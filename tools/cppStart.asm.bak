@@ -1,0 +1,37 @@
+%include "asm/asm.inc"
+
+[section .text]
+[global start]
+[extern main]
+[extern start_ctors]
+[extern end_ctors]
+[extern start_dtors]
+[extern end_dtors]
+[extern exit]
+
+start:
+
+	mov	ebx, start_ctors
+.nextCtor
+	cmp	ebx, end_ctors
+	je	.endCtorCall
+	call	[ebx]
+	add	ebx, 4
+	jmp	.nextCtor
+
+.endCtorCall
+
+	call	main
+	push	eax
+
+	mov	ebx, start_dtors
+.nextDtor
+	cmp	ebx, end_dtors
+	je	.endDtorCall
+	call	[ebx]
+	add	ebx, 4
+	jmp	.nextDtor
+.endDtorCall
+;	Tell kernel to exit here
+
+	call exit

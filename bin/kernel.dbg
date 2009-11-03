@@ -1,0 +1,435 @@
+ELF Header:
+  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00 
+  Class:                             ELF32
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Intel 80386
+  Version:                           0x1
+  Entry point address:               0xff500000
+  Start of program headers:          52 (bytes into file)
+  Start of section headers:          53300 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               52 (bytes)
+  Size of program headers:           32 (bytes)
+  Number of program headers:         3
+  Size of section headers:           40 (bytes)
+  Number of section headers:         8
+  Section header string table index: 5
+
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        ff500000 001000 008000 00  AX  0   0 16
+  [ 2] .data             PROGBITS        ff508000 009000 001000 00  WA  0   0 32
+  [ 3] .disc             PROGBITS        ff509000 00a000 003000 00 WAX  0   0 32
+  [ 4] .bss              NOBITS          ff50c000 00d000 000068 00  WA  0   0  4
+  [ 5] .shstrtab         STRTAB          00000000 00d000 000032 00      0   0  1
+  [ 6] .symtab           SYMTAB          00000000 00d174 001770 10      7 167  4
+  [ 7] .strtab           STRTAB          00000000 00e8e4 00113e 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings)
+  I (info), L (link order), G (group), x (unknown)
+  O (extra OS processing required) o (OS specific), p (processor specific)
+
+There are no section groups in this file.
+
+Program Headers:
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  LOAD           0x001000 0xff500000 0x00100000 0x08000 0x08000 R E 0x1000
+  LOAD           0x009000 0xff508000 0x00108000 0x04000 0x04068 RWE 0x1000
+  GNU_STACK      0x000000 0x00000000 0x00000000 0x00000 0x00000 RWE 0x4
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .text 
+   01     .data .disc .bss 
+   02     
+
+There is no dynamic section in this file.
+
+There are no relocations in this file.
+
+There are no unwind sections in this file.
+
+Symbol table '.symtab' contains 375 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND 
+     1: ff500000     0 SECTION LOCAL  DEFAULT    1 
+     2: ff508000     0 SECTION LOCAL  DEFAULT    2 
+     3: ff509000     0 SECTION LOCAL  DEFAULT    3 
+     4: ff50c000     0 SECTION LOCAL  DEFAULT    4 
+     5: 00000000     0 FILE    LOCAL  DEFAULT  ABS entry.asm
+     6: 00000001     0 NOTYPE  LOCAL  DEFAULT  ABS MULTIBOOT_PAGE_ALIGN
+     7: 00000002     0 NOTYPE  LOCAL  DEFAULT  ABS MULTIBOOT_MEMORY_INFO
+     8: 00010000     0 NOTYPE  LOCAL  DEFAULT  ABS MULTIBOOT_AOUT_KLUDGE
+     9: 1badb002     0 NOTYPE  LOCAL  DEFAULT  ABS MULTIBOOT_HEADER_MAGIC
+    10: 00010003     0 NOTYPE  LOCAL  DEFAULT  ABS MULTIBOOT_HEADER_FLAGS
+    11: e4514ffb     0 NOTYPE  LOCAL  DEFAULT  ABS MULTIBOOT_CHECKSUM
+    12: 00000008     0 NOTYPE  LOCAL  DEFAULT  ABS kCodeSel
+    13: 00000010     0 NOTYPE  LOCAL  DEFAULT  ABS kDataSel
+    14: 0000001b     0 NOTYPE  LOCAL  DEFAULT  ABS uCodeSel
+    15: 00000023     0 NOTYPE  LOCAL  DEFAULT  ABS uDataSel
+    16: 00000028     0 NOTYPE  LOCAL  DEFAULT  ABS tssSel
+    17: ff500027     0 NOTYPE  LOCAL  DEFAULT    1 okMagic
+    18: ff50003c     0 NOTYPE  LOCAL  DEFAULT    1 mboot
+    19: ff509000     0 NOTYPE  LOCAL  DEFAULT    3 initPaging
+    20: ff509029     0 NOTYPE  LOCAL  DEFAULT    3 initPaging.clearPages
+    21: ff509048     0 NOTYPE  LOCAL  DEFAULT    3 initPaging.mapFirstTable
+    22: ff509060     0 NOTYPE  LOCAL  DEFAULT    3 initPaging.mappingLoop
+    23: ff509092     0 NOTYPE  LOCAL  DEFAULT    3 initPaging.mapPhysKernel
+    24: ff5090c4     0 NOTYPE  LOCAL  DEFAULT    3 initPaging.mapVirtKernel
+    25: ff5090ff     0 NOTYPE  LOCAL  DEFAULT    3 printErrMsg
+    26: ff509111     0 NOTYPE  LOCAL  DEFAULT    3 printErrMsg.cpyStr
+    27: ff50911d     0 NOTYPE  LOCAL  DEFAULT    3 stop
+    28: 2badb002     0 NOTYPE  LOCAL  DEFAULT  ABS mbootMagic
+    29: ff50af56     0 NOTYPE  LOCAL  DEFAULT    3 bstrapErrMsg
+    30: 00001000     0 NOTYPE  LOCAL  DEFAULT  ABS initPageDir
+    31: 00000000     0 FILE    LOCAL  DEFAULT  ABS apic.c
+    32: 00000000     0 FILE    LOCAL  DEFAULT  ABS cpu_state.asm
+    33: 00000008     0 NOTYPE  LOCAL  DEFAULT  ABS kCodeSel
+    34: 00000010     0 NOTYPE  LOCAL  DEFAULT  ABS kDataSel
+    35: 0000001b     0 NOTYPE  LOCAL  DEFAULT  ABS uCodeSel
+    36: 00000023     0 NOTYPE  LOCAL  DEFAULT  ABS uDataSel
+    37: 00000028     0 NOTYPE  LOCAL  DEFAULT  ABS tssSel
+    38: 00000000     0 FILE    LOCAL  DEFAULT  ABS debug.c
+    39: ff500220    11 FUNC    LOCAL  DEFAULT    1 inByte
+    40: ff500230    18 FUNC    LOCAL  DEFAULT    1 outByte
+    41: ff506162    14 OBJECT  LOCAL  DEFAULT    1 __func__.1610
+    42: 00000000     0 FILE    LOCAL  DEFAULT  ABS exceptions.c
+    43: ff5062f0    10 OBJECT  LOCAL  DEFAULT    1 __func__.1443
+    44: ff50634a    15 OBJECT  LOCAL  DEFAULT    1 __func__.1471
+    45: ff500cb0   167 FUNC    LOCAL  DEFAULT    1 registerIRQ
+    46: ff506395    16 OBJECT  LOCAL  DEFAULT    1 __func__.1501
+    47: ff500e00   471 FUNC    LOCAL  DEFAULT    1 dump_regs
+    48: ff5063ec    12 OBJECT  LOCAL  DEFAULT    1 __func__.1586
+    49: ff50643b    11 OBJECT  LOCAL  DEFAULT    1 __func__.1604
+    50: ff500d60   147 FUNC    LOCAL  DEFAULT    1 releaseIRQ
+    51: 00000000     0 FILE    LOCAL  DEFAULT  ABS idt.asm
+    52: 00000008     0 NOTYPE  LOCAL  DEFAULT  ABS kCodeSel
+    53: 00000010     0 NOTYPE  LOCAL  DEFAULT  ABS kDataSel
+    54: 0000001b     0 NOTYPE  LOCAL  DEFAULT  ABS uCodeSel
+    55: 00000023     0 NOTYPE  LOCAL  DEFAULT  ABS uDataSel
+    56: 00000028     0 NOTYPE  LOCAL  DEFAULT  ABS tssSel
+    57: ff50af93     0 NOTYPE  LOCAL  DEFAULT    3 idtPointer
+    58: 00000000     0 FILE    LOCAL  DEFAULT  ABS init.c
+    59: ff5065f4    14 OBJECT  LOCAL  DEFAULT    1 __func__.1691
+    60: ff5011a0    18 FUNC    LOCAL  DEFAULT    1 outByte
+    61: ff5011c0     9 FUNC    LOCAL  DEFAULT    1 ioWait
+    62: ff506895     6 OBJECT  LOCAL  DEFAULT    1 __func__.2149
+    63: ff506aef     5 OBJECT  LOCAL  DEFAULT    1 __func__.2382
+    64: ff50af38     0 NOTYPE  LOCAL  DEFAULT    3 _skip
+    65: 00000000     0 FILE    LOCAL  DEFAULT  ABS inthand.asm
+    66: 00000008     0 NOTYPE  LOCAL  DEFAULT  ABS kCodeSel
+    67: 00000010     0 NOTYPE  LOCAL  DEFAULT  ABS kDataSel
+    68: 0000001b     0 NOTYPE  LOCAL  DEFAULT  ABS uCodeSel
+    69: 00000023     0 NOTYPE  LOCAL  DEFAULT  ABS uDataSel
+    70: 00000028     0 NOTYPE  LOCAL  DEFAULT  ABS tssSel
+    71: 00000000     0 NOTYPE  LOCAL  DEFAULT  ABS idleTID
+    72: 0000005c     0 NOTYPE  LOCAL  DEFAULT  ABS TCB_Size
+    73: 00000040     0 NOTYPE  LOCAL  DEFAULT  ABS regSize
+    74: 00000000     0 NOTYPE  LOCAL  DEFAULT  ABS aSpaceOff
+    75: 00000004     0 NOTYPE  LOCAL  DEFAULT  ABS quantaOff
+    76: 00000005     0 NOTYPE  LOCAL  DEFAULT  ABS stateOff
+    77: 00000005     0 NOTYPE  LOCAL  DEFAULT  ABS priorityOff
+    78: 00000018     0 NOTYPE  LOCAL  DEFAULT  ABS regOff
+    79: ff5011d0     0 NOTYPE  LOCAL  DEFAULT    1 enterExceptionHandler
+    80: ff501212     0 NOTYPE  LOCAL  DEFAULT    1 enterExceptionHandler.loa
+    81: ff50121a     0 NOTYPE  LOCAL  DEFAULT    1 enterExceptionHandler.doS
+    82: ff50123a     0 NOTYPE  LOCAL  DEFAULT    1 enterExceptionHandler.loa
+    83: ff50123d     0 NOTYPE  LOCAL  DEFAULT    1 enterExceptionHandler.com
+    84: ff501252     0 NOTYPE  LOCAL  DEFAULT    1 enterExceptionHandler.pop
+    85: ff501376     0 NOTYPE  LOCAL  DEFAULT    1 enterIrqHandler
+    86: ff5013b8     0 NOTYPE  LOCAL  DEFAULT    1 enterIrqHandler.loadStack
+    87: ff5013c0     0 NOTYPE  LOCAL  DEFAULT    1 enterIrqHandler.doSched
+    88: ff5013e0     0 NOTYPE  LOCAL  DEFAULT    1 enterIrqHandler.load_stac
+    89: ff5013e3     0 NOTYPE  LOCAL  DEFAULT    1 enterIrqHandler.compare_t
+    90: ff5013f8     0 NOTYPE  LOCAL  DEFAULT    1 enterIrqHandler.pop_regs
+    91: ff501531     0 NOTYPE  LOCAL  DEFAULT    1 timerHandler.loadStack
+    92: ff501539     0 NOTYPE  LOCAL  DEFAULT    1 timerHandler.doSched
+    93: ff501559     0 NOTYPE  LOCAL  DEFAULT    1 timerHandler.load_stack
+    94: ff50155c     0 NOTYPE  LOCAL  DEFAULT    1 timerHandler.compare_thre
+    95: ff501571     0 NOTYPE  LOCAL  DEFAULT    1 timerHandler.pop_regs
+    96: ff5015c9     0 NOTYPE  LOCAL  DEFAULT    1 syscallHandler.loadStack
+    97: ff5015d1     0 NOTYPE  LOCAL  DEFAULT    1 syscallHandler.doSched
+    98: ff5015f1     0 NOTYPE  LOCAL  DEFAULT    1 syscallHandler.load_stack
+    99: ff5015f4     0 NOTYPE  LOCAL  DEFAULT    1 syscallHandler.compare_th
+   100: ff501609     0 NOTYPE  LOCAL  DEFAULT    1 syscallHandler.pop_regs
+   101: 00000000     0 FILE    LOCAL  DEFAULT  ABS memory.c
+   102: 00000000     0 FILE    LOCAL  DEFAULT  ABS message.c
+   103: ff506c11    12 OBJECT  LOCAL  DEFAULT    1 __func__.1540
+   104: ff506caf    15 OBJECT  LOCAL  DEFAULT    1 __func__.1649
+   105: 00000000     0 FILE    LOCAL  DEFAULT  ABS paging.c
+   106: ff506ce4    10 OBJECT  LOCAL  DEFAULT    1 __func__.1472
+   107: ff506d3a     9 OBJECT  LOCAL  DEFAULT    1 __func__.1504
+   108: ff506d61     9 OBJECT  LOCAL  DEFAULT    1 __func__.1523
+   109: ff506d6a     8 OBJECT  LOCAL  DEFAULT    1 __func__.1555
+   110: ff506d88     8 OBJECT  LOCAL  DEFAULT    1 __func__.1580
+   111: ff506de7     9 OBJECT  LOCAL  DEFAULT    1 __func__.1625
+   112: ff506e16    10 OBJECT  LOCAL  DEFAULT    1 __func__.1672
+   113: ff506e47    13 OBJECT  LOCAL  DEFAULT    1 __func__.1740
+   114: ff506ebe     9 OBJECT  LOCAL  DEFAULT    1 __func__.1779
+   115: ff506f00     8 OBJECT  LOCAL  DEFAULT    1 __func__.1825
+   116: ff506f49    11 OBJECT  LOCAL  DEFAULT    1 __func__.1891
+   117: ff506f77    10 OBJECT  LOCAL  DEFAULT    1 __func__.1930
+   118: ff506fcb    15 OBJECT  LOCAL  DEFAULT    1 __func__.1993
+   119: 00000000     0 FILE    LOCAL  DEFAULT  ABS pic.c
+   120: ff503580    18 FUNC    LOCAL  DEFAULT    1 outByte
+   121: ff5035a0     9 FUNC    LOCAL  DEFAULT    1 ioWait
+   122: ff503660    11 FUNC    LOCAL  DEFAULT    1 inByte
+   123: 00000000     0 FILE    LOCAL  DEFAULT  ABS queue.c
+   124: ff506ff5    13 OBJECT  LOCAL  DEFAULT    1 __func__.1432
+   125: ff507069    13 OBJECT  LOCAL  DEFAULT    1 __func__.1512
+   126: ff507076     8 OBJECT  LOCAL  DEFAULT    1 __func__.1539
+   127: ff50708b    12 OBJECT  LOCAL  DEFAULT    1 __func__.1576
+   128: ff507097     8 OBJECT  LOCAL  DEFAULT    1 __func__.1632
+   129: 00000000     0 FILE    LOCAL  DEFAULT  ABS schedule.c
+   130: ff503dd7     0 NOTYPE  LOCAL  DEFAULT    1 .halt
+   131: ff5070a0     9 OBJECT  LOCAL  DEFAULT    1 __func__.1504
+   132: ff50720f     9 OBJECT  LOCAL  DEFAULT    1 __func__.1661
+   133: ff507218    12 OBJECT  LOCAL  DEFAULT    1 __func__.1676
+   134: ff507240    15 OBJECT  LOCAL  DEFAULT    1 __func__.1709
+   135: ff5072eb    15 OBJECT  LOCAL  DEFAULT    1 __func__.1761
+   136: ff5072fa     9 OBJECT  LOCAL  DEFAULT    1 __func__.1801
+   137: 00000000     0 FILE    LOCAL  DEFAULT  ABS signal.c
+   138: ff507374     9 OBJECT  LOCAL  DEFAULT    1 __func__.1524
+   139: 00000000     0 FILE    LOCAL  DEFAULT  ABS syscall.c
+   140: ff504b00   148 FUNC    LOCAL  DEFAULT    1 sysExit
+   141: ff5073d8    17 OBJECT  LOCAL  DEFAULT    1 __func__.1591
+   142: ff504ba0   432 FUNC    LOCAL  DEFAULT    1 sysGetThreadInfo
+   143: ff50740f     9 OBJECT  LOCAL  DEFAULT    1 __func__.1639
+   144: 00000000     0 FILE    LOCAL  DEFAULT  ABS thread.c
+   145: ff5074bc    11 OBJECT  LOCAL  DEFAULT    1 __func__.1567
+   146: ff50c000     2 OBJECT  LOCAL  DEFAULT    4 lastTID.1562
+   147: ff50754d    12 OBJECT  LOCAL  DEFAULT    1 __func__.1614
+   148: ff507596    12 OBJECT  LOCAL  DEFAULT    1 __func__.1640
+   149: ff507601    12 OBJECT  LOCAL  DEFAULT    1 __func__.1700
+   150: ff50763d    13 OBJECT  LOCAL  DEFAULT    1 __func__.1722
+   151: ff507740    14 OBJECT  LOCAL  DEFAULT    1 __func__.1788
+   152: 00000000     0 FILE    LOCAL  DEFAULT  ABS vmm.c
+   153: ff507771     9 OBJECT  LOCAL  DEFAULT    1 __func__.1462
+   154: ff50778c    18 OBJECT  LOCAL  DEFAULT    1 __func__.1473
+   155: ff50779e     7 OBJECT  LOCAL  DEFAULT    1 __func__.1487
+   156: ff5077cc    16 OBJECT  LOCAL  DEFAULT    1 __func__.1510
+   157: ff5077dc     9 OBJECT  LOCAL  DEFAULT    1 __func__.1533
+   158: ff5077fd    18 OBJECT  LOCAL  DEFAULT    1 __func__.1560
+   159: 00000000     0 FILE    LOCAL  DEFAULT  ABS gdt.asm
+   160: 00000008     0 NOTYPE  LOCAL  DEFAULT  ABS kCodeSel
+   161: 00000010     0 NOTYPE  LOCAL  DEFAULT  ABS kDataSel
+   162: 0000001b     0 NOTYPE  LOCAL  DEFAULT  ABS uCodeSel
+   163: 00000023     0 NOTYPE  LOCAL  DEFAULT  ABS uDataSel
+   164: 00000028     0 NOTYPE  LOCAL  DEFAULT  ABS tssSel
+   165: ff509149     0 NOTYPE  LOCAL  DEFAULT    3 loadCs
+   166: ff50af8d     0 NOTYPE  LOCAL  DEFAULT    3 gdtPointer
+   167: ff500190   136 FUNC    GLOBAL DEFAULT    1 init_serial
+   168: ff504430   424 FUNC    GLOBAL DEFAULT    1 attachRunQueue
+   169: ff509dc0    89 FUNC    GLOBAL DEFAULT    3 getModuleEndAddr
+   170: ff5048d0    19 FUNC    GLOBAL DEFAULT    1 sysSetSigHandler
+   171: ff5012e0     0 NOTYPE  GLOBAL DEFAULT    1 intHandler9
+   172: ff508000    16 OBJECT  GLOBAL DEFAULT    2 IRQState
+   173: ff5004b0    91 FUNC    GLOBAL DEFAULT    1 kprintAt
+   174: ff500280    52 FUNC    GLOBAL DEFAULT    1 putDebugChar
+   175: ff50c058     4 OBJECT  GLOBAL DEFAULT    4 __default_sig_handler
+   176: ff50c004     1 OBJECT  GLOBAL DEFAULT    4 tempMapped
+   177: ff502df0   613 FUNC    GLOBAL DEFAULT    1 mapPage
+   178: ff50015c     0 NOTYPE  GLOBAL DEFAULT    1 getCR3
+   179: ff5020e0    13 FUNC    GLOBAL DEFAULT    1 reload_cr3
+   180: ff5012a9     0 NOTYPE  GLOBAL DEFAULT    1 intHandler5
+   181: ff50c05c     4 OBJECT  GLOBAL DEFAULT    4 cpuFeatures
+   182: ff500470    23 FUNC    GLOBAL DEFAULT    1 setVideoLowMem
+   183: ff50130d     0 NOTYPE  GLOBAL DEFAULT    1 intHandler13
+   184: ff50c008     4 OBJECT  GLOBAL DEFAULT    4 tssEsp0
+   185: ff503130   584 FUNC    GLOBAL DEFAULT    1 unmapPage
+   186: ff503760    58 FUNC    GLOBAL DEFAULT    1 disableAllIRQ
+   187: ff502ae0   435 FUNC    GLOBAL DEFAULT    1 mapPageTable
+   188: ff400500     0 NOTYPE  GLOBAL DEFAULT  ABS kernelIDT
+   189: ff5014b8     0 NOTYPE  GLOBAL DEFAULT    1 irq13Handler
+   190: ff5008a0   233 FUNC    GLOBAL DEFAULT    1 sysEndIRQ
+   191: ff501317     0 NOTYPE  GLOBAL DEFAULT    1 intHandler14
+   192: ff500164     0 NOTYPE  GLOBAL DEFAULT    1 getEflags
+   193: ff504d50  1158 FUNC    GLOBAL DEFAULT    1 _syscall
+   194: ff501404     0 NOTYPE  GLOBAL DEFAULT    1 irq1Handler
+   195: ff5051e0   306 FUNC    GLOBAL DEFAULT    1 getFreeTID
+   196: ff505ef0   255 FUNC    GLOBAL DEFAULT    1 sysGrant
+   197: ff5048f0   527 FUNC    GLOBAL DEFAULT    1 sysRaise
+   198: ff500490    23 FUNC    GLOBAL DEFAULT    1 setBadAssertHlt
+   199: ff50c03c     4 OBJECT  GLOBAL DEFAULT    4 tcbTable
+   200: ff50c00c     1 OBJECT  GLOBAL DEFAULT    4 badAssertHlt
+   201: ff504710   436 FUNC    GLOBAL DEFAULT    1 timerInt
+   202: ff50b2e0     4 OBJECT  GLOBAL DEFAULT    3 totalPhysMem
+   203: ff501620  1264 FUNC    GLOBAL DEFAULT    1 memcpy
+   204: ff50c068     0 NOTYPE  GLOBAL DEFAULT  ABS kEnd
+   205: ff50c040     4 OBJECT  GLOBAL DEFAULT    4 maxThreads
+   206: ff502ca0   331 FUNC    GLOBAL DEFAULT    1 kMapPage
+   207: ff50c010     4 OBJECT  GLOBAL DEFAULT    4 upper2
+   208: ff505660   315 FUNC    GLOBAL DEFAULT    1 pauseThread
+   209: ff501440     0 NOTYPE  GLOBAL DEFAULT    1 irq5Handler
+   210: ff500000     0 NOTYPE  GLOBAL DEFAULT  ABS kVirtStart
+   211: ff50c060     4 OBJECT  GLOBAL DEFAULT    4 maxRunQueues
+   212: ff50147c     0 NOTYPE  GLOBAL DEFAULT    1 irq9Handler
+   213: ff400000     0 NOTYPE  GLOBAL DEFAULT  ABS kPhysToVirt
+   214: ff500510    73 FUNC    GLOBAL DEFAULT    1 printAssertMsg
+   215: ff50c044     4 OBJECT  GLOBAL DEFAULT    4 runQueues
+   216: ff50afa0     4 OBJECT  GLOBAL DEFAULT    3 kernelEnd
+   217: ff5012d6     0 NOTYPE  GLOBAL DEFAULT    1 intHandler8
+   218: ff50013c     0 NOTYPE  GLOBAL DEFAULT    1 setCR3
+   219: ff50c014     1 OBJECT  GLOBAL DEFAULT    4 useLowMem
+   220: ff50c000     0 NOTYPE  GLOBAL DEFAULT  ABS kVirtBss
+   221: ff5020f0   329 FUNC    GLOBAL DEFAULT    1 _writePDE
+   222: ff5012b8     0 NOTYPE  GLOBAL DEFAULT    1 intHandler6
+   223: ff50125e     0 NOTYPE  GLOBAL DEFAULT    1 intHandler0
+   224: ff50128b     0 NOTYPE  GLOBAL DEFAULT    1 intHandler3
+   225: ff501349     0 NOTYPE  GLOBAL DEFAULT    1 intHandler19
+   226: ff505c90    70 FUNC    GLOBAL DEFAULT    1 sysUnmap
+   227: ff50b300   160 OBJECT  GLOBAL DEFAULT    3 mem_area
+   228: 0010c000     0 NOTYPE  GLOBAL DEFAULT  ABS kPhysBss
+   229: ff5014d6     0 NOTYPE  GLOBAL DEFAULT    1 irq15Handler
+   230: ff509123     0 NOTYPE  GLOBAL DEFAULT    3 loadGDT
+   231: ff5000a0   139 FUNC    GLOBAL DEFAULT    1 enable_apic
+   232: ff5037a0   626 FUNC    GLOBAL DEFAULT    1 sleepEnqueue
+   233: ff501321     0 NOTYPE  GLOBAL DEFAULT    1 intHandler16
+   234: ff50144f     0 NOTYPE  GLOBAL DEFAULT    1 irq6Handler
+   235: ff50c048     4 OBJECT  GLOBAL DEFAULT    4 tcbNodes
+   236: ff5057a0  1092 FUNC    GLOBAL DEFAULT    1 createThread
+   237: ff508000     0 NOTYPE  GLOBAL DEFAULT    2 kData
+   238: ff509490    56 FUNC    GLOBAL DEFAULT    3 initTSS
+   239: ff509000     0 NOTYPE  GLOBAL DEFAULT    3 kdCode
+   240: ff509160   156 FUNC    GLOBAL DEFAULT    3 clearPhysPage
+   241: ff503de0  1213 FUNC    GLOBAL DEFAULT    1 schedule
+   242: ff50c018     4 OBJECT  GLOBAL DEFAULT    4 lower2
+   243: ff500080    22 FUNC    GLOBAL DEFAULT    1 init_apic_timer
+   244: ff508000     0 NOTYPE  GLOBAL DEFAULT  ABS kVirtData
+   245: ff5006a0    60 FUNC    GLOBAL DEFAULT    1 incTimerCount
+   246: ff5012f9     0 NOTYPE  GLOBAL DEFAULT    1 intHandler11
+   247: ff509e20    90 FUNC    GLOBAL DEFAULT    3 getTotalModuleSize
+   248: 0000c068     0 NOTYPE  GLOBAL DEFAULT  ABS kSize
+   249: ff505e20   202 FUNC    GLOBAL DEFAULT    1 sysMapPageTable
+   250: ff501358     0 NOTYPE  GLOBAL DEFAULT    1 invalidIntHandler
+   251: ff50b2e4     4 OBJECT  GLOBAL DEFAULT    3 startPhysPages
+   252: ff503060   206 FUNC    GLOBAL DEFAULT    1 kUnmapPage
+   253: ff509e80    47 FUNC    GLOBAL DEFAULT    3 getModuleStart
+   254: ff5095c0    29 FUNC    GLOBAL DEFAULT    3 stopInit
+   255: ff500000     0 NOTYPE  GLOBAL DEFAULT    1 kCode
+   256: ff50016b     0 NOTYPE  GLOBAL DEFAULT    1 setEflags
+   257: ff50b2fc     4 OBJECT  GLOBAL DEFAULT    3 boot_info
+   258: ff5014a9     0 NOTYPE  GLOBAL DEFAULT    1 irq12Handler
+   259: ff50b2ec     4 OBJECT  GLOBAL DEFAULT    3 totalKSize
+   260: ff50145e     0 NOTYPE  GLOBAL DEFAULT    1 irq7Handler
+   261: ff50127c     0 NOTYPE  GLOBAL DEFAULT    1 intHandler2
+   262: ff500990   239 FUNC    GLOBAL DEFAULT    1 sysRegisterInt
+   263: ff501367     0 NOTYPE  GLOBAL DEFAULT    1 spuriousIntHandler
+   264: ff501303     0 NOTYPE  GLOBAL DEFAULT    1 intHandler12
+   265: ff50afa4     4 OBJECT  GLOBAL DEFAULT    3 init_server_img
+   266: ff50b2f4     4 OBJECT  GLOBAL DEFAULT    3 modulesStart
+   267: ff50a970   255 FUNC    GLOBAL DEFAULT    3 showCPU_Features
+   268: 00109000     0 NOTYPE  GLOBAL DEFAULT  ABS kPhysDisc
+   269: ff509390   242 FUNC    GLOBAL DEFAULT    3 add_gdt_entry
+   270: ff50c01c    12 OBJECT  GLOBAL DEFAULT    4 drive_info_t
+   271: ff503dd0     0 NOTYPE  GLOBAL DEFAULT    1 idle
+   272: ff5002c0   393 FUNC    GLOBAL DEFAULT    1 kitoa
+   273: ff502410   209 FUNC    GLOBAL DEFAULT    1 readPDE
+   274: ff50157d     0 NOTYPE  GLOBAL DEFAULT    1 syscallHandler
+   275: ff50c04c     4 OBJECT  GLOBAL DEFAULT    4 sleepQueue
+   276: ff50a150   738 FUNC    GLOBAL DEFAULT    3 load_elf_exec
+   277: ff500060    24 FUNC    GLOBAL DEFAULT    1 send_apic_eoi
+   278: 00108000     0 NOTYPE  GLOBAL DEFAULT  ABS kPhysData
+   279: ff505ce0    70 FUNC    GLOBAL DEFAULT    1 sysUnmapPageTable
+   280: ff501e40   663 FUNC    GLOBAL DEFAULT    1 receiveMessage
+   281: ff502a00   105 FUNC    GLOBAL DEFAULT    1 pokeMem
+   282: ff503380   437 FUNC    GLOBAL DEFAULT    1 unmapPageTable
+   283: ff50b2e8     4 OBJECT  GLOBAL DEFAULT    3 totalPages
+   284: ff500154     0 NOTYPE  GLOBAL DEFAULT    1 getCR0
+   285: ff509200   110 FUNC    GLOBAL DEFAULT    3 memcmp
+   286: ff5014e5     0 NOTYPE  GLOBAL DEFAULT    1 timerHandler
+   287: ff502240   149 FUNC    GLOBAL DEFAULT    1 writePDE
+   288: ff50aa70  1254 FUNC    GLOBAL DEFAULT    3 init
+   289: ff500130     0 NOTYPE  GLOBAL DEFAULT    1 setCR0
+   290: ff50126d     0 NOTYPE  GLOBAL DEFAULT    1 intHandler1
+   291: ff5095e0   683 FUNC    GLOBAL DEFAULT    3 initMemory
+   292: ff400d00     0 NOTYPE  GLOBAL DEFAULT  ABS kernelGDT
+   293: ff500174     0 NOTYPE  GLOBAL DEFAULT    1 intIsEnabled
+   294: ff509270   282 FUNC    GLOBAL DEFAULT    3 initPIC
+   295: ff509f30   354 FUNC    GLOBAL DEFAULT    3 initTables
+   296: ff50c050     4 OBJECT  GLOBAL DEFAULT    4 currentThread
+   297: ff508020    32 OBJECT  GLOBAL DEFAULT    2 IRQHandlers
+   298: ff501b10    39 FUNC    GLOBAL DEFAULT    1 memset
+   299: ff501431     0 NOTYPE  GLOBAL DEFAULT    1 irq4Handler
+   300: ff509890   120 FUNC    GLOBAL DEFAULT    3 initTimer
+   301: ff505d30   227 FUNC    GLOBAL DEFAULT    1 sysMap
+   302: ff50914a     0 NOTYPE  GLOBAL DEFAULT    3 loadIDT
+   303: ff501330     0 NOTYPE  GLOBAL DEFAULT    1 intHandler17
+   304: ff50afc0   800 OBJECT  GLOBAL DEFAULT    3 kBootModules
+   305: ff509000     0 NOTYPE  GLOBAL DEFAULT  ABS kVirtDisc
+   306: ff501413     0 NOTYPE  GLOBAL DEFAULT    1 irq2Handler
+   307: 00100000     0 NOTYPE  GLOBAL DEFAULT  ABS kPhysStart
+   308: ff400f98     0 NOTYPE  GLOBAL DEFAULT  ABS kernelTSS
+   309: ff500bc0   226 FUNC    GLOBAL DEFAULT    1 handleIRQ
+   310: ff50c028     4 OBJECT  GLOBAL DEFAULT    4 upper1
+   311: ff500158     0 NOTYPE  GLOBAL DEFAULT    1 getCR2
+   312: ff50c02c     4 OBJECT  GLOBAL DEFAULT    4 incSchedCount_counter
+   313: ff50c030     4 OBJECT  GLOBAL DEFAULT    4 tssIOBitmap
+   314: ff5022e0   291 FUNC    GLOBAL DEFAULT    1 _readPDE
+   315: ff500450    19 FUNC    GLOBAL DEFAULT    1 initVideo
+   316: 00c00000     0 NOTYPE  GLOBAL DEFAULT  ABS kVirtToPhys
+   317: 00100000     0 NOTYPE  GLOBAL DEFAULT  ABS kPhysCode
+   318: ff5042a0   130 FUNC    GLOBAL DEFAULT    1 sysYield
+   319: ff505ff0   255 FUNC    GLOBAL DEFAULT    1 sysGrantPageTable
+   320: ff500fe0   389 FUNC    GLOBAL DEFAULT    1 handleCPUException
+   321: ff50b2f8     4 OBJECT  GLOBAL DEFAULT    3 totalModulesSize
+   322: ff500560   312 FUNC    GLOBAL DEFAULT    1 incSchedCount
+   323: ff5012ef     0 NOTYPE  GLOBAL DEFAULT    1 intHandler10
+   324: ff500250    45 FUNC    GLOBAL DEFAULT    1 getDebugChar
+   325: ff5024f0   425 FUNC    GLOBAL DEFAULT    1 readPTE
+   326: ff5035b0   173 FUNC    GLOBAL DEFAULT    1 enableIRQ
+   327: ff501b40   758 FUNC    GLOBAL DEFAULT    1 sendMessage
+   328: ff503ac0   310 FUNC    GLOBAL DEFAULT    1 enqueue
+   329: ff50129a     0 NOTYPE  GLOBAL DEFAULT    1 intHandler4
+   330: ff500000     0 NOTYPE  GLOBAL DEFAULT  ABS kVirtCode
+   331: ff50af56     0 NOTYPE  GLOBAL DEFAULT    3 kdData
+   332: ff5012c7     0 NOTYPE  GLOBAL DEFAULT    1 intHandler7
+   333: ff509eb0   113 FUNC    GLOBAL DEFAULT    3 calcKernelSize
+   334: ff502a70   105 FUNC    GLOBAL DEFAULT    1 peekMem
+   335: ff503d70    94 FUNC    GLOBAL DEFAULT    1 dequeue
+   336: ff502870   389 FUNC    GLOBAL DEFAULT    1 accessMem
+   337: ff50c054     2 OBJECT  GLOBAL DEFAULT    4 init_server_tid
+   338: ff500750   327 FUNC    GLOBAL DEFAULT    1 kprintf
+   339: ff50b2f0     4 OBJECT  GLOBAL DEFAULT    3 grubBootInfo
+   340: ff505bf0   157 FUNC    GLOBAL DEFAULT    1 releaseThread
+   341: ff50c034     4 OBJECT  GLOBAL DEFAULT    4 kernelAddrSpace
+   342: ff504330   256 FUNC    GLOBAL DEFAULT    1 setPriority
+   343: ff505320   252 FUNC    GLOBAL DEFAULT    1 startThread
+   344: ff5045e0   292 FUNC    GLOBAL DEFAULT    1 detachRunQueue
+   345: ff400000     0 NOTYPE  GLOBAL DEFAULT  ABS VPhysMemStart
+   346: ff503720    58 FUNC    GLOBAL DEFAULT    1 enableAllIRQ
+   347: ff50148b     0 NOTYPE  GLOBAL DEFAULT    1 irq10Handler
+   348: ff50a0a0   163 FUNC    GLOBAL DEFAULT    3 isValidElfExe
+   349: ff5094d0   230 FUNC    GLOBAL DEFAULT    3 initGDT
+   350: ff500000     0 NOTYPE  GLOBAL DEFAULT    1 start
+   351: ff50c000     0 NOTYPE  GLOBAL DEFAULT    4 kBss
+   352: ff503c00   360 FUNC    GLOBAL DEFAULT    1 detachQueue
+   353: ff50c064     4 OBJECT  GLOBAL DEFAULT    4 idleThread
+   354: ff503670   169 FUNC    GLOBAL DEFAULT    1 disableIRQ
+   355: ff501170     0 NOTYPE  GLOBAL DEFAULT    1 addIDTEntry
+   356: ff50a440  1022 FUNC    GLOBAL DEFAULT    3 init2
+   357: ff509950  1121 FUNC    GLOBAL DEFAULT    3 initInterrupts
+   358: ff50afa8     4 OBJECT  GLOBAL DEFAULT    3 numBootMods
+   359: ff503a20   160 FUNC    GLOBAL DEFAULT    1 sleepDequeue
+   360: ff5006e0   108 FUNC    GLOBAL DEFAULT    1 clearScreen
+   361: ff500160     0 NOTYPE  GLOBAL DEFAULT    1 getCR4
+   362: ff500148     0 NOTYPE  GLOBAL DEFAULT    1 setCR4
+   363: ff501422     0 NOTYPE  GLOBAL DEFAULT    1 irq3Handler
+   364: ff500a80   306 FUNC    GLOBAL DEFAULT    1 sysEndPageFault
+   365: ff505420   562 FUNC    GLOBAL DEFAULT    1 sleepThread
+   366: ff50c038     4 OBJECT  GLOBAL DEFAULT    4 lower1
+   367: ff5026a0   454 FUNC    GLOBAL DEFAULT    1 writePTE
+   368: ff509910    64 FUNC    GLOBAL DEFAULT    3 initScheduler
+   369: ff50a840   294 FUNC    GLOBAL DEFAULT    3 showGrubSupport
+   370: ff50133a     0 NOTYPE  GLOBAL DEFAULT    1 intHandler18
+   371: ff5014c7     0 NOTYPE  GLOBAL DEFAULT    1 irq14Handler
+   372: ff50149a     0 NOTYPE  GLOBAL DEFAULT    1 irq11Handler
+   373: ff503540    58 FUNC    GLOBAL DEFAULT    1 sendEOI
+   374: ff50146d     0 NOTYPE  GLOBAL DEFAULT    1 irq8Handler
+
+No version information found in this file.

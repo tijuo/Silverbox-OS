@@ -1,0 +1,10 @@
+default = 0
+timeout = 5
+
+title Silverbox OS
+  kernel /silverbox_os/kernel.gz
+  module /silverbox_os/pagersrv.exe
+  module /silverbox_os/video.exe
+  module /silverbox_os/keyboard.exe
+  module /silverbox_os/ramdisk.exe
+  module /silverbox_os/shell.exe
