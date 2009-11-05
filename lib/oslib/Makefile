@@ -1,6 +1,6 @@
 SRC     =strings.c sbrk.c region.c bitmap.c \
 	services.c longmsg.c fat_lib.c fat_alloc.c \
-	libdrv.c console.c
+	driver.c console.c
 
 AS_SRC	=mutex.s state.s
 AS_OBJ	=$(AS_SRC:.s=.o)
@@ -98,15 +98,15 @@ fat_alloc.o: /home/tiju/silverbox-os/include/ipc.h
 fat_alloc.o: /home/tiju/silverbox-os/include/os/mutex.h
 fat_alloc.o: /home/tiju/silverbox-os/include/string.h
 fat_alloc.o: /home/tiju/silverbox-os/include/stdlib.h
-libdrv.o: /home/tiju/silverbox-os/include/oslib.h
-libdrv.o: /home/tiju/silverbox-os/include/types.h
-libdrv.o: /home/tiju/silverbox-os/include/stddef.h
-libdrv.o: /home/tiju/silverbox-os/include/stdbool.h
-libdrv.o: /home/tiju/silverbox-os/include/ipc.h
-libdrv.o: /home/tiju/silverbox-os/include/os/mutex.h
-libdrv.o: /home/tiju/silverbox-os/include/os/dev_interface.h
-libdrv.o: /home/tiju/silverbox-os/include/string.h
-libdrv.o: /home/tiju/silverbox-os/include/os/message.h
+driver.o: /home/tiju/silverbox-os/include/oslib.h
+driver.o: /home/tiju/silverbox-os/include/types.h
+driver.o: /home/tiju/silverbox-os/include/stddef.h
+driver.o: /home/tiju/silverbox-os/include/stdbool.h
+driver.o: /home/tiju/silverbox-os/include/ipc.h
+driver.o: /home/tiju/silverbox-os/include/os/mutex.h
+driver.o: /home/tiju/silverbox-os/include/os/dev_interface.h
+driver.o: /home/tiju/silverbox-os/include/string.h
+driver.o: /home/tiju/silverbox-os/include/os/message.h
 console.o: /home/tiju/silverbox-os/include/oslib.h
 console.o: /home/tiju/silverbox-os/include/types.h
 console.o: /home/tiju/silverbox-os/include/stddef.h

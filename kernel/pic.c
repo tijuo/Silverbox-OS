@@ -7,7 +7,7 @@ COLD(void disableIRQ( int irq ));
 COLD(void enableAllIRQ(void));
 COLD(void disableAllIRQ(void));
 
-/* XXX: Maybe I should use APIC? */
+/* TODO: Maybe I should use APIC? */
 
 void sendEOI( void )
 {

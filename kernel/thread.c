@@ -80,7 +80,7 @@ int startThread( TCB *thread )
     assert( thread != currentThread ); // A paused thread should NEVER be running
     //detachPausedQueue( thread );
     thread->state = READY;
-    thread->quantaLeft = thread->priority + 1; // !!! This is important. Without it, the scheduler breaks for some reason !!!
+    thread->quantaLeft = thread->priority + 1;
 
     assert(thread->state != DEAD);
 
@@ -228,7 +228,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
     thread->regs.userEsp = (unsigned)uStack;
 
-    thread->regs.eflags = 0x3201;//0x3201; // FIXME: Warning: Magic Number
+    thread->regs.eflags = 0x3201;//0x3201; // XXX: Warning: Magic Number
     thread->regs.eip = ( dword ) threadAddr;
 
     if( tid == 0 )

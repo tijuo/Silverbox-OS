@@ -17,7 +17,6 @@ int detachRunQueue( TCB *thread );
 int attachPausedQueue( TCB *thread );
 int detachPausedQueue( TCB *thread );
 */
-/* XXX: Needs work */
 
 __asm__(".globl idle\n" \
         "idle: \n" \
@@ -40,7 +39,8 @@ void idle( void )
     asm("hlt\n");
 }
 */
-/* XXX: Needs work */
+
+/* TODO: There's probably a more efficient way of scheduling threads */
 
 TCB *schedule( volatile TCB *thread )
 {
@@ -143,17 +143,9 @@ TCB *schedule( volatile TCB *thread )
 
   currentThread->state = newThread->state = RUNNING;
 
-  /* XXX: Load the thread's I/O Bitmap */
-
-//  if( newThread->process->tssIOBitmap != NULL )
-//    memcpy( tssIOBitmap, newThread->process->tssIOBitmap, 128 );
-
   incSchedCount();
   return newThread;
 }
-
-/* XXX: This is broken. Only the context switcher should call schedule() otherwise
-   the scheduler will break! */
 
 int sysYield( TCB *thread )
 {
@@ -253,7 +245,7 @@ void timerInt( volatile TCB *thread )
 
     thread->quantaLeft--;
 
-    /* XXX: Put a sleepDequeue() that dequeues a thread only if the head has 0 delta.
+    /* TODO: Put a sleepDequeue() that dequeues a thread only if the head has 0 delta.
        It will also return the TID. Use the TID number to wake it up. Repeat until
        there is no head or the head's delta > 0. */
 

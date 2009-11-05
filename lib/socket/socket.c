@@ -2,7 +2,7 @@
 #include <os/rmpo.h>
 #include <errno.h>
 
-// FIXME: convert index into a valid socket descriptor
+// XXX: convert index into a valid socket descriptor
 
 int __fd_is_sockfd(int fd)
 {

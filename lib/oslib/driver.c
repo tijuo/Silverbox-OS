@@ -4,27 +4,6 @@
 #include <os/message.h>
 
 /* 
-CONNECT_MESSAGE
-
-1. A wants to start a connection with B. It sends a CONNECT_REQ to B.
-2a. B accepts and sends a CREATE_SHMEM message to the pager. It also sends an ATTACH_SHMEM_REG on behalf of A.
-2b. B rejects and sends a NACK message to A.
-3a. The pager sends two ACKs to B.
-3c. The pager sends an ACK and a NACK, respectfully, to B
-3d. The pager sends two NACKs to B.
-4a. B sends an ACK to A with information about the shared region
-4c. B sends a NACK to A. B sends a DELETE_SHMEM message to the pager.
-4d. B sends a NACK to A.
-5a. Connection formed. Data about the connection(address, reply port, etc) are stored.
-5c. The pager sends back an ACK/NACK to B.
-
-DISCONNECT_MESSAGE(What if something goes wrong?)
-
-1. A wants to disconnect with B. It sends a DISCONNECT_REQ to B.
-2. B accepts and sends a DELETE_SHMEM message to the pager.
-3. The pager sends an ACK to B.
-4. B sends an ACK to A.
-
 DRV_WRITE
 
 1. A requests to form a connection with B.
@@ -40,9 +19,7 @@ DRV_READ
 3. A requests to disconnect from B
 */
 
-// to send lots of data, use shared memory
-
-// FIXME: This doesn't protect against buffer overflows...
+// XXX: This doesn't protect against buffer overflows...
 
 int deviceRead( tid_t tid, unsigned char device, unsigned offset, size_t num_blks, 
 		size_t blk_len, void *buffer )

@@ -70,29 +70,6 @@ typedef unsigned long shmid_t;
 #define MSG_LEN         1024
 
 #define RAW_PROTOCOL		0
-#define TMPO_PROTOCOL		1
-#define UMPO_PROTOCOL		2
-#define RMPO_PROTOCOL		3
-
-struct UMPO_Header
-{
-  unsigned short frag_id : 7;
-/*
-  union FlagInfo
-  {
-    unsigned short flags : 3;
-
-    struct FragFlags
-    {
-      unsigned short more_frags : 1;
-      unsigned short retrans : 1;
-      unsigned short _resd : 1;
-    };
-  };
-*/
-  unsigned short resd : 6;
-  unsigned short subject;
-} __PACKED__;
 
 struct MemInfo
 {

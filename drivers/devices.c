@@ -81,7 +81,8 @@ static int registerDevName( tid_t tid, char *name, size_t name_len,
     print("Too many names\n");
     return -1;
   }
-  // XXX: Try to find a duplicate name here
+
+  // TODO: Try to find a duplicate name here
 
   strncpy( names[num_names].name, name, name_len );
   names[num_names].name_len = name_len;

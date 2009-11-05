@@ -10,8 +10,6 @@ int enqueue( struct Queue *queue, tid_t tid );
 tid_t detachQueue( struct Queue *queue, tid_t tid );
 tid_t dequeue( struct Queue *queue );
 
-/* !!! This function may cause problems. Must test !!! */
-
 int sleepEnqueue( struct Queue *queue, tid_t tid, unsigned short time )
 {
   tid_t node, prevNode = NULL_TID;

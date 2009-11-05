@@ -1,7 +1,5 @@
 #include <kernel/memory.h>
 
-/* !!! This can be made faster !!! */
-
 void *memcpy( void *dest, const void *src, size_t count );
 void *memset( void *buffer, int c, size_t num );
 /*

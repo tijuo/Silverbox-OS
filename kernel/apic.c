@@ -44,6 +44,6 @@ void enable_apic(void)
 
   kprintf("APIC Base: 0x%x\n", apic_result & ~0xFFF);  
 
-  // XXX: Here, actually *set up* the APIC
+  // TODO: Here, actually *set up* the APIC
   kMapPage( (addr_t)LAPIC_VADDR, (addr_t)LAPIC_BASE, PAGING_RW | PAGING_PCD );
 }

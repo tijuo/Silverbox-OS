@@ -25,7 +25,7 @@ struct FatDir
   char use_sects : 1;
 };
 
-/* XXX: Need to implement LFNs and FAT32 */
+/* TODO: Need to implement LFNs and FAT32 */
 
 /* XXX: readCluster() and writeCluster() are broken! 
    If the size of a block isn't divisible by 512, then there's
@@ -555,8 +555,6 @@ static int getDeviceData( unsigned short devNum, struct FAT_Dev *fatDev )
 
   return 0;
 }
-
-// XXX: FAT32/LFN not supported
 
 /* Follow a path (a set of directory names) until either a file or directory
    is reached. Return the file/directory's directory entry. */

@@ -70,7 +70,7 @@ shmid_t __connect(mid_t server_mbox, struct MemRegion *region, size_t pages)
 int __disconnect(struct ShmRegInfo *shmreg_info)
 {
   return -1;
-// XXX: __disconnect() needs to be implemented. The code below is the same for __connect()
+// TODO: __disconnect() needs to be implemented. The code below is the same for __connect()
 /*
   mid_t mbox;
   struct MessageQueue msgQueue;

@@ -7,8 +7,6 @@
 //static void mapPageTable( pde_t *pde, void *phys, u32 privilege );
 //static bool tempMapped = false, tempMapped2 = false;
 
-// XXX: Are these functions correct?
-
 int _writePDE( unsigned entryNum, pde_t *pde, void * addrSpace );
 int _readPDE( unsigned entryNum, pde_t *pde, void * addrSpace );
 int readPDE( void * virt, pde_t *pde, void * addrSpace );
@@ -29,9 +27,6 @@ addr_t unmapPageTable( void *virt, void *addrSpace );
 addr_t unmapPage( void *virt, void *addrSpace );
 
 void reload_cr3(void);
-
-// XXX: mapPage()
-// XXX: unmapPage()
 
 /* when I added mapTemp() and unmapTemp(), weird things started to happen. */
 
@@ -93,8 +88,8 @@ void unmapTemp( void )
   }
 }
 */
-/* !!! Warning: When modifying a page directory entry in kernel space, all page
-       directories need to be accessible and modified. !!! */
+/* Warning: When modifying a page directory entry in kernel space, all page
+   directories need to be accessible and modified. */
 
 int _writePDE( unsigned entryNum, pde_t *pde, void *addrSpace )
 {
@@ -270,8 +265,6 @@ addrSpace/*,  *(unsigned *)&pde*/);
   }
   return 0;
 }
-
-/* XXX: This is *really* broken for some reason... */
 
 /* address is the foreign address(in the indicated addrSpace */
 /* buffer is current address space */
@@ -545,8 +538,6 @@ addr_t kUnmapPage( void *virt )
   else
     return (addr_t)NULL_PADDR;
 }
-
-/* XXX: This needs work */
 
 addr_t unmapPage( void *virt, void *addrSpace )
 {

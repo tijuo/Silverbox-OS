@@ -9,8 +9,6 @@
 #include <kernel/signal.h>
 #include <os/signal.h>
 
-/* XXX: This file needs an entire overhaul */
-
 extern TCB *idleThread;
 void _syscall( volatile TCB *_thread, volatile unsigned intInfo );
 

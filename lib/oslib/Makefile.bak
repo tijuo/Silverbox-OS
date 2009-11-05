@@ -1,6 +1,6 @@
 SRC     =strings.c sbrk.c region.c bitmap.c \
 	services.c longmsg.c fat_lib.c fat_alloc.c \
-	libdrv.c console.c
+	driver.c console.c
 
 AS_SRC	=mutex.s state.s
 AS_OBJ	=$(AS_SRC:.s=.o)

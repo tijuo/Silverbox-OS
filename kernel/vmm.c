@@ -4,6 +4,9 @@
 #include <kernel/debug.h>
 #include <kernel/thread.h>
 
+// TODO: map, grant, and unmap operations should be privileged syscalls
+// TODO: only the inital server should have access to them
+
 int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages );
 int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys );
 int sysGrant( TCB *tcb, addr_t srcAddr, addr_t destAddr, 
@@ -26,8 +29,6 @@ void *sysUnmapPageTable( TCB *tcb, void *virt )
 
   return unmapPageTable( virt, tcb->addrSpace );
 }
-
-/* XXX: This needs work. */
 
 int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages )
 {

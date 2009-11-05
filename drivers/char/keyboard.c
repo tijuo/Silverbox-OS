@@ -335,7 +335,7 @@ void signal_handler(int signal, int arg)
             ext1++;
         }
         else if( (key & 0xE1) == 0xE1 )
-          ; // XXX: need to implement Pause
+          ; // TODO: need to implement Pause
         else
         {
           if( ext1 == 0 )

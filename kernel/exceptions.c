@@ -86,7 +86,7 @@ int sysRegisterInt( TCB *thread, int intNum )
 /* Notifies the kernel that a pager is finished handling a
    page fault, and it should resume execution. */
 
-// FIXME: This assumes that the page fault wasn't fatal
+// XXX: This assumes that the page fault wasn't fatal
 
 int sysEndPageFault( TCB *currThread, tid_t tid )
 {
@@ -113,7 +113,7 @@ void handleIRQ(volatile TCB *thread )
 {
   Registers *regs = (Registers *)&thread->regs;
 
-  if( GET_TID(thread) == IDLE_TID ) // FIXME: idle stack is messed up
+  if( GET_TID(thread) == IDLE_TID )
   {
     regs = (Registers *)(V_IDLE_STACK_TOP);
     regs--;

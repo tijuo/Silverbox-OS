@@ -17,7 +17,6 @@
 #define  DISC_DATA(X)  \
 extern X __attribute__((section(".ddata")));  X
 
-/* !!! What about the TSS entry here? !!! */
 #define contextSwitch( addrSpace, stack ) \
   __asm__ __volatile__( \
     "mov %0, %%ecx\n" \
@@ -202,8 +201,6 @@ int add_gdt_entry(int sel, dword base, dword limit, int flags)
   return rsel;
 }
 
-// XXX: Need to redo
-
 void initTSS(void)
 {
   struct TSS_Struct *tss = (struct TSS_Struct *)KERNEL_TSS;
@@ -243,11 +240,9 @@ void stopInit(char *msg)
   while(1);
 }
 
-/* !!! Warning: Fragile Code. Any changes to this function or to the
-       functions that are called by this function may break the entire
-       kernel. !!! */
-
-// XXX: Needs work
+/* Warning: This is fragile code! Any changes to this function or to the
+   functions that are called by this function may break the entire
+   kernel. */
 
 int initMemory( multiboot_info_t *info )
 {
@@ -323,8 +318,6 @@ void initTimer( void )
   kprintf("Enabling IRQ 0\n");
   enableIRQ( 0 );
 }
-
-// XXX: Need to redo
 
 void initScheduler( addr_t addrSpace )
 {
@@ -431,7 +424,7 @@ size_t calcKernelSize( multiboot_info_t *info )
 
 /* Returns the total size of the tables. */
 
-// XXX: Needs work
+// TODO: This needs to be cleaned up
 
 int initTables( addr_t start, int numThreads, int numRunQueues )
 {
@@ -500,7 +493,7 @@ bool isValidElfExe( addr_t img )
 
 }
 
-/* !!! Requires physical pages for BSS !!! */
+/* Requires physical pages for BSS */
 
 int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack )
 {
@@ -572,7 +565,7 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
         if ( fileSize == 0 )
         {
           /* Picks a physical address for BSS */
-          phys = (void *)m_area->base; // !!! This can be done better !!!
+          phys = (void *)m_area->base; // This can be done better
           priv = PAGING_RW;
           clearPhysPage( phys );
           m_area->base += PAGE_SIZE;
@@ -581,7 +574,7 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
         else
         {
           phys = (void *)VIRT_TO_PHYS((pheader->offset + (int)image + j * PAGE_SIZE));
-          priv = PAGING_RW; // XXX: Depends on whether it's read/write or read-only
+          priv = PAGING_RW; // TODO: Depends on whether it's read/write or read-only
         }
         
         //kprintf("mapping page: vaddr-0x%x phys-0x%x addrSpace-0x%x\n", pheader->vaddr+j*PAGE_SIZE, phys, addrSpace);
@@ -606,7 +599,7 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
   return 0;
 }
 
-// XXX: Need to redo
+// TODO: This *really* needs to be cleaned up
 
 void init2( void )
 {
@@ -632,7 +625,7 @@ void init2( void )
   clearPhysPage( (void *)INIT_SERVER_USTACK_PDE );
 //  clearPhysPage( (void *)INIT_SERVER_USTACK_PTE ); This shouldn't need clearing
 
-  ptr = (int *)(TEMP_PAGEADDR + PAGE_SIZE);//(/*(u32)PHYSMEM_START + */INIT_SERVER_USTACK_PTE + PAGE_SIZE); // XXX: Needs to be changed
+  ptr = (int *)(TEMP_PAGEADDR + PAGE_SIZE);
 
   kprintf("\n0x%x bytes of discardable code.", (unsigned)&kdData - (unsigned)&kdCode);
   kprintf(" 0x%x bytes of discardable data.\n", (unsigned)&kBss - (unsigned)&kdData);
@@ -771,7 +764,7 @@ void showCPU_Features(void)
     kprintf("PSE\n");
 }
 
-// XXX: Need to redo
+// TODO: This could be more organized and cleaner
 
 void init( multiboot_info_t *info )
 {

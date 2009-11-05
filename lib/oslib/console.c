@@ -15,7 +15,7 @@ char kbConvertRawChar( unsigned char c );
 char kbGetRawChar( void );
 char kbGetChar( void );
 
-/* XXX: Code is needed here to control scrolling, colors, etc */
+/* TODO: Code is needed here to control scrolling, colors, etc */
 
 int printChar( char c )
 {
