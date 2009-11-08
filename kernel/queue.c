@@ -2,13 +2,20 @@
 #include <kernel/debug.h>
 #include <kernel/thread.h>
 
-/* Done for now. */
-
 int sleepEnqueue( struct Queue *queue, tid_t tid, unsigned short time );
 tid_t sleepDequeue( struct Queue *queue );
 int enqueue( struct Queue *queue, tid_t tid );
 tid_t detachQueue( struct Queue *queue, tid_t tid );
 tid_t dequeue( struct Queue *queue );
+
+/** 
+  Adds a thread to a sleep queue with an associated delta time.
+
+  @param queue A sleep queue.
+  @param tid The TID of the thread to enqueue.
+  @param time The delta time in ticks.
+  @return 0 on success. -1 on failure.
+*/
 
 int sleepEnqueue( struct Queue *queue, tid_t tid, unsigned short time )
 {
@@ -69,7 +76,15 @@ int sleepEnqueue( struct Queue *queue, tid_t tid, unsigned short time )
   return 0;
 }
 
-/* Dequeues a thread only if the head has 0 delta. */
+/** 
+  Removes the first thread from a sleep queue if that thread has no time left.
+
+  @todo FIXME: If the first thread in the queue has delta time > 0, it's TID will
+               still be returned. This may not be desired.
+
+  @param queue A sleep queue.
+  @return The TID of the dequeued thread. NULL_TID if queue is empty or on failure.
+*/
 
 tid_t sleepDequeue( struct Queue *queue )
 {
@@ -88,6 +103,14 @@ tid_t sleepDequeue( struct Queue *queue )
 
   return node;
 }
+
+/** 
+  Adds a thread to the end of a thread queue.
+
+  @param queue A thread queue.
+  @param tid The TID of the thread to enqueue.
+  @return 0 on success. -1 on failure. 
+*/
 
 int enqueue( struct Queue *queue, tid_t tid )
 {
@@ -110,6 +133,14 @@ int enqueue( struct Queue *queue, tid_t tid )
 
   return 0;
 }
+
+/** 
+  Removes a thread from a thread queue.
+
+  @param queue A thread queue.
+  @param tid The TID of the thread to dequeue.
+  @return The TID of the thread, if found. NULL_TID if the thread is not on the queue or on failure.
+*/
 
 tid_t detachQueue( struct Queue *queue, tid_t tid )
 {
@@ -146,6 +177,14 @@ tid_t detachQueue( struct Queue *queue, tid_t tid )
 
 return NULL_TID;//  RET_MSG(NULL_TID, "NULL tid")//return NULL_TID;
 }
+
+/** 
+  Removes the first thread from a thread queue.
+
+  @param queue A thread queue.
+  @return The TID of the first thread on the thread queue. NULL_TID if the 
+          thread queue is empty or on failure.
+*/
 
 tid_t dequeue( struct Queue *queue )
 {

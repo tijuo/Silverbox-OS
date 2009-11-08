@@ -9,6 +9,8 @@ COLD(void disableAllIRQ(void));
 
 /* TODO: Maybe I should use APIC? */
 
+/// Send an EOI to the master and slave PICs
+
 void sendEOI( void )
 {
   outByte( (word)0x20, (byte)0x20 );
@@ -16,6 +18,8 @@ void sendEOI( void )
   outByte( (word)0xA0, (byte)0x20 );
   ioWait();
 }
+
+/// Unmasks an IRQ (enables an IRQ)
 
 void enableIRQ( int irq )
 {
@@ -40,6 +44,8 @@ void enableIRQ( int irq )
   }
 }
 
+/// Masks an IRQ (disables an IRQ)
+
 void disableIRQ( int irq )
 {
   volatile byte data;
@@ -63,6 +69,8 @@ void disableIRQ( int irq )
   }
 }
 
+/// Unmask all IRQs (enables all IRQs)
+
 void enableAllIRQ( void )
 {
   outByte( (word)0x21, 0 );
@@ -70,6 +78,8 @@ void enableAllIRQ( void )
   outByte( (word)0xA1, 0 );
   ioWait();
 }
+
+/// Mask all IRQs (disables all IRQs)
 
 void disableAllIRQ( void )
 {

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html 
+     PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>Silverbox OS Concepts</title>
+</head>
+
+<body>
+  <h1>Concepts of the Silverbox microkernel</h1>
+    <h2>Features:</h2>
+      <h3>Working or complete</h3>
+      <ul>
+        <li>Synchronous message passing</li>
+        <li>No memory management</li>
+        <li>Signals</li>
+        <li>Threads instead of processes</li>
+        <li>IRQ allocation</li>
+        <li>I/O port allocation(incomplete)</li>
+        <li>Preemptive multitasking(incomplete)</li>
+      </ul>
+      <h3>Need to do</h3>
+        <ul>
+          <li>System Clock (at least medium precision)</li>
+          <li>System Reboot/Restart</li>
+        </ul>
+    <h2>General</h2>
+
+    <h2>The Initial Server</h2>
+    <p>The initial server is the most important server because the
+Silverbox microkernel gives it special privileges, such as: using
+address space mapping system calls and modifying TCBs. It is the
+first and only server that the microkernel runs during the bootstrapping
+process. Boot information and memory map information are passed to the
+initial server during this time. The initial server is then responsible
+for doing the rest of the initializing.</p>
+
+    <h2>Scheduler</h2>
+
+    <h2>Signals</h2>
+    <p>Signals in the Silverbox microkernel are similar in concept to Unix
+signals; they are used to notify the user of some important event.</p>
+
+    <h2>Threads</h2>
+    <p>Each thread has an associated exception handler. This exception
+       handler receives all of the serious exceptions that are caused
+       by the thread. The exception handler also handles exit messages
+       and termination messages.</p>
+
+</body>
+</html>

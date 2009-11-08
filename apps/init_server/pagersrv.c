@@ -569,7 +569,7 @@ void initMsgQueue( void )
   servQueue.tail = &tail;
   servQueue.lock = 0;
 }
-*/
+
 int _allocate_mem_region(struct AllocMemInfo *info, tid_t sender)
 {
   struct MemRegion *region = region_malloc();
@@ -590,7 +590,7 @@ void allocate_mem_region( struct Message *msg )
   struct UMPO_Header *header = (struct UMPO_Header *)msg->data;
   _allocate_mem_region((struct AllocMemInfo *)(header + 1), msg->sender);
 }
-
+*/
 void dump_regs( int cr2, struct ThreadInfo *info )
 {
   print( "\n\n\n\n\nException: " );

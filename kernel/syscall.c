@@ -217,6 +217,8 @@ static int enableIO_Permissions( volatile TCB *thread, unsigned short begin,
 }
 */
 
+/// Handles a system call
+
 void _syscall( volatile TCB *thread, volatile unsigned intInfo )
 {
   TCB *_thread = (TCB *)thread;

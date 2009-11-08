@@ -32,6 +32,8 @@
 #define PAGING_PWT		8
 #define PAGING_PCD		16
 
+/// Represents an x86 PTE in a page table
+
 struct PageTableEntry 
 {
   dword present  : 1;
@@ -48,6 +50,8 @@ struct PageTableEntry
 } __PACKED__;
 
 typedef struct PageTableEntry pte_t;
+
+/// Represents an x86 PDE in a page directory
 
 struct PageDirEntry 
 {
@@ -66,9 +70,13 @@ struct PageDirEntry
 
 typedef struct PageDirEntry pde_t;
 
+/// Represents an x86 page directory
+
 typedef struct {
   pde_t pageTables[1024];
 } __PACKED__ pdir_t;
+
+/// Represents an x86 page table
 
 typedef struct {
   pte_t pages[1024];

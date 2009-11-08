@@ -17,7 +17,8 @@ static bool registerIRQ( int irq );
 static bool releaseIRQ( int irq );
 static void dump_regs( TCB *thread );
 
-/* true = no handler set
+/// Indicates whether an IRQ is allocated
+/** true = no handler set
    false = handler has been set */
 
 bool IRQState[ 16 ] =
@@ -25,6 +26,8 @@ bool IRQState[ 16 ] =
   true, true, false, true, true, true, true, true,
   true, false, true, true, true, true, true, true
 };
+
+/// The TIDs that are responsible for handling an IRQ
 
 tid_t IRQHandlers[ 16 ] = { NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID, 
 			       NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID, 
@@ -60,7 +63,7 @@ int sysEndIRQ( TCB *thread, int irqNum )
     return -1;
 }
 
-/* This allows a thread to register an interrupt handler. All
+/** This allows a thread to register an interrupt handler. All
    interrupts will be sent to a mailbox. */
 
 int sysRegisterInt( TCB *thread, int intNum )
@@ -83,10 +86,11 @@ int sysRegisterInt( TCB *thread, int intNum )
   }
 }
 
-/* Notifies the kernel that a pager is finished handling a
-   page fault, and it should resume execution. */
+/** Notifies the kernel that a pager is finished handling a
+   page fault, and it should resume execution.
 
-// XXX: This assumes that the page fault wasn't fatal
+   Warning: This assumes that the page fault wasn't fatal.
+*/
 
 int sysEndPageFault( TCB *currThread, tid_t tid )
 {
@@ -106,8 +110,9 @@ int sysEndPageFault( TCB *currThread, tid_t tid )
   return 0;
 }
 
-/* If an IRQ occurs, the kernel will send a message to the
-   thread's exception handler(if it exists). */
+/// Handles an IRQ (from 0 to 15).
+/** If an IRQ occurs, the kernel will send a message to the
+    thread's exception handler (if it exists). */
 
 void handleIRQ(volatile TCB *thread )
 {
@@ -141,6 +146,8 @@ void handleIRQ(volatile TCB *thread )
   }
 }
 
+/// Allocates an IRQ (so it cannot be reused)
+
 static bool registerIRQ( int irq )
 {
   assert( irq >= IRQ0 && irq <= IRQ15 );
@@ -154,6 +161,8 @@ static bool registerIRQ( int irq )
   }
 }
 
+/// Deallocates an IRQ (so it can be reused)
+
 static bool releaseIRQ( int irq )
 {
   assert( irq >= IRQ0 && irq <= IRQ15 );
@@ -166,6 +175,8 @@ static bool releaseIRQ( int irq )
     return true;
   }
 }
+
+/// Prints useful debugging information about the current thread
 
 static void dump_regs( TCB *thread )
 {
@@ -205,6 +216,8 @@ static void dump_regs( TCB *thread )
   }
   kprintf("\n");
 }
+
+/// Handles the CPU exceptions
 
 void handleCPUException(volatile TCB *thread  )
 {

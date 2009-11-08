@@ -48,4 +48,4 @@ depend:
 clean:
 	rm -f *.a
 	for i in $(LIBOSDIR) $(LIBCDIRS); do make -C $$i clean; done
-#	for i in $(LIBCDIRS); do make -C $$i clean; done
+	rm -rf *.o

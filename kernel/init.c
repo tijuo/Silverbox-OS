@@ -15,7 +15,7 @@
   X __attribute__((section(".dtext")));
 
 #define  DISC_DATA(X)  \
-extern X __attribute__((section(".ddata")));  X
+  extern X __attribute__((section(".ddata")));  X
 
 #define contextSwitch( addrSpace, stack ) \
   __asm__ __volatile__( \
@@ -32,13 +32,8 @@ extern X __attribute__((section(".ddata")));  X
     "iret\n" :: "m"(addrSpace), \
     "m"(stack) : "edx", "ecx", "esp" \
     );
+
 extern TCB *idleThread;
-
-extern void printA( void );
-extern void printB( void );
-extern void printC( void );
-
-extern void systemThread( void );
 
 DISC_DATA( u32 kernelEnd );
 DISC_CODE(int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack ));

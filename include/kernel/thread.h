@@ -27,6 +27,8 @@ typedef struct RegisterState Registers;
 
 #define GET_TID(t)	(tid_t)(t - tcbTable)
 
+/// Represents a node link in a queue
+
 struct NodePointer
 {
   union
@@ -37,15 +39,20 @@ struct NodePointer
   tid_t next;
 };
 
+/// Represents a queue of threads
+
 struct Queue
 {
   tid_t head;
   tid_t tail;
 };
 
-/* !!! This assumes only *single* processors */
+/* This assumes only *single* processors */
 
 /* Touching the data types of this struct may break the context switcher! */
+
+/// Contains the necessary data for a thread
+
 struct ThreadCtrlBlk
 {
   volatile addr_t addrSpace;
@@ -87,6 +94,6 @@ int startThread( TCB *thread );
 int pauseThread( TCB *thread );
 int sysYield( TCB *thread );
 
-int switchToThread( volatile TCB *oldThread, volatile TCB *newThread );
+//int switchToThread( volatile TCB *oldThread, volatile TCB *newThread );
 
 #endif /* THREAD_H */

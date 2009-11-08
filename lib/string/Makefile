@@ -6,7 +6,7 @@ OPT_FLG =-O2
 CLEAN   =$(OBJ)
 
 all: $(OBJ)
-	@cp *.o ..
+
 include ../../vars.mk
 # DO NOT DELETE
 

@@ -12,6 +12,9 @@ kernel:
 	@cp kernel/kernel* bin/
 	@rm -f bin/kernel.tmp
 
+kernel-docs:
+	doxygen kernel.cfg
+
 lib:
 	make -C $@ all
 
@@ -30,3 +33,4 @@ install: $(DIRS)
 clean:
 	for i in $(DIRS); do make -C $$i clean; done
 	cd tools && rm -f *.o
+	rm -rf doc/

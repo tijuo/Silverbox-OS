@@ -44,28 +44,29 @@
 #define KERNEL_VAR_PAGE		KERNEL_STACK_TOP
 #define BOOTSTRAP_STACK_TOP	(KERNEL_VAR_PAGE + 2 * PAGE_SIZE)
 
-/* FIXME: end */
-
 #define INVALID_VADDR       (void *)0xFFFFFFFF
 #define INVALID_ADDR        (void *)0xFFFFFFFF
 
+/// Aligns an address to the next page boundary (if not already aligned)
 #define PAGE_ALIGN(addr)    ALIGN(PAGE_SIZE, addr)
 
+/// Aligns an address to the next boundary (if not already aligned)
 #define ALIGN(mod, addr)    (((addr == ALIGN_DOWN(mod, addr)) ? (addr_t)addr : \
                                ((addr_t)(((u32)ALIGN_DOWN(mod, addr)) + mod)) ))
 
+/// Aligns an address to the previous boundary (if not already aligned)
 #define ALIGN_DOWN(mod, addr) ((addr_t)( (u32)addr & ~(mod - 1) ))
 
-/* Maps a physical address to a virtual address into the current address
-   space. */
+/// Maps a physical address to a virtual address into the current address space
+#define kMapMem( virt, phys, flags ) ( kMapPage( virt, phys, flags ) )
 
-#define kMapMem( virt, phys, privilege ) ( kMapPage( virt, phys, privilege) )
-
-/* Unmaps a virtual address from the current address space. */
-
+/// Unmaps a virtual address from the current address space
 #define kUnmapMem( virt ) ( kUnmapPage( virt ) )
 
+/// Temporarily maps a physical page into the current address space
 #define mapTemp( phys ) kMapMem((void *)(TEMP_PAGEADDR), phys, PAGING_RW)
+
+/// Unmaps the temporary page
 #define unmapTemp() 	kUnmapMem((void *)(TEMP_PAGEADDR))
 
 bool tempMapped;
@@ -87,9 +88,9 @@ HOT(int readPTE( void * virt, pte_t *pte, void * addrSpace ));
 HOT(int writePTE( void * virt, pte_t *pte, void * addrSpace ));
 HOT(int writePDE( void * virt, pde_t *pde, void * addrSpace ));
 
-int mapPageTable( void *virt, void *phys, u32 privilege, void *addrSpace );
-HOT(int kMapPage( void *virt, void *phys, u32 privilege ));
-HOT(int mapPage( void *virt, void *phys, u32 privilege, void *addrSpace ));
+int mapPageTable( void *virt, void *phys, u32 flags, void *addrSpace );
+HOT(int kMapPage( void *virt, void *phys, u32 flags ));
+HOT(int mapPage( void *virt, void *phys, u32 flags, void *addrSpace ));
 HOT(addr_t kUnmapPage( void *virt ));
 HOT(addr_t unmapPage( void *virt, void *addrSpace ));
 addr_t unmapPageTable( void *virt, void *addrSpace );

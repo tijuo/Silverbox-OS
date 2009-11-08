@@ -18,6 +18,10 @@ int attachPausedQueue( TCB *thread );
 int detachPausedQueue( TCB *thread );
 */
 
+/** There is a specific reason why this isn't a regular C function. It has to do
+    with the way the compiler compiles C functions and stack memory. The idle thread 
+    code has to be specifically like this. */
+
 __asm__(".globl idle\n" \
         "idle: \n" \
         "cli\n" \
@@ -41,6 +45,24 @@ void idle( void )
 */
 
 /* TODO: There's probably a more efficient way of scheduling threads */
+
+/** 
+  Picks the best thread to run next. Picks the idle thread, if none are available.
+
+  This scheduler picks a thread according to priority. Higher priority threads
+  will always run before lower priority threads (given that they are ready-to-run).
+  Higher priority threads are given shorter time slices than lower priority threads.
+  This assumes that high priority threads are IO-bound threads and lower priority
+  threads are CPU-bound. If a thread uses up too much of its time slice, then its
+  priority level is decreased. If there are no threads to run, then run the idle
+  thread.
+
+  @todo Add a way to increase the priority level of threads if it uses very little of
+        its time slice.
+
+  @param thread The TCB of the current thread.
+  @return A pointer to the TCB of the newly scheduled thread on success. NULL on failure.
+*/
 
 TCB *schedule( volatile TCB *thread )
 {
@@ -147,6 +169,8 @@ TCB *schedule( volatile TCB *thread )
   return newThread;
 }
 
+/// Voluntarily gives up control of the current thread
+
 int sysYield( TCB *thread )
 {
   assert( thread != NULL );
@@ -161,7 +185,7 @@ int sysYield( TCB *thread )
   return 0;
 }
 
-/* Ok */
+/// Adjusts the priority level of a thread
 
 int setPriority( TCB *thread, int level )
 {
@@ -187,7 +211,8 @@ int setPriority( TCB *thread, int level )
   return 0;
 }
 
-/* Ok */
+/// Adds a thread to the run queue
+
 int attachRunQueue( TCB *thread )
 {
   assert( thread != NULL );
@@ -196,7 +221,7 @@ int attachRunQueue( TCB *thread )
   if( thread == NULL )
     return -1;
 
-  assert( thread != currentThread ); /* If the current thread is attached to it's run queue, the scheduler will break! */
+  assert( thread != currentThread ); /* If the current thread is attached to its run queue, the scheduler will break! */
 
   if( thread->state == RUNNING )
     return 1;
@@ -213,7 +238,8 @@ int attachRunQueue( TCB *thread )
   #endif
 }
 
-/* Ok */
+/// Removes a thread from the run queue
+
 int detachRunQueue( TCB *thread )
 {
   assert( thread != NULL );
@@ -232,7 +258,19 @@ int detachRunQueue( TCB *thread )
   return 0;
 }
 
-/* Ok */
+/** 
+  Handles a timer interrupt.
+
+  @note This function should only be called by low-level IRQ handler routines.
+
+  The timer interrupt handler does periodic things like updating kernel
+  clocks/timers and decreasing a thread's quanta.
+
+  @note Since this is an interrupt handler, there should not be too much
+        code here and it should execute quickly.
+
+  @param thread The TCB of the current thread.
+*/
 
 void timerInt( volatile TCB *thread )
 {

@@ -11,7 +11,7 @@
 
 //extern void saveAndSwitchContext( volatile TCB * volatile, volatile TCB * volatile );
 
-/* Ok */
+/// Returns an unused TID
 
 tid_t getFreeTID(void)
 {
@@ -34,7 +34,6 @@ tid_t getFreeTID(void)
     RET_MSG(NULL_TID, "Exhausted all TIDS!");
 }
 
-/* Ok */
 /*
 int switchToThread( volatile TCB *oldThread, volatile TCB *newThread )
 {
@@ -66,7 +65,8 @@ int switchToThread( volatile TCB *oldThread, volatile TCB *newThread )
   return 0;
 }
 */
-/* Ok */
+
+/// Starts a non-running thread
 
 int startThread( TCB *thread )
 {
@@ -91,7 +91,8 @@ int startThread( TCB *thread )
     return 1;
 }
 
-/* Ok */
+
+/// Temporarily pauses a thread
 
 int sleepThread( TCB *thread, int msecs )
 {
@@ -125,7 +126,7 @@ int sleepThread( TCB *thread, int msecs )
   }
 }
 
-/* Ok */
+/// Pauses a thread
 
 int pauseThread( TCB *thread )
 {
@@ -149,9 +150,9 @@ int pauseThread( TCB *thread )
   }
 }
 
-/* Ok */
-
 /* Note that 'stack' is a physical address that will be mapped below 0xFF800000 */
+
+/// Creates and initializes a new thread
 
 TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exHandler )
 {
@@ -239,7 +240,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
     return thread;
 }
 
-/* Ok */
+/// Deallocates a thread
 
 int releaseThread( TCB *currThread, tid_t tid )
 {

@@ -12,7 +12,19 @@
 int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout );
 int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout );
 
-// Warning: sendMessage() modifies msg->sender.
+/**
+  Synchronously sends a message from the current thread to the recipient thread.
+
+  If the recipient is not ready to receive the message, then wait.
+
+  @note sendMessage() modifies msg->sender.
+
+  @param tcb The TCB of the sender.
+  @param recipient The TID of the message's recipient.
+  @param msg The message to be sent.
+  @param timeout Aborts the operation after timeout, if non-negative.
+  @return 0 on success. -1 on failure. -2 if interrupted by a signal.
+*/
 
 int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
 {
@@ -65,7 +77,18 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
   return -1;
 }
 
-/* sender may be NULL_TID, which represents anyone */
+/**
+  Synchronously receives a message from a thread.
+
+  If no message can be received, then wait for a message from sender.
+  
+  @param tcb The TCB of the recipient.
+  @param sender The TID of the message's sender. May be NULL_TID 
+         (which represents anyone).
+  @param buf A buffer to hold the incoming message.
+  @param timeout Aborts the operation after timeout, if non-negative.
+  @return 0 on success. -1 on failure. -2 if interrupted by a signal.
+*/
 
 int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout )
 {
