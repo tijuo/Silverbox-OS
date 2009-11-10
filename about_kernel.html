@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html 
+     PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>Silverbox OS Concepts</title>
+  <style type='text/css'>
+    body	{ width: 95%;
+		  margin-left: auto;
+		  margin-right: auto; }
+    table	{ border-width: 1px; 
+                  border-style: solid; }
+    table td	{ padding: 2px;
+                  margin: 1px;
+                  border: 1px;
+                  border-style: solid; }
+  </style>
+</head>
+
+<body>
+  <h1>About the Silverbox microkernel</h1>
+    <h2>Features:</h2>
+      <h3>Working, Implemented, or Complete</h3>
+      <ul>
+        <li>Synchronous message passing</li>
+        <li>No memory management</li>
+        <li>Signals</li>
+        <li>Threads instead of processes</li>
+        <li>IRQ allocation</li>
+      </ul>
+      <h3>Incopmlete</h3>
+      <ul>
+        <li>I/O port allocation</li>
+        <li>Preemptive multitasking</li>
+      </ul>
+      <h3>Not done yet</h3>
+        <ul>
+          <li>System Clock (at least medium precision)</li>
+          <li>System Reboot/Restart</li>
+        </ul>
+
+    <h2>General</h2>
+    <p>The Silverbox microkernel acts as the core of the Silverbox operating
+       system. Since the kernel is a microkernel, drivers do not run in
+       kernel mode. The microkernel is mainly responsible for manipulating
+       address spaces, threads, scheduling, I/O ports, timers/clocks, 
+       and any privileged operations.</p>
+
+    <h2>The Initial Server</h2>
+    <p>The initial server is the most important server because the
+       Silverbox microkernel gives it special privileges, such as: using
+       address space mapping system calls and modifying TCBs. It is the
+       first and only server that the microkernel runs during the bootstrapping
+       process. Boot information and memory map information are passed to the
+       initial server during this time. The initial server is then responsible
+       for doing the rest of the initializing.</p>
+
+    <h2>Scheduler</h2>
+    <p>Threads are scheduled according to priority. Higher priority threads are
+       always scheduled before lower priority threads. Higher priority threads
+       get a smaller CPU time slice while lower priority threads get a larger
+       CPU time slice. If a high priority thread uses up too much of its allocated
+       time slice, its priority is lowered. If a low priority thread uses little
+       of its allocated time slice its priority is increased. This way, IO-bound
+       threads tend to have a higher priority than CPU-bound threads.</p>
+    <p>Only threads that are ready-to-run can be scheduled. If no ready-to-run
+       threads exist, then the idle thread will run.
+
+    <h2>Signals</h2>
+    <p>Signals in the Silverbox microkernel are similar in concept to Unix
+       signals; they are used to notify the user of some important event.</p>
+
+    <h2>Threads</h2>
+    <p>Each thread has an associated exception handler. This exception
+       handler receives all of the serious exceptions that are caused
+       by the thread. The exception handler also handles exit messages
+       and termination messages.</p>
+
+      <h3>The Idle Thread</h3>
+      <p>The idle thread is only used when no other threads need to run.</p>
+
+    <h2>Kernel Memory Map</h2>
+    <table>
+      <tr>
+        <th>Name</th>
+        <th>Virtual Address</th>
+        <th>Description</th>
+      </tr>
+
+      <tr>
+        <td>Kernel Code &amp; Data</td>
+        <td>0xF0000000-0xF3FFFFFF</td>
+        <td>This area is reserved for kernel code and data. This region is 
+            present in all memory regions.</td>
+      </tr>
+      <tr>
+        <td>Interrupt Vector Table (IVT)</td>
+        <td>0xF0000000-0xF00004FF</td>
+        <td>This is the table of all BIOS from 16-bit mode. It's saved in case it's needed.</td>
+      </tr>
+
+      <tr>
+        <td>Interrupt Descriptor Table (IDT)</td>
+        <td>0xF0000500-0xF0000CFF</td>
+        <td>The table of all 32-bit interrupts.</td>
+      </tr>
+
+      <tr>
+        <td>Global Descriptor Table (GDT)</td>
+        <td>0xF0000D00-0xF0000F97</td>
+        <td>The table of GDT entries.</td>
+      </tr>
+
+      <tr>
+        <td>Task State Segment (TSS)</td>
+        <td>0xF0000F98-0xF0000FFF</td>
+        <td>The single TSS used for multitasking.</td>
+      </tr>
+
+      <tr>
+        <td>TSS IO Permission Bitmap</td>
+        <td>0xF0001000-0xF0002FFF</td>
+        <td>The bitmap for the permissions of the 65536 IO ports.</td>
+      </tr>
+
+      <tr>
+        <td>Temporary Page</td>
+        <td>0xF0003000-0xF0003FFF</td>
+        <td>The page used for mapping physical addresses to a virtual address.</td>
+      </tr>
+
+      <tr>
+        <td>LAPIC Address</td>
+        <td>0xF0004000-0xF0004FFF</td>
+        <td>The memory-mapped IO address for the LAPIC.</td>
+      </tr>
+
+      <tr>
+        <td>Idle Thread's Stack</td>
+        <td>0xF0005000-0xF0005FFF</td>
+        <td>The kernel stack used for the idle thread.</td>
+      </tr>
+
+      <tr>
+        <td>Kernel Stack</td>
+        <td>0xF0006000-0xF0006FFF</td>
+        <td>This is used for something...</td>
+      </tr>
+
+      <tr>
+        <td>Kernel Variables</td>
+        <td>0xF0007000-0xF0007FFF</td>
+        <td>These are kernel variables that are modified by the kernel,
+            but may be of use to user programs.</td>
+      </tr>
+
+      <tr>
+        <td>Bootstrap Stack</td>
+        <td>0xF0008000-0xF0008FFF</td>
+        <td>The stack used for bootstrapping the kernel. It is temporarily used.</td>
+      </tr>
+
+      <tr>
+        <td>Page Tables</td>
+        <td>0xFC000000-0xFFFFFFFF</td>
+        <td>Since the last PDE in the page directory points to the page directory itself,
+            The last page table in the page directory *is* the page directory.
+            The pages of the last page table are the page tables themselves.</td>
+      </tr>
+
+      <tr>
+        <td>Page Directory</td>
+        <td>0xFFFF0000-0xFFFFFFFF</td>
+        <td>This is the page directory mapped into itself. All 1024 page directory
+            entries are accessible here.</td>
+      </tr>
+    </table>
+
+</body>
+</html>

@@ -28,7 +28,7 @@ static void sysExit( TCB *thread, int code )
   thread->state = ZOMBIE;
 
   if( thread->exHandler == NULL_TID )
-    releaseThread(thread, GET_TID(thread));
+    releaseThread(thread);
   else
     sysRaise(&tcbTable[thread->exHandler], (GET_TID(thread) << 8) | SIGEXIT, code);
 
@@ -42,7 +42,7 @@ static void sysExit( TCB *thread, int code )
   if( thread == NULL )
     return;
 
-  releaseThread( thread, GET_TID(thread) );
+  releaseThread( thread );
 
   thread->state = DEAD;
 

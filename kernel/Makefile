@@ -31,6 +31,7 @@ kernel.gz: $(OBJ)
 	make -C asm/ all
 	@cp asm/*.o .
 	$(LD) $(LDFLAGS) -s -S *.o -o `basename $@ .gz`; \
+	rm -f $@
 	gzip `basename $@ .gz`
 
 memory.o: memory.c

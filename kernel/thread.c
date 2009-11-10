@@ -11,22 +11,18 @@
 
 //extern void saveAndSwitchContext( volatile TCB * volatile, volatile TCB * volatile );
 
-/// Returns an unused TID
+/** Returns an unused TID
+
+    @return A free, unused TID.
+*/
 
 tid_t getFreeTID(void)
 {
   static tid_t lastTID = INITIAL_TID;
   int count = 0;
 
-  kprintf("Last tid: %d\n", lastTID);
-
-  if( tcbTable[lastTID].state == DEAD )
-    kprintf("Last state is still DEAD(ok the first time).\n");
-
   while( tcbTable[lastTID].state != DEAD && count++ < maxThreads )
     lastTID = (lastTID == maxThreads - 1 ? INITIAL_TID + 1 : lastTID + 1);
-
-  kprintf("allocated tid\n");
 
   if( tcbTable[lastTID].state == DEAD )
     return lastTID;
@@ -66,8 +62,13 @@ int switchToThread( volatile TCB *oldThread, volatile TCB *newThread )
 }
 */
 
-/// Starts a non-running thread
+/** Starts a non-running thread
 
+    The thread is started by placing it on a run queue.
+
+    @param thread The TCB of the thread to be started.
+    @return 0 on success. -1 on failure. 1 if the thread doesn't need to be started.
+*/
 int startThread( TCB *thread )
 {
   assert( thread != NULL );
@@ -92,7 +93,15 @@ int startThread( TCB *thread )
 }
 
 
-/// Temporarily pauses a thread
+/** 
+    Temporarily pauses a thread for an amount of time.
+
+    @param thread The TCB of the thread to put to sleep.
+    @param msecs The amount of time to pause the thread in milliseconds.
+    @return 0 on success. -1 on failure. -2 if the thread cannot be switched
+            to the sleeping state from its current state. 1 if the thread is 
+            already sleeping.
+*/
 
 int sleepThread( TCB *thread, int msecs )
 {
@@ -100,13 +109,13 @@ int sleepThread( TCB *thread, int msecs )
   assert( msecs > 0 );
 
   if( thread->state == SLEEPING )
-    RET_MSG(-1, "Already sleeping!")//return -1;
+    RET_MSG(1, "Already sleeping!")//return -1;
 
   if( thread->state != READY && thread->state != RUNNING )
   {
     kprintf("sleepThread() failed!\n");
     assert(false);
-    return -1;
+    return -2;
   }
 
   if( thread->state == READY && GET_TID(thread) != IDLE_TID )
@@ -150,9 +159,15 @@ int pauseThread( TCB *thread )
   }
 }
 
-/* Note that 'stack' is a physical address that will be mapped below 0xFF800000 */
+/** 
+    Creates and initializes a new thread.
 
-/// Creates and initializes a new thread
+    @param threadAddr The start address of the thread.
+    @param addrSpace The physical address of the thread's page directory.
+    @param uStack The address of the top of the thread's user stack.
+    @param exHandler The TID of the thread's exception handler.
+    @return The TCB of the newly created thread. NULL on failure.
+*/
 
 TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exHandler )
 {
@@ -240,19 +255,23 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
     return thread;
 }
 
-/// Deallocates a thread
+/** 
+    Deallocates a thread.
 
-int releaseThread( TCB *currThread, tid_t tid )
+    @param thread The TCB of the thread to release.
+    @return 0 on success. -1 on failure.
+*/
+
+int releaseThread( TCB *thread )
 {
-  assert( currThread != NULL );
-  assert( tid != NULL_TID );
+  assert( thread != NULL );
 
-  if( currThread == NULL || tid == NULL_TID )
+  if( thread == NULL )
     return -1;
 
   // disableInt();
 
-  tcbTable[tid].state = DEAD;
+  thread->state = DEAD;
 
   // enableInt();
 

@@ -77,6 +77,8 @@
 #define enableInt()     asm __volatile__("sti\n")
 #define disableInt()    asm __volatile__("cli\n")
 
+/** Represents an entire TSS */
+
 struct TSS_Struct
 {
 	dword	backlink;
@@ -107,12 +109,14 @@ struct TSS_Struct
 	dword	ioMap;
 } __PACKED__;
 
-/* This is eight bytes long */
+/*
+// This is eight bytes long
 
 struct IDT_Entry
 {
 
 } __PACKED__;
+*/
 
 extern void atomicInc( volatile void * );
 extern void atomicDec( volatile void *);

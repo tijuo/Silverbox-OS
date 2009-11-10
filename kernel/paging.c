@@ -23,8 +23,8 @@ int mapPage( void *phys, void *virt, u32 flags, void *addrSpace );
 addr_t unmapPageTable( void *virt, void *addrSpace );
 addr_t unmapPage( void *virt, void *addrSpace );
 
-void reload_cr3(void);
-void invalidate_page( void *virt );
+inline void reload_cr3(void) __attribute__((always_inline));
+inline void invalidate_page( void *virt ) __attribute__((always_inline));
 
 /**
   Flushes the entire TLB by reloading the CR3 register.
@@ -33,7 +33,7 @@ void invalidate_page( void *virt );
   If only a few entries need to be flushed, use invalidate_page().
 */
 
-void reload_cr3(void)
+inline void reload_cr3(void)
 {
   __asm__ volatile("push %eax\n"
                    "movl %cr3, %eax\n"
@@ -48,7 +48,7 @@ void reload_cr3(void)
   This is faster than reload_cr3() for flushing a few entries.
 */
 
-void invalidate_page( void *virt )
+inline void invalidate_page( void *virt )
 {
   __asm__ volatile( "invlpg %0\n" :: "m"( *(char *)virt ) );
 }
@@ -704,8 +704,11 @@ addr_t unmapPage( void *virt, void *addrSpace )
     return returnAddr;
 }
 
-/// Unmaps a page table from an address space
-
+/** Unmaps a page table from an address space
+  @param virt The virtual address of the page table to unmap.
+  @param addrSpace The physical address of the page directory.
+  @return The physical address of the unmapped page table on success. NULL_PADDR on failure.
+*/
 addr_t unmapPageTable( void *virt, void *addrSpace )
 {
     pde_t pde, *pdePtr = &pde;

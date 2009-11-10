@@ -87,7 +87,7 @@ TCB  volatile * volatile currentThread;
 tid_t getFreeTID(void);
 
 TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exHandler/*, byte *io_bitmap*/ );
-int releaseThread( TCB *thread, tid_t tid );
+int releaseThread( TCB *thread );
 
 int sleepThread( TCB *thread, int msecs );
 int startThread( TCB *thread );

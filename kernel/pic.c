@@ -19,7 +19,11 @@ void sendEOI( void )
   ioWait();
 }
 
-/// Unmasks an IRQ (enables an IRQ)
+/** 
+    Unmasks an IRQ (enables an IRQ)
+
+    @param irq An IRQ number from 0 to 15.
+*/
 
 void enableIRQ( int irq )
 {
@@ -44,7 +48,11 @@ void enableIRQ( int irq )
   }
 }
 
-/// Masks an IRQ (disables an IRQ)
+/** 
+    Masks an IRQ (disables an IRQ)
+
+    @param irq An IRQ number from 0 to 15.
+*/
 
 void disableIRQ( int irq )
 {

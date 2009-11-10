@@ -487,7 +487,6 @@ bool isValidElfExe( addr_t img )
   return true;
 
 }
-
 /* Requires physical pages for BSS */
 
 int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack )
@@ -595,6 +594,10 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
 }
 
 // TODO: This *really* needs to be cleaned up
+
+/**
+    Bootstraps the initial server and passes necessary boot data to it.
+*/
 
 void init2( void )
 {
@@ -760,6 +763,12 @@ void showCPU_Features(void)
 }
 
 // TODO: This could be more organized and cleaner
+
+/**
+    Bootstraps the kernel.
+
+    @param info The multiboot structure passed by the bootloader.
+*/
 
 void init( multiboot_info_t *info )
 {

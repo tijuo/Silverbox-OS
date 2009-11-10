@@ -26,6 +26,10 @@ char *kitoa(int value, char *str, int base);
 
 #define combase com1
 
+/** Sets up the serial ports for printing debug messages
+    (and possibly receiving commands).
+*/
+
 void init_serial(void)
 {
     outByte(combase + 3, inByte(combase + 3) | 0x80); // Set DLAB for
@@ -92,6 +96,7 @@ void initVideo( void )
   useLowMem = true;
   badAssertHlt = true;//false; // true;
 }
+
 /*
 char toIntString(int num)
 {
@@ -198,10 +203,16 @@ char *_toHexString(unsigned int num)
   return __toHexString(num, 0);
 }
 */
+
+/** Sets the flag to use conventional memory for printing instead
+    of virtual memory.
+*/
 void setVideoLowMem( bool value )
 {
   useLowMem = value;
 }
+
+/// Sets the flag to halt the system on a failed assertion
 
 void setBadAssertHlt( bool value )
 {
@@ -294,6 +305,10 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
   }
 }
 
+/** Increments a counter that keeps track of the number of times that 
+    the scheduler was called.
+*/
+
 void incSchedCount( void )
 {
   volatile char *vidmem = ( volatile char * ) ( VIDMEM_START );
@@ -316,6 +331,10 @@ void incSchedCount( void )
   }
 }
 
+/** Increments a counter that keeps track of the number of times that
+    the timer interrupt was called.
+*/
+
 void incTimerCount( void )
 {
   volatile char *vidmem = ( volatile char * ) ( VIDMEM_START );
@@ -326,6 +345,8 @@ void incTimerCount( void )
   vidmem[0]++;
   vidmem[1] = 0x72;
 }
+
+/// Blanks the screen
 
 void clearScreen( void )
 {
@@ -375,6 +396,12 @@ void putChar( char c, int x, int y )
   _putChar( c, x, y, 7 );
 }
 */
+
+/** A simplified stdio printf() for debugging use
+    @param str The formatted string to print with format specifiers
+    @param ... The arguments to the specifiers
+*/
+
 void kprintf( const char *str, ... )
 {
 //  unsigned i;

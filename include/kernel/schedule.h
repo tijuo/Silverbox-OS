@@ -11,6 +11,8 @@
 #define NORMAL_PRIORITY 	4
 #define LOWEST_PRIORITY		NUM_PRIORITIES - 1
 
+/** The number of run queues used for the scheduler. */
+
 int maxRunQueues;
 
 int attachPausedQueue( TCB *thread );

@@ -185,8 +185,17 @@ int sysYield( TCB *thread )
   return 0;
 }
 
-/// Adjusts the priority level of a thread
+/** 
+    Adjusts the priority level of a thread.
 
+    If the thread is already on a run queue, then it will
+    be detached from its current run queue and attached to the
+    run queue associated with the new priority level.
+
+    @param thread The thread of a TCB.
+    @param level The new priority level.
+    @return 0 on success. -1 on failure.
+*/
 int setPriority( TCB *thread, int level )
 {
   assert( thread != NULL );
@@ -211,8 +220,12 @@ int setPriority( TCB *thread, int level )
   return 0;
 }
 
-/// Adds a thread to the run queue
+/** 
+    Adds a thread to the run queue.
 
+    @param thread The TCB of the thread to attach.
+    @return 0 on success. -1 on success. 1 if the thread was running (and shouldn't be on a run queue)
+*/
 int attachRunQueue( TCB *thread )
 {
   assert( thread != NULL );
@@ -238,7 +251,12 @@ int attachRunQueue( TCB *thread )
   #endif
 }
 
-/// Removes a thread from the run queue
+/** 
+    Removes a thread from the run queue.
+
+    @param thread The TCB of the thread to detach.
+    @return 0 on success. -1 on failure. 1 if the thread is running (and shouldn't be on a run queue).
+*/
 
 int detachRunQueue( TCB *thread )
 {
