@@ -88,77 +88,78 @@
         <th>Description</th>
       </tr>
 
-      <tr>
-        <td>Kernel Code &amp; Data</td>
-        <td>0xF0000000-0xF3FFFFFF</td>
-        <td>This area is reserved for kernel code and data. This region is 
-            present in all memory regions.</td>
-      </tr>
-      <tr>
+<!--      <tr>
         <td>Interrupt Vector Table (IVT)</td>
-        <td>0xF0000000-0xF00004FF</td>
+        <td>0xF4000000-0xF40004FF</td>
         <td>This is the table of all BIOS from 16-bit mode. It's saved in case it's needed.</td>
-      </tr>
+      </tr> -->
 
       <tr>
         <td>Interrupt Descriptor Table (IDT)</td>
-        <td>0xF0000500-0xF0000CFF</td>
+        <td>0xF4000000-0xF40007FF</td>
         <td>The table of all 32-bit interrupts.</td>
       </tr>
 
       <tr>
         <td>Global Descriptor Table (GDT)</td>
-        <td>0xF0000D00-0xF0000F97</td>
+        <td>0xF4000800-0xF4000F97</td>
         <td>The table of GDT entries.</td>
       </tr>
 
       <tr>
         <td>Task State Segment (TSS)</td>
-        <td>0xF0000F98-0xF0000FFF</td>
+        <td>0xF4000F98-0xF4000FFF</td>
         <td>The single TSS used for multitasking.</td>
       </tr>
 
       <tr>
-        <td>TSS IO Permission Bitmap</td>
-        <td>0xF0001000-0xF0002FFF</td>
-        <td>The bitmap for the permissions of the 65536 IO ports.</td>
-      </tr>
-
-      <tr>
-        <td>Temporary Page</td>
-        <td>0xF0003000-0xF0003FFF</td>
-        <td>The page used for mapping physical addresses to a virtual address.</td>
-      </tr>
-
-      <tr>
-        <td>LAPIC Address</td>
-        <td>0xF0004000-0xF0004FFF</td>
-        <td>The memory-mapped IO address for the LAPIC.</td>
-      </tr>
-
-      <tr>
         <td>Idle Thread's Stack</td>
-        <td>0xF0005000-0xF0005FFF</td>
+        <td>0xF408F000-0xF4008FFF</td>
         <td>The kernel stack used for the idle thread.</td>
       </tr>
 
       <tr>
         <td>Kernel Stack</td>
-        <td>0xF0006000-0xF0006FFF</td>
-        <td>This is used for something...</td>
+        <td>0xF4090000-0xF4090FFF</td>
+        <td>This is the kernel stack that is used for every thread other than the idle thread.</td>
+      </tr>
+
+      <tr>
+        <td>Bootstrap Stack</td>
+        <td>0xF4093000-0xF4093FFF</td>
+        <td>The stack used for bootstrapping the kernel. It is temporarily used.</td>
+      </tr>
+
+      <tr>
+        <td>TSS IO Permission Bitmap</td>
+        <td>0xF40C0000-0xF40C2FFF</td>
+        <td>The bitmap for the permissions of the 65536 IO ports.</td>
+      </tr>
+
+      <tr>
+        <td>Temporary Page</td>
+        <td>0xF40C3000-0xF40C3FFF</td>
+        <td>The page used for mapping physical addresses to a virtual address.</td>
+      </tr>
+
+      <tr>
+        <td>LAPIC Address</td>
+        <td>0xF40C4000-0xF40C4FFF</td>
+        <td>The memory-mapped IO address for the LAPIC.</td>
       </tr>
 
       <tr>
         <td>Kernel Variables</td>
-        <td>0xF0007000-0xF0007FFF</td>
+        <td>0xF40C5000-0xF40C5FFF</td>
         <td>These are kernel variables that are modified by the kernel,
             but may be of use to user programs.</td>
       </tr>
 
       <tr>
-        <td>Bootstrap Stack</td>
-        <td>0xF0008000-0xF0008FFF</td>
-        <td>The stack used for bootstrapping the kernel. It is temporarily used.</td>
+        <td>Kernel Code &amp; Data</td>
+        <td>0xF5000000-0xF7FFFFFF</td>
+        <td>This area is reserved for kernel code and data. This region is
+            present in all memory regions.</td>
       </tr>
 
       <tr>

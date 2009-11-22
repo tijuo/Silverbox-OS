@@ -198,7 +198,7 @@ int add_gdt_entry(int sel, dword base, dword limit, int flags)
 
 void initTSS(void)
 {
-  struct TSS_Struct *tss = (struct TSS_Struct *)KERNEL_TSS;
+  struct TSS_Struct *tss = (struct TSS_Struct *)(PHYSMEM_START + KERNEL_TSS);
 
   tss->ioMap = 0x68;
   tss->ss0 = KDATA;

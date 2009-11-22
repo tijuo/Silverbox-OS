@@ -19,6 +19,11 @@ block:
 bus:
 	make -C $@ all
 
+install: $(DIRS) $(EXE)
+	for i in $(DIRS); do make -C $$i install; done
+	echo $(EXE)
+	$(PREFIX)/tools/copy_files.sh $(EXE)
+
 clean:
 	for i in $(DIR); do cd $$i; make clean; cd ..; done
 	rm -f *.o

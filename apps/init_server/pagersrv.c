@@ -9,6 +9,7 @@
 #include <os/dev_interface.h>
 #include <os/device.h>
 #include "shmem.h"
+#include "name.h"
 
 extern void handleTMPO(struct Message *msg);
 
@@ -34,7 +35,14 @@ struct ProgramArgs
   int length;
 };
 
+<<<<<<< HEAD:apps/init_server/pagersrv.c
 extern struct ListType shmem_list;
+=======
+/*
+extern int registerThreadName(char *name, size_t len, tid_t tid);
+extern tid_t lookupThreadName( char *name, size_t len);
+*/
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
 
 void handle_message(void);
 /*
@@ -59,10 +67,17 @@ void tested2(void)
 }
 */
 
+<<<<<<< HEAD:apps/init_server/pagersrv.c
 struct NameEntry
 {
   char name[N_MAX_NAME_LEN];
   size_t name_len;
+=======
+int extendHeap( unsigned pages );
+int _mapMem( void *phys, void *virt, int pages, int flags, void *pdir );
+void *_unmapMem( void *virt, void *pdir );
+int mapMemRange( void *virt, int pages );
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
 
   union Entry entry;
   enum NameType name_type;
@@ -71,6 +86,7 @@ struct NameEntry
 static unsigned num_names=0;
 static unsigned num_fs=0;
 
+<<<<<<< HEAD:apps/init_server/pagersrv.c
 static int _register( tid_t tid, enum NameType name_type, union Entry *device );
 static int registerDevName( tid_t tid, char *name, size_t name_len, 
                             enum NameType name_type, union Entry *device );
@@ -154,6 +170,11 @@ static struct NameEntry *_lookupName( char *name, size_t len )
 
   return NULL;
 }
+=======
+void clearPage( void *page );
+
+struct AddrSpace pager_addr_space;
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
 
 int get_boot_info( int argc, char **argv )
 {
@@ -210,24 +231,14 @@ int get_boot_info( int argc, char **argv )
     }
   }
 
-  __map((void *)TEMP_PAGE, (void *)start_page_addr, 1);
-  memset((void *)TEMP_PAGE, 0, PAGE_SIZE);
-  __unmap((void *)TEMP_PAGE);
-
-  /* Extra page is needed for page table */
-
-  /* Map in pages for boot information, memory map, etc... */
-
-  __map_page_table(allocEnd, (void *)start_page_addr);
+  clearPage( (void *)start_page_addr );
 
   for(i=1; i < pages_needed+1; i++)
-  {
-    __map((void *)TEMP_PAGE, (void *)(start_page_addr + i * PAGE_SIZE), 1);
-    memset((void *)TEMP_PAGE, 0, PAGE_SIZE);
-    __unmap((void *)TEMP_PAGE);
-  }
+    clearPage( (void *)(start_page_addr + i * PAGE_SIZE) );
 
-  __map(allocEnd, (void *)(start_page_addr + PAGE_SIZE), pages_needed);
+  __map_page_table(allocEnd, (void *)start_page_addr, 0, NULL_PADDR);
+
+  __map(allocEnd, (void *)(start_page_addr + PAGE_SIZE), pages_needed, 0, NULL_PADDR);
   pages_needed += 2; //pages_needed++; <--- FIXME: Why is it only incremented by 1 instead of 2 ???
 
   /* Initialize the physical page lists. */
@@ -300,17 +311,10 @@ void _mapMem( void *phys, void *virt, int pages, int flags, void *pdir )
     {
       table_phys = alloc_phys_page(NORMAL, pdir);
 
-      __map( (void *)TEMP_PAGE, table_phys, 1 );
-      memset((void *)TEMP_PAGE, 0, 4096);
-      __unmap( (void *)TEMP_PAGE );
+      clearPage( table_phys );
 
-      if( pdir == page_dir )
-        __map_page_table( addr, table_phys );
-      else
-      {
-        __map_page_table( (void *)TEMP_PTABLE, table_phys );
-        __grant_page_table((void *)TEMP_PTABLE, addr, pdir, 1);
-      }
+      __map_page_table( addr, table_phys, 0, pdir );
+
       set_ptable_status(pdir, addr, true);
     }
 
@@ -318,22 +322,35 @@ void _mapMem( void *phys, void *virt, int pages, int flags, void *pdir )
 
     // XXX: modify phys page attributes
 
-    if( pdir == page_dir )
-      __map( addr, phys, 1 );
-    else
-    {
-      __map( (void *)TEMP_PAGE, phys, 1 );
-      __grant( (void *)TEMP_PAGE, addr, pdir, 1 );
-    }
+    __map( addr, phys, 1, 0, pdir );
 
     addr += PAGE_SIZE;
     phys += PAGE_SIZE;
   }
 }
 
+<<<<<<< HEAD:apps/init_server/pagersrv.c
 void mapVirt( void *virt, int pages )
+=======
+void *_unmapMem( void *virt, void *pdir )
+{
+  // XXX: Need to clear the page table if it is empty!
+  return __unmap( virt, pdir );
+}
+
+// Maps a virtual address to a physical address (in this address space)
+
+int mapMemRange( void *virt, int pages )
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
 {
   _mapMem( alloc_phys_page(NORMAL, page_dir), virt, pages, 0, page_dir );
+}
+
+void clearPage( void *page )
+{
+  __map((void *)TEMP_PAGE, page, 1, 0, NULL_PADDR);
+  memset((void *)TEMP_PAGE, 0, PAGE_SIZE);
+  __unmap((void *)TEMP_PAGE, NULL_PADDR);
 }
 
 bool isValidElfExe( void *img )
@@ -362,6 +379,92 @@ bool isValidElfExe( void *img )
   return true;
 }
 
+int loadExe( const char *path )
+{
+  elf_header_t header;
+  elf_pheader_t pheader;
+  unsigned pheader_count;
+  tid_t tid;
+  void *phys;
+  void *addrSpace;
+  struct AddrSpace *addr_space_struct;
+
+  if( fatReadFile( path, 0, DEV_NUM(10, 0), &header, sizeof header ) < 0 )
+    return -1;
+
+  if( !isValidElfExe( &header ) )
+    return -1;
+
+  pheader_count = header.phnum;
+
+  addrSpace = alloc_phys_page(NORMAL, page_dir);//pageAllocator->alloc();
+
+  // XXX: Now create a 'struct AddrSpace' for the new thread
+
+  addr_space_struct = malloc( sizeof( struct AddrSpace ) );
+  init_addr_space(addr_space_struct, addrSpace);
+  list_insert((int)addrSpace, addr_space_struct, &addr_space_list);
+
+  clearPage( addrSpace );
+
+  tid = __create_thread( (addr_t)header.entry, addrSpace, (void *)(TEMP_PTABLE + PTABLE_SIZE), 1 );
+
+  if( tid == -1 )
+  {
+    free_phys_page( addrSpace );
+    list_remove((int)addrSpace, &addr_space_list);
+    free(addr_space_struct);
+    return -1; // XXX: But first, free physical memory before returning
+  }
+
+  attach_tid(addrSpace, tid);
+
+  for( unsigned i = 0; i < pheader_count; i++ )
+  {
+    fatReadFile( path, header.phoff + i * sizeof(pheader), DEV_NUM(10, 0), 
+                 &pheader, sizeof pheader );
+
+    if( pheader.type == PT_LOAD )
+    {
+      unsigned memSize = pheader.memsz;
+      unsigned fileSize = pheader.filesz;
+
+      for ( unsigned j = 0; memSize > 0; j++ )
+      {
+        phys = alloc_phys_page(NORMAL, addrSpace);
+
+        if ( fileSize == 0 )
+          clearPage(phys);
+        else
+        {
+          __map( (void *)TEMP_PAGE, phys, 1, 0, page_dir );
+
+          fatReadFile( path, pheader.offset + j * PAGE_SIZE, DEV_NUM(10,0),
+                       (void *)TEMP_PAGE, PAGE_SIZE );
+        }
+
+        _mapMem( phys, (void *)(pheader.vaddr + j * PAGE_SIZE), 1, 0, addrSpace );
+
+        if( fileSize > 0 )
+          __unmap( (void *)TEMP_PAGE, page_dir );
+
+        if( memSize < PAGE_SIZE )
+          memSize = 0;
+        else
+          memSize -= PAGE_SIZE;
+
+        if( fileSize < PAGE_SIZE )
+          fileSize = 0;
+        else
+          fileSize -= PAGE_SIZE;
+      }
+    }
+  }
+
+  __start_thread( tid );
+  return 0;
+}
+
 // !!! Requires physical pages for BSS !!! 
 
 // Note that img is a physical address and needs to be mapped to an address somewhere
@@ -373,9 +476,9 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
   elf_pheader_t *pheader;
   tid_t tid;
   void *phys;
+  void *tempPage;
   size_t length = module->mod_end - module->mod_start;
   void *addrSpace, *temp;;
-  void *tempPage;
   unsigned lastTable = 1;
   struct AddrSpace *addr_space_struct;
   unsigned arg_len=8;
@@ -383,34 +486,41 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
   if( module == NULL )
     return -1;
 
+/* First, map in a page table for the image. */
+
+  _mapMem( (void *)module->mod_start, image, (length % PAGE_SIZE == 0) ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1, 0, page_dir );
+
+/*
   tempPage = alloc_phys_page(NORMAL, page_dir);//pageAllocator->alloc();
 
-  __map( (void *)TEMP_PAGE, tempPage, 1 );
-  memset( (void *)TEMP_PAGE, 0, PAGE_SIZE );
-  __unmap( (void *)TEMP_PAGE );
+  clearPage(tempPage);
 
-  if( __map_page_table((void *)image, tempPage) != 0 )
+  if( __map_page_table((void *)image, tempPage, 0, NULL_PADDR) != 0 )
   {
     free_phys_page(tempPage);
     print("__map_page_table() failed.\n");
-   __exit(1);
+   return -1;
   }
 
-  if( __map((void *)image, (void *)module->mod_start, (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1)) != 0)
+/ * Map the image to virtual memory. (assumes that the image is less than or equal to 4MB in size). * /
+
+  if( __map((void *)image, (void *)module->mod_start, (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1), 0, NULL_PADDR) != 0)
   {
-    __unmap_page_table((void *)image);
+    __unmap_page_table((void *)image, NULL_PADDR);
     free_phys_page(tempPage);
     print("__map failed!\n");
-   __exit(1);
+   return -1;
   }
+*/
 
    //__yield(); // This makes the code work for some reason...
 
   if( !isValidElfExe( image ) )
   {
-    __unmap((void *)image);
-    __unmap_page_table((void *)image);
-    free_phys_page(tempPage);
+    for(i=0; i < (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1); i++)
+      __unmap((void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR);
+
+    __unmap_page_table((void *)image, NULL_PADDR);
     print("Not a valid ELF executable.\n");
     return -1;
   }
@@ -425,27 +535,36 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
   init_addr_space(addr_space_struct, addrSpace);
   list_insert((int)addrSpace, addr_space_struct, &addr_space_list);
 
-  __map( (void *)TEMP_PAGE, addrSpace, 1 );
-  memset( (void *)TEMP_PAGE, 0, PAGE_SIZE );
-  __unmap( (void *)TEMP_PAGE );
+  clearPage( addrSpace );
 
+  tempPage = alloc_phys_page(NORMAL, addrSpace);
+
+  _mapMem( tempPage, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, addrSpace );
+  _mapMem( tempPage, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, page_dir );
+
+  if( args != NULL )
+  {
+    memcpy( (void *)(TEMP_PTABLE + PTABLE_SIZE - args->length - 8), args->data, args->length );
+    arg_len += args->length;
+  }
+
+  memset( (void *)(TEMP_PTABLE + PTABLE_SIZE - 8), 0, 8 );
+/*
   temp = alloc_phys_page(NORMAL, addrSpace);//pageAllocator->alloc();
 
-  __map( (void *)TEMP_PAGE, temp, 1 );
-  memset( (void *)TEMP_PAGE, 0, PAGE_SIZE );
-  __unmap( (void *)TEMP_PAGE );
+  clearPage( temp );
 
-  if( __map_page_table( (void *)TEMP_PTABLE, temp) != 0 )
+  if( __map_page_table( (void *)TEMP_PTABLE, temp, 0, NULL_PADDR) != 0 )
     ;//cleanup;
  
   phys = alloc_phys_page(NORMAL, addrSpace);
 
-  if( __map((void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), phys, 1 ) != 0 )
+  if( __map((void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), phys, 1, 0, NULL_PADDR ) != 0 )
     ;// cleanup;
 
   if( args != NULL )
   {
-    /* XXX: This may not work */
+    / * XXX: This may not work * /
     memcpy( (void *)(TEMP_PTABLE + PTABLE_SIZE - args->length - 8), args->data, args->length);
     arg_len += args->length;
   }
@@ -454,9 +573,11 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
 
   if( args != NULL )
   {
-    ; // Here, put the start argument pointer and return address (if __exit() isn't called)
+    ; // Here, put the start argument pointer and return address (if __exit() isn't called before program termination)
   }
+*/
 
+  _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL_PADDR );
   tid = __create_thread( (addr_t)image->entry, addrSpace, (void *)(TEMP_PTABLE + PTABLE_SIZE - arg_len), 1 );
 
   if( tid == -1 )
@@ -464,8 +585,8 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
 
   attach_tid(addrSpace, tid); //mappingTable.map( tid, addrSpace );
 
-  __grant_page_table( (void *)TEMP_PTABLE, (void *)STACK_TABLE, addrSpace, 1 );
-  set_ptable_status( addrSpace, (void *)STACK_TABLE, true );
+//  __grant_page_table( (void *)TEMP_PTABLE, (void *)STACK_TABLE, addrSpace, 1 );
+//  set_ptable_status( addrSpace, (void *)STACK_TABLE, true );
 
   // Program header information is loaded into memory
 
@@ -482,43 +603,13 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
       {
         if ( fileSize == 0 )
         {
-  //        print("fileSize == 0:\n");
-          // Picks a physical address for BSS
           phys = alloc_phys_page(NORMAL, addrSpace); //pageAllocator->alloc();
-
-          __map( (void *)TEMP_PAGE, phys, 1 );
-          memset( (void *)TEMP_PAGE, 0, PAGE_SIZE );
-          __unmap( (void *)TEMP_PAGE );
+          clearPage( phys );
         }
         else
           phys = (void *)(pheader->offset + (unsigned)module->mod_start + j * PAGE_SIZE);
 
-        if( get_ptable_status(addrSpace, (void *)((unsigned)pheader->vaddr + j * PAGE_SIZE)) == false )
-        {
-          if( (lastTable != (((unsigned)pheader->vaddr + j * PAGE_SIZE) & 0xFFC00000) ) && (lastTable != 1) )
-            __grant_page_table((void *)0x4000000, (void *)lastTable, addrSpace, 1);
-
-          /* For some strange reason, the end of memory is filled with 0xFFFFFFF and can't be written to.
-             Maybe it's for memory mapped I/O? */
-
-          temp = alloc_phys_page(NORMAL, addrSpace);//(void *)pageAllocator->alloc();
-
-          __map( (void *)TEMP_PAGE, temp, 1 );
-          memset( (void *)TEMP_PAGE, 0, PAGE_SIZE );
-          __unmap( (void *)TEMP_PAGE );
-
-          __map_page_table((void *)0x4000000, temp);
-
-          lastTable = ((unsigned)pheader->vaddr + j * PAGE_SIZE) & 0xFFC00000;
-
-          // mappingTable.setPTable( addrSpace, (void *)((unsigned)pheader->vaddr + j * PAGE_SIZE) );
-          set_ptable_status(addrSpace, (void *)((unsigned)pheader->vaddr + j * PAGE_SIZE), true);
-        }
-
-        __map( (void *)(0x4000000 + (((unsigned)pheader->vaddr + j * PAGE_SIZE) & 0x3FFFFF)), phys, 1 );
-
-        if( fileSize == 0 )
-          memset( (void *)(0x4000000 + (((unsigned)pheader->vaddr + j * PAGE_SIZE) & 0x3FFFFF)), 0, 4096 );
+        _mapMem( phys, (void *)(pheader->vaddr + j * PAGE_SIZE), 1, 0, addrSpace );
 
         if( memSize < PAGE_SIZE )
           memSize = 0;
@@ -533,16 +624,13 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
     }
   }
 
-  if( lastTable != 1 )
-    __grant_page_table((void *)0x4000000, (void *)lastTable, addrSpace, 1);
-
   __start_thread( tid );
 
   for(i=0; i < (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1); i++)
-    __unmap((void *)((unsigned)image + i * PAGE_SIZE));
+    _unmapMem( (void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR); //__unmap((void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR);
 
-  tempPage = __unmap_page_table(image);
-  free_phys_page(tempPage);
+//  tempPage = __unmap_page_table(image, NULL_PADDR);
+//  free_phys_page(tempPage);
 
   return 0;
 }
@@ -782,6 +870,7 @@ void handle_message( void )
         void *pdir = lookup_tid(sender);
         _mapMem((void *)req->arg[0], (void *)req->arg[1], (unsigned)req->arg[2], req->arg[3], pdir); // doesn't return result
 
+<<<<<<< HEAD:apps/init_server/pagersrv.c
         break;
       }
       case ALLOC_MEM:
@@ -804,6 +893,64 @@ void handle_message( void )
 
         break;
       }
+=======
+        pdir = lookup_tid(sender);
+
+        if( pdir == NULL )
+        {
+          print("Request map_map(): Oops! TID ");
+          printInt(sender);
+          print(" is not registerd.");
+
+          result = -1;
+          break;
+        }
+
+        region = region_malloc();
+
+        if( region == NULL )
+        {
+          print("Couldn't alloc region.");
+          result = -1;
+          break;
+        }
+
+        region->virtRegion.start = req->arg[1];
+        region->physRegion.start = req->arg[0];
+        region->virtRegion.length = region->physRegion.length = 
+           req->arg[2]  * PAGE_SIZE;
+        region->flags = MEM_MAP;
+
+        if( flags & MEM_FLG_RO )
+          region->flags |= MEM_RO;
+
+        if( (flags & MEM_FLG_COW) && !(flags & MEM_FLG_ALLOC) ) // COW would imply !ALLOC
+          region->flags |= MEM_RO | MEM_COW;
+
+        if( flags & MEM_FLG_LAZY )	// I wonder how a lazy COW would work...
+          region->flags |= MEM_LAZY;
+
+        if( (flags & MEM_FLG_ALLOC) && !(flags & MEM_FLG_COW) ) // ALLOC would imply !COW
+          region->flags &= ~MEM_MAP ;
+
+        if( attach_mem_region(pdir, region) != 0 )
+        {
+          region_free(region);
+          print("attach_mem_region() failed.");
+          result = -1;
+          break;
+        }
+
+        if( !(flags & MEM_FLG_LAZY) && !(flags & MEM_FLG_ALLOC) )
+        {
+          _mapMem((void *)req->arg[0], (void *)req->arg[1], 
+                    (unsigned)req->arg[2], req->arg[3], pdir); // doesn't return result
+        }
+
+        result = 0;
+        break;
+      }
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
       case MAP_TID:
       {
         if( req->arg[1] == (int)NULL_PADDR )
@@ -850,16 +997,33 @@ void handle_message( void )
       case REGISTER_NAME:
       {
         tid_t t;
+        struct NameRecord *record = _lookupName((char *)&req->arg[1],req->arg[0], TID);
 
+<<<<<<< HEAD:apps/init_server/pagersrv.c
         if( (t=lookup_name((char *)&req->arg[1], req->arg[0])) == NULL_TID )
           result = register_name((char *)&req->arg[1], req->arg[0], sender);
+=======
+        if( !record )
+          result = _registerName((char *)&req->arg[1],req->arg[0], TID, &sender);
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
         else
           result = -1;
         break;
       }
       case LOOKUP_NAME:
+<<<<<<< HEAD:apps/init_server/pagersrv.c
         result = lookup_name((char *)&req->arg[1], req->arg[0]);
+=======
+      {
+        struct NameRecord *record = _lookupName((char *)&req->arg[1], req->arg[0], TID);
+
+        if( record )
+          result = record->entry.tid;
+        else
+          result = -1;
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
         break;
+      }
 /*      case SET_IO_PERM:
         result = set_io_perm(req->argv[0], req->argv[1], argv[2], sender);
         break; */
@@ -889,8 +1053,21 @@ void handle_message( void )
       case DEV_REGISTER:
       {
         struct RegisterNameReq *req = (struct RegisterNameReq *)msg.data;
-        int retval = registerDevName(sender, req->name, req->name_len, 
-                       req->name_type, &req->entry);
+        int retval;
+        enum _NameType name_type;
+        req->entry.device.ownerTID = sender;
+
+        if( req->name_type == DEV_NAME )
+          name_type = DEVICE;
+        /*else if( name_type == FS_NAME )
+          name_type = FS;*/
+        else
+        {
+          status = REPLY_ERROR;
+          break;
+        }
+
+        retval = _registerName(req->name, req->name_len, name_type, &req->entry);
 
         if( retval > 0 )
           status = REPLY_FAIL;
@@ -906,21 +1083,25 @@ void handle_message( void )
       {
         struct NameLookupReq *req = (struct NameLookupReq *)msg.data;
         struct Device *device = NULL;
-        struct NameEntry *entry = NULL;
+        struct NameRecord *record = NULL;
 
         if( *type == DEV_LOOKUP_MAJOR )
-          device = _lookupMajor( req->major );
+          device = lookupDeviceMajor( req->major );
         else
-          entry = _lookupName( req->name, req->name_len );
+          record = _lookupName( req->name, req->name_len, DEVICE );
 
-        if( device == NULL && entry == NULL )
+        if( device == NULL && record == NULL )
           status = REPLY_ERROR;
         else
         {
           if( *type != DEV_LOOKUP_MAJOR )
           {
-            reply_msg->entry = entry->entry;
-            reply_msg->type = entry->name_type;
+            reply_msg->entry.device = record->entry.device;
+
+            if( record->name_type == DEVICE )
+              reply_msg->type = DEV_NAME;
+            else
+              status = REPLY_ERROR;
           }
           else
           {
@@ -977,7 +1158,7 @@ int main( int argc, char **argv )
 
   /* It's important not to cause an exception! */
 
-  __map((void *)0xB8000, (void *)0xB8000, 8);
+  __map((void *)0xB8000, (void *)0xB8000, 8, 0, NULL_PADDR);
 
   get_boot_info(argc, argv);
   list_init(&shmem_list, list_malloc, list_free);
@@ -987,7 +1168,15 @@ int main( int argc, char **argv )
   for(i=1; i < boot_info->num_mods; i++)
     load_elf_exec(&boot_modules[i], NULL);
 
+int t=0;
+
   while(1)
+  {
+    t++;
     handle_message();
+
+//    if( t == 6 )
+        //loadExe("/vidtest.exe");
+  }
   return 0;
 }

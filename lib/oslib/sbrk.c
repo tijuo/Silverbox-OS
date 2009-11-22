@@ -6,7 +6,7 @@
 
 extern void print(char *str);
 
-/* This doesn't handle negative increments. */
+/* XXX: This doesn't handle negative increments. */
 
 void *sbrk( int increment )
 {
@@ -36,7 +36,7 @@ void *sbrk( int increment )
   }
   else if( pages < 0 )
   {
-    // unmap pages?
+    // XXX: unmap pages?
   }
   return prevHeap;
 }

@@ -254,7 +254,8 @@ void initVideo( void )
   enableCursor( true );
   setAttr( ATTRIB( GRAY, BLACK, NO_BLINK ) );
 
-  __map( (void *)VIDEO_RAM, (void *)VIDEO_RAM, 8 );
+  //__map( (void *)VIDEO_RAM, (void *)VIDEO_RAM, 8 );
+  mapMem( (void *)VIDEO_RAM, (void *)VIDEO_RAM, 8, 0 );
 
 //  __chioperm( 1, 0x3D4, 2 ); 	// Allocate port range
 

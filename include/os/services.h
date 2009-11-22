@@ -5,6 +5,7 @@
 #include <os/device.h>
 #include <os/region.h>
 
+<<<<<<< HEAD:include/os/services.h
 #define ALLOC_MEM		1
 #define MAP_MEM			2
 #define REGISTER_NAME		3
@@ -16,6 +17,18 @@
 #define DETACH_SHM_REG		9
 #define DELETE_SHM		10
 #define CONNECT_REQ		11
+=======
+#define MAP_MEM			1
+#define REGISTER_NAME		2
+#define LOOKUP_NAME		3
+#define LOOKUP_TID		4
+#define MAP_TID			5
+#define CREATE_SHM		6
+#define ATTACH_SHM_REG		7
+#define DETACH_SHM_REG		8
+#define DELETE_SHM		9
+#define CONNECT_REQ		10
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:include/os/services.h
 
 #define MSG_REPLY		0x80000000
 #define SHARE_MEM_REQ		0xFFF0
@@ -111,14 +124,14 @@ int mapTid( tid_t tid, void *addr_space );
 int createShmem( shmid_t shmid, unsigned pages, struct MemRegion *region, bool ro_perm );
 int attachShmemReg( shmid_t shmid, struct MemRegion *region );
 
-int registerDevice( char *name, size_t name_len, struct Device *deviceInfo );
-int lookupDevName( char *name, size_t name_len, struct Device *device );
+int registerDevice( const char *name, size_t name_len, struct Device *deviceInfo );
+int lookupDevName( const char *name, size_t name_len, struct Device *device );
 int lookupDevMajor( unsigned char major, struct Device *device );
 
-tid_t lookupName( char *name, size_t len );
-int registerName( char *name, size_t len );
+tid_t lookupName( const char *name, size_t len );
+int registerName( const char *name, size_t len );
 
-int lookupFsName( char *name, size_t name_len, struct Filesystem *fs );
-int registerFs( char *name, size_t name_len, struct Filesystem *fsInfo );
+int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
+int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
 
 #endif /* OS_SERVICES_H */

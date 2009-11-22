@@ -71,22 +71,23 @@ tid_t __create_thread( void *entry, void *addr_space, void *stack,
   return retval;
 }
 
-int __map( void *virt, void *phys, size_t pages )
+int __map( void *virt, void *phys, size_t pages, int flags, void *addrSpace )
 {
   int retval;
 
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_MAP),
-                   "b"(virt), "c"(phys), "d"(pages));
+                   "b"(virt), "c"(phys), "d"(pages), "S"(flags),
+		   "D"(addrSpace));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
 }
 
-int __map_page_table( void *virt, void *phys )
+int __map_page_table( void *virt, void *phys, int flags, void *addrSpace )
 {
   int retval;
 
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_MAP_PAGE_TABLE),
-                   "b"(virt), "c"(phys));
+                   "b"(virt), "c"(phys), "d"(flags), "S"(addrSpace));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
 }
@@ -156,22 +157,22 @@ int __end_page_fault( tid_t tid )
   return retval;
 }
 
-void *__unmap( void *virt )
+void *__unmap( void *virt, void *addrSpace )
 {
   void *retval;
 
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_UNMAP),
-                   "b"(virt) );
+                   "b"(virt), "c"(addrSpace) );
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
 }
 
-void *__unmap_page_table( void *virt )
+void *__unmap_page_table( void *virt, void *addrSpace )
 {
   void *retval;
 
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_UNMAP_PAGE_TABLE),
-                   "b"(virt) );
+                   "b"(virt), "c"(addrSpace) );
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
 }

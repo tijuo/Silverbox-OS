@@ -20,19 +20,35 @@
 /* FIXME: Changing any of these values may require changing the 
    asm code. */
 
+<<<<<<< HEAD:include/kernel/mm.h
 #define KERNEL_IVT		KERNEL_VSTART
 #define KERNEL_IDT		0xFF400500
 #define KERNEL_GDT		0xFF400D00
 #define KERNEL_TSS		0xFF400F98
 #define TSS_IO_PERM_BMP		0xFF401000
+=======
+#define KERNEL_IDT		0x88000
+#define KERNEL_GDT		(KERNEL_IDT + 256 * 8)
+#define KERNEL_TSS		(KERNEL_IDT + 0xF98)
+
+#define TSS_IO_PERM_BMP		(0xFF4C0000)
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:include/kernel/mm.h
 #define TEMP_PAGEADDR           (TSS_IO_PERM_BMP + 2 * PAGE_SIZE)
 #define LAPIC_VADDR             (TEMP_PAGEADDR + PAGE_SIZE)
-#define V_IDLE_STACK_TOP	(LAPIC_VADDR + 2 * PAGE_SIZE)
-#define V_KERNEL_STACK_TOP	(V_IDLE_STACK_TOP + PAGE_SIZE)
-#define KERNEL_VAR_ADDR		V_KERNEL_STACK_TOP
-#define V_BOOTSTRAP_STACK_TOP	(KERNEL_VAR_ADDR + 2 * PAGE_SIZE)
+//#define V_IDLE_STACK_TOP	(LAPIC_VADDR + 2 * PAGE_SIZE)
+//#define V_KERNEL_STACK_TOP	(V_IDLE_STACK_TOP + PAGE_SIZE)
+#define KERNEL_VAR_ADDR		(LAPIC_VADDR + PAGE_SIZE)
+//V_KERNEL_STACK_TOP
+//#define V_BOOTSTRAP_STACK_TOP	(KERNEL_VAR_ADDR + 2 * PAGE_SIZE)
 
+#define V_IDLE_STACK_TOP	(PHYSMEM_START + IDLE_STACK_TOP)
+#define V_KERNEL_STACK_TOP	(PHYSMEM_START + KERNEL_STACK_TOP)
+
+<<<<<<< HEAD:include/kernel/mm.h
 #define INIT_PDIR		0x1000
+=======
+#define INIT_PDIR		(KERNEL_IDT + PAGE_SIZE)
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:include/kernel/mm.h
 #define FIRST_PAGE_TAB          (INIT_PDIR + PAGE_SIZE)
 #define KERNEL_PAGE_TAB         FIRST_PAGE_TAB
 #define INIT_SERVER_PDIR        (KERNEL_PAGE_TAB + PAGE_SIZE)
@@ -42,7 +58,8 @@
 #define IDLE_STACK_TOP		(INIT_SERVER_PDE + 2 * PAGE_SIZE)
 #define KERNEL_STACK_TOP	(IDLE_STACK_TOP + PAGE_SIZE)
 #define KERNEL_VAR_PAGE		KERNEL_STACK_TOP
-#define BOOTSTRAP_STACK_TOP	(KERNEL_VAR_PAGE + 2 * PAGE_SIZE)
+#define KERNEL_PAGE_TAB2	(KERNEL_VAR_PAGE + PAGE_SIZE)
+#define BOOTSTRAP_STACK_TOP	(KERNEL_PAGE_TAB2 + 2 * PAGE_SIZE)
 
 #define INVALID_VADDR       (void *)0xFFFFFFFF
 #define INVALID_ADDR        (void *)0xFFFFFFFF

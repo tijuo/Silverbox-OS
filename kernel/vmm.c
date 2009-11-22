@@ -7,34 +7,18 @@
 // TODO: map, grant, and unmap operations should be privileged syscalls
 // TODO: only the inital server should have access to them
 
-int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages );
-int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys );
+int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages, int flags, addr_t addrSpace );
+int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys, int flags, addr_t addrSpace );
 int sysGrant( TCB *tcb, addr_t srcAddr, addr_t destAddr, 
     addr_t addrSpace, size_t pages );
 int sysGrantPageTable( TCB *tcb, addr_t srcAddr, addr_t destAddr,
     addr_t addrSpace, size_t tables );
-void *sysUnmap( TCB *tcb, void *virt );
-void *sysUnmapPageTable( TCB *tcb, void *virt );
+void *sysUnmap( TCB *tcb, void *virt, addr_t addrSpace );
+void *sysUnmapPageTable( TCB *tcb, void *virt, addr_t addrSpace );
 
-void *sysUnmap( TCB *tcb, void *virt )
+int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages, int flags, addr_t addrSpace )
 {
-  assert( tcb != NULL );
-  
-  return unmapPage( virt, tcb->addrSpace );
-}
-
-void *sysUnmapPageTable( TCB *tcb, void *virt )
-{
-  assert( tcb != NULL );
-
-  return unmapPageTable( virt, tcb->addrSpace );
-}
-
-int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages )
-{
-  #ifdef DEBUG
   int result;
-  #endif
 
   assert( tcb != NULL );
   assert( phys != (addr_t)NULL_PADDR );
@@ -48,11 +32,10 @@ int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages )
     disableInt();
     #endif
 
-    #ifdef DEBUG
-    result =
-    #endif
-
-    mapPage( virt, phys, PAGING_RW | PAGING_USER, tcb->addrSpace );
+    if( addrSpace == NULL_PADDR )
+      result = mapPage( virt, phys, PAGING_RW | PAGING_USER, tcb->addrSpace );
+    else
+      result = mapPage( virt, phys, PAGING_RW | PAGING_USER, addrSpace );
 
     #ifdef DEBUG2
     enableInt();
@@ -63,11 +46,9 @@ int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages )
   return 0;
 }
 
-int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys )
+int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys, int flags, addr_t addrSpace )
 {
-  #ifdef DEBUG
   int result;
-  #endif
 
   assert( tcb != NULL );
   assert( phys != (addr_t)NULL_PADDR );
@@ -79,11 +60,10 @@ int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys )
   disableInt();
   #endif
 
-  #ifdef DEBUG
-  result =
-  #endif
-
-  mapPageTable( virt, phys, PAGING_RW | PAGING_USER, tcb->addrSpace );
+  if( addrSpace == NULL_PADDR )
+    result = mapPageTable( virt, phys, PAGING_RW | PAGING_USER, tcb->addrSpace );
+  else
+    result = mapPageTable( virt, phys, PAGING_RW | PAGING_USER, addrSpace );
 
   #ifdef DEBUG2
   enableInt()
@@ -158,5 +138,25 @@ int sysGrantPageTable( TCB *tcb, addr_t srcAddr, addr_t destAddr,
     }
 
     return 0;
+}
+
+void *sysUnmap( TCB *tcb, void *virt, addr_t addrSpace )
+{
+  assert( tcb != NULL );
+
+  if( addrSpace == NULL_PADDR )
+    return unmapPage( virt, tcb->addrSpace );
+  else
+    return unmapPage( virt, addrSpace );
+}
+
+void *sysUnmapPageTable( TCB *tcb, void *virt, addr_t addrSpace )
+{
+  assert( tcb != NULL );
+
+  if( addrSpace == NULL_PADDR )
+    return unmapPageTable( virt, tcb->addrSpace );
+  else
+    return unmapPageTable( virt, addrSpace );
 }
 

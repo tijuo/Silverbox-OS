@@ -1,8 +1,10 @@
 #include <oslib.h>
 #include <string.h>
 #include <os/dev_interface.h>
+#include <ctype.h>
 #include <os/vfs.h>
 #include <os/services.h>
+#include <os/fatfs.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -22,7 +24,8 @@ struct Dev
   char name[11]; // 11 is arbitrarily chosen...
 };
 
-unsigned short dev_num = 0xA00;
+short dev_num;
+char *dev_name = "rd0";
 
 //char convert_raw_char( unsigned char c );
 /*
@@ -90,71 +93,6 @@ size_t getStr( char *buffer, size_t maxLen )
   return num_read;
 }
 
-/*
-char convert_raw_char( unsigned char c )
-{
-  static int alt=0, caps=0, shift=0, numlk=0;
-
-  char num_shift[10] = { ')', '!', '@', '#', '$', '%', '^', '&', '*','(' };
-
-  if( (c & VK_BREAK) == VK_BREAK )
-  {
-    if( (c & 0x7F) == VK_RSHIFT || (c & 0x7F) == VK_LSHIFT )
-      shift = 0;
-    return '\0';
-  }
-  else if( c == VK_CAPSLK )
-    caps ^= 1;
-  else if( c == VK_NUMLK )
-    numlk ^= 1;
-
-  c &= 0x7F;
-
-  if( c >= VK_0 && c <= VK_9 )
-    return (shift ? num_shift[c-VK_0] : '0' + (c - VK_0));
-  else if( c >= VK_A && c <= VK_Z )
-    return ((!shift && !caps) || (shift && caps) ? 'a' + (c - VK_A) : 'A' + (c-VK_A));
-  else if( c == VK_RSHIFT || c == VK_LSHIFT )
-    shift = 1;
-
-  switch( c )
-  {
-    case VK_ENTER:
-      return '\n';
-    case VK_BSPACE:
-      return '\b';
-    case VK_TAB:
-      return '\t';
-    case VK_SPACE:
-      return ' ';
-    case VK_MINUS:
-      return (shift ? '_' : '-');
-    case VK_EQUAL:
-      return (shift ? '+' : '=');
-    case VK_BQUOTE:
-      return (shift ? '~' : '`');
-    case VK_COMMA:
-      return (shift ? '<' : ',');
-    case VK_PERIOD:
-      return (shift ? '>' : '.');
-    case VK_SLASH:
-      return (shift ? '?' : '/');
-    case VK_BSLASH:
-      return (shift ? '|' : '\\');
-    case VK_RBRACK:
-      return (shift ? '}' : ']');
-    case VK_LBRACK:
-      return (shift ? '{' : '[');
-    case VK_QUOTE:
-      return (shift ? '"' : '\'');
-    case VK_SEMICOL:
-      return (shift ? ':' : ';');
-    default:
-      return '\0';
-  }
-  return '\0';
-}
-*/
 static int concatPaths( char *path, char *str )
 {
   char *stack[256];
@@ -197,6 +135,84 @@ static int concatPaths( char *path, char *str )
   return 0;
 }
 
+char *getFullPathName(char *str)
+{
+  static char path[PATH_LEN+1];
+  size_t len;
+
+  if( str[0] == '/' )
+    return str;
+
+  len = strlen(currDir);
+
+  path[PATH_LEN] = '/0';
+  strcat( path, currDir );
+  concatPaths( path, str );
+//  strncpy( &path[len], str, PATH_LEN );
+
+  return path;
+}
+
+int parseDevice( const char *str, short *devNum )
+{
+  unsigned minorIndex=1;
+  char major, minor;
+  struct Device device;
+  long _minor;
+
+  if( !isalpha(str[0]) )
+    return -1;
+
+  while( isalpha(str[minorIndex]) )
+    minorIndex++;
+
+  if( lookupDevName(str, minorIndex, &device) != 0 )
+    return -1;
+
+  major = device.major;
+
+  _minor = strtol(&str[minorIndex], NULL, 10);
+
+  if( _minor < 0 || minor > 255 )
+    return -1;
+
+  minor = _minor;
+
+  if( devNum )
+    *devNum = (major << 8) | minor;
+
+  return 0;
+}
+/*
+int parsePath( const char *path, short *devNum, char **pathStart )
+{
+  unsigned minorIndex=1;
+  char major;
+
+  if( !isalpha(path[0]) )
+    return -1;
+
+  while( isalpha(path[minorIndex]) )
+    minorIndex++;
+
+  if( !isdigit(path[minorIndex]) )
+    return -1;
+
+  if( memcmp( &path[minorIndex+1], ":/", 2 ) != 0 )
+    return -1;
+
+  major = lookupName(path, minorIndex);
+
+  if( pathStart )
+    *pathStart = &path[minorIndex+3];
+
+  if( devNum )
+    *devNum = (major << 8) | (path[minorIndex] - '0');
+
+  return 0;
+}
+*/
+
 int doCommand( char *command, size_t comm_len, char *arg_str )
 {
   if( strncmp( command, "help", 4 ) == 0 || strncmp( command, "?", 1 ) == 0 )
@@ -210,21 +226,31 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
   }
   else if( strncmp( command, "read", 4 ) == 0 )
   {
-/*
-    char *file_buffer;
+    int result;
+    char *path = getFullPathName( arg_str );
 
-    
+    char *file_buffer = malloc( 1920 );
 
-     = malloc( (size_t)
-//    fatReadFile
-*/
+    result = fatReadFile( path, 0, dev_num,
+                 file_buffer, 1920 );
+    free(file_buffer);
 
-    printf("read isn't supported yet...\n");
+    if( result < 0 )
+      printf("Failed to read %s\n", path);
+    else
+      printf("%.*s\n", result, file_buffer );
   }
   else if( strncmp( command, "wd", 2 ) == 0 )
     printf("%.*s\n", PATH_LEN, currDir);
   else if( strncmp( command, "cd", 2 ) == 0 )
   {
+    char *path = getFullPathName( arg_str );
+
+    if( fatGetAttributes( path, dev_num, attrib_list ) >= 0 )
+      strncpy( currDir, path, PATH_LEN );
+    else
+      return -1;
+/*
     if( arg_str[0] == '/' )
     {
       if( fatGetAttributes(arg_str, dev_num, attrib_list ) >= 0 )
@@ -234,15 +260,14 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     }
     else
       concatPaths( currDir, arg_str );
+*/
   }
   else if( strncmp( command, "ld", 2 ) == 0 )
   {
     int n;
-    char *path=arg_str, *buffer;
+    char *path=getFullPathName(arg_str), *buffer;
 
-    if( buffer == NULL )
-      return -1;
-
+/*
     if( arg_str == NULL )
       path = currDir;
     else if( arg_str[0] != '/' )
@@ -256,7 +281,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
       concatPaths( buffer, arg_str );
       path = buffer;
     }
-
+*/
     n = fatGetDirList(path, dev_num, attrib_list, sizeof attrib_list / 
                       sizeof(struct FileAttributes));
 
@@ -264,32 +289,34 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     {
       printf("n < 0\n");
 
-      if( arg_str != NULL && *arg_str != '/' )
-        free(buffer);
+  //    if( arg_str != NULL && *arg_str != '/' )
+  //      free(buffer);
 
       return -1;
     }
 
-    printf("Listing of %.*s:\n", PATH_LEN, path);
+    printf("Listing of %.*s:\n", PATH_LEN, arg_str);
 
     if( n == 0 )
       printf("No entries\n");
     else
     {
-      for(unsigned i=0; i < n; i++)
+      for(unsigned i=0; i < (unsigned)n; i++)
       {
+        printf("%.*s%c \n", attrib_list[i].nameLen, attrib_list[i].name, ((attrib_list[i].flags & FS_DIR) ? '/' : '\0'));
+/*
         for( unsigned j=0; j < attrib_list[i].nameLen; j++ )
           putchar(attrib_list[i].name[j]);
         
         if( attrib_list[i].flags & FS_DIR )
           putchar('/');
 
-        putchar('\n');
+        putchar('\n'); */
       }
     }
 
-    if( arg_str != NULL && *arg_str != '/' )
-      free(buffer);
+//    if( arg_str != NULL && *arg_str != '/' )
+//      free(buffer);
   }
   else if( strncmp( command, "echo", 4 ) == 0 )
   {
@@ -309,7 +336,13 @@ int main(void)
   char *space_ptr, *second_arg;
   size_t index;
 
-  __map(0xb8000, 0xb8000, 8);
+  mapMem((void *)0xB8000, (void *)0xB8000, 8, 0);
+  print("Looking up...");
+//  dev_num = lookupName( dev_name, strlen(dev_name) );
+
+  parseDevice(dev_name, &dev_num);
+
+  dev_num = 0xA00;
 
   charBuf = malloc(BUF_LEN);
   currDir = malloc(PATH_LEN);
@@ -320,9 +353,12 @@ int main(void)
   currDir[0] = '/';
   currDir[1] = '\0';
 
+  printf("%s\n", "abc");
+  printf("abc\n");
+
   while( true )
   {
-    printf("rd0:/> ");
+    printf("%s:/> ", dev_name);
     fflush(stdout);
 
     index = getStr(charBuf, BUF_LEN);

@@ -4,6 +4,8 @@
 #include <types.h>
 #include <oslib.h>
 
+#define DEV_NUM(major, minor)	(((major & 0xFF) << 8) | (minor & 0xFF))
+
 #define N_MAX_NAME_LEN 		12
 #define N_MAX_NAMES		(MAX_DEVICES + MAX_FILESYSTEMS)
 #define MAX_DEVICES 		256

@@ -14,7 +14,7 @@ extern unsigned char floppy_array[];
 #define RAMDISK_SERVER 		RAMDISK_MAJOR
 #define NUM_DEVICES		NUM_RAMDISKS
 #define SERVER_NAME		"ramdisk"
-#define DEVICE_NAME		"ramdisk"
+#define DEVICE_NAME		"rd"
 
 #define BLK_LEN			RAMDISK_BLKSIZE
 

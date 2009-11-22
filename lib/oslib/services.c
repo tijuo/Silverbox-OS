@@ -6,6 +6,47 @@
 #include <os/dev_interface.h>
 #include <os/device.h>
 
+<<<<<<< HEAD:lib/oslib/services.c
+=======
+// Maps a physical address range to a virtual address range
+int mapMem( void *phys, void *virt, int numPages, int flags );
+
+// Reserves a virtual address range
+int allocatePages( void *address, int numPages );
+
+// Associates a tid with an address space
+int mapTid( tid_t tid, void *addr_space );
+
+// Creates a region of shared memory
+int createShmem( shmid_t shmid, unsigned pages, struct MemRegion *region,
+                bool ro_perm );
+
+// Attaches a memory region to an existing shared memory region
+int attachShmemReg( shmid_t shmid, struct MemRegion *region );
+
+// Associates a name with the current thread ID
+int registerName( const char *name, size_t len );
+
+// Returns the TID associated with a name
+tid_t lookupName( const char *name, size_t len );
+
+// Associates a name with a device
+int registerDevice( const char *name, size_t name_len, struct Device *deviceInfo );
+
+// Returns a device associated with a device major number
+int lookupDevMajor( unsigned char major, struct Device *device );
+
+
+int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
+
+
+int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
+
+
+int allocatePortRange( int first_port, int num_ports );
+int releasePortRange( int first_port, int num_ports );
+
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:lib/oslib/services.c
 /*
 void handleConnection( struct Message *msg )
 {
@@ -44,6 +85,7 @@ int mapMem( void *phys, void *virt, int numPages, int flags )
 
 int allocatePages( void *address, int numPages )
 {
+<<<<<<< HEAD:lib/oslib/services.c
   volatile struct GenericReq *req;
   volatile struct Message msg;
   int status;
@@ -65,6 +107,9 @@ int allocatePages( void *address, int numPages )
   while( __receive( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
 
   return req->arg[0];
+=======
+  return mapMem( NULL_PADDR, address, numPages, MEM_FLG_LAZY | MEM_FLG_ALLOC );
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:lib/oslib/services.c
 }
 
 int mapTid( tid_t tid, void *addr_space )
@@ -138,7 +183,7 @@ int attachShmemReg( shmid_t shmid, struct MemRegion *region )
   return req->arg[0];
 }
 
-int registerName( char *name, size_t len )
+int registerName( const char *name, size_t len )
 {
   volatile struct GenericReq *req;
   volatile struct Message msg;
@@ -161,7 +206,7 @@ int registerName( char *name, size_t len )
   return req->arg[0];
 }
 
-tid_t lookupName( char *name, size_t len )
+tid_t lookupName( const char *name, size_t len )
 {
   volatile struct GenericReq *req;
   volatile struct Message msg;
@@ -184,7 +229,7 @@ tid_t lookupName( char *name, size_t len )
   return (tid_t)req->arg[0];
 }
 
-int registerDevice( char *name, size_t name_len, struct Device *deviceInfo )
+int registerDevice( const char *name, size_t name_len, struct Device *deviceInfo )
 {
   struct RegisterNameReq *req;
   volatile struct DevMgrReply *reply;
@@ -238,7 +283,7 @@ int lookupDevMajor( unsigned char major, struct Device *device )
   return reply->reply_status;
 }
 
-int lookupDevName( char *name, size_t name_len, struct Device *device )
+int lookupDevName( const char *name, size_t name_len, struct Device *device )
 {
   struct NameLookupReq *req;
   volatile struct DevMgrReply *reply;
@@ -266,7 +311,7 @@ int lookupDevName( char *name, size_t name_len, struct Device *device )
   return reply->reply_status;
 }
 
-int registerFs( char *name, size_t name_len, struct Filesystem *fsInfo )
+int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo )
 {
   struct RegisterNameReq *req;
   volatile struct DevMgrReply *reply;
@@ -293,7 +338,7 @@ int registerFs( char *name, size_t name_len, struct Filesystem *fsInfo )
   return reply->reply_status;
 }
 
-int lookupFsName( char *name, size_t name_len, struct Filesystem *fs )
+int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs )
 {
   struct NameLookupReq *req;
   volatile struct DevMgrReply *reply;

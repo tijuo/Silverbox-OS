@@ -1,4 +1,9 @@
+<<<<<<< HEAD:apps/init_server/Makefile
 SRC     =list.c addr_space.c phys_alloc.c pagersrv.c shmem.c sbrk.c name.c
+=======
+SRC     =list.c addr_space.c phys_alloc.c pagersrv.c shmem.c name.c \
+	exceptions.c sbrk.c
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/Makefile
 OUTPUT	=pagersrv.exe
 
 include ../apps.mk

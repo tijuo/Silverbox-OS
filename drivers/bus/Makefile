@@ -1,3 +1,3 @@
-SRC     =
+SRC     =pci.c
 
 include ../drivers.mk

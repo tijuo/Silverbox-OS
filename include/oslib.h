@@ -61,7 +61,11 @@ extern "C" {
 #define REQUEST_MORE		2  /* More to send */
 
 #define KERNEL_TID		(tid_t)0
+<<<<<<< HEAD:include/oslib.h
 #define NULL_TID		(tid_t)-1
+=======
+#define NULL_TID		(tid_t)0xFFFF
+>>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:include/oslib.h
 #define NULL_SHMID		(shmid_t)-1  
 
 typedef unsigned long shmid_t;
@@ -167,16 +171,16 @@ int __get_thread_info( tid_t tid, struct ThreadInfo *info );
 int __register_int( int int_num );
 tid_t __create_thread( void *entry, void *addr_space, 
                        void *user_stack, tid_t exhandler );
-int __map( void *virt, void *phys, size_t pages );
-int __map_page_table( void *virt, void *phys );
+int __map( void *virt, void *phys, size_t pages, int flags, void *addrSpace );
+int __map_page_table( void *virt, void *phys, int flags, void *addrSpace );
 int __grant( void *src_addr, void *dest_addr, void *addr_space, size_t pages );
 int __grant_page_table( void *src_addr, void *dest_addr, void *addr_space, size_t pages );
 void __exit( int status );
 int __sleep( int msecs );
 int __end_irq( int irqNum );
 int __end_page_fault( tid_t tid );
-void *__unmap( void *virt );
-void *__unmap_page_table( void *virt );
+void *__unmap( void *virt, void *addrSpace );
+void *__unmap_page_table( void *virt, void *addrSpace );
 int __raise( int signal, int arg );
 int __set_sig_handler( void *handler );
 int __set_io_perm( unsigned short start, unsigned short end, bool value, tid_t tid );

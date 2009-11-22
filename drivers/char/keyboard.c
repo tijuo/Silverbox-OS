@@ -510,7 +510,9 @@ int main( void )
 //  __chioperm( 1, KB_IO, 1 );
 //  __chioperm( 1, KB_STAT_CMD, 1 );
 
-  __map(0xB8000,0xB8000, 8);
+//  __map(0xB8000,0xB8000, 8);
+
+  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
 
 //  __register_int( 0x21 );
 //  __register_int( 0x2C );

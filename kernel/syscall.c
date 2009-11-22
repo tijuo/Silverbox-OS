@@ -12,8 +12,6 @@
 extern TCB *idleThread;
 void _syscall( volatile TCB *_thread, volatile unsigned intInfo );
 
-//static int sysReleaseMbox( TCB *thread, mid_t mbox );
-//static int sysAllocMbox( TCB *thread, mid_t mbox, struct MessageQueue *queue);
 static int sysGetThreadInfo( TCB *thread, tid_t tid, struct ThreadInfo *info );
 static void sysExit( TCB *thread, int code );
 
@@ -277,14 +275,14 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
       break;
     case SYS_MAP:
       *result = sysMap( _thread, (unsigned char *)regs->ebx, (unsigned char *)regs->ecx,
-                        (size_t)regs->edx );
+                        (size_t)regs->edx, (int)regs->esi, (addr_t)regs->edi );
+      break;
+    case SYS_MAP_PAGE_TABLE:
+      *result = sysMapPageTable( _thread, (unsigned char *)regs->ebx, (addr_t)regs->ecx, (int)regs->edx, (addr_t)regs->esi );
       break;
     case SYS_GRANT:
       *result = sysGrant( _thread, (unsigned char *)regs->ebx, (unsigned char *)regs->ecx,
                      (addr_t)regs->edx, (size_t)regs->esi );
-      break;
-    case SYS_MAP_PAGE_TABLE:
-      *result = sysMapPageTable( _thread, (unsigned char *)regs->ebx, (addr_t)regs->ecx );
       break;
     case SYS_GRANT_PAGE_TABLE:
       *result = sysGrantPageTable( _thread, (unsigned char *)regs->ebx, (unsigned char *)regs->ecx,
@@ -294,10 +292,10 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
       *result = sysGetThreadInfo( _thread, (tid_t)regs->ebx, (struct ThreadInfo *)regs->ecx );
       break;
     case SYS_UNMAP:
-      *result = (int)sysUnmap( _thread, (void *)regs->ebx );
+      *result = (int)sysUnmap( _thread, (void *)regs->ebx, (addr_t)regs->ecx );
       break; 
     case SYS_UNMAP_PAGE_TABLE:
-      *result = (int)sysUnmapPageTable( _thread, (void *)regs->ebx );
+      *result = (int)sysUnmapPageTable( _thread, (void *)regs->ebx, (addr_t)regs->ecx );
       break;
     case SYS_RAISE:
       *result = sysRaise( _thread, (int)regs->ebx, (int)regs->ecx );

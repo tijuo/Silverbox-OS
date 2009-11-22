@@ -10,8 +10,10 @@ IMPORT schedule
 IMPORT kVirtStart
 IMPORT tcbTable
 
-idleStack   equ VPhysMemStart + 0x6000
-kernelStack equ VPhysMemStart + 0x7000
+; Stack tops
+
+idleStack   equ VPhysMemStart + 0x90000
+kernelStack equ VPhysMemStart + 0x91000
 
 idleTID	    equ 0
 
