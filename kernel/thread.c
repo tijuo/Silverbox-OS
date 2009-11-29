@@ -197,7 +197,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
     thread = &tcbTable[tid];
 
-   kprintf("TID: %d Thread: 0x%x\n", tid, thread);
+   //kprintf("TID: %d Thread: 0x%x\n", tid, thread);
 
     thread->priority = NORMAL_PRIORITY;
     thread->quantaLeft = 0;

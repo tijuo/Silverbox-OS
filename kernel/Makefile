@@ -8,6 +8,7 @@ SRC     =init.c paging.c thread.c schedule.c exceptions.c \
 OBJ     =$(SRC:.c=.o)
 LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL
 
+
 all:	kernel.gz kernel.dmp kernel.dbg kernel.sym
 
 include	../vars.mk
@@ -21,12 +22,12 @@ kernel.dbg: kernel.tmp
 kernel.sym: kernel.dmp
 	$(PREFIX)/tools/extract_sym.pl $< > $@
 
-kernel.tmp: $(OBJ)
+kernel.tmp: $(OBJ) asm/*.asm
 	make -C asm/ all
 	@cp asm/*.o .
 	$(LD) $(LDFLAGS) *.o -o $@
 
-kernel.gz: $(OBJ)
+kernel.gz: $(OBJ) asm/*.asm
 	make -C asm/ all
 	@cp asm/*.o .
 	$(LD) $(LDFLAGS) -s -S *.o -o `basename $@ .gz`; \

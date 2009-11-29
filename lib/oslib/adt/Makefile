@@ -1,4 +1,4 @@
-SRC     =cqueue.c
+SRC     =cqueue.c hash_table.c
 OBJ     =$(SRC:.c=.o)
 OPT_FLG =-O0
 CLEAN   =$(OBJ)

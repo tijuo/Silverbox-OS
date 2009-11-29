@@ -25,7 +25,7 @@ install: $(DIRS) $(EXE)
 	$(PREFIX)/tools/copy_files.sh $(EXE)
 
 clean:
-	for i in $(DIR); do cd $$i; make clean; cd ..; done
+	for i in $(DIRS); do make -C $$i clean; done
 	rm -f *.o
 	rm -f *.dmp
 	rm -f *.dbg

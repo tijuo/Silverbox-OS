@@ -7,7 +7,24 @@
 #include <os/region.h>
 #include <stddef.h>
 
+#define MEM_RO		1	// Read-only memory range
+#define MEM_COW		2	/* Range is copy-on-write (if written to, copy 
+				   range to another set of pages & mark that
+				   range as read-write [implies read-only]). */
+#define MEM_LAZY	4	// Do not immediately map the range into memory
+#define MEM_MAP		8	/* Map virtual addresses to a specific physical 
+                                   addresses (as opposed to mapping virtual 
+				   addresses to any physical addresses. */
+#define MEM_ZERO	16	// Clear an address range before mapping it.
+
 #define NUM_PTABLES     1024
+
+struct AddrRegion
+{
+  struct MemRegion virtRegion;
+  struct MemRegion physRegion;
+  int flags;
+};
 
 struct AddrSpace
 {
@@ -18,7 +35,7 @@ struct AddrSpace
 
 struct RegionNode
 {
-  struct MemRegion region;
+  struct AddrRegion region;
   struct RegionNode *next, *prev;
 };
 
@@ -26,6 +43,9 @@ struct ListNode *free_list_nodes;
 struct ListType addr_space_list;
 
 struct RegionNode *free_region_nodes;
+
+void *list_malloc( size_t size );
+void list_free( void *node );
 
 void init_addr_space(struct AddrSpace *addr_space, void *phys_addr);
 int set_ptable_status(void *aspace_phys, void *virt, bool status);
@@ -36,8 +56,8 @@ int attach_tid(void *aspace_phys, tid_t tid);
 int _attach_tid(struct AddrSpace *addr_space, tid_t tid);
 int detach_tid(void *aspace_phys, tid_t tid);
 int _detach_tid(struct AddrSpace *addr_space, tid_t tid);
-int attach_mem_region(void *aspace_phys, struct MemRegion *region);
-int _attach_mem_region(struct AddrSpace *addr_space, struct MemRegion *region);
+int attach_mem_region(void *aspace_phys, struct AddrRegion *region);
+int _attach_mem_region(struct AddrSpace *addr_space, struct AddrRegion *region);
 bool _region_overlaps(struct AddrSpace *addr_space, struct MemRegion *region);
 bool region_overlaps(void *aspace_phys, struct MemRegion *region);
 bool find_address(void *aspace_phys, void *addr);

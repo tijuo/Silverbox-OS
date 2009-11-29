@@ -5,19 +5,6 @@
 #include <os/device.h>
 #include <os/region.h>
 
-<<<<<<< HEAD:include/os/services.h
-#define ALLOC_MEM		1
-#define MAP_MEM			2
-#define REGISTER_NAME		3
-#define LOOKUP_NAME		4
-#define LOOKUP_TID		5
-#define MAP_TID			6
-#define CREATE_SHM		7
-#define ATTACH_SHM_REG		8
-#define DETACH_SHM_REG		9
-#define DELETE_SHM		10
-#define CONNECT_REQ		11
-=======
 #define MAP_MEM			1
 #define REGISTER_NAME		2
 #define LOOKUP_NAME		3
@@ -28,11 +15,15 @@
 #define DETACH_SHM_REG		8
 #define DELETE_SHM		9
 #define CONNECT_REQ		10
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:include/os/services.h
 
 #define MSG_REPLY		0x80000000
 #define SHARE_MEM_REQ		0xFFF0
 #define EXIT_MSG		0xFFFF
+
+#define	MEM_FLG_RO		0x01		// Read only
+#define MEM_FLG_LAZY		0x02		// Map in pages only when needed
+#define MEM_FLG_ALLOC		0x04		// Do not perform a phys->virt mapping (implies read-write)
+#define MEM_FLG_COW		0x08		// Mark as copy-on-write(implies read-only)
 
 /*
 DRV_WRITE
@@ -133,5 +124,8 @@ int registerName( const char *name, size_t len );
 
 int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
 int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
+
+int allocatePortRange( int first_port, int num_ports );
+int releasePortRange( int first_port, int num_ports );
 
 #endif /* OS_SERVICES_H */

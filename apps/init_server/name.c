@@ -4,22 +4,6 @@
 #include <string.h>
 #include "name.h"
 
-<<<<<<< HEAD:apps/init_server/name.c
-#define MAX_NAME_RECS	256
-#define MAX_NAME_LEN	18
-
-struct NameRecord
-{
-  char name[MAX_NAME_LEN];
-  size_t name_len;
-  tid_t tid;
-};
-
-static struct NameRecord name_records[MAX_NAME_RECS];
-static unsigned num_records = 0;
-
-int register_name(char *name, size_t len, tid_t tid)
-=======
 static struct NameRecord threadNames[MAX_NAME_RECS], 
               deviceNames[MAX_NAME_RECS]/*, fsNames[MAX_NAME_RECS]*/;
 static unsigned numThreadNames = 0, /*numFsNames = 0,*/ numDeviceNames = 0;
@@ -69,36 +53,22 @@ int _registerName(char *name, size_t len, enum _NameType type, void *data)
 }
 
 int registerThreadName(char *name, size_t len, tid_t tid)
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/name.c
 {
   if( len > MAX_NAME_LEN )
     return -1;
-  else if( num_records >= MAX_NAME_RECS )
+  else if( numThreadNames >= MAX_NAME_RECS )
     return -1;
 
-  memcpy(name_records[num_records].name, name, len);
+  memcpy(threadNames[numThreadNames].name, name, len);
 
-<<<<<<< HEAD:apps/init_server/name.c
-  name_records[num_records].name_len = len;
-  name_records[num_records].tid = tid;
-=======
   threadNames[numThreadNames].name_len = len;
   threadNames[numThreadNames].entry.tid = tid;
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/name.c
 
-  num_records++;
+  numThreadNames++;
 
   return 0;
 }
 
-<<<<<<< HEAD:apps/init_server/name.c
-tid_t lookup_name(char *name, size_t len)
-{
-  for(int i=0; i < num_records; i++)
-  {
-    if( strncmp(name_records[i].name, name, len) == 0 )
-      return name_records[i].tid;
-=======
 int registerDeviceName(char *name, size_t len, struct Device *dev)
 {
   if( len > MAX_NAME_LEN )
@@ -167,13 +137,10 @@ struct NameRecord *_lookupName(char *name, size_t len, enum _NameType type)
 */
     default:
       return NULL;
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/name.c
   }
 
   return NULL;
 }
-<<<<<<< HEAD:apps/init_server/name.c
-=======
 
 struct Device *lookupDeviceMajor(int major)
 {
@@ -198,4 +165,3 @@ struct NameEntry *lookupDeviceName(char *name, size_t len)
   return NULL;
 }
 */
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/name.c

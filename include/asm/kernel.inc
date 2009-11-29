@@ -29,7 +29,4 @@ uCodeSel  equ 0x1B
 uDataSel  equ 0x23
 tssSel    equ 0x28
 
-;kernelIDT equ 0xD00
-;kernelGDT equ 0x500
-
 %endif

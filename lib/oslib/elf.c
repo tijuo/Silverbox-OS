@@ -29,8 +29,10 @@ bool is_valid_elf_exe( void *img )
 
 /*  */
 
-int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
+int load_elf_exec( void *image, struct ProgramArgs *args )
 {
+  elf_header_t *elf_img = image;
+
   // 1. Request an address space (or use existing one)
   // 2. Map in the code and data segments
   // 3. Create and zero a BSS segment
@@ -38,5 +40,6 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   // 5. Put input arguments on stack
   // 6. Create a new thread (and start it)
 
-
+  if( !is_valid_elf_exe(elf_img) )
+    return -1;
 }

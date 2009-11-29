@@ -6,8 +6,6 @@
 #include <os/dev_interface.h>
 #include <os/device.h>
 
-<<<<<<< HEAD:lib/oslib/services.c
-=======
 // Maps a physical address range to a virtual address range
 int mapMem( void *phys, void *virt, int numPages, int flags );
 
@@ -46,7 +44,6 @@ int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
 int allocatePortRange( int first_port, int num_ports );
 int releasePortRange( int first_port, int num_ports );
 
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:lib/oslib/services.c
 /*
 void handleConnection( struct Message *msg )
 {
@@ -59,12 +56,12 @@ void handleConnection( struct Message *msg )
   attachShmemReg(0, &args->region);
 }
 */
-/* XXX: There needs to be a way to handle reply messages. */
 
 int mapMem( void *phys, void *virt, int numPages, int flags )
 {
   struct GenericReq *req;
   struct Message msg;
+  int status;
 
   req = (struct GenericReq *)msg.data;
 
@@ -77,7 +74,11 @@ int mapMem( void *phys, void *virt, int numPages, int flags )
   msg.length = sizeof *req;
   msg.protocol = MSG_PROTO_GENERIC;
 
-  while( __send( INIT_SERVER, &msg, 0 ) == 2 );
+  while( (status=__send( INIT_SERVER, &msg, 0 )) == 2 );
+
+  if( status < 0 )
+    return -1;
+
   while( __receive( INIT_SERVER, &msg, 0 ) == 2 );
 
   return req->arg[0];
@@ -85,31 +86,7 @@ int mapMem( void *phys, void *virt, int numPages, int flags )
 
 int allocatePages( void *address, int numPages )
 {
-<<<<<<< HEAD:lib/oslib/services.c
-  volatile struct GenericReq *req;
-  volatile struct Message msg;
-  int status;
-
-  req = (volatile struct GenericReq *)msg.data;
-
-  req->request = ALLOC_MEM;
-  req->arg[0] = (int)address;
-  req->arg[1] = (int)numPages;
-
-  msg.length = sizeof *req;
-  msg.protocol = MSG_PROTO_GENERIC;
-
-  while( (status=__send( INIT_SERVER, (struct Message *)&msg, 0 )) == 2 );
-
-  if( status < 0 )
-    return -1;
-
-  while( __receive( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
-
-  return req->arg[0];
-=======
   return mapMem( NULL_PADDR, address, numPages, MEM_FLG_LAZY | MEM_FLG_ALLOC );
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:lib/oslib/services.c
 }
 
 int mapTid( tid_t tid, void *addr_space )
@@ -366,239 +343,12 @@ int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs )
   return reply->reply_status;
 }
 
-
-/*
-  struct FileAttributes
-  {
-    int flags;
-    long long timestamp; // number of microseconds since Jan. 1, 1950 CE
-    long long size;
-    unsigned char name_len;
-    char name[255];  
-  };
-
-  struct FsReqMsg
-  {
-    int req;
-    size_t pathLen;
-
-    union {
-      size_t nameLen;
-      size_t dataLen;
-    };
-  };
-
-int listDir( tid_t tid, char *path, size_t pathLen, 
-             struct FileAttributes *entries, size_t maxEntries )
+int allocatePortRange( int first_port, int num_ports )
 {
-  struct FsReqMsg *req;
-  struct FsReplyMsg *reply;
-  struct Message msg;
-  int ret;
-  size_t bytes_recv = 0, bytes_to_recv = maxEntries * sizeof( struct FileAttributes );
-  size_t bufferLen;
-
-  req = (struct FsReqMsg *)msg.data;
-  reply = (struct FsReplyMsg *)msg.data;
-
-  if( path == NULL || pathLen == 0 || tid == NULL_TID )
-    return -1;
-
-  req->req = LIST_DIR;
-  //strncpy( req->path, path, pathLen );
-  req->pathLen = pathLen;
-  req->dataLen = maxEntries * sizeof(struct FileAttributes);
-
-  msg.length = sizeof *req;
-  msg.protocol = MSG_PROTO_FS;
-
-  while( (ret=__send( tid, &msg, 0 )) == 2 );
-
-  if( ret < 0 )
-    return -1;
-
-  while( (ret=__receive( tid, (struct Message *)&msg, 0 )) == 2 );
-
-  if( ret < 0 || reply->fail || reply->bufferLen == 0 )
-    return -1;
-
-  bufferLen = reply->bufferLen;
-
-  while( pathLen )
-  {
-    _send( tid, path, pathLen > bufferLen ? bufferLen : pathLen, 0 );
-    path += pathLen > bufferLen ? bufferLen : pathLen;
-    pathLen -= pathLen > bufferLen ? bufferLen : pathLen;
-  }
-
-  while( num_recv < bytes_to_recv )
-  {
-    size_t diff = (bytes_to_recv - num_recv);
-
-    num_recv += _receive( tid, entries, diff > bufferLen ? bufferLen : diff, 0 );
-    entries = (struct FileAttributes *)((unsigned)entries + (diff > bufferLen ? 
-                 bufferLen : diff));
-  }
-
-  return num_recv;
+  return -1;
 }
 
-int readFile( tid_t tid, char *path, size_t pathLen, unsigned offset,
-              void *buffer, size_t bytes )
+int releasePortRange( int first_port, int num_ports )
 {
-  struct FsReqMsg *req;
-  struct FsReplyMsg *reply;
-  struct Message msg;
-  size_t bufferLen;
-  size_t num_recv;
-  int ret;
-
-  req = (struct FsReqMsg *)msg.data;
-  reply = (struct FsReplyMsg *)msg.data;
-
-  if( path == NULL || pathLen == 0 || tid == NULL_TID )
-    return -1;
-
-  req->req = READ_FILE;
-  //strncpy( req->path, path, pathLen );
-  req->pathLen = pathLen;
-  req->dataLen = bytes;
-  req->offset = offset;
-
-  msg.length = sizeof *req;
-  msg.protocol = MSG_PROTO_FS;
-
-  while( (ret=__send( tid, &msg, 0 )) == 2 );
-
-  if( ret < 0 )
-    return -1;
-
-  while( (ret=__receive( tid, (struct Message *)&msg, 0 )) == 2 );
-
-  if( ret < 0 || reply->fail || reply->bufferLen == 0 )
-    return -1;
-
-  bufferLen = reply->bufferLen;
-
-  while( pathLen )
-  {
-    _send( tid, path, pathLen > bufferLen ? bufferLen : pathLen, 0 );
-    path += pathLen > bufferLen ? bufferLen : pathLen;
-    pathLen -= pathLen > bufferLen ? bufferLen : pathLen;
-  }
-
-  while( num_recv < bytes )
-  {
-    size_t diff = bytes - num_recv;
-
-    num_recv += _receive( tid, buffer, diff > bufferLen ? bufferLen : diff, 0 );
-    buffer = (void *)((unsigned)buffer + (diff > bufferLen ? bufferLen : diff));
-  }
-
-  return num_recv;
+  return -1;
 }
-
-int writeFile( tid_t tid, char *path, size_t pathLen, unsigned offset,
-              void *buffer, size_t bytes )
-{
-  struct FsReqMsg *req;
-  struct Message msg;
-  int ret;
-
-  req = (struct FsReqMsg *)msg.data;
-  reply = (struct FsReplyMsg *)msg.data;
-
-  if( path == NULL || pathLen == 0 || tid == NULL_TID )
-    return -1;
-
-  req->req = WRITE_FILE;
-  //strncpy( req->path, path, pathLen );
-  req->pathLen = pathLen;
-  req->dataLen = bytes;
-
-  msg.length = sizeof *req;
-  msg.protocol = MSG_PROTO_FS;
-
-  while( (ret=__send( tid, &msg, 0 )) == 2 );
-
-  if( ret < 0 )
-    return -1;
-
-  while( (ret=__receive( tid, (struct Message *)&msg, 0 )) == 2 );
-
-  if( ret < 0 || reply->fail || reply->bufferLen == 0 )
-    return -1;
-
-  bufferLen = reply->bufferLen;
-
-  while( pathLen )
-  {
-    _send( tid, path, pathLen > bufferLen ? bufferLen : pathLen, 0 );
-    path += pathLen > bufferLen ? bufferLen : pathLen;
-    pathLen -= pathLen > bufferLen ? bufferLen : pathLen;
-  }
-
-  while( num_sent < bytes_to_send )
-  {
-    size_t diff = (bytes_to_send - num_sent);
-
-    num_sent += _receive( tid, entries, diff > bufferLen ? bufferLen : diff, 0 );
-    entries = (struct FileAttributes *)((unsigned)entries + (diff > bufferLen ? 
-                 bufferLen : diff));
-  }
-
-  return num_sent;
-}
-
-int getAttributes( tid_t tid, char *path, size_t pathLen, 
-                   struct FileAttributes *attrib )
-{
-  struct FsReqMsg *req;
-  struct Message msg;
-  int ret;
-
-  req = (struct FsReqMsg *)msg.data;
-  reply = (struct FsReplyMsg *)msg.data;
-
-  if( path == NULL || pathLen == 0 || tid == NULL_TID || attrib == NULL )
-    return -1;
-
-  req->req = GET_ATTRIB;
-  //strncpy( req->path, path, pathLen );
-  req->pathLen = pathLen;
-  req->dataLen = sizeof *attrib;
-
-  msg.length = sizeof *req;
-  msg.protocol = MSG_PROTO_FS;
-
-  while( (ret=__send( tid, &msg, 0 )) == 2 );
-
-  if( ret < 0 )
-    return -1;
-
-  while( (ret=__receive( tid, (struct Message *)&msg, 0 )) == 2 );
-
-  if( ret < 0 || reply->fail || reply->bufferLen == 0 )
-    return -1;
-
-  bufferLen = reply->bufferLen;
-
-  while( pathLen )
-  {
-    _send( tid, path, pathLen > bufferLen ? bufferLen : pathLen, 0 );
-    path += pathLen > bufferLen ? bufferLen : pathLen;
-    pathLen -= pathLen > bufferLen ? bufferLen : pathLen;
-  }
-
-  while( num_recv < bytes_to_recv )
-  {
-    size_t diff = (bytes_to_recv - num_recv);
-
-    num_recv += _receive( tid, attrib, diff > bufferLen ? bufferLen : diff, 0 );
-    attrib = (struct FileAttributes *)((unsigned)attrib + (diff > bufferLen ? 
-                 bufferLen : diff));
-  }
-
-  return num_recv;
-}
-*/
