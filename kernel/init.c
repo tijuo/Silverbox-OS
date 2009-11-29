@@ -293,11 +293,12 @@ int initMemory( multiboot_info_t *info )
 
   loadGDT();
 
-  kprintf("Unmapping first page table\n");
+//  kprintf("Unmapping first page table\n");
+
   /* Unmap the first page table */
 
-  pde = ADDR_TO_PDE((addr_t)0x00);
-  memset( pde, 0, sizeof(*pde) );
+//  pde = ADDR_TO_PDE((addr_t)0x00);
+//  memset( pde, 0, sizeof(*pde) );
 
   return 0;
 }
@@ -613,7 +614,7 @@ void init2( void )
   struct BootInfo *b_info;
   struct MemoryArea *memory_area;
   struct BootModule *boot_mods;
-  char *init_server_stack = (char *)(PHYSMEM_START - PAGE_SIZE);
+  char *init_server_stack = (char *)(KERNEL_VSTART - PAGE_SIZE);
 
   /* Each entry in a page directory and page table must be cleared 
      prior to using. */

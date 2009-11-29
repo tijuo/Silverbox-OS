@@ -238,7 +238,7 @@ int main(void)
 {
   struct Message msg;
 
-  __map(0xB8000, 0xB8000, 8);
+//  __map(0xB8000, 0xB8000, 8);
 
   if(registerName(DEVICE_MGR, strlen(DEVICE_MGR)) != 0)
     return 1;

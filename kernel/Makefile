@@ -6,8 +6,7 @@ SRC     =init.c paging.c thread.c schedule.c exceptions.c \
         apic.c signal.c memory.c
 
 OBJ     =$(SRC:.c=.o)
-LDFLAGS	=-m elf_i386 -T ../link.ld --exclude-libs ALL
-
+LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL
 
 all:	kernel.gz kernel.dmp kernel.dbg kernel.sym
 

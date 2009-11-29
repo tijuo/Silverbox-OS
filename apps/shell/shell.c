@@ -138,15 +138,18 @@ static int concatPaths( char *path, char *str )
 char *getFullPathName(char *str)
 {
   static char path[PATH_LEN+1];
-  size_t len;
+  
+  if( str == NULL )
+    return str;
+
+  while( *str == ' ' )
+    str++;
 
   if( str[0] == '/' )
     return str;
 
-  len = strlen(currDir);
-
-  path[PATH_LEN] = '/0';
-  strcat( path, currDir );
+  path[PATH_LEN] = '\0';
+  strncpy( path, currDir, PATH_LEN );
   concatPaths( path, str );
 //  strncpy( &path[len], str, PATH_LEN );
 
@@ -244,53 +247,34 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     printf("%.*s\n", PATH_LEN, currDir);
   else if( strncmp( command, "cd", 2 ) == 0 )
   {
-    char *path = getFullPathName( arg_str );
+    char *path;
+
+    if( comm_len == 0 || arg_str == NULL )
+      path = "/";
+    else
+      path = getFullPathName( arg_str );
 
     if( fatGetAttributes( path, dev_num, attrib_list ) >= 0 )
       strncpy( currDir, path, PATH_LEN );
     else
       return -1;
-/*
-    if( arg_str[0] == '/' )
-    {
-      if( fatGetAttributes(arg_str, dev_num, attrib_list ) >= 0 )
-        strncpy( currDir, arg_str, PATH_LEN );
-      else
-        return -1;
-    }
-    else
-      concatPaths( currDir, arg_str );
-*/
   }
   else if( strncmp( command, "ld", 2 ) == 0 )
   {
     int n;
-    char *path=getFullPathName(arg_str), *buffer;
+    char *path, *buffer;
 
-/*
-    if( arg_str == NULL )
+    if( comm_len == 0 || arg_str == NULL )
       path = currDir;
-    else if( arg_str[0] != '/' )
-    {
-      buffer = malloc(PATH_LEN);
+    else
+      path = getFullPathName(arg_str );
 
-      if( buffer == NULL )
-        return -1;
-
-      memcpy( buffer, currDir, PATH_LEN );
-      concatPaths( buffer, arg_str );
-      path = buffer;
-    }
-*/
     n = fatGetDirList(path, dev_num, attrib_list, sizeof attrib_list / 
                       sizeof(struct FileAttributes));
 
     if( n < 0 )
     {
-      printf("n < 0\n");
-
-  //    if( arg_str != NULL && *arg_str != '/' )
-  //      free(buffer);
+      printf("Failure\n");
 
       return -1;
     }
@@ -302,21 +286,8 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     else
     {
       for(unsigned i=0; i < (unsigned)n; i++)
-      {
-        printf("%.*s%c \n", attrib_list[i].nameLen, attrib_list[i].name, ((attrib_list[i].flags & FS_DIR) ? '/' : '\0'));
-/*
-        for( unsigned j=0; j < attrib_list[i].nameLen; j++ )
-          putchar(attrib_list[i].name[j]);
-        
-        if( attrib_list[i].flags & FS_DIR )
-          putchar('/');
-
-        putchar('\n'); */
-      }
+        printf("%.*s%c\n", attrib_list[i].nameLen, attrib_list[i].name, ((attrib_list[i].flags & FS_DIR) ? '/' : '\0'));
     }
-
-//    if( arg_str != NULL && *arg_str != '/' )
-//      free(buffer);
   }
   else if( strncmp( command, "echo", 4 ) == 0 )
   {
@@ -336,8 +307,7 @@ int main(void)
   char *space_ptr, *second_arg;
   size_t index;
 
-  mapMem((void *)0xB8000, (void *)0xB8000, 8, 0);
-  print("Looking up...");
+//  mapMem((void *)0xB8000, (void *)0xB8000, 8, 0);
 //  dev_num = lookupName( dev_name, strlen(dev_name) );
 
   parseDevice(dev_name, &dev_num);
@@ -353,12 +323,9 @@ int main(void)
   currDir[0] = '/';
   currDir[1] = '\0';
 
-  printf("%s\n", "abc");
-  printf("abc\n");
-
   while( true )
   {
-    printf("%s:/> ", dev_name);
+    printf("%s:%.*s>", dev_name, PATH_LEN, currDir);
     fflush(stdout);
 
     index = getStr(charBuf, BUF_LEN);

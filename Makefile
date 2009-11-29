@@ -34,3 +34,4 @@ clean:
 	for i in $(DIRS); do make -C $$i clean; done
 	cd tools && rm -f *.o
 	rm -rf doc/
+	rm -f bin/*

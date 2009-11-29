@@ -9,8 +9,8 @@
 /* FIXME: Changing any of these values may require changing
    the asm code */
 
-#define BOOTSTRAP_VSTART    0x100000
-#define BOOTSTRAP_START     0x100000
+#define BOOTSTRAP_VSTART    0x1000000
+#define BOOTSTRAP_START     0x1000000
 
 #define KERNEL_VSTART       (u32)&kVirtStart
 #define PHYSMEM_START       (u32)&VPhysMemStart
@@ -20,19 +20,11 @@
 /* FIXME: Changing any of these values may require changing the 
    asm code. */
 
-<<<<<<< HEAD:include/kernel/mm.h
-#define KERNEL_IVT		KERNEL_VSTART
-#define KERNEL_IDT		0xFF400500
-#define KERNEL_GDT		0xFF400D00
-#define KERNEL_TSS		0xFF400F98
-#define TSS_IO_PERM_BMP		0xFF401000
-=======
-#define KERNEL_IDT		0x88000
-#define KERNEL_GDT		(KERNEL_IDT + 256 * 8)
-#define KERNEL_TSS		(KERNEL_IDT + 0xF98)
+#define KERNEL_IDT		(u32)&kernelIDT
+#define KERNEL_GDT		(u32)&kernelGDT
+#define KERNEL_TSS		(u32)&kernelTSS
 
-#define TSS_IO_PERM_BMP		(0xFF4C0000)
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:include/kernel/mm.h
+#define TSS_IO_PERM_BMP		(PHYSMEM_START + 0xC0000)
 #define TEMP_PAGEADDR           (TSS_IO_PERM_BMP + 2 * PAGE_SIZE)
 #define LAPIC_VADDR             (TEMP_PAGEADDR + PAGE_SIZE)
 //#define V_IDLE_STACK_TOP	(LAPIC_VADDR + 2 * PAGE_SIZE)
@@ -44,13 +36,8 @@
 #define V_IDLE_STACK_TOP	(PHYSMEM_START + IDLE_STACK_TOP)
 #define V_KERNEL_STACK_TOP	(PHYSMEM_START + KERNEL_STACK_TOP)
 
-<<<<<<< HEAD:include/kernel/mm.h
-#define INIT_PDIR		0x1000
-=======
 #define INIT_PDIR		(KERNEL_IDT + PAGE_SIZE)
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:include/kernel/mm.h
-#define FIRST_PAGE_TAB          (INIT_PDIR + PAGE_SIZE)
-#define KERNEL_PAGE_TAB         FIRST_PAGE_TAB
+#define KERNEL_PAGE_TAB         (INIT_PDIR + PAGE_SIZE)
 #define INIT_SERVER_PDIR        (KERNEL_PAGE_TAB + PAGE_SIZE)
 #define INIT_SERVER_USTACK_PDE  (INIT_SERVER_PDIR + PAGE_SIZE)
 #define INIT_SERVER_USTACK_PTE  (INIT_SERVER_USTACK_PDE + PAGE_SIZE)
@@ -58,7 +45,8 @@
 #define IDLE_STACK_TOP		(INIT_SERVER_PDE + 2 * PAGE_SIZE)
 #define KERNEL_STACK_TOP	(IDLE_STACK_TOP + PAGE_SIZE)
 #define KERNEL_VAR_PAGE		KERNEL_STACK_TOP
-#define KERNEL_PAGE_TAB2	(KERNEL_VAR_PAGE + PAGE_SIZE)
+#define FIRST_PAGE_TAB		(KERNEL_VAR_PAGE + PAGE_SIZE)
+#define KERNEL_PAGE_TAB2	(FIRST_PAGE_TAB + PAGE_SIZE)
 #define BOOTSTRAP_STACK_TOP	(KERNEL_PAGE_TAB2 + 2 * PAGE_SIZE)
 
 #define INVALID_VADDR       (void *)0xFFFFFFFF

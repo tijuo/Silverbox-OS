@@ -125,7 +125,7 @@ int main( void )
 
   __sleep( 1500 );
 //  __map(0xB8000,0xB8000, 8);
-  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
+//  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
 
   printMsg("\n\n\n\nReady.\n");
   print("\n\n\n\n\n\n\ngo\n");

@@ -15,10 +15,13 @@ extern void handleTMPO(struct Message *msg);
 
 /* Malloc works here as long as 'pager_addr_space' exists and is correct*/
 
-#define STACK_TABLE	0xE0000000
+#define STACK_TABLE	KVIRT_START
 #define TEMP_PTABLE	0xE0000000
-#define TEMP_PAGE	0x10000
-#define KPHYS_START	0x100000
+#define TEMP_PAGE	0x100000
+
+/* FIXME: These should be passed to the init server by the kernel. */
+#define KPHYS_START	0x1000000
+#define KVIRT_START	0xFF400000
 
 struct AddrSpace pager_addr_space;
 
@@ -348,7 +351,9 @@ int mapMemRange( void *virt, int pages )
 
 void clearPage( void *page )
 {
-  __map((void *)TEMP_PAGE, page, 1, 0, NULL_PADDR);
+  if( __map((void *)TEMP_PAGE, page, 1, 0, NULL_PADDR) < 1 )
+    print("Map failed.");
+
   memset((void *)TEMP_PAGE, 0, PAGE_SIZE);
   __unmap((void *)TEMP_PAGE, NULL_PADDR);
 }
@@ -495,7 +500,7 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
 
   clearPage(tempPage);
 
-  if( __map_page_table((void *)image, tempPage, 0, NULL_PADDR) != 0 )
+  if( __map_page_table((void *)image, tempPage, 0, NULL_PADDR) < 0 )
   {
     free_phys_page(tempPage);
     print("__map_page_table() failed.\n");
@@ -504,7 +509,7 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
 
 / * Map the image to virtual memory. (assumes that the image is less than or equal to 4MB in size). * /
 
-  if( __map((void *)image, (void *)module->mod_start, (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1), 0, NULL_PADDR) != 0)
+  if( __map((void *)image, (void *)module->mod_start, (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1), 0, NULL_PADDR) < 1)
   {
     __unmap_page_table((void *)image, NULL_PADDR);
     free_phys_page(tempPage);
@@ -554,12 +559,12 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
 
   clearPage( temp );
 
-  if( __map_page_table( (void *)TEMP_PTABLE, temp, 0, NULL_PADDR) != 0 )
+  if( __map_page_table( (void *)TEMP_PTABLE, temp, 0, NULL_PADDR) < 0 )
     ;//cleanup;
  
   phys = alloc_phys_page(NORMAL, addrSpace);
 
-  if( __map((void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), phys, 1, 0, NULL_PADDR ) != 0 )
+  if( __map((void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), phys, 1, 0, NULL_PADDR ) < 1 )
     ;// cleanup;
 
   if( args != NULL )
@@ -1156,9 +1161,7 @@ int main( int argc, char **argv )
   sysID = 0;
   //tid_t tid;
 
-  /* It's important not to cause an exception! */
-
-  __map((void *)0xB8000, (void *)0xB8000, 8, 0, NULL_PADDR);
+//  __map((void *)0xB8000, (void *)0xB8000, 8, 0, NULL_PADDR);
 
   get_boot_info(argc, argv);
   list_init(&shmem_list, list_malloc, list_free);

@@ -13,11 +13,7 @@ IMPORT init
 EXPORT start
 ;  eax has the mulitboot magic value
 ;  ebx has multiboot data address
-<<<<<<< HEAD:kernel/asm/entry.asm
-  mov   esp, 0xB000
-=======
-  mov   esp, 0x94000
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:kernel/asm/entry.asm
+  mov   esp, 0x95000
   mov   ebp, esp
 
   push  0
@@ -71,30 +67,12 @@ mboot:
 
 ; Physical Memory Map
 
-<<<<<<< HEAD:kernel/asm/entry.asm
-; 0x0000 - 0x0500 : IVT
-; 0x0500 - 0x0D00 : GDT
-; 0x0D00 - 0x1000 : IDT
-;--- not used ----          ; 0x1000 - 0x3000 : TSS I/O Bitmap
-;--- not used ---- ; 0x3000 - 0x4000 : Temporary PDir/PTab
-;-- not used ---   ; 0x4000 - 0x5000 : APIC
-; 0x1000 - 0x2000 : initial Page directory
-; 0x2000 - 0x3000 : The first page table and kernel's page table
-; 0x3000 - 0x4000 : Initial server page directory
-; 0x4000 - 0x5000 : init server user stack's pde
-; 0x5000 - 0x6000 : init server user stack's pte
-; 0x6000 - 0x7000 : init server user pde
-; 0x7000 - 0x8000 ; idle kernel stack
-; 0x8000 - 0x9000 ; kernel stack
-; 0x9000 - 0xA000 ; kernel variables
-; 0xA000 - 0xB000 : Bootstrap stack
-=======
 ; 0x0000  - 0x0500 : IVT
 ; 0x88000 - 0x88800 : IDT
 ; 0x88800 - 0x88F98 : GDT
 ; 0x88F98 - 0x89000 : TSS
 ; 0x89000 - 0x8A000 : initial Page directory
-; 0x8A000 - 0x8B000 : The first page table and kernel's page table
+; 0x8A000 - 0x8B000 : The kernel's page table
 ; 0x8B000 - 0x8C000 : Initial server page directory
 ; 0x8C000 - 0x8D000 : init server user stack's pde
 ; 0x8D000 - 0x8E000 : init server user stack's pte
@@ -102,9 +80,9 @@ mboot:
 ; 0x8F000 - 0x90000 ; idle kernel stack
 ; 0x90000 - 0x91000 ; kernel stack
 ; 0x91000 - 0x92000 ; kernel variables
-; 0x92000 - 0x93000 ; The second kernel page table
-; 0x93000 - 0x94000 : Bootstrap stack
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:kernel/asm/entry.asm
+; 0x92000 - 0x93000 ; the first page table
+; 0x93000 - 0x94000 ; The second kernel page table
+; 0x94000 - 0x95000 : Bootstrap stack
 
 initPaging:
 ;  push  ebp
@@ -121,81 +99,63 @@ initPaging:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-<<<<<<< HEAD:kernel/asm/entry.asm
-;  lea   ecx, [initPageDir]
-  lea   eax, [initPageDir + 0xFF4]
-  mov   edx, 0x2003
-;  mov   dword [ecx], edx     ; Map the first page table(0x000000-0x100000)
-  mov	dword [eax], edx     ; Map the physical memory range(0xFF400000-0xFF500000)
-=======
   lea	eax, [initPageDir + 0xFF8]
-  mov	edx, 0x92003
+  mov	edx, 0x93003
   mov	dword [eax], edx
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-  lea   eax, [initPageDir + 0xFF4]
   lea	ecx, [initPageDir]
-  mov   edx, 0x8A003
-  mov	dword [eax], edx     ; Map the physical memory range (0x00-0x100000) to (0xFF400000-0xFF500000)
-  mov   dword [ecx], edx     ; 1:1 map the physical memory range (0x00-0x100000)
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:kernel/asm/entry.asm
+  mov   edx, 0x92007
+  mov   dword [ecx], edx     ; 1:1 map the physical memory range (0x00-0xC0000)
 
-  lea	edi, [0x2000]
-  xor	eax, eax
-  mov	ecx, 16
+; No need to clear the PTEs since they'll be overwritten anyway
+
+;  lea	edi, [0x92000]
+;  xor	eax, eax
+;  mov	ecx, 256
 
 .clearPages:
   stosd
   loop .clearPages
 
-  lea   edi, [0x2000]
-  mov   dword [edi], 0x03	; Map 0x0000-0x2000 -> 0xFF400000 - 0xFF401000
+  lea   edi, [0x92000]
+  mov	eax, 0x03
+  mov	ecx, 160
 
-<<<<<<< HEAD:kernel/asm/entry.asm
-  lea	edi, [0x2000+5*4]
-  mov	eax, 0x7003
-  mov	ecx, 4
-=======
 ; Map conventional memory
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:kernel/asm/entry.asm
 
 .mapFirstTable:
-  stosd                    ; Map 0x7000-0xA000 -> 0xFF405000 - 0xFF49000
+  stosd
   add  eax, 0x1000
   loop .mapFirstTable
 
-<<<<<<< HEAD:kernel/asm/entry.asm
-  mov	eax, 0x10003
-  mov	ecx, 240
-  lea	edi, [0x2000+16*4]
+; Map video memory (no-cache, write-through, user)
 
-.mappingLoop:
-=======
-; Map video memory (no-cache, write-through)
-
-  mov	eax, 0xA001B
+  mov	eax, 0xA001F
   mov	ecx, 32
-  lea	edi, [0x8A000+160*4]
+  lea	edi, [0x92000+160*4]
 
 .mapFirstTable2:
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:kernel/asm/entry.asm
   stosd
   add	eax, 0x1000
   loop	.mappingLoop
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-; This is redundant
+;  This is redundant (this step will be done below)
+
   mov	eax, kPhysStart
-  shr	eax, 22
-  lea   ecx, [initPageDir + eax] ; Assumes that Kernel is at 0x100000
-  mov   edx, 0x2003
+  shr	eax, 20
+  lea   ecx, [initPageDir + eax] ; Assumes that Kernel is at 0x1000000
+  mov   edx, 0x8A003
+
   mov   dword [ecx], edx
 
-  mov   ecx, 768
+  mov   ecx, 1024
   mov   eax, kPhysStart
   or    eax, 0x03
-  lea   edi, [0x2000+256*4]
+  lea   edi, [0x8A000]
 
 .mapPhysKernel:
   stosd                    ; 1:1 map kernel memory
@@ -205,20 +165,20 @@ initPaging:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
   mov	eax, kVirtStart
-  shr	eax, 22
+  shr	eax, 20
   lea   ecx, [initPageDir + eax]
   mov   edx, 0x2003
   mov   dword [ecx], edx        ; Map the Kernel table
 
-  mov   ecx, 768           ; Assumes that the init code is within the 
-  mov   eax, kPhysStart    ; first 3MB of the kernel
-  or    eax, 0x03
-  lea   edi, [0x2000+256*4]
+;  mov   ecx, 1024           ; Assumes that the init code is within the 
+;  mov   eax, kPhysStart    ; first 4MB of the kernel
+;  or    eax, 0x03
+;  lea   edi, [0x8A000]
 
-.mapVirtKernel:             ; Map the kernel to address 0xC0000000
-  stosd
-  add   eax, 0x1000
-  loop .mapVirtKernel
+;.mapVirtKernel:             ; Map the kernel to address 0xFF400000
+;  stosd
+;  add   eax, 0x1000
+;  loop .mapVirtKernel
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -236,8 +196,7 @@ initPaging:
   or    eax, 0x80000000    ; Enable paging
   mov   cr0, eax
 
-  add	esp, 0xFF400000
-  sub	esp, 0x2000
+  add	esp, VPhysMemStart
 
 ;  leave
   ret

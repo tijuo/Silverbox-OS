@@ -27,7 +27,7 @@ tid_t getFreeTID(void)
   if( tcbTable[lastTID].state == DEAD )
     return lastTID;
   else
-    RET_MSG(NULL_TID, "Exhausted all TIDS!");
+    RET_MSG(NULL_TID, "Exhausted all TIDs!");
 }
 
 /*
@@ -220,6 +220,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
     readPDE( (void *)KERNEL_VSTART, &pde, (void *)getCR3() );
     writePDE( (void *)KERNEL_VSTART, &pde, addrSpace );
+
     readPDE( (void *)PHYSMEM_START, &pde, (void *)getCR3() );
     writePDE( (void *)PHYSMEM_START, &pde, addrSpace );
 

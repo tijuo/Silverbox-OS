@@ -46,7 +46,7 @@
 
 #define doNewline() \
   charXPos = 0; \
-  charYPos = (charYPos + 1); \
+  charYPos++; \
   if( charYPos >= 25 ) scrollToLine( charYPos - 24 );
 
 /* Go to nearest multiple of 8. */
@@ -255,7 +255,7 @@ void initVideo( void )
   setAttr( ATTRIB( GRAY, BLACK, NO_BLINK ) );
 
   //__map( (void *)VIDEO_RAM, (void *)VIDEO_RAM, 8 );
-  mapMem( (void *)VIDEO_RAM, (void *)VIDEO_RAM, 8, 0 );
+//  mapMem( (void *)VIDEO_RAM, (void *)VIDEO_RAM, 8, 0 );
 
 //  __chioperm( 1, 0x3D4, 2 ); 	// Allocate port range
 

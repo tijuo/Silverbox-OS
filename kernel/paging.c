@@ -584,6 +584,7 @@ int mapPage( void *virt, void *phys, u32 flags, void *addrSpace )
 
   if( ptePtr->present )
   {
+    kprintf("Already mapped! 0x%x->0x%x\n", phys, virt);
     assert( false );
 
     return -2;

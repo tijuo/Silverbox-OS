@@ -9,7 +9,7 @@ int main( void )
   char letter[] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   int i=0;
 
-  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
+//  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
 //  __map( (void *)0xB8000, (void *)0xB8000, 8 );
 
   __sleep( 4000 );

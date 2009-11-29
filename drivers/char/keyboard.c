@@ -512,7 +512,7 @@ int main( void )
 
 //  __map(0xB8000,0xB8000, 8);
 
-  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
+//  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
 
 //  __register_int( 0x21 );
 //  __register_int( 0x2C );

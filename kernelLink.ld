@@ -18,14 +18,14 @@ OUTPUT_FORMAT("elf32-i386")
 ENTRY(start)
 SECTIONS
 {
-  kPhysCode  = 0x100000;
-  kPhysStart = 0x100000;
-  kVirtCode  = 0xFF500000;
-  kVirtStart = 0xFF500000;
+  kPhysCode  = 0x1000000;
+  kPhysStart = 0x1000000;
+  kVirtCode  = 0xFF400000;
+  kVirtStart = 0xFF400000;
 
   kVirtToPhys = kPhysStart - kVirtStart;
   kPhysToVirt = kVirtStart - kPhysStart;
-  VPhysMemStart = 0xFF400000;
+  VPhysMemStart = 0x00000000;
 
 <<<<<<< HEAD:link.ld
   kernelGDT = 0xD00 + VPhysMemStart;

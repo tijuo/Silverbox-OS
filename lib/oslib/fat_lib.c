@@ -8,10 +8,10 @@
 
 struct FatDir
 {
-  struct FAT_DirEntry *entries;
+  struct FAT_DirEntry *entries; // the sub-entries (files, dirs) in this directory
   struct FAT_Dev *fatDev;
 
-  size_t num_entries;
+  size_t num_entries;	// the number of sub-entries
 
   union 
   {
@@ -19,10 +19,10 @@ struct FatDir
     unsigned sector;
   };  
 
-  unsigned next;
+  unsigned next;	// the next sector/cluster from which to read the entries
 
-  char more : 1;
-  char use_sects : 1;
+  char more : 1;	// indicates that there are more entries to be read
+  char use_sects : 1;	// read from sectors instead of clusters
 };
 
 /* TODO: Need to implement LFNs and FAT32 */
@@ -796,7 +796,7 @@ int fatGetDirList( const char *path, unsigned short devNum, struct FileAttribute
   unsigned nameLen, extLen;
   struct FileAttributes *fsEntry = attrib;
   struct FAT_Dev fatInfo, *fat_dev = &fatInfo;
-  unsigned entriesRead=0;
+  int entriesListed=0, entriesRead;
   struct FatDir *fat_dir;
 
   if( path == NULL || attrib == NULL || getDeviceData( devNum, &fatInfo ) < 0 )
@@ -809,11 +809,14 @@ int fatGetDirList( const char *path, unsigned short devNum, struct FileAttribute
 
   while( maxEntries )
   {
+    entriesRead = 0;
+
     for( unsigned i=0; i < fat_dir->num_entries && i < maxEntries; i++, fsEntry++ )
     {
       if(fat_dir->entries[i].filename[0] == (byte)0xE5 || 
         (fat_dir->entries[i].start_clus == 0 && fat_dir->entries[i].file_size != 0)) // Disregard deleted file entries and LFNs
       {
+        fsEntry--;
         continue;
       }
       else if( fat_dir->entries[i].filename[0] == 0x05 )
@@ -846,16 +849,18 @@ int fatGetDirList( const char *path, unsigned short devNum, struct FileAttribute
           fsEntry->nameLen += extLen + 1;
         }
       }
+
+      entriesRead++;
     }
 
-    if( maxEntries > fat_dir->num_entries )
+    if( maxEntries > entriesRead )
     {
-      maxEntries -= fat_dir->num_entries;
-      entriesRead += fat_dir->num_entries;
+      maxEntries -= entriesRead;
+      entriesListed += entriesRead;
     }
     else
     {
-      entriesRead += maxEntries;
+      entriesListed += maxEntries;
       maxEntries = 0;
     }
 
@@ -866,13 +871,13 @@ int fatGetDirList( const char *path, unsigned short devNum, struct FileAttribute
       if( fat_dir == NULL )
       {
         freeFatDir( fat_dir );
-        return entriesRead;
+        return entriesListed;
       }
     }
     else
     {
       freeFatDir( fat_dir );
-      return entriesRead;
+      return entriesListed;
     }
   }
 

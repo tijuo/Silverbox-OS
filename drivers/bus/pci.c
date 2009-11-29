@@ -153,7 +153,7 @@ void initPCI(void)
     __exit(-1);
 */
 
-  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
+//  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
   mapMem( (void *)0xE0000, (void *)0xE0000, 32, 0 );
 }
 

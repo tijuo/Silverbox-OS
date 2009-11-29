@@ -15,7 +15,7 @@ extern int fatCreateFile( const char *path, const char *name, unsigned short dev
 int main(void)
 {
   int n;
-  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
+//  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
 //  __map( 0xB8000, 0xB8000, 8 );
 
   struct FileAttributes *attrib = malloc( 10 * sizeof(struct FileAttributes) );

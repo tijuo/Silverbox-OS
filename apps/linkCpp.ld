@@ -18,7 +18,7 @@ OUTPUT_FORMAT("elf32-i386")
 ENTRY(start)
 SECTIONS
 {
-  virtual = 0x4000000;
+  virtual = 0x400000;
 
   .text virtual : {
     code = .;
