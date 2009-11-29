@@ -1,29 +1,15 @@
-/* floppy.c
-*
-* Copyright (C) 2005 Tiju Oliver
-*
-* This program is free software; you can redistribute it and/or modify it under
-* the terms of the GNU General Public License as published by the Free Software
-* Foundation; either version 2 of the License, or (at your option) any later
-* version.
-*
-* This program is distributed in the hope that it will be useful, but WITHOUT
-* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-* FOR A PARTICULAR PURPOSE.
-*
-* For more info, look at the COPYING file.
-*/
-
 #include <kernel/io.h>
 #include <kernel/irq.h>
 #include <kernel/interrupt.h>
 #include <kernel/dma.h>
 #include <kernel/task.h>
 #include <kernel/syscalls.h>
-#include <drivers/floppy.h>
+#include "floppy.h"
 #include <drivers/file.h>
 #include <kernel/device.h>
-#include <kernel/video.h>
+#include <os/io.h>
+#include <oslib.h>
+#include <stdio.h>
 #include <string.h>
 
 #define FLOPPY_DEVICE		   3
@@ -74,7 +60,7 @@ void convert_blk_to_geom(unsigned long blk, int dev, struct fdc_geometry *geom)
   geom->secsize = floppy_dev[dev].secsize;
   geom->tracklen = floppy_dev[dev].secs_per_track;
 }
-
+/*
 int floppy_request(struct blk_request *request)
 {
   switch(request->command)
@@ -89,7 +75,7 @@ int floppy_request(struct blk_request *request)
       return -1;
   }
 }
-
+*/
 int start_fdc_rw(int devnum, void *buffer, unsigned long blk, int nblks, int wr_comm)
 {
   struct Floppy_RW_Comm comm_param;
@@ -130,9 +116,10 @@ int start_fdc_rw(int devnum, void *buffer, unsigned long blk, int nblks, int wr_
   return 0;
 }
 
+/*
 void motor_sleep_off(void)
 {
-  sys_sleep(1800);
+  __sleep(1800);
 
   if((!floppy_dev[0].status.motor_on) && (floppy_dev[0].status.kill))
     kill_motor(0);
@@ -141,8 +128,9 @@ void motor_sleep_off(void)
 
   floppy_dev[0].status.kill = floppy_dev[1].status.kill = 0;
 
-  kill_thread(task_current->thread_current);
+//  kill_thread(task_current->thread_current);
 }
+*/
 
 byte get_fdc_data(void) {
   int i;
@@ -155,10 +143,10 @@ byte get_fdc_data(void) {
       comm_error = 0;
       return data;
     }
-    sys_sleep(2);
+    __sleep(2);
   }
   comm_error = 1;
-//  print("get_fdc_data(): error\n");
+//  printf("get_fdc_data(): error\n");
   return 0xFF;
 }
 
@@ -173,9 +161,9 @@ int send_fdc_data(byte command)
       outByte(DATA_FIFO, command);
       return 0;
     }
-    sys_sleep(2);
+    __sleep(2);
   }
-//  print("send_fdc_data(): error\n");
+//  printf("send_fdc_data(): error\n");
   return 1;
 }
 
@@ -200,10 +188,10 @@ void start_motor(int drive)
 */
   }
   if(floppy_dev[drive].type == FLOP120MB)
-    sys_sleep(500); /* Motor startup delay */
+    __sleep(500); /* Motor startup delay */
   else if((floppy_dev[drive].type == FLOP720KB) ||
           (floppy_dev[drive].type == FLOP144MB))
-    sys_sleep(300);
+    __sleep(300);
 }
 
 void stop_motor(int drive)
@@ -431,7 +419,7 @@ int floppy_calibrate(int drive)
 
   floppy_checkint(&st0, &cyl);  
 
-  sys_sleep(15);
+  __sleep(15);
 
   stop_motor(drive);
 
@@ -483,7 +471,7 @@ int fdc_seek(int drive, int head, int cyl)
   wait_floppy();
   floppy_checkint(&st0, &intcyl);
 
-  sys_sleep(15);
+  __sleep(15);
 
 //  stop_motor(drive);
 
@@ -510,6 +498,7 @@ void get_drv_status(byte *st3)
   *st3 = get_fdc_data();
 }
 
+/*
 void floppy_hand(task_t *current)
 {
   drv_ready = 1;
@@ -517,6 +506,7 @@ void floppy_hand(task_t *current)
   outByte(PIC1, EOI);
   outByte(PIC2, EOI);
 }
+*/
 
 void set_fdc_timeout(int msecs)
 {
@@ -542,9 +532,9 @@ void reset_fdc(void)
 
   outByte(CONFIG_CTRL, DR500KBPS);   
 
-  print("waiting for floppy.\n");
+  printf("waiting for floppy.\n");
   wait_floppy();
-  print("Done waiting.\n");
+  printf("Done waiting.\n");
   /* Polling is enabled after reset, so we need to sense the interrupt
      for each of the available drives */
 
@@ -560,7 +550,7 @@ void reset_fdc(void)
   poll_dis = 0;
   fifo_thr = 0;
   pre_trk = 0;
-  print("Sending a configure command.\n");
+  printf("Sending a configure command.\n");
   send_fdc_data(COMM_CONFIGURE);
   send_fdc_data(0);
   send_fdc_data((imp_seek << 6) | (fifo_en << 5) | (poll_dis << 4) | (fifo_thr)); 
@@ -597,7 +587,7 @@ byte get_floppies(void)
   return floppies;
 }
 
-int mod_main(void)
+int main(void)
 {
   byte floppies;
 
@@ -641,10 +631,10 @@ int mod_main(void)
 
   add_ISR(floppy, IRQ6);
 
-  if(register_blk_dev("floppy", FLOPPY_DEVICE, &floppy_ops, 512, (int *)floppy_request, 2) == -1)
-    print("Failed to register floppy device.");
-  else
-    print("Floppy device registered.\n");
+//  if(register_blk_dev("floppy", FLOPPY_DEVICE, &floppy_ops, 512, (int *)floppy_request, 2) == -1)
+    printf("Failed to register floppy device.");
+//  else
+    printf("Floppy device registered.\n");
 
   reset_fdc();
 //  while(1);

@@ -43,7 +43,6 @@ dep:
 
 depend:
 	for i in $(LIBOSDIR) $(LIBCDIRS); do make -C $$i depend; done
-#	for i in $(LIBCDIRS); do make -C $$i depend; done
 
 clean:
 	rm -f *.a

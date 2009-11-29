@@ -1,7 +1,7 @@
 #include "addr_space.h"
 #include "pagersrv.h"
 
-extern void mapPage(void);
+extern int extendHeap(unsigned);
 
 /* There needs to be a way to lookup the address space of a thread using a TID */
 
@@ -25,7 +25,7 @@ void *list_malloc( size_t size )
 
   else if ( size > availBytes )
   {
-    mapPage( );
+    extendHeap( 1 );
     availBytes += PAGE_SIZE;
   }
 
@@ -92,7 +92,7 @@ void *region_malloc( void )
   }
   else if ( size > availBytes )
   {
-    mapPage( );
+    extendHeap( 1 );
     availBytes += PAGE_SIZE;
   }
 
@@ -215,12 +215,13 @@ int detach_tid(void *aspace_phys, tid_t tid)
 /* Virtual addresses are allocated to an address space by using
    _attach_mem_region() and attach_mem_region() */
 
-int _attach_mem_region(struct AddrSpace *addr_space, struct MemRegion *region)
+int _attach_mem_region(struct AddrSpace *addr_space, struct AddrRegion *region)
 {
-  return list_insert(region->start, region, &addr_space->mem_region_list);
+  return list_insert(region->virtRegion.start, region, 
+                     &addr_space->mem_region_list);
 }
 
-int attach_mem_region(void *aspace_phys, struct MemRegion *region)
+int attach_mem_region(void *aspace_phys, struct AddrRegion *region)
 {
   struct AddrSpace addr_space, *ptr;
   ptr = &addr_space;
@@ -243,8 +244,11 @@ bool _find_address(struct AddrSpace *addr_space, void *addr)
 
   for(; ptr != NULL; ptr = ptr->next)
   {
-    if( is_in_region((unsigned int)addr, (struct MemRegion *)ptr->element) )
+    if( is_in_region((unsigned int)addr, 
+        &((struct AddrRegion *)ptr->element)->virtRegion) )
+    {
       return true;
+    }
   }
   return false;
 }
@@ -271,7 +275,7 @@ bool _region_overlaps(struct AddrSpace *addr_space, struct MemRegion *region)
 
   for( ; ptr != NULL; ptr = ptr->next )
   {
-    if( reg_overlaps(region, (struct MemRegion *)ptr->element ) )
+    if( reg_overlaps(region, &((struct AddrRegion *)ptr->element)->virtRegion ) )
       return true;
   }
   return false;

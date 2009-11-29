@@ -15,6 +15,7 @@ INCLUDES="$SB_PREFIX/include/ $SB_PREFIX/drivers/include/"
 EXIT_ON_WARN=1
 TOOLS="$SB_PREFIX/tools"
 LIBS="$SB_PREFIX/lib/"
+LDFLAGS="-melf_i386 --exclude-libs ALL -T $SB_PREFIX/cLink.ld --static -L$LIBS -( -lc -los -)"
 
 if [ $# -lt 2 ]; then
   echo "usage: $0 infile-1 [ infile-2 ... infile-n ] output"
@@ -63,4 +64,4 @@ for name in $files; do
 done
 
 gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $files
-ld -melf_i386 --exclude-libs ALL -T $SB_PREFIX/cLink.ld $obj $TOOLS/{$C_STUB,$SIG,$SIG2}.o -L$LIBS -\( -lc -los -\) -o $output
+ld $obj $TOOLS/{$C_STUB,$SIG,$SIG2}.o $LDFLAGS -o $output

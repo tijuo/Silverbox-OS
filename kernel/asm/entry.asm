@@ -5,6 +5,7 @@
 [section .header]
 
 IMPORT init
+IMPORT commandLine
 
 ; NOTE: Virtual addresses are used, but paging isn't enabled yet.
 ; GRUB loads the kernel to it's physical address. Memory needs
@@ -19,7 +20,7 @@ EXPORT start
   push  0
   popf
 
-  add ebx, VPhysMemStart
+  lea ebx, [ebx+VPhysMemStart]
 
   push ebx
 
@@ -115,9 +116,9 @@ initPaging:
 ;  xor	eax, eax
 ;  mov	ecx, 256
 
-.clearPages:
-  stosd
-  loop .clearPages
+;.clearPages:
+;  stosd
+;  loop .clearPages
 
   lea   edi, [0x92000]
   mov	eax, 0x03
@@ -125,10 +126,10 @@ initPaging:
 
 ; Map conventional memory
 
-.mapFirstTable:
+.mapFirstTable1:
   stosd
   add  eax, 0x1000
-  loop .mapFirstTable
+  loop .mapFirstTable1
 
 ; Map video memory (no-cache, write-through, user)
 
@@ -139,7 +140,7 @@ initPaging:
 .mapFirstTable2:
   stosd
   add	eax, 0x1000
-  loop	.mappingLoop
+  loop	.mapFirstTable2
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -149,7 +150,6 @@ initPaging:
   shr	eax, 20
   lea   ecx, [initPageDir + eax] ; Assumes that Kernel is at 0x1000000
   mov   edx, 0x8A003
-
   mov   dword [ecx], edx
 
   mov   ecx, 1024
@@ -167,7 +167,7 @@ initPaging:
   mov	eax, kVirtStart
   shr	eax, 20
   lea   ecx, [initPageDir + eax]
-  mov   edx, 0x2003
+  mov   edx, 0x8A003
   mov   dword [ecx], edx        ; Map the Kernel table
 
 ;  mov   ecx, 1024           ; Assumes that the init code is within the 
@@ -225,4 +225,4 @@ stop:
 ;GRUBBootInfo: dd 0
 mbootMagic equ 0x2BADB002
 bstrapErrMsg: db 'Error: Only Multiboot-compliant loaders are supported.',0
-initPageDir equ 0x1000
+initPageDir equ 0x89000

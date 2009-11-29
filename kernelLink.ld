@@ -27,15 +27,9 @@ SECTIONS
   kPhysToVirt = kVirtStart - kPhysStart;
   VPhysMemStart = 0x00000000;
 
-<<<<<<< HEAD:link.ld
-  kernelGDT = 0xD00 + VPhysMemStart;
-  kernelIDT = 0x500 + VPhysMemStart;
-  kernelTSS = 0xF98 + VPhysMemStart;
-=======
   kernelIDT = VPhysMemStart + 0x88000;
   kernelGDT = 0x88800 + VPhysMemStart;
   kernelTSS = 0x88F98 + VPhysMemStart;
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:link.ld
 
   .text kVirtCode : AT(kPhysCode) {
      kCode = .;

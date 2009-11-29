@@ -17,14 +17,19 @@
 #define  DISC_DATA(X)  \
   extern X __attribute__((section(".ddata")));  X
 
-#define contextSwitch( addrSpace, stack ) \
-  __asm__ __volatile__( \
+#define INIT_SRV_FLAG	"initsrv="
+
+void contextSwitch( void *addrSpace, void *stack ) __attribute( (section(".dtext")) );
+
+inline void contextSwitch( void *addrSpace, void *stack )
+{
+   __asm__ __volatile__( \
     "mov %0, %%ecx\n" \
     "mov %%cr3, %%edx\n" \
     "cmp %%edx, %%ecx\n" \
-    "jz   _skip\n" \
+    "jz   __skip\n" \
     "mov  %%ecx, %%cr3\n" \
-    "_skip: mov    %1, %%esp\n" \
+    "__skip: mov    %1, %%esp\n" \
     "popa\n" \
     "popw  %%es\n" \
     "popw  %%ds\n" \
@@ -32,6 +37,7 @@
     "iret\n" :: "m"(addrSpace), \
     "m"(stack) : "edx", "ecx", "esp" \
     );
+}
 
 extern TCB *idleThread;
 
@@ -56,6 +62,8 @@ DISC_CODE(void init2(void));
 DISC_CODE(void init(multiboot_info_t *info));
 DISC_CODE(void initPIC( void ));
 DISC_CODE(int memcmp(const char *s1, const char *s2, register size_t n));
+DISC_CODE(int strncmp(const char *str1, const char *str2, size_t num));
+DISC_CODE(char *strstr(const char *str, const char *substr));
 DISC_CODE(int clearPhysPage(void *phys));
 DISC_CODE(void showCPU_Features(void));
 DISC_CODE(void showGrubSupport(multiboot_info_t *));
@@ -93,6 +101,7 @@ struct BootModule
 {
   unsigned long mod_start;
   unsigned long mod_end;
+// Name goes here
 } __PACKED__;
 
 DISC_DATA(struct BootInfo boot_info);
@@ -129,6 +138,47 @@ int memcmp(const char *s1, const char *s2, register size_t n)
       return (int)(*(const int *)--s1 - *(const int *)--s2);
   }
   return 0;
+}
+
+int strncmp( const char *str1, const char *str2, size_t num )
+{
+  while( num-- && *str1 == *str2 && *str1 != '\0' )
+  {
+    str1++;
+    str2++;
+  }
+
+  if( *str1 == *str2 && *str1 == '\0' )
+    return 0;
+  else if( *str1 > *str2 )
+    return 1;
+  else if( *str2 > *str1 )
+    return -1;
+  else
+    return 0;
+}
+
+char *strstr( const char *str, const char *substr )
+{
+  register int i;
+
+  while( *str )
+  {
+    i = 0;
+
+    while( str[i] == substr[i] )
+      i++;
+
+    if( substr[i] == '\0' )
+      return (char *)str;
+
+    str++;
+  }
+
+  if( *substr == *str )
+    return (char *)str;
+  else
+    return NULL;
 }
 
 void initPIC( void )
@@ -775,7 +825,10 @@ void init( multiboot_info_t *info )
 {
   memory_map_t *mmap;
   module_t *module;
+  unsigned stack;
   int i=0;
+  bool init_srv_found=false;
+  char *srv_str_ptr = NULL, *srv_str_end=NULL;
 
 #ifdef DEBUG
   init_serial();
@@ -785,6 +838,19 @@ void init( multiboot_info_t *info )
   showGrubSupport(info);
   showCPU_Features();
 #endif
+
+  srv_str_ptr = strstr( (char *)(PHYSMEM_START + info->cmdline), INIT_SRV_FLAG );
+
+  if( srv_str_ptr )
+  {
+    srv_str_ptr += (sizeof( INIT_SRV_FLAG ) - 1);
+    srv_str_end = srv_str_ptr;
+
+    while( *srv_str_end != ' ' && *srv_str_end != '\0' )
+      srv_str_end++;
+  }
+
+  /* Prepare the modules for use later. */
 
   info->mods_addr += PHYSMEM_START;
   kprintf("Boot info struct: 0x%x\nModules located at 0x%x. %d modules\n", info, info->mods_addr, info->mods_count);
@@ -800,12 +866,23 @@ void init( multiboot_info_t *info )
     stopInit("Too many modules.\n");
   else
   {    
-    for(i=0; i < numBootMods; i++,module++)
+    for(i=0; i < numBootMods; i++, module++)
     {
       boot_info.num_mods++;
 
-      if( i == 0 )
+      if( srv_str_ptr && !init_srv_found )
+      {
+        if( strncmp((char *)(PHYSMEM_START+module->string), srv_str_ptr, 
+                    srv_str_end-srv_str_ptr) == 0 )
+        {
+          init_server_img = PHYS_TO_VIRT(module->mod_start);
+        }
+
+        init_srv_found = true;
+      }
+      else if( i == 0 )
         init_server_img = PHYS_TO_VIRT(module->mod_start);
+
       kBootModules[i] = *module;
     }
   }
@@ -819,6 +896,8 @@ void init( multiboot_info_t *info )
     stopInit("Not enough memory! At least 8 MiB is needed");
 
   size_t len;
+
+  /* Determine which portions of memory are free & usable.*/
 
   if( info->flags & (1 << 6) ) // Is mmap valid?
   {
@@ -890,8 +969,6 @@ void init( multiboot_info_t *info )
 
 //  __asm__ volatile("wbinvd\n");
 
-  unsigned stack;
-
   if( GET_TID(currentThread) == 0 )
   {
     stack = V_IDLE_STACK_TOP - sizeof(Registers);
@@ -907,6 +984,6 @@ void init( multiboot_info_t *info )
 
   assert( tcbTable->state != DEAD );
 
-  contextSwitch( currentThread->addrSpace, stack );
+  contextSwitch( currentThread->addrSpace, (void *)stack );
   stopInit("Unable to start operating system");
 }

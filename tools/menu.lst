@@ -2,9 +2,9 @@ default = 0
 timeout = 5
 
 title Silverbox OS
-  kernel /silverbox_os/kernel.gz
-  module /silverbox_os/pagersrv.exe
-  module /silverbox_os/video.exe
-  module /silverbox_os/keyboard.exe
-  module /silverbox_os/ramdisk.exe
-  module /silverbox_os/shell.exe
+  kernel /sbos/kernel.gz initsrv=/sbos/pagersrv.exe
+  module /sbos/pagersrv.exe
+  module /sbos/video.exe
+  module /sbos/keyboard.exe
+  module /sbos/ramdisk.exe
+  module /sbos/shell.exe

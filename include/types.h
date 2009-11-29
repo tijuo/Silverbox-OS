@@ -41,7 +41,7 @@ typedef s16 int16;
 typedef s32 int32;
 typedef s64 int64;
 
-typedef short int tid_t;
+typedef unsigned short int tid_t;
 
 #ifndef __cplusplus
 /* typedef char _Bool; */

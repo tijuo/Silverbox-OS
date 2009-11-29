@@ -61,11 +61,7 @@ extern "C" {
 #define REQUEST_MORE		2  /* More to send */
 
 #define KERNEL_TID		(tid_t)0
-<<<<<<< HEAD:include/oslib.h
-#define NULL_TID		(tid_t)-1
-=======
 #define NULL_TID		(tid_t)0xFFFF
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:include/oslib.h
 #define NULL_SHMID		(shmid_t)-1  
 
 typedef unsigned long shmid_t;

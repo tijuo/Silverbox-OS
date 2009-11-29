@@ -11,8 +11,6 @@
 #include "shmem.h"
 #include "name.h"
 
-extern void handleTMPO(struct Message *msg);
-
 /* Malloc works here as long as 'pager_addr_space' exists and is correct*/
 
 #define STACK_TABLE	KVIRT_START
@@ -23,161 +21,38 @@ extern void handleTMPO(struct Message *msg);
 #define KPHYS_START	0x1000000
 #define KVIRT_START	0xFF400000
 
-struct AddrSpace pager_addr_space;
-
-extern int register_name(char *name, size_t len, tid_t tid);
-extern tid_t lookup_name( char *name, size_t len);
-
-extern void print( char * );
-extern void *list_malloc( size_t );
-extern void list_free( void * );
-
 struct ProgramArgs
 {
   char *data;
   int length;
 };
 
-<<<<<<< HEAD:apps/init_server/pagersrv.c
-extern struct ListType shmem_list;
-=======
 /*
 extern int registerThreadName(char *name, size_t len, tid_t tid);
 extern tid_t lookupThreadName( char *name, size_t len);
 */
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
 
-void handle_message(void);
-/*
-struct State state1, state2;
+extern void print( char * );
+extern void *list_malloc( size_t );
+extern void list_free( void * );
 
-void tested(void)
-{
-  while(1)
-  {
-    print("a");
-    _switch_context(&state1, &state2);
-  }
-}
+extern void handle_exception( tid_t tid, int cr2 );
+extern struct ListType shmem_list;
 
-void tested2(void)
-{
-  while(1)
-  {
-    print("b");
-    _switch_context(&state2, &state1);
-  }
-}
-*/
-
-<<<<<<< HEAD:apps/init_server/pagersrv.c
-struct NameEntry
-{
-  char name[N_MAX_NAME_LEN];
-  size_t name_len;
-=======
 int extendHeap( unsigned pages );
 int _mapMem( void *phys, void *virt, int pages, int flags, void *pdir );
 void *_unmapMem( void *virt, void *pdir );
 int mapMemRange( void *virt, int pages );
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
 
-  union Entry entry;
-  enum NameType name_type;
-} names[N_MAX_NAMES];
+int get_boot_info( int argc, char **argv );
 
-static unsigned num_names=0;
-static unsigned num_fs=0;
+int load_elf_exec( struct BootModule *module, struct ProgramArgs *args );
+bool isValidElfExe( void *img );
+void handle_message(void);
 
-<<<<<<< HEAD:apps/init_server/pagersrv.c
-static int _register( tid_t tid, enum NameType name_type, union Entry *device );
-static int registerDevName( tid_t tid, char *name, size_t name_len, 
-                            enum NameType name_type, union Entry *device );
-static struct Device *_lookupMajor( unsigned char major );
-static struct NameEntry *_lookupName( char *name, size_t len );
-
-static int registerDevName( tid_t tid, char *name, size_t name_len, 
-                         enum NameType name_type, union Entry *entry )
-{
-  if( name == NULL || name_len > N_MAX_NAME_LEN || entry == NULL )
-    return -1;
-
-  if( num_names >= N_MAX_NAMES )
-    return -1;
-  // XXX: Try to find a duplicate name here
-
-  strncpy( names[num_names].name, name, name_len );
-  names[num_names].name_len = name_len;
-
-  names[num_names].entry = *entry;
-  num_names++;
-
-  return _register(tid, name_type, entry);
-}
-
-static int _register( tid_t tid, enum NameType name_type, union Entry *entry )
-{
-  if( name_type == DEV_NAME )
-  {
-    if( entry->device.numDevices == 0 || entry->device.dataBlkLen == 0 || 
-        (unsigned char)entry->device.major >= MAX_DEVICES )
-    {
-      return -1;
-    }
-
-    if( entry->device.type != CHAR_DEV && entry->device.type != BLOCK_DEV )
-      return -1;
-
-    if( devices[entry->device.major].used )
-      return 1;
-
-    devices[entry->device.major] = entry->device;
-    devices[entry->device.major].used = 1;
-    devices[entry->device.major].ownerTID = tid;
-
-    return 0;
-  }
-  else
-  {
-    if( num_fs >= MAX_FILESYSTEMS )
-      return -1;
-
-    filesystems[num_fs] = entry->fs;
-    filesystems[num_fs++].ownerTID = tid;
-
-    return 0;
-  }
-}
-
-static struct Device *_lookupMajor( unsigned char major )
-{
-  if( (unsigned char)major >= MAX_DEVICES )
-    return NULL;
-
-  if( !devices[major].used )
-    return NULL;
-
-  return &devices[major];
-}
-
-static struct NameEntry *_lookupName( char *name, size_t len )
-{
-  if( name == NULL || len >= N_MAX_NAME_LEN )
-    return NULL;
-
-  for(unsigned i=0; i < N_MAX_NAMES; i++)
-  {
-    if( strncmp(names[i].name, name, len) == 0 )
-      return &names[i];
-  }
-
-  return NULL;
-}
-=======
 void clearPage( void *page );
 
 struct AddrSpace pager_addr_space;
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
 
 int get_boot_info( int argc, char **argv )
 {
@@ -287,7 +162,9 @@ int get_boot_info( int argc, char **argv )
    allocEnd would be extended past expected pages and the structure will
    point to garbage. */
 
-void mapPage( void )
+/* This extends the end of the heap by a certain number of pages. */
+
+int extendHeap( unsigned pages )
 {
   void *virt;
 
@@ -296,17 +173,18 @@ void mapPage( void )
   else
     virt = allocEnd;
 
-  mapVirt( virt, 1 );
+  return mapMemRange( virt, pages );
 }
 
-void _mapMem( void *phys, void *virt, int pages, int flags, void *pdir )
+/* Maps a physical address range to a virtual address range in some address space. */
+
+int _mapMem( void *phys, void *virt, int pages, int flags, void *pdir )
 {
   unsigned char *addr = (unsigned char *)virt;
   void *table_phys;
-//  if( pdir == 
 
   if( pages < 1 )
-    return;
+    return -1;
 
   while(pages--)
   {
@@ -327,14 +205,13 @@ void _mapMem( void *phys, void *virt, int pages, int flags, void *pdir )
 
     __map( addr, phys, 1, 0, pdir );
 
-    addr += PAGE_SIZE;
-    phys += PAGE_SIZE;
+    addr = (void *)((unsigned)addr + PAGE_SIZE);
+    phys = (void *)((unsigned)phys + PAGE_SIZE);
   }
+
+  return 0;
 }
 
-<<<<<<< HEAD:apps/init_server/pagersrv.c
-void mapVirt( void *virt, int pages )
-=======
 void *_unmapMem( void *virt, void *pdir )
 {
   // XXX: Need to clear the page table if it is empty!
@@ -344,9 +221,14 @@ void *_unmapMem( void *virt, void *pdir )
 // Maps a virtual address to a physical address (in this address space)
 
 int mapMemRange( void *virt, int pages )
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
 {
-  _mapMem( alloc_phys_page(NORMAL, page_dir), virt, pages, 0, page_dir );
+  unsigned i=0;
+
+  while( pages-- )
+    _mapMem( alloc_phys_page(NORMAL, page_dir), 
+             (void *)((unsigned)virt + i * PAGE_SIZE), 1, 0, page_dir );
+
+  return 0;
 }
 
 void clearPage( void *page )
@@ -474,7 +356,7 @@ int loadExe( const char *path )
 
 // Note that img is a physical address and needs to be mapped to an address somewhere
 
-int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_t exHandler, addr_t addrSpace, addr_t stack, addr_t uStack )
+int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 {
   unsigned phtab_count, i, j;
   elf_header_t *image = (elf_header_t *)0xC0000000;//module->start_addr;
@@ -517,8 +399,6 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
    return -1;
   }
 */
-
-   //__yield(); // This makes the code work for some reason...
 
   if( !isValidElfExe( image ) )
   {
@@ -643,25 +523,8 @@ int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )//, mid_
 
 /* Handles exceptions, memory allocations, i/o permissions,
    DMA, address spaces, exit messages */
-/*
-struct MessageQueue servQueue;
-struct Message mboxQueue[32];
-*/
 
-//unsigned int pointer=0, tail=0;
 /*
-unsigned short pointer = 0, tail = 0;
-struct Message mboxQueue[16];
-struct MessageQueue servQueue;
-
-void initMsgQueue( void )
-{
-  servQueue.length = sizeof mboxQueue / sizeof(struct Message);
-  servQueue.queueAddr = mboxQueue;
-  servQueue.pointer = &pointer;
-  servQueue.tail = &tail;
-  servQueue.lock = 0;
-}
 
 int _allocate_mem_region(struct AllocMemInfo *info, tid_t sender)
 {
@@ -684,118 +547,6 @@ void allocate_mem_region( struct Message *msg )
   _allocate_mem_region((struct AllocMemInfo *)(header + 1), msg->sender);
 }
 */
-void dump_regs( int cr2, struct ThreadInfo *info )
-{
-  print( "\n\n\n\n\nException: " );
-  print(toIntString( info->state.int_num ) );
-  print( " @ EIP: 0x" );
-  print(toHexString( info->state.eip ));
-
-  print( " TID: ");
-  print( toIntString(info->tid) );
-
-  print( "\nEAX: 0x" );
-  print(toHexString( info->state.eax  ));
-  print( " EBX: 0x" );
-  print(toHexString( info->state.ebx  ));
-  print( " ECX: 0x" );
-  print(toHexString( info->state.ecx  ));
-  print( " EDX: 0x" );
-  print(toHexString( info->state.edx  ));
-
-  print( "\nESI: 0x" );
-  print(toHexString( info->state.esi  ));
-  print( " EDI: 0x" );
-  print(toHexString( info->state.edi  ));
-
-  print( " ESP: 0x" );
-  print(toHexString( info->state.esp  ));
-  print( " EBP: 0x" );
-  print(toHexString( info->state.ebp ));
-
-  print( "\nDS: 0x" );
-  print(toHexString( info->state.ds ));
-  print( " ES: 0x" );
-  print(toHexString( info->state.es ));
-
-  if( info->state.int_num == 14 )
-  {
-    print(" CR2: 0x");
-    print(toHexString( cr2 ));
-  }
-
-  print( " error code: 0x" );
-  print(toHexString( info->state.error_code ));
-
-  print( " CR3: 0x" );
-  print(toHexString( info->addr_space ) );
-
-  print("\nEFLAGS: 0x");
-  print(toHexString( info->state.eflags ));
-
-  print(" User SS: 0x");
-  print(toHexString(info->state.userEsp));
-
-  print(" SS: 0x");
-  print(toHexString(info->state.userSs));
-}
-
-void handle_exception( tid_t tid, int cr2 )
-{
-  struct ThreadInfo thread_info;
-  void *physAddr;
-
-  __get_thread_info( tid, &thread_info );
-
-  if( thread_info.state.int_num == 14 )
-  {
-  /* Only accept if exception was caused by accessing a non-existant user page.
-     Then check to make sure that the accessed page was allocated to the thread. */
-
-    if ( (thread_info.state.error_code & 0x5) == 0x4 && find_address((void *)thread_info.addr_space, 
-          (void *)cr2))
-    {
-      // Map in a new page table if not present.
-      if( get_ptable_status((void *)thread_info.addr_space, (void *)(cr2 & ~0x3FFFFF)) == false )
-      {
-        physAddr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
-
-        __map((void *)TEMP_PAGE, (void *)physAddr, 1);
-        memset((void *)TEMP_PAGE, 0, PAGE_SIZE);
-        __unmap((void *)TEMP_PAGE);
-
-        __map_page_table((void *)TEMP_PTABLE, physAddr);
-        __grant_page_table((void *)TEMP_PTABLE, (void *)(cr2 & ~0x3FFFFF),(void *)thread_info.addr_space, 1);
-        set_ptable_status((void *)thread_info.addr_space, (void *)(cr2 & ~0x3FFFFF), true);
-      }
-      physAddr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);//pageAllocator->alloc();
-
-      __map( (void *)TEMP_PAGE, (void *)physAddr, 1 );
-
-      __grant( (void *)TEMP_PAGE, (void *)(cr2 & ~0xFFF), (void *)thread_info.addr_space, 1 );
-
-      __end_page_fault(thread_info.tid);
-    }
-    else if( (thread_info.state.error_code & 0x05) && (cr2 & ~0x3FFFFF) == STACK_TABLE ) /* XXX: This can be done better. Will not work if there aren't
-                                                                                       any pages in the stack page! */
-    {
-      physAddr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
-      __map( (void *)TEMP_PAGE, (void *)physAddr, 1 );
-      __grant( (void *)TEMP_PAGE, (void *)(cr2 & ~0xFFF), (void *)thread_info.addr_space, 1);
-      __end_page_fault(thread_info.tid);
-    }
-    else
-    {
-      dump_regs( cr2, &thread_info );
-     // print("Can't find address: 0x"), print(toHexString(info->cr2)), print(" in addr space 0x"), print(toHexString(info->cr3));
-    }
-  }
-  else
-  {
-//    print("Exception!!!(Need to put the rest of data here)\n");
-    dump_regs( cr2, &thread_info );
-  }
-}
 
 /*
 void map_memory( struct Message *msg )
@@ -872,33 +623,10 @@ void handle_message( void )
     {
       case MAP_MEM:
       {
-        void *pdir = lookup_tid(sender);
-        _mapMem((void *)req->arg[0], (void *)req->arg[1], (unsigned)req->arg[2], req->arg[3], pdir); // doesn't return result
+        struct AddrRegion *region;
+        void *pdir;
+        int flags = req->arg[3];
 
-<<<<<<< HEAD:apps/init_server/pagersrv.c
-        break;
-      }
-      case ALLOC_MEM:
-      {
-        struct MemRegion *region = region_malloc();
-        void *addr_space = lookup_tid(sender);
-
-        if( region == NULL )
-        {
-          print("Couldn't allocate region\n");
-     //   return; 
-         result = -1;
-         break;
-        }
-
-        region->start = (unsigned int)req->arg[0] & 0xFFFFF000;
-        region->length = (size_t)req->arg[1] * PAGE_SIZE;
-
-        result = attach_mem_region(addr_space, region);
-
-        break;
-      }
-=======
         pdir = lookup_tid(sender);
 
         if( pdir == NULL )
@@ -955,13 +683,13 @@ void handle_message( void )
         result = 0;
         break;
       }
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
       case MAP_TID:
       {
         if( req->arg[1] == (int)NULL_PADDR )
           result = attach_tid(lookup_tid(sender), (tid_t)req->arg[0]);
         else
           result = attach_tid((void *)req->arg[1], (tid_t)req->arg[0]);
+
         break;
       }
       case CREATE_SHM:
@@ -1004,21 +732,13 @@ void handle_message( void )
         tid_t t;
         struct NameRecord *record = _lookupName((char *)&req->arg[1],req->arg[0], TID);
 
-<<<<<<< HEAD:apps/init_server/pagersrv.c
-        if( (t=lookup_name((char *)&req->arg[1], req->arg[0])) == NULL_TID )
-          result = register_name((char *)&req->arg[1], req->arg[0], sender);
-=======
         if( !record )
           result = _registerName((char *)&req->arg[1],req->arg[0], TID, &sender);
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
         else
           result = -1;
         break;
       }
       case LOOKUP_NAME:
-<<<<<<< HEAD:apps/init_server/pagersrv.c
-        result = lookup_name((char *)&req->arg[1], req->arg[0]);
-=======
       {
         struct NameRecord *record = _lookupName((char *)&req->arg[1], req->arg[0], TID);
 
@@ -1026,7 +746,6 @@ void handle_message( void )
           result = record->entry.tid;
         else
           result = -1;
->>>>>>> 7ee7a89... Rearranged the memory map. Refactored initial server code.:apps/init_server/pagersrv.c
         break;
       }
 /*      case SET_IO_PERM:

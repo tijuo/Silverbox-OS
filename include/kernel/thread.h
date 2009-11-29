@@ -16,7 +16,7 @@
 
 #define NUM_PROCESSORS   1
 
-#define TID_MAX		(tid_t)0x7FFF
+#define TID_MAX		(tid_t)32767
 
 #define yieldCPU() asm __volatile__("int    $32\n")
 
