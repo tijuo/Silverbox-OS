@@ -578,7 +578,7 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
 
   /* Create the page table before mapping memory */
 
-  *(u32 *)&pde = INIT_SERVER_PDE | PAGING_RW | PAGING_USER | PAGING_PRES;
+  *(u32 *)&pde = INIT_SERVER_PTAB | PAGING_RW | PAGING_USER | PAGING_PRES;
   writePDE( (void *)pheader->vaddr, &pde, addrSpace );
 
   for ( i = 0; i < phtab_count; i++, pheader++ )
@@ -670,9 +670,9 @@ void init2( void )
      prior to using. */
 
   clearPhysPage( (void *)INIT_SERVER_PDIR );
-  clearPhysPage( (void *)INIT_SERVER_PDE );
-  clearPhysPage( (void *)INIT_SERVER_USTACK_PDE );
-//  clearPhysPage( (void *)INIT_SERVER_USTACK_PTE ); This shouldn't need clearing
+  clearPhysPage( (void *)INIT_SERVER_PTAB );
+  clearPhysPage( (void *)INIT_SERVER_USTACK_PTAB );
+//  clearPhysPage( (void *)INIT_SERVER_USTACK_PAGE ); This shouldn't need clearing
 
   ptr = (int *)(TEMP_PAGEADDR + PAGE_SIZE);
 
@@ -697,12 +697,12 @@ void init2( void )
 
   if( isValidElfExe( (addr_t)init_server_img ) )
   {
-    *(u32 *)&pde = INIT_SERVER_USTACK_PDE | PAGING_RW | PAGING_USER | PAGING_PRES;
+    *(u32 *)&pde = INIT_SERVER_USTACK_PTAB | PAGING_RW | PAGING_USER | PAGING_PRES;
     writePDE(init_server_stack, &pde, (void *)INIT_SERVER_PDIR);
-    *(u32 *)&pte = INIT_SERVER_USTACK_PTE | PAGING_RW | PAGING_USER | PAGING_PRES;
+    *(u32 *)&pte = INIT_SERVER_USTACK_PAGE | PAGING_RW | PAGING_USER | PAGING_PRES;
     writePTE(init_server_stack, &pte, (void *)INIT_SERVER_PDIR);
 
-    string = (char *)TEMP_PAGEADDR;//(PHYSMEM_START + INIT_SERVER_USTACK_PTE /*- PAGE_SIZE*/);
+    string = (char *)TEMP_PAGEADDR;//(PHYSMEM_START + INIT_SERVER_USTACK_PAGE /*- PAGE_SIZE*/);
     b_info = (struct BootInfo *)(string + 8);
     memory_area = (struct MemoryArea *)(b_info + 1);
     boot_mods = (struct BootModule *)(memory_area + boot_info.num_mem_areas);
@@ -712,7 +712,7 @@ void init2( void )
        memory_area struct. The modified memory_area struct would
        need to be written to the root server's stack. */
 
-    mapTemp((addr_t)INIT_SERVER_USTACK_PTE);
+    mapTemp((addr_t)INIT_SERVER_USTACK_PAGE);
 
     for(i=0; i < boot_info.num_mods; i++)
     {
@@ -722,7 +722,7 @@ void init2( void )
       //kprintf(" ");
     }
 
-//    mapTemp(INIT_SERVER_USTACK_PTE);
+//    mapTemp(INIT_SERVER_USTACK_PAGE);
 
     *(char **)&argv[6] = (init_server_stack + ((unsigned)argv & 0xFFF));
     *(int *)&argv[5] = 5;
@@ -749,7 +749,7 @@ void init2( void )
       kprintf("Failed to initialize initial server.\n");
     }
 
-    mapTemp((addr_t)INIT_SERVER_USTACK_PTE);
+    mapTemp((addr_t)INIT_SERVER_USTACK_PAGE);
 
     memcpy(string, "initsrv", 8);
     memcpy(b_info, &boot_info, sizeof boot_info);

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html 
      PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
      "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
@@ -23,19 +23,22 @@
     <h2>Features:</h2>
       <h3>Working, Implemented, or Complete</h3>
       <ul>
-        <li>Synchronous message passing</li>
-        <li>No memory management</li>
+        <li>IRQ Allocation</li>
+        <li>Multithreading (no processes)</li>
+        <li>No Memory Management</li>
         <li>Signals</li>
-        <li>Threads instead of processes</li>
-        <li>IRQ allocation</li>
+        <li>Synchronous Message Passing</li>
       </ul>
       <h3>Incopmlete</h3>
       <ul>
-        <li>I/O port allocation</li>
-        <li>Preemptive multitasking</li>
+        <li>I/O Port Allocation</li>
+        <li>Preemptive Multithreading</li>
       </ul>
       <h3>Not done yet</h3>
         <ul>
+          <li>8-bit &amp; 16-bit DMA Support</li>
+          <li>Kernel Variables</li>
+          <li>Privileged System Calls</li>
           <li>System Clock (at least medium precision)</li>
           <li>System Reboot/Restart</li>
         </ul>
@@ -80,91 +83,217 @@
       <h3>The Idle Thread</h3>
       <p>The idle thread is only used when no other threads need to run.</p>
 
+    <h2>System Calls</h2>
+    <h3>Memory</h3>
+    <ul>
+      <li>map (privileged)</li>
+      <li>map_page_table( privileged)</li>
+      <li>get_mem_attrib - to be done</li>
+      <li>grant (privileged)</li>
+      <li>grant_page_table (privileged)</li>
+      <li>set_mem_attrib (privileged) - to be done</li>
+      <li>unmap (privileged)</li>
+      <li>unmap_page_table (privileged)</li>
+    </ul>
+    <h3>Threads</h3>
+    <ul>
+      <li>create_thread</li>
+      <li>destroy_thread - to be done</li>
+      <li>exit</li>
+      <li>get_thread_info</li>
+      <li>pause</li>
+      <li>sleep</li>
+      <li>start_thread</li>
+    </ul>
+    <h3>IPC</h3>
+    <ul>
+      <li>send</li>
+      <li>receive</li>
+    </ul>
+    <h3>Signals</h3>
+    <ul>
+      <li>raise</li>
+      <li>set_sig_handler</li>
+    </ul>
+    <h3>Interrupts &amp; Exceptions</h3>
+    <ul>
+      <li>end_irq (privileged)</li>
+      <li>end_page_fault (privileged)</li>
+      <li>register_int (privileged)</li>
+    </ul>
+    <h3>I/O</h3>
+    <ul>
+      <li>set_io_perm (privileged)</li>
+    </ul>
     <h2>Kernel Memory Map</h2>
     <table>
       <tr>
         <th>Name</th>
-        <th>Virtual Address</th>
+        <th>Range (Address:Length)</th>
+        <th>Memory Type</th>
         <th>Description</th>
       </tr>
 
-<!--      <tr>
+      <tr>
         <td>Interrupt Vector Table (IVT)</td>
-        <td>0xF4000000-0xF40004FF</td>
+        <td>0x0000:0x0500</td>
+        <td>Physical</td>
         <td>This is the table of all BIOS from 16-bit mode. It's saved in case it's needed.</td>
-      </tr> -->
+      </tr>
 
       <tr>
         <td>Interrupt Descriptor Table (IDT)</td>
-        <td>0xF4000000-0xF40007FF</td>
+        <td>0x88000:0x0800</td>
+        <td>Physical</td>
         <td>The table of all 32-bit interrupts.</td>
       </tr>
 
       <tr>
         <td>Global Descriptor Table (GDT)</td>
-        <td>0xF4000800-0xF4000F97</td>
+        <td>0x88800:0x0798</td>
+        <td>Physical</td>
         <td>The table of GDT entries.</td>
       </tr>
 
       <tr>
         <td>Task State Segment (TSS)</td>
-        <td>0xF4000F98-0xF4000FFF</td>
+        <td>0x88F98:0x0068</td>
+        <td>Physical</td>
         <td>The single TSS used for multitasking.</td>
       </tr>
 
       <tr>
+        <td>Initial Kernel Page Directoy</td>
+        <td>0x89000:0x1000</td>
+        <td>Physical</td>
+        <td>The page directory created during bootstrap that is used by all 
+            kernel threads. It serves as a template when creating a new page 
+            directory.</td>
+      </tr>
+
+      <tr>
+        <td>1st Kernel Page Table</td>
+        <td>0x8A000:0x1000</td>
+        <td>Physical</td>
+        <td>Represents the first 4MiB of the kernel.</td>
+      </tr>
+
+      <tr>
+        <td>Initial Server's Page Directory</td>
+        <td>0x8B000:0x1000</td>
+        <td>Physical</td>
+        <td>The page directory for the initial server.</td>
+      </tr>
+
+      <tr>
+        <td>Initial Server's Stack Page Table</td>
+        <td>0x8C000:0x1000</td>
+        <td>Physical</td>
+        <td>The page table corresponding to the initial server's user 
+        stack.</td>
+      </tr>
+
+      <tr>
+        <td>Initial Server's Stack Page</td>
+        <td>0x8D000:0x1000</td>
+        <td>Physical</td>
+        <td>The first page of the initial server's user stack.</td>
+      </tr>
+
+      <tr>
+        <td>Initial Server's Page Table</td>
+        <td>0x8E000:0x1000</td>
+        <td>Physical</td>
+        <td>The page table for the initial server's module image. Note that
+        this limits the size of the image to 4MiB.</td>
+      </tr>
+
+      <tr>
         <td>Idle Thread's Stack</td>
-        <td>0xF408F000-0xF4008FFF</td>
-        <td>The kernel stack used for the idle thread.</td>
+        <td>0x8F000:0x1000</td>
+        <td>Physical</td>
+        <td>The idle stack's kernel thread. Mostly used during the second 
+        initialization process.</td>
       </tr>
 
       <tr>
         <td>Kernel Stack</td>
-        <td>0xF4090000-0xF4090FFF</td>
-        <td>This is the kernel stack that is used for every thread other than the idle thread.</td>
-      </tr>
-
-      <tr>
-        <td>Bootstrap Stack</td>
-        <td>0xF4093000-0xF4093FFF</td>
-        <td>The stack used for bootstrapping the kernel. It is temporarily used.</td>
-      </tr>
-
-      <tr>
-        <td>TSS IO Permission Bitmap</td>
-        <td>0xF40C0000-0xF40C2FFF</td>
-        <td>The bitmap for the permissions of the 65536 IO ports.</td>
-      </tr>
-
-      <tr>
-        <td>Temporary Page</td>
-        <td>0xF40C3000-0xF40C3FFF</td>
-        <td>The page used for mapping physical addresses to a virtual address.</td>
-      </tr>
-
-      <tr>
-        <td>LAPIC Address</td>
-        <td>0xF40C4000-0xF40C4FFF</td>
-        <td>The memory-mapped IO address for the LAPIC.</td>
+        <td>0x90000:0x1000</td>
+        <td>Physical</td>
+        <td>The single kernel stack shared by all user threads.</td>
       </tr>
 
       <tr>
         <td>Kernel Variables</td>
-        <td>0xF40C5000-0xF40C5FFF</td>
-        <td>These are kernel variables that are modified by the kernel,
-            but may be of use to user programs.</td>
+        <td>0x91000:0x1000</td>
+        <td>Physical</td>
+        <td>A region where user threads can get information about the kernel.
+        </td>
+      </tr>
+
+      <tr>
+        <td>First 4 MiB</td>
+        <td>0x92000:0x1000</td>
+        <td>Physical</td>
+        <td>The first 4 MiB of physical memory.</td>
+      </tr>
+
+      <tr>
+        <td>2nd Kernel Page Table</td>
+        <td>0x93000:0x1000</td>
+        <td>Physical</td>
+        <td>Represents the second 4MiB of the kernel.</td>
+      </tr>
+
+      <tr>
+        <td>Kernel Bootstrap Stack</td>
+        <td>0x94000:0x1000</td>
+        <td>Physical</td>
+        <td>The stack used for the kernel bootstrapper.</td>
+      </tr>
+      
+      <tr>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+
+      <tr>
+        <td>TSS I/O Permission Bitmap</td>
+        <td>0xC0000:0x2000</td>
+        <td>Virtual</td>
+        <td>A bitmap that represents the access permissions of all 65536 
+        I/O ports.</td>
+      </tr>
+
+      <tr>
+        <td>Temporary Page</td>
+        <td>0xC2000:0x1000</td>
+        <td>Virtual</td>
+        <td>Mainly used for mapping physical addresses into address spaces.
+        Memory is marked as non-present when not in use.</td>
+      </tr>
+
+      <tr>
+        <td>LAPIC Address</td>
+        <td>0xC3000:0x1000</td>
+        <td>Virtual</td>
+        <td>Memory mapped I/O address for the LAPIC.</td>
       </tr>
 
       <tr>
         <td>Kernel Code &amp; Data</td>
-        <td>0xF5000000-0xF7FFFFFF</td>
+        <td>0xF4000000:0x08000000</td>
+        <td>Virtual</td>
         <td>This area is reserved for kernel code and data. This region is
             present in all memory regions.</td>
       </tr>
 
       <tr>
         <td>Page Tables</td>
-        <td>0xFC000000-0xFFFFFFFF</td>
+        <td>0xFC000000:0x00400000</td>
+        <td>Virtual</td>
         <td>Since the last PDE in the page directory points to the page directory itself,
             The last page table in the page directory *is* the page directory.
             The pages of the last page table are the page tables themselves.</td>
@@ -172,11 +301,15 @@
 
       <tr>
         <td>Page Directory</td>
-        <td>0xFFFF0000-0xFFFFFFFF</td>
+        <td>0xFFFFF000:0x1000</td>
+        <td>Virtual</td>
         <td>This is the page directory mapped into itself. All 1024 page directory
             entries are accessible here.</td>
       </tr>
     </table>
+
+    <h3>Grub Memory Map</h3>
+    <a href='grub_memory_map.html'>Grub Memory Map</a>
 
 </body>
 </html>

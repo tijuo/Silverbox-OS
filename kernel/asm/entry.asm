@@ -75,9 +75,9 @@ mboot:
 ; 0x89000 - 0x8A000 : initial Page directory
 ; 0x8A000 - 0x8B000 : The kernel's page table
 ; 0x8B000 - 0x8C000 : Initial server page directory
-; 0x8C000 - 0x8D000 : init server user stack's pde
-; 0x8D000 - 0x8E000 : init server user stack's pte
-; 0x8E000 - 0x8F000 : init server user pde
+; 0x8C000 - 0x8D000 : init server user stack's page table
+; 0x8D000 - 0x8E000 : init server user stack's page
+; 0x8E000 - 0x8F000 : init server user page table
 ; 0x8F000 - 0x90000 ; idle kernel stack
 ; 0x90000 - 0x91000 ; kernel stack
 ; 0x91000 - 0x92000 ; kernel variables
