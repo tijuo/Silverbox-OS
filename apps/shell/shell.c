@@ -126,10 +126,15 @@ static int concatPaths( char *path, char *str )
 
   for(unsigned i=0; i < stackPtr; i++)
   {
-    size_t len = strlen(stack[i]);
-    stack[i][len] = '/';
+    if( i != stackPtr - 1 )
+    {
+      size_t len = strlen(stack[i]);
+      stack[i][len] = '/';
 
-    strncat(path, stack[i], len+1);
+      strncat(path, stack[i], len+1);
+    }
+    else
+      strncat(path, stack[i], strlen(stack[i]));
   }
 
   return 0;
@@ -152,6 +157,8 @@ char *getFullPathName(char *str)
   strncpy( path, currDir, PATH_LEN );
   concatPaths( path, str );
 //  strncpy( &path[len], str, PATH_LEN );
+
+  printf("Path: '%s'\n", path);
 
   return path;
 }
@@ -267,7 +274,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     if( comm_len == 0 || arg_str == NULL )
       path = currDir;
     else
-      path = getFullPathName(arg_str );
+      path = getFullPathName(arg_str);
 
     n = fatGetDirList(path, dev_num, attrib_list, sizeof attrib_list / 
                       sizeof(struct FileAttributes));
@@ -279,7 +286,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
       return -1;
     }
 
-    printf("Listing of %.*s:\n", PATH_LEN, arg_str);
+    printf("Listing of %.*s:\n", PATH_LEN, path);
 
     if( n == 0 )
       printf("No entries\n");

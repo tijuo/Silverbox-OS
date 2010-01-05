@@ -7,7 +7,7 @@ int createSBString(const char *str, SBString *sbString)
   
   sbString->charWidth = 1;
 
-  if( str == NULL )
+  if( str == NULL || strlen(str) == 0 )
   {
     sbString->data = NULL;
     sbString->length = 0;
@@ -35,30 +35,27 @@ void deleteSBString(SBString *sbString)
   }
 }
 
-int concatSBString(SBString *dest, const SBString *src)
+int concatSBString(SBString *str, const SBString *addend)
 {
   void *buf;
 
-  if( src == NULL || dest == NULL || src->data == NULL )
+  if( !addend || !str == NULL || (!str->data && str->len) || (!addend->data && addend->len) )
     return -1;
-  else if( src->charWidth != dest->charWidth )
+  else if( addend->charWidth != str->charWidth )
     return -2;
-  else
+
+  str->data = realloc( str->data, (str->len + addend->len) * addend->charWidth );
+
+  if( str->data == NULL )
   {
-    if( dest->data == NULL )
-      dest->length = 0;
-
-    buf = malloc( src->charWidth * (dest->length + src->length) )
-    strncpy( buf, dest->data, dest->length * dest->charWidth );
-    strncpy( (unsigned)buf + dest->length * dest->charWidth, 
-             src->data, src->length * src->charWidth );
-
-    if( dest->data == NULL )
-      free(dest->data);
-
-    dest->data = buf;
-    dest->length += src->length * src->charWidth;
+    str->len = 0;
+    return (str->len + addend->len == 0) ? 0 : -1;
   }
+
+  strncpy( str->data + str->length * str->charWidth,
+           addend->data, addend->length * addend->charWidth );
+
+  str->length += addend->length * addend->charWidth;
 
   return 0;
 }
