@@ -209,6 +209,8 @@ int do_printf(void *s, const char *format, va_list ap, int is_stream)
           flags |= FLG_WIDTH;
           ptr++;
         }
+        else if( flags & FLG_WSTART )
+          flags |= FLG_WIDTH;
         else
         {
           width = 0;
@@ -232,6 +234,8 @@ int do_printf(void *s, const char *format, va_list ap, int is_stream)
         }
         else if( isdigit(*ptr) && (flags & FLG_PSTART) )
           precision = precision * 10 + (*ptr++ - '0');
+        else if( flags & FLG_PSTART )
+          flags |= FLG_PREC;
         else
         {
           flags |= FLG_PREC;

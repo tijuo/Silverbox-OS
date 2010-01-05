@@ -8,6 +8,7 @@
 #include <os/fatfs.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 struct FileAttributes attrib_list[64];
 
@@ -233,7 +234,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     printf("cd <path> - Change current directory\n");
     printf("wd - Display the current working directory\n");
     printf("echo <msg> - Prints a message\n");
-    printf("time - Displays the current time (in milliseconds since Jan 1, 1970)\n");
+    printf("time - Displays the current time\n");
     printf("help OR ? - Prints this message\n");
   }
   else if( strncmp( command, "read", 4 ) == 0 )
@@ -270,8 +271,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
   }
   else if( strncmp( command, "time", 4 ) == 0 )
   {
-    unsigned *time = (unsigned *)CLOCK_TICKS;
-    printf("Time is: 0x%x%x\n", *(time+1), *time);
+    printf("Time is: %s", asctime(gmtime(time(NULL))));
 
     return 0;
   }

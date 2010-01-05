@@ -1,6 +1,6 @@
 ARFLAGS =rs
 
-LIBCDIRS=ctype string stdlib errno stdio
+LIBCDIRS=ctype string stdlib errno stdio time
 LIBOSDIR=syscall oslib
 
 .PHONY:	$(LIBCDIRS) $(LIBOSDIR) all dep depend clean
@@ -28,6 +28,9 @@ errno:
 	make -C $@ all
 
 stdio:
+	make -C $@ all
+
+time:
 	make -C $@ all
 
 libc.a: $(LIBCDIRS)

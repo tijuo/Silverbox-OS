@@ -15,7 +15,9 @@ INCLUDES="$SB_PREFIX/include/ $SB_PREFIX/drivers/include/"
 EXIT_ON_WARN=1
 TOOLS="$SB_PREFIX/tools"
 LIBS="$SB_PREFIX/lib/"
-LDFLAGS="-melf_i386 --exclude-libs ALL -T $SB_PREFIX/cLink.ld --static -L$LIBS -( -lc -los -)"
+LIBGCC=`gcc --print-libgcc-file-name`
+GCCLIBS=`dirname $LIBGCC`
+LDFLAGS="-melf_i386 --exclude-libs ALL -T $SB_PREFIX/cLink.ld --static -L$LIBS -L$GCCLIBS -( -lc -los -lgcc -)"
 
 if [ $# -lt 2 ]; then
   echo "usage: $0 infile-1 [ infile-2 ... infile-n ] output"

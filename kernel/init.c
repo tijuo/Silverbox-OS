@@ -369,45 +369,37 @@ int initMemory( multiboot_info_t *info )
 
 static int is_leap( int year )
 {
-  if( ((year % 4) == 0 && (year % 100) != 0) || 
-      ((year % 100) == 0 && (year % 400) == 0) )
-  {
-    return 1;
-  }
-  else
-    return 0;
+  return ( ((year % 4) == 0 && (year % 100) != 0) || 
+      (year % 400) == 0 );
 }
                           
 unsigned bcd2bin(unsigned short num)
 {
-  return (num & 0x0F) + 10 * ((num & 0xF0) >> 8) + 100 * ((num & 0xF00) >> 16) 
-    + 1000 * ((num & 0xF000) >> 24);
+  return (num & 0x0F) + 10 * ((num & 0xF0) >> 4) + 100 * ((num & 0xF00) >> 8) 
+    + 1000 * ((num & 0xF000) >> 12);
 }
 
 unsigned long long mktime(int year, int month, int day, int hour, 
                           int minute, int second)
 {
-  unsigned long long elapsed = 0;
+  unsigned long long elapsed = 0ull;
   int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+
+  kprintf("mktime: %d %d %d %d %d %d\n", year, month, day, hour, minute, second);
   
-  elapsed += second * 1024;
-  elapsed += minute * 1024 * 60;
-  elapsed += hour * 1024 * 60 * 60;
-  elapsed += day * 1024 * 60 * 60 * 24;
+  elapsed += second * 1024ull;
+  elapsed += minute * 1024ull * 60ull;
+  elapsed += hour * 1024ull * 60ull * 60ull;
+  elapsed += day * 1024ull * 60ull * 60ull * 24ull;
   
   for(int i=0; i < month; i++)
-    elapsed += month_days[i] * 1024 * 60 * 60 * 24;
+    elapsed += month_days[i] * 1024ull * 60ull * 60ull * 24ull;
     
   if( is_leap(CENTURY_START+year) && month > 1 )
-    elapsed += 1024 * 60 * 60 * 24;
+    elapsed += 1024ull * 60ull * 60ull * 24ull;
   
   for(int i=UNIX_EPOCH; i < CENTURY_START + year; i++)
-  {
-    if( is_leap(i) )
-      elapsed += 366 * 60 * 60 * 24;
-    else
-      elapsed += 365 * 60 * 60 * 24;
-  }
+    elapsed += (is_leap(i) ? 366ull : 365ull) * 60ull * 60ull * 24ull * 1024ull;
   
   return elapsed;
 }
