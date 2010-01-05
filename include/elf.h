@@ -180,7 +180,7 @@ struct ELF_Dynamic {
     unsigned long val;
     unsigned	  ptr;
   }d_un;
-} __PACKED__;
+} __attribute__((packed));
 
 typedef struct ELF_Dynamic elf_dyn_t;
 
@@ -195,7 +195,7 @@ struct ELF_Program_Header {
   unsigned long memsz;
   unsigned long flags;
   unsigned long align;
-} __PACKED__;
+} __attribute__((packed));
 
 typedef struct ELF_Program_Header elf_pheader_t;
 
@@ -251,7 +251,7 @@ struct ELF_Header {
   unsigned short	shentsize;
   unsigned short	shnum;
   unsigned short	shstrndx;
-} __PACKED__;
+} __attribute__((packed));
 
 typedef struct ELF_Header elf_header_t;
 

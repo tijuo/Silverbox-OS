@@ -1,6 +1,7 @@
 #include <oslib.h>
 #include <string.h>
 #include <os/dev_interface.h>
+#include <os/variables.h>
 #include <ctype.h>
 #include <os/vfs.h>
 #include <os/services.h>
@@ -232,6 +233,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     printf("cd <path> - Change current directory\n");
     printf("wd - Display the current working directory\n");
     printf("echo <msg> - Prints a message\n");
+    printf("time - Displays the current time (in milliseconds since Jan 1, 1970)\n");
     printf("help OR ? - Prints this message\n");
   }
   else if( strncmp( command, "read", 4 ) == 0 )
@@ -265,6 +267,13 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
       strncpy( currDir, path, PATH_LEN );
     else
       return -1;
+  }
+  else if( strncmp( command, "time", 4 ) == 0 )
+  {
+    unsigned *time = (unsigned *)CLOCK_TICKS;
+    printf("Time is: 0x%x%x\n", *(time+1), *time);
+
+    return 0;
   }
   else if( strncmp( command, "ld", 2 ) == 0 )
   {

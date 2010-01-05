@@ -47,8 +47,9 @@ Bits:
 #define RTC_STATUS_C        0x0c
 #define RTC_STATUS_D        0x0d
 
+/*
  Numbers are stored in BCD/binary if bit 2 of byte 11 is unset/set
    15  * The clock is in 12hr/24hr mode if bit 1 of byte 11 is unset/set
-
+*/
 
 #endif /* RTC */

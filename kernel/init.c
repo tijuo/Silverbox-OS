@@ -7,6 +7,7 @@
 #include <kernel/cpuid.h>
 #include <kernel/paging.h>
 #include <kernel/memory.h>
+#include <kernel/rtc.h>
 
 #include <oslib.h>
 #include <os/io.h>
@@ -366,9 +367,6 @@ int initMemory( multiboot_info_t *info )
 #define UNIX_EPOCH          1970
 #define CENTURY_START       2000
 
-static unsigned bcd2bin(unsigned short num);
-static int is_leap( int year );
-
 static int is_leap( int year )
 {
   if( ((year % 4) == 0 && (year % 100) != 0) || 
@@ -392,7 +390,7 @@ unsigned long long mktime(int year, int month, int day, int hour,
   unsigned long long elapsed = 0;
   int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
   
-  elapsed += second * 1024
+  elapsed += second * 1024;
   elapsed += minute * 1024 * 60;
   elapsed += hour * 1024 * 60 * 60;
   elapsed += day * 1024 * 60 * 60 * 24;
@@ -1013,6 +1011,9 @@ void init( multiboot_info_t *info )
 
   if( initMemory( info ) < 0 )
     stopInit("Not enough memory! At least 8 MiB is needed");
+
+
+  kMapMem( (void *)CLOCK_TICKS, (void *)KERNEL_VAR_PAGE, PAGING_RO | PAGING_USER );
 
   size_t len;
 

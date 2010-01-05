@@ -172,7 +172,18 @@ EXPORT irq8Handler
     inc dword [0x91000]
     jnz .return
     inc dword [0x91004]
-.return
+.return:
+    push eax
+    mov	al, 0x0C
+    out 0x70, al
+    in al, 0x71
+
+; Send acknowledgement to PICs
+
+    mov al, 0x20
+    out 0x20, al
+    out 0xA0,al
+    pop eax
     iret
 
 EXPORT irq9Handler
