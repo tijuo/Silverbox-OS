@@ -1,13 +1,16 @@
-#include <oslib.h>
 #include <elf.h>
+
 #include <kernel/thread.h>
 #include <kernel/debug.h>
 #include <kernel/mm.h>
-#include <os/io.h>
 #include <kernel/schedule.h>
 #include <kernel/cpuid.h>
 #include <kernel/paging.h>
 #include <kernel/memory.h>
+
+#include <oslib.h>
+#include <os/io.h>
+#include <os/variables.h>
 
 #define MAX_MODULES 50
 
@@ -67,6 +70,10 @@ DISC_CODE(char *strstr(const char *str, const char *substr));
 DISC_CODE(int clearPhysPage(void *phys));
 DISC_CODE(void showCPU_Features(void));
 DISC_CODE(void showGrubSupport(multiboot_info_t *));
+DISC_CODE(void init_clock());
+DISC_CODE(unsigned bcd2bin(unsigned short num));
+DISC_CODE(unsigned long long mktime(int year, int month, int day, int hour, 
+                          int minute, int second));
 DISC_DATA( addr_t init_server_img );
 DISC_DATA( int numBootMods );
 DISC_DATA( module_t kBootModules[MAX_MODULES] );
@@ -180,6 +187,8 @@ char *strstr( const char *str, const char *substr )
   else
     return NULL;
 }
+
+
 
 void initPIC( void )
 {
@@ -353,6 +362,116 @@ int initMemory( multiboot_info_t *info )
   return 0;
 }
 
+
+#define UNIX_EPOCH          1970
+#define CENTURY_START       2000
+
+static unsigned bcd2bin(unsigned short num);
+static int is_leap( int year );
+
+static int is_leap( int year )
+{
+  if( ((year % 4) == 0 && (year % 100) != 0) || 
+      ((year % 100) == 0 && (year % 400) == 0) )
+  {
+    return 1;
+  }
+  else
+    return 0;
+}
+                          
+unsigned bcd2bin(unsigned short num)
+{
+  return (num & 0x0F) + 10 * ((num & 0xF0) >> 8) + 100 * ((num & 0xF00) >> 16) 
+    + 1000 * ((num & 0xF000) >> 24);
+}
+
+unsigned long long mktime(int year, int month, int day, int hour, 
+                          int minute, int second)
+{
+  unsigned long long elapsed = 0;
+  int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  
+  elapsed += second * 1024
+  elapsed += minute * 1024 * 60;
+  elapsed += hour * 1024 * 60 * 60;
+  elapsed += day * 1024 * 60 * 60 * 24;
+  
+  for(int i=0; i < month; i++)
+    elapsed += month_days[i] * 1024 * 60 * 60 * 24;
+    
+  if( is_leap(CENTURY_START+year) && month > 1 )
+    elapsed += 1024 * 60 * 60 * 24;
+  
+  for(int i=UNIX_EPOCH; i < CENTURY_START + year; i++)
+  {
+    if( is_leap(i) )
+      elapsed += 366 * 60 * 60 * 24;
+    else
+      elapsed += 365 * 60 * 60 * 24;
+  }
+  
+  return elapsed;
+}
+
+void init_clock()
+{
+  int year, month, day, hour, minute, second;
+  unsigned long long *time = (unsigned long long *)KERNEL_VAR_PAGE;
+  int bcd, _24hr, status_b;
+  
+  addIDTEntry( irq8Handler, IRQ8, INT_GATE | KCODE );
+  
+  outByte( RTC_INDEX, RTC_STATUS_B );
+  status_b = inByte( RTC_DATA );
+  
+  if( status_b & RTC_BINARY )
+    bcd = 0;
+  else
+    bcd = 1;
+
+  if( status_b & RTC_24_HR )
+    _24hr = 1;
+  else
+    _24hr = 0;
+  
+  outByte( RTC_INDEX, RTC_STATUS_B );
+  outByte( RTC_DATA, status_b | RTC_PERIODIC );
+  
+  kprintf("Enabling IRQ 8\n");
+  enableIRQ(8);
+  
+  outByte( RTC_INDEX, RTC_SECOND ); // second
+  second = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
+
+  outByte( RTC_INDEX, RTC_MINUTE ); // minute
+  minute = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
+  
+  outByte( RTC_INDEX, RTC_HOUR ); // hour
+  hour = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
+  
+  if( !_24hr )
+  {
+    hour--;
+    
+    if( hour & 0x80 )
+      hour = 12 + (hour & 0x7F);
+    else
+      hour = (hour & 0x7F);    
+  }
+  
+  outByte( RTC_INDEX, RTC_DAY ); // day
+  day = -1 + (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
+  
+  outByte( RTC_INDEX, RTC_MONTH ); // month
+  month = -1 + (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
+
+  outByte( RTC_INDEX, RTC_YEAR ); // century year (00-99)
+  year = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
+  
+  *time = mktime(year, month, day, hour, minute, second);
+}
+
 void initTimer( void )
 {
   addIDTEntry( timerHandler, IRQ0, INT_GATE | KCODE );
@@ -404,7 +523,7 @@ void initInterrupts( void )
   addIDTEntry( ( void * ) irq5Handler, 0x25, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq6Handler, 0x26, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq7Handler, 0x27, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq8Handler, 0x28, INT_GATE | KCODE ) ;
+  //addIDTEntry( ( void * ) irq8Handler, 0x28, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq9Handler, 0x29, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq10Handler, 0x2A, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq11Handler, 0x2B, INT_GATE | KCODE ) ;
@@ -578,7 +697,7 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
 
   /* Create the page table before mapping memory */
 
-  *(u32 *)&pde = INIT_SERVER_PDE | PAGING_RW | PAGING_USER | PAGING_PRES;
+  *(u32 *)&pde = INIT_SERVER_PTAB | PAGING_RW | PAGING_USER | PAGING_PRES;
   writePDE( (void *)pheader->vaddr, &pde, addrSpace );
 
   for ( i = 0; i < phtab_count; i++, pheader++ )
@@ -670,9 +789,9 @@ void init2( void )
      prior to using. */
 
   clearPhysPage( (void *)INIT_SERVER_PDIR );
-  clearPhysPage( (void *)INIT_SERVER_PDE );
-  clearPhysPage( (void *)INIT_SERVER_USTACK_PDE );
-//  clearPhysPage( (void *)INIT_SERVER_USTACK_PTE ); This shouldn't need clearing
+  clearPhysPage( (void *)INIT_SERVER_PTAB );
+  clearPhysPage( (void *)INIT_SERVER_USTACK_PTAB );
+//  clearPhysPage( (void *)INIT_SERVER_USTACK_PAGE ); This shouldn't need clearing
 
   ptr = (int *)(TEMP_PAGEADDR + PAGE_SIZE);
 
@@ -697,12 +816,12 @@ void init2( void )
 
   if( isValidElfExe( (addr_t)init_server_img ) )
   {
-    *(u32 *)&pde = INIT_SERVER_USTACK_PDE | PAGING_RW | PAGING_USER | PAGING_PRES;
+    *(u32 *)&pde = INIT_SERVER_USTACK_PTAB | PAGING_RW | PAGING_USER | PAGING_PRES;
     writePDE(init_server_stack, &pde, (void *)INIT_SERVER_PDIR);
-    *(u32 *)&pte = INIT_SERVER_USTACK_PTE | PAGING_RW | PAGING_USER | PAGING_PRES;
+    *(u32 *)&pte = INIT_SERVER_USTACK_PAGE | PAGING_RW | PAGING_USER | PAGING_PRES;
     writePTE(init_server_stack, &pte, (void *)INIT_SERVER_PDIR);
 
-    string = (char *)TEMP_PAGEADDR;//(PHYSMEM_START + INIT_SERVER_USTACK_PTE /*- PAGE_SIZE*/);
+    string = (char *)TEMP_PAGEADDR;//(PHYSMEM_START + INIT_SERVER_USTACK_PAGE /*- PAGE_SIZE*/);
     b_info = (struct BootInfo *)(string + 8);
     memory_area = (struct MemoryArea *)(b_info + 1);
     boot_mods = (struct BootModule *)(memory_area + boot_info.num_mem_areas);
@@ -712,7 +831,7 @@ void init2( void )
        memory_area struct. The modified memory_area struct would
        need to be written to the root server's stack. */
 
-    mapTemp((addr_t)INIT_SERVER_USTACK_PTE);
+    mapTemp((addr_t)INIT_SERVER_USTACK_PAGE);
 
     for(i=0; i < boot_info.num_mods; i++)
     {
@@ -722,7 +841,7 @@ void init2( void )
       //kprintf(" ");
     }
 
-//    mapTemp(INIT_SERVER_USTACK_PTE);
+//    mapTemp(INIT_SERVER_USTACK_PAGE);
 
     *(char **)&argv[6] = (init_server_stack + ((unsigned)argv & 0xFFF));
     *(int *)&argv[5] = 5;
@@ -749,7 +868,7 @@ void init2( void )
       kprintf("Failed to initialize initial server.\n");
     }
 
-    mapTemp((addr_t)INIT_SERVER_USTACK_PTE);
+    mapTemp((addr_t)INIT_SERVER_USTACK_PAGE);
 
     memcpy(string, "initsrv", 8);
     memcpy(b_info, &boot_info, sizeof boot_info);
@@ -983,6 +1102,8 @@ void init( multiboot_info_t *info )
   kprintf("Stack: 0x%x\n", stack);
 
   assert( tcbTable->state != DEAD );
+
+  init_clock();
 
   contextSwitch( currentThread->addrSpace, (void *)stack );
   stopInit("Unable to start operating system");
