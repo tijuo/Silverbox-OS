@@ -169,9 +169,11 @@ EXPORT irq7Handler
     jmp enterIrqHandler
 
 EXPORT irq8Handler
-    push dword 0
-    push dword 0x28
-    jmp enterIrqHandler
+    inc dword [0x91000]
+    jnz .return
+    inc dword [0x91004]
+.return
+    iret
 
 EXPORT irq9Handler
     push dword 0

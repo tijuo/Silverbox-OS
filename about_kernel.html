@@ -32,14 +32,14 @@
       <h3>Incopmlete</h3>
       <ul>
         <li>I/O Port Allocation</li>
+	<li>Kernel Variables</li>
         <li>Preemptive Multithreading</li>
+        <li>System Clock (at least medium precision)</li>
       </ul>
       <h3>Not done yet</h3>
         <ul>
           <li>8-bit &amp; 16-bit DMA Support</li>
-          <li>Kernel Variables</li>
           <li>Privileged System Calls</li>
-          <li>System Clock (at least medium precision)</li>
           <li>System Reboot/Restart</li>
         </ul>
 
@@ -260,6 +260,14 @@
       </tr>
 
       <tr>
+        <td>Low Memory &amp; Video Memory</td>
+	<td>0x0000:0xC0000</td>
+	<td>Virtual</td>
+	<td>A 1:1 mapping of low memory and video memory.
+	    Accessible only from the kernel.</td> 
+      </tr>
+
+      <tr>
         <td>TSS I/O Permission Bitmap</td>
         <td>0xC0000:0x2000</td>
         <td>Virtual</td>
@@ -280,6 +288,14 @@
         <td>0xC3000:0x1000</td>
         <td>Virtual</td>
         <td>Memory mapped I/O address for the LAPIC.</td>
+      </tr>
+
+      <tr>
+        <td>Kernel Variables</td>
+        <td>0xC4000:0x1000</td>
+        <td>Virtual</td>
+        <td>A region where user threads can get information about the kernel.
+	  (read-only)</td>
       </tr>
 
       <tr>
