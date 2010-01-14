@@ -271,7 +271,9 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
   }
   else if( strncmp( command, "time", 4 ) == 0 )
   {
-    printf("Time is: %s", asctime(gmtime(time(NULL))));
+    time_t t = time(NULL);
+
+    printf("The time/date is: %s", asctime(gmtime(&t)));
 
     return 0;
   }

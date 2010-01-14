@@ -1,8 +1,10 @@
-First modify the variables in tools/variables.sh and vars.mk. Do a 
-"make && make install" to install the kernel and boot modules. to
+skin First modify the variables in tools/variables.sh and vars.mk. Do a 
+"make && make install" to install the kernel and boot modules to
 the disk. 
 
 A disk image can be associated with a loopback device, for
-example, by doing a "losetup /dev/loop2 os_disk.img" (os_disk.img 
+example, by doing a "losetup -f /dev/loop2 os_disk.img" (os_disk.img 
 is associated with /dev/loop2). The loopback device can then be used
 like a physical device. 
+
+Premade images are in the images/ directory

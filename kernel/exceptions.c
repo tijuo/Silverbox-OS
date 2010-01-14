@@ -239,13 +239,30 @@ void handleCPUException(volatile TCB *thread  )
   {
     struct TSS_Struct *tss = (struct TSS_Struct *)KERNEL_TSS;
 
-    if( tss->ioMap == 0x30000000 /*&& thread->io_bitmap != NULL*/ )
+    if( tss->ioMap == IOMAP_LAZY_OFFSET )
     {
+      pte_t pte;
+
+      if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, getCR3() ) < 0 ||
+          !pte.present || 
+          pokeMem((void *)KERNEL_IO_BITMAP, 2 * PAGE_SIZE, (void *)TSS_IO_PERM_BMP, getCR3()) < 0 )
+      {
+        mapTemp(KERNEL_IO_BITMAP);
+        memset((void *)TEMP_PAGEADDR, 0xFF, PAGE_SIZE);
+        unmapTemp();
+
+        mapTemp(KERNEL_IO_BITMAP+PAGE_SIZE);
+        memset((void *)TEMP_PAGEADDR, 0xFF, PAGE_SIZE);
+        unmapTemp();
+      }
+
       tss->ioMap = 0x68;
-//      memcpy( (void *)TSS_IO_PERM_BMP, thread->io_bitmap, 8192 );
+
       kprintf("GPF due to IO bitmap\n");
       return;
     }
+
+    kprintf("Unknown GPF caught.\n");
   }
 
   #if DEBUG

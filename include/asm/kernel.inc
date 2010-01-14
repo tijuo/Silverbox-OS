@@ -20,8 +20,21 @@ IMPORT kSize
 IMPORT kPhysToVirt
 IMPORT kVirtToPhys
 IMPORT VPhysMemStart
-IMPORT kernelGDT
-IMPORT kernelIDT
+IMPORT _kernelGDT
+IMPORT _kernelIDT
+IMPORT _kernelTSS
+IMPORT _initKrnlPDIR
+IMPORT _firstKrnlPTAB
+IMPORT _initServPDIR
+IMPORT _initServStackPTAB
+IMPORT _initServStack
+IMPORT _initServPTAB
+IMPORT _idleStack
+IMPORT _kernelStack
+IMPORT _kernelVars
+IMPORT _firstPTAB
+IMPORT _secondKrnlPTAB
+IMPORT _kernelBootStack
 
 kCodeSel  equ 0x08
 kDataSel  equ 0x10

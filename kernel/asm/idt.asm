@@ -12,7 +12,7 @@ EXPORT addIDTEntry
     mov	    ebp, esp
 
     mov     eax, [ebp + 12]
-    lea     edx, [eax*8 + kernelIDT]
+    lea     edx, [eax*8 + _kernelIDT]
 
     mov     eax, [ebp + 8]
     mov     [edx], ax
@@ -42,4 +42,4 @@ EXPORT loadIDT
 
 idtPointer:
     dw    0x800
-    dd    kernelIDT
+    dd    _kernelIDT

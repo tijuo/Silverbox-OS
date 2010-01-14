@@ -54,9 +54,6 @@
 #define FP_SEG(addr)    (((addr_t)addr & 0xF0000) >> 4)
 #define FP_OFF(addr)    ((addr_t)addr & 0xFFFF)
 
-// #define KERNEL_IDT 	(&kernelGDT + PHYSMEM_START)
-// #define KERNEL_GDT 	(&kernelIDT + PHYSMEM_START)
-
 #define IRQ0            0x20
 #define IRQ1            (IRQ0 + 1)
 #define IRQ2            (IRQ0 + 2)
@@ -77,17 +74,23 @@
 #define enableInt()     asm __volatile__("sti\n")
 #define disableInt()    asm __volatile__("cli\n")
 
+#define IOMAP_LAZY_OFFSET	0xFFFF
+
 /** Represents an entire TSS */
 
 struct TSS_Struct
 {
-	dword	backlink;
+	word	backlink;
+	word	_resd1;
 	dword	esp0;
-	dword	ss0;
+	word	ss0;
+	word	_resd2;
 	dword	esp1;
-	dword	ss1;
+	word	ss1;
+	word	_resd3;
 	dword	esp2;
-	dword	ss2;
+	word	ss2;
+	word	_resd4;
 	dword	cr3;
 	dword	eip;
 	dword	eflags;
@@ -99,14 +102,23 @@ struct TSS_Struct
 	dword	ebp;
 	dword	esi;
 	dword	edi;
-	dword	es;
-	dword	cs;
-	dword	ss;
-	dword	ds;
-	dword	fs;
-	dword	gs;
-	dword	ldt;
-	dword	ioMap;
+	word	es;
+	word	_resd5;
+	word	cs;
+	word	_resd6;
+	word	ss;
+	word	_resd7;
+	word	ds;
+	word	_resd8;
+	word	fs;
+	word	_resd9;
+	word	gs;
+	word	_resd10;
+	word	ldt;
+	word	_resd11;
+	word	trap : 1;
+	word	_resd12 : 15;
+	word	ioMap;
 } __PACKED__;
 
 /*
@@ -193,7 +205,10 @@ volatile unsigned *tssEsp0;
 extern char *kCode, *kData, *kBss, *kEnd, *kPhysStart, *kVirtStart;
 extern char *kdCode, *kdData;
 extern char *kPhysData, *kVirtData, *kPhysBss, *kVirtBss, *kSize;
-extern char *kernelGDT, *kernelIDT, *kernelTSS;
-extern char *kVirtToPhys, *kPhysToVirt, *VPhysMemStart;
+extern char *_kernelGDT, *_kernelIDT, *_kernelTSS, *_initKrnlPDIR;
+extern char *_firstKrnlPTAB, *_initServPDIR, *_initServStackPTAB;
+extern char *_initServStack, *_initServPTAB, *_idleStack, *_kernelStack;
+extern char *_kernelVars, *_firstPTAB, *_secondKrnlPTAB, *_kernelBootStack;
+extern char *_kernelIOBitmap, *kVirtToPhys, *kPhysToVirt, *VPhysMemStart;
 
 #endif

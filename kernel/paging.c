@@ -499,7 +499,7 @@ int kMapPage( void *virt, void *phys, u32 flags)
 
   if ( !pdePtr->present )
   {
-    kprintf("%x -> %x\n", virt, phys);
+    kprintf("Trying to map %x -> %x, but no PDE present.\n", phys, virt);
     assert( false );
     return -3;
   }
@@ -634,7 +634,6 @@ addr_t kUnmapPage( void *virt )
     returnAddr = (unsigned)(ptePtr->base << 12);
     ptePtr->present = 0;
     invalidate_page( virt );
-//    __asm__ volatile( "invlpg %0\n" :: "m" ( *(char *)virt ) );
 
     return (addr_t)returnAddr;
   }

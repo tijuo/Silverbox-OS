@@ -14,7 +14,7 @@ IMPORT commandLine
 EXPORT start
 ;  eax has the mulitboot magic value
 ;  ebx has multiboot data address
-  mov   esp, 0x95000
+  lea   esp, [_kernelBootStack + 4096]
   mov   ebp, esp
 
   push  0
@@ -41,7 +41,7 @@ okMagic:
 
 ;  mov eax, kPhysStart
 ;  shr   eax, 22
-;  lea   ecx, [VPhysMemStart + initPageDir + eax] ; Assumes that Kernel is at 0x1000000
+;  lea   ecx, [VPhysMemStart + _initKrnlPDIR + eax] ; Assumes that Kernel is at 0x1000000
 ;  xor   edx, edx
 ;  mov   dword [ecx], edx     ; Unmap the third page table
 
@@ -92,7 +92,7 @@ initPaging:
   xor   eax, eax        ; and clear any data left there
   mov   ecx, 1024
 
-  mov   edi, initPageDir
+  mov   edi, _initKrnlPDIR
 
   cld
 
@@ -100,19 +100,21 @@ initPaging:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-  lea	eax, [initPageDir + 0xFF8]
-  mov	edx, 0x93003
+  lea	eax, [_initKrnlPDIR + 0xFF8]
+  mov	edx, _secondKrnlPTAB
+  or	edx, 3
   mov	dword [eax], edx
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-  lea	ecx, [initPageDir]
-  mov   edx, 0x92007
+  mov	ecx, _initKrnlPDIR
+  mov   edx, _firstPTAB
+  or	edx, 7
   mov   dword [ecx], edx     ; 1:1 map the physical memory range (0x00-0xC0000)
 
 ; No need to clear the PTEs since they'll be overwritten anyway
 
-;  lea	edi, [0x92000]
+;  lea	edi, [_firstPTAB]
 ;  xor	eax, eax
 ;  mov	ecx, 256
 
@@ -120,7 +122,7 @@ initPaging:
 ;  stosd
 ;  loop .clearPages
 
-  lea   edi, [0x92000]
+  mov   edi, _firstPTAB
   mov	eax, 0x03
   mov	ecx, 160
 
@@ -135,7 +137,7 @@ initPaging:
 
   mov	eax, 0xA001F
   mov	ecx, 32
-  lea	edi, [0x92000+160*4]
+  lea	edi, [_firstPTAB+160*4]
 
 .mapFirstTable2:
   stosd
@@ -148,14 +150,15 @@ initPaging:
 
   mov	eax, kPhysStart
   shr	eax, 20
-  lea   ecx, [initPageDir + eax] ; Assumes that Kernel is at 0x1000000
-  mov   edx, 0x8A003
+  lea   ecx, [_initKrnlPDIR + eax] ; Assumes that Kernel is at 0x1000000
+  mov   edx, _firstKrnlPTAB
+  or    edx, 3
   mov   dword [ecx], edx
 
   mov   ecx, 1024
   mov   eax, kPhysStart
   or    eax, 0x03
-  lea   edi, [0x8A000]
+  mov   edi, _firstKrnlPTAB
 
 .mapPhysKernel:
   stosd                    ; 1:1 map kernel memory
@@ -166,14 +169,15 @@ initPaging:
 
   mov	eax, kVirtStart
   shr	eax, 20
-  lea   ecx, [initPageDir + eax]
-  mov   edx, 0x8A003
+  lea   ecx, [_initKrnlPDIR + eax]
+  mov   edx, _firstKrnlPTAB
+  or    edx, 3
   mov   dword [ecx], edx        ; Map the Kernel table
 
 ;  mov   ecx, 1024           ; Assumes that the init code is within the 
 ;  mov   eax, kPhysStart    ; first 4MB of the kernel
 ;  or    eax, 0x03
-;  lea   edi, [0x8A000]
+;  lea   edi, [_firstKrnlPTAB]
 
 ;.mapVirtKernel:             ; Map the kernel to address 0xFF400000
 ;  stosd
@@ -182,14 +186,14 @@ initPaging:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-  lea   ecx, [initPageDir + 4 * 1023]
-  mov   edx, initPageDir
+  lea   ecx, [_initKrnlPDIR + 4 * 1023]
+  mov   edx, _initKrnlPDIR
   or    edx, 0x03
   mov   dword [ecx], edx        ; Map the page directory into itself
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-  mov   eax, initPageDir   ; Load the page directory into the PDBR
+  mov   eax, _initKrnlPDIR   ; Load the page directory into the PDBR
   mov   cr3, eax
 
   mov   eax, cr0
@@ -225,4 +229,3 @@ stop:
 ;GRUBBootInfo: dd 0
 mbootMagic equ 0x2BADB002
 bstrapErrMsg: db 'Error: Only Multiboot-compliant loaders are supported.',0
-initPageDir equ 0x89000

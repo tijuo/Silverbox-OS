@@ -7,26 +7,21 @@
 IMPORT currentThread
 IMPORT tssEsp0
 IMPORT schedule
-IMPORT kVirtStart
 IMPORT tcbTable
 
-; Stack tops
+idleTID	    	equ 0
 
-idleStack   equ VPhysMemStart + 0x90000
-kernelStack equ VPhysMemStart + 0x91000
+TCB_Size    	equ 0x58
+regSize	    	equ 0x40
 
-idleTID	    equ 0
+aSpaceOff   	equ 0
+quantaOff   	equ 4
+stateOff    	equ 5
+priorityOff 	equ 5
+regOff      	equ 20
 
-TCB_Size    equ 0x5c
-regSize	    equ 0x40
-
-aSpaceOff   equ 0
-quantaOff   equ 4
-stateOff    equ 5
-priorityOff equ 5
-regOff      equ 24
-
-; FIXME: This needs an entire overhaul
+ioMapOffOff 	equ 102
+ioMapLazyOff	equ 0xFFFF
 
 %macro SAVE_STATE 0
     o16 push ds
@@ -38,8 +33,8 @@ regOff      equ 24
     mov   ds, ax
     mov   es, ax
 
-     lea   esp, [kernelStack]
-     push  dword [currentThread]
+    lea   esp, [_kernelStack + 4096]
+    push  dword [currentThread]
 %endmacro
 
 ; This desperately needs to be cleaned up!
@@ -63,7 +58,7 @@ regOff      equ 24
 
     cmp  edi, [tcbTable]
     jne	 .loadStack
-    mov	 esp, idleStack - regSize
+    lea	 esp, [_idleStack + 4096 - regSize]
     jmp  .pop_regs
 .loadStack:
     lea  esp, [edi+regOff]
@@ -77,7 +72,7 @@ regOff      equ 24
 
     cmp	 edi, [tcbTable+idleTID*TCB_Size]
     jne  .load_stack
-    mov  esp, idleStack - regSize
+    lea  esp, [_idleStack + 4096 - regSize]
     jmp  .compare_threads
 
 .load_stack:
@@ -94,6 +89,9 @@ regOff      equ 24
 
     mov  edi, [edi+aSpaceOff]
     mov  cr3, edi
+
+    lea  eax, [_kernelTSS + ioMapOffOff]
+    mov  word [eax], ioMapLazyOff
 
 .pop_regs:
     popa

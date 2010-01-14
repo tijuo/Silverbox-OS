@@ -207,7 +207,6 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
     thread->wait_tid = NULL_TID;
     thread->threadQueue.tail = thread->threadQueue.head = NULL_TID;
     thread->sig_handler = NULL;
-//    thread->io_bitmap = NULL;
 
 //    thread->stack = thread->stackMem + THREAD_STACK_LEN - sizeof( struct RegisterState );
 //    state = (struct RegisterState *)thread->regs;
@@ -245,7 +244,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
     thread->regs.userEsp = (unsigned)uStack;
 
-    thread->regs.eflags = 0x3201;//0x3201; // XXX: Warning: Magic Number
+    thread->regs.eflags = 0x0201;//0x3201; // XXX: Warning: Magic Number
     thread->regs.eip = ( dword ) threadAddr;
 
     if( tid == 0 )

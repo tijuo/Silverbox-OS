@@ -1,19 +1,3 @@
-/* link.ld
-*
-* Copyright (C) 2006 Tiju Oliver
-*
-* This program is free software; you can redistribute it and/or modify it under
-* the terms of the GNU General Public License as published by the Free Software
-* Foundation; either version 2 of the License, or (at your option) any later
-* version.
-*
-* This program is distributed in the hope that it will be useful, but WITHOUT
-* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-* FOR A PARTICULAR PURPOSE.
-*
-* For more info, look at the COPYING file.
-*/
-
 OUTPUT_FORMAT("elf32-i386")
 ENTRY(start)
 SECTIONS
@@ -27,9 +11,33 @@ SECTIONS
   kPhysToVirt = kVirtStart - kPhysStart;
   VPhysMemStart = 0x00000000;
 
-  kernelIDT = VPhysMemStart + 0x88000;
-  kernelGDT = 0x88800 + VPhysMemStart;
-  kernelTSS = 0x88F98 + VPhysMemStart;
+  _kernelIDT = VPhysMemStart + 0x88000;
+  _kernelGDT = 0x88800 + VPhysMemStart;
+  _kernelTSS = 0x88F98 + VPhysMemStart;
+  _kernelIOBitmap = _kernelIDT + 0x1000;
+  _initKrnlPDIR = _kernelIOBitmap + 0x2000;
+  _firstKrnlPTAB = _initKrnlPDIR + 0x1000;
+  _initServPDIR = _firstKrnlPTAB + 0x1000;
+  _initServStackPTAB = _initServPDIR + 0x1000;
+
+  /* Note that this is the address of the bottom of the stack. */
+
+  _initServStack = _initServStackPTAB + 0x1000;
+
+  _initServPTAB = _initServStack + 0x1000;
+
+  /* Note that these addresses are the bottoms of the stacks. */
+
+  _idleStack = _initServPTAB + 0x1000;
+  _kernelStack = _idleStack + 0x1000;
+
+  _kernelVars = _kernelStack + 0x1000;
+  _firstPTAB = _kernelVars + 0x1000;
+  _secondKrnlPTAB = _firstPTAB + 0x1000;
+
+  /* Note that this is the address of the bottom of the stack. */
+
+  _kernelBootStack = _secondKrnlPTAB + 0x1000;
 
   .text kVirtCode : AT(kPhysCode) {
      kCode = .;

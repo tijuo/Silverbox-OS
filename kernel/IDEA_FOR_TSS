@@ -1,4 +1,0 @@
-- Set the TSS io bitmap offset to an invalid offset
-- When the GPF is triggered, the handler will set
-the offset to a valid value, and copy io bitmap
-data to the actual offset

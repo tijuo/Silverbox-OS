@@ -9,20 +9,20 @@
 /* FIXME: Changing any of these values may require changing
    the asm code */
 
-#define BOOTSTRAP_VSTART    0x1000000
-#define BOOTSTRAP_START     0x1000000
+#define BOOTSTRAP_VSTART    	0x1000000
+#define BOOTSTRAP_START     	0x1000000
 
-#define KERNEL_VSTART       (u32)&kVirtStart
-#define PHYSMEM_START       (u32)&VPhysMemStart
-#define KERNEL_START        (u32)&kPhysStart
-#define RESD_PHYSMEM	    KERNEL_START
+#define KERNEL_VSTART       	((u32)&kVirtStart)
+#define PHYSMEM_START       	((u32)&VPhysMemStart)
+#define KERNEL_START        	((u32)&kPhysStart)
+#define RESD_PHYSMEM	    	KERNEL_START
 
 /* FIXME: Changing any of these values may require changing the 
    asm code. */
 
-#define KERNEL_IDT		(u32)&kernelIDT
-#define KERNEL_GDT		(u32)&kernelGDT
-#define KERNEL_TSS		(u32)&kernelTSS
+#define KERNEL_IDT		((u32)&_kernelIDT)
+#define KERNEL_GDT		((u32)&_kernelGDT)
+#define KERNEL_TSS		((u32)&_kernelTSS)
 
 #define TSS_IO_PERM_BMP		(PHYSMEM_START + 0xC0000)
 #define TEMP_PAGEADDR           (TSS_IO_PERM_BMP + 2 * PAGE_SIZE)
@@ -32,18 +32,19 @@
 #define V_IDLE_STACK_TOP	(PHYSMEM_START + IDLE_STACK_TOP)
 #define V_KERNEL_STACK_TOP	(PHYSMEM_START + KERNEL_STACK_TOP)
 
-#define INIT_PDIR		(KERNEL_IDT + PAGE_SIZE)
-#define KERNEL_PAGE_TAB         (INIT_PDIR + PAGE_SIZE)
-#define INIT_SERVER_PDIR        (KERNEL_PAGE_TAB + PAGE_SIZE)
-#define INIT_SERVER_USTACK_PTAB (INIT_SERVER_PDIR + PAGE_SIZE)
-#define INIT_SERVER_USTACK_PAGE (INIT_SERVER_USTACK_PTAB + PAGE_SIZE)
-#define INIT_SERVER_PTAB        (INIT_SERVER_USTACK_PAGE + PAGE_SIZE)
-#define IDLE_STACK_TOP		(INIT_SERVER_PTAB + 2 * PAGE_SIZE)
-#define KERNEL_STACK_TOP	(IDLE_STACK_TOP + PAGE_SIZE)
-#define KERNEL_VAR_PAGE		KERNEL_STACK_TOP
-#define FIRST_PAGE_TAB		(KERNEL_VAR_PAGE + PAGE_SIZE)
-#define KERNEL_PAGE_TAB2	(FIRST_PAGE_TAB + PAGE_SIZE)
-#define BOOTSTRAP_STACK_TOP	(KERNEL_PAGE_TAB2 + 2 * PAGE_SIZE)
+#define KERNEL_IO_BITMAP	((u32)&_kernelIOBitmap)
+#define INIT_PDIR		((u32)&_initKrnlPDIR)
+#define KERNEL_PAGE_TAB         ((u32)&_firstKrnlPTAB)
+#define INIT_SERVER_PDIR        ((u32)&_initServPDIR)
+#define INIT_SERVER_USTACK_PTAB ((u32)&_initServStackPTAB)
+#define INIT_SERVER_USTACK_PAGE ((u32)&_initServStack)
+#define INIT_SERVER_PTAB        ((u32)&_initServPTAB)
+#define IDLE_STACK_TOP		((u32)&_idleStack + PAGE_SIZE)
+#define KERNEL_STACK_TOP	((u32)&_kernelStack + PAGE_SIZE)
+#define KERNEL_VAR_PAGE		((u32)&_kernelVars)
+#define FIRST_PAGE_TAB		((u32)&_firstPTAB)
+#define KERNEL_PAGE_TAB2	((u32)&_secondKrnlPTAB)
+#define BOOTSTRAP_STACK_TOP	((u32)&_kernelBootStack + PAGE_SIZE)
 
 #define INVALID_VADDR       (void *)0xFFFFFFFF
 #define INVALID_ADDR        (void *)0xFFFFFFFF

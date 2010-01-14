@@ -5,7 +5,7 @@
 
 
 
-/* The VFS will */
+/* The VFS will appear to act as a single, global filesystem while it translates VFS requests into filesystem specific requests (for FAT, ext2, ntfs, etc.).*/
 
 /*
   statuses:

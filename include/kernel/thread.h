@@ -64,7 +64,6 @@ struct ThreadCtrlBlk
   tid_t exHandler;
   tid_t wait_tid;
   void *sig_handler;
-  byte *io_bitmap;
   unsigned short __packing;
   volatile Registers regs;
 } __PACKED__;

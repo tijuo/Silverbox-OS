@@ -29,7 +29,7 @@ loadCs:
 
 gdtPointer:
     dw    0x298
-    dd    kernelGDT
+    dd    _kernelGDT
 
 ;EXPORT tssEntry
 ;        dw 0, 0

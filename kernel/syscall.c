@@ -90,130 +90,86 @@ static int sysGetThreadInfo( TCB *thread, tid_t tid, struct ThreadInfo *info )
 
   return 0;
 }
-/*
+
 static int enableIO_Permissions( volatile TCB *thread, unsigned short begin, 
 				 unsigned short end, bool value, tid_t tid )
 {
-  addr_t phys, addrSpace;
   pte_t pte;
-  byte *data = TEMP_PAGEADDR;
-  TCB *target_tcb;
+  byte *data = (byte *)TEMP_PAGEADDR;
   int result;
-
-  // XXX: Need to actually write data to tssIOBitmap if altering current thread
 
   if( GET_TID(thread) != init_server_tid ) // No permission to do this operation
     return -2;
 
-  target_tcb = &tcbTable[tid];
-
-  if( target_tcb->io_bitmap == NULL || ((unsigned)target_tcb->io_bitmap % PAGE_SIZE) != 0 )
+  if( tid == NULL_TID )
     return -1;
 
-  if( begin < 32768 && end >= 32768 ) 	// spans two pages
+  if( begin < 32768 && end >= 32768 )   // spans two pages
   {
     if( (result=enableIO_Permissions( thread, begin, 32767, value, tid )) != 0 )
       return result;
 
     return enableIO_Permissions( thread, 32768, end, value, tid );
   }
-  else
+
+  if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, tcbTable[tid].addrSpace ) < 0 ||
+      !pte.present )
   {
-    if( begin < 32768 ) // spans first page
+    return -3;
+  }
+
+  if( readPTE( (void *)(TSS_IO_PERM_BMP + PAGE_SIZE), &pte, tcbTable[tid].addrSpace ) < 0 ||
+      !pte.present )
+  {
+    return -3;
+  }
+
+  if( begin < 32768 ) // spans first page
+    mapTemp((void *)KERNEL_IO_BITMAP);
+  else // spans second
+  {
+    mapTemp((void *)(KERNEL_IO_BITMAP+PAGE_SIZE));
+    begin -= 32768;
+    end -= 32768;
+  }
+
+  if( begin / 8 == end / 8 ) // if the range spans only one byte
+  {                          // simply modify this byte
+    for(unsigned i=begin % 8; i <= end % 8; i++)
     {
-      if( readPTE( (void *)target_tcb->io_bitmap, &pte, target_tcb->addrSpace ) == -1 )
-        return -1;
-
-      phys = pte.base << 12;
-
-      mapTemp(phys);
-
-      if( begin / 8 == end / 8 ) // if the range spans only one byte
-      {                          // simply modify this byte
-        for(unsigned i=begin % 8; i <= end % 8; i++)
-        {
-          if( value == false )
-            data[begin / 8] |= (1 << i);
-          else
-            data[begin / 8] &= ~(1 << i);
-        }
-      }
-      else // otherwise, modify the beginning and ending byte
-      { 
-        for(unsigned i=begin % 8; i <= 7; i++)
-        {
-          if( value == false )
-            data[begin / 8] |= (1 << i);
-          else
-            data[begin / 8] &= ~(1 << i);
-        }
-
-        for(unsigned i=0; i <= end % 8; i++)
-        {
-          if( value == false )
-            data[end / 8] |= (1 << i);
-          else
-            data[end / 8] &= ~(1 << i);
-        }
-
-        // and set the bytes in between(if any)
-
-        if( end / 8 + 1 >= begin / 8 )
-          memset( data + 1, value == true ? 0xFF : 0, (end / 8) - (begin / 8) - 1 );
-      }
-
-      unmapTemp();
-    }
-    else // spans second page
-    {
-      if( readPTE( (void *)(target_tcb->io_bitmap + PAGE_SIZE), &pte, target_tcb->addrSpace ) == -1 )
-        return -1;
-
-      phys = pte.base << 12;
-
-      mapTemp(phys);
-
-      begin -= 32768;
-      end -= 32768;
-
-      if( begin / 8 == end / 8 )
-      {
-        for(unsigned i=begin % 8; i <= end % 8; i++)
-        {
-          if( value == false )
-            data[begin / 8] |= (1 << i);
-          else
-            data[begin / 8] &= ~(1 << i);
-        }
-      }
+      if( value == false )
+        data[begin / 8] |= (1 << i);
       else
-      { 
-        for(unsigned i=begin % 8; i <= 7; i++)
-        {
-          if( value == false )
-            data[begin / 8] |= (1 << i);
-          else
-            data[begin / 8] &= ~(1 << i);
-        }
-
-        for(unsigned i=0; i <= end % 8; i++)
-        {
-          if( value == false )
-            data[end / 8] |= (1 << i);
-          else
-            data[end / 8] &= ~(1 << i);
-        }
-
-        if( begin / 8 >= end / 8 + 1 )
-          memset( data + 1, value == true ? 0xFF : 0, (end / 8) - (begin / 8) - 1 );
-      }
-
-      unmapTemp();
+        data[begin / 8] &= ~(1 << i);
     }
   }
+  else // otherwise, modify the beginning and ending byte
+  { 
+    for(unsigned i=begin % 8; i <= 7; i++)
+    {
+      if( value == false )
+        data[begin / 8] |= (1 << i);
+      else
+        data[begin / 8] &= ~(1 << i);
+    }
+
+    for(unsigned i=0; i <= end % 8; i++)
+    {
+      if( value == false )
+        data[end / 8] |= (1 << i);
+      else
+        data[end / 8] &= ~(1 << i);
+    }
+
+    // and set the bytes in between(if any)
+
+    if( end / 8 + 1 >= begin / 8 )
+      memset( data + 1, value == true ? 0xFF : 0, (end / 8) - (begin / 8) - 1 );
+  }
+
+  unmapTemp();
   return 0;
 }
-*/
 
 /// Handles a system call
 
@@ -304,8 +260,8 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
       *result = sysSetSigHandler( _thread, (void *)regs->ebx );
       break;
     case SYS_SET_IO_PERM:
-//      *result = enableIO_Permissions( _thread, (unsigned short)regs->ebx, 
-//				 (unsigned short)regs->ecx, (bool)regs->edx, (tid_t)regs->esi );
+      *result = enableIO_Permissions( _thread, (unsigned short)regs->ebx, 
+				 (unsigned short)regs->ecx, (bool)regs->edx, (tid_t)regs->esi );
       break;
     default:
       kprintf("Invalid system call: 0x%x %d 0x%x\n", regs->eax, 

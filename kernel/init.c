@@ -260,7 +260,7 @@ void initTSS(void)
 {
   struct TSS_Struct *tss = (struct TSS_Struct *)(PHYSMEM_START + KERNEL_TSS);
 
-  tss->ioMap = 0x68;
+  tss->ioMap = IOMAP_LAZY_OFFSET;
   tss->ss0 = KDATA;
   tssEsp0 = (unsigned *)&tss->esp0;
   tssIOBitmap = (void *)TSS_IO_PERM_BMP;
@@ -284,7 +284,7 @@ void initGDT(void)
       G_BIG | /*G_RDONLY*/G_RDWR | G_CODESEG | G_DPL3 );
   add_gdt_entry( UDATA, 0, 0xFFFFF, G_PRESENT | G_GRANULARITY |
       G_BIG | G_RDWR | G_DATASEG | G_DPL3 );
-  add_gdt_entry( TSS, (dword)&kernelTSS, 0x2068, 0x89 );
+  add_gdt_entry( TSS, (dword)&_kernelTSS, 0x2068, 0x89 );
 }
 
 void stopInit(char *msg)

@@ -41,6 +41,8 @@
           <li>8-bit &amp; 16-bit DMA Support</li>
           <li>Privileged System Calls</li>
           <li>System Reboot/Restart</li>
+          <li>Swap Memory</li>
+          <li>Memory-mapped files</li>
         </ul>
 
     <h2>General</h2>
@@ -163,8 +165,16 @@
       </tr>
 
       <tr>
-        <td>Initial Kernel Page Directoy</td>
-        <td>0x89000:0x1000</td>
+        <td>TSS IO Bitmap</td>
+        <td>0x89000:0x2000</td>
+        <td>Physical</td>
+        <td>The TSS bitmap representing the access permissions for the 65,536
+            I/O ports.</td>
+      </tr>
+
+      <tr>
+        <td>Initial Kernel Page Directory</td>
+        <td>0x8B000:0x1000</td>
         <td>Physical</td>
         <td>The page directory created during bootstrap that is used by all 
             kernel threads. It serves as a template when creating a new page 
@@ -173,21 +183,21 @@
 
       <tr>
         <td>1st Kernel Page Table</td>
-        <td>0x8A000:0x1000</td>
+        <td>0x8C000:0x1000</td>
         <td>Physical</td>
         <td>Represents the first 4MiB of the kernel.</td>
       </tr>
 
       <tr>
         <td>Initial Server's Page Directory</td>
-        <td>0x8B000:0x1000</td>
+        <td>0x8D000:0x1000</td>
         <td>Physical</td>
         <td>The page directory for the initial server.</td>
       </tr>
 
       <tr>
         <td>Initial Server's Stack Page Table</td>
-        <td>0x8C000:0x1000</td>
+        <td>0x8E000:0x1000</td>
         <td>Physical</td>
         <td>The page table corresponding to the initial server's user 
         stack.</td>
@@ -195,14 +205,14 @@
 
       <tr>
         <td>Initial Server's Stack Page</td>
-        <td>0x8D000:0x1000</td>
+        <td>0x8F000:0x1000</td>
         <td>Physical</td>
         <td>The first page of the initial server's user stack.</td>
       </tr>
 
       <tr>
         <td>Initial Server's Page Table</td>
-        <td>0x8E000:0x1000</td>
+        <td>0x90000:0x1000</td>
         <td>Physical</td>
         <td>The page table for the initial server's module image. Note that
         this limits the size of the image to 4MiB.</td>
@@ -210,7 +220,7 @@
 
       <tr>
         <td>Idle Thread's Stack</td>
-        <td>0x8F000:0x1000</td>
+        <td>0x91000:0x1000</td>
         <td>Physical</td>
         <td>The idle stack's kernel thread. Mostly used during the second 
         initialization process.</td>
@@ -218,14 +228,14 @@
 
       <tr>
         <td>Kernel Stack</td>
-        <td>0x90000:0x1000</td>
+        <td>0x92000:0x1000</td>
         <td>Physical</td>
         <td>The single kernel stack shared by all user threads.</td>
       </tr>
 
       <tr>
         <td>Kernel Variables</td>
-        <td>0x91000:0x1000</td>
+        <td>0x93000:0x1000</td>
         <td>Physical</td>
         <td>A region where user threads can get information about the kernel.
         </td>
@@ -233,21 +243,21 @@
 
       <tr>
         <td>First 4 MiB</td>
-        <td>0x92000:0x1000</td>
+        <td>0x94000:0x1000</td>
         <td>Physical</td>
-        <td>The first 4 MiB of physical memory.</td>
+        <td>Page table for the first 4 MiB of physical memory.</td>
       </tr>
 
       <tr>
         <td>2nd Kernel Page Table</td>
-        <td>0x93000:0x1000</td>
+        <td>0x95000:0x1000</td>
         <td>Physical</td>
         <td>Represents the second 4MiB of the kernel.</td>
       </tr>
 
       <tr>
         <td>Kernel Bootstrap Stack</td>
-        <td>0x94000:0x1000</td>
+        <td>0x96000:0x1000</td>
         <td>Physical</td>
         <td>The stack used for the kernel bootstrapper.</td>
       </tr>
@@ -268,11 +278,12 @@
       </tr>
 
       <tr>
-        <td>TSS I/O Permission Bitmap</td>
+        <td>I/O Permission Bitmap</td>
         <td>0xC0000:0x2000</td>
         <td>Virtual</td>
         <td>A bitmap that represents the access permissions of all 65536 
-        I/O ports.</td>
+        I/O ports for a thread. (Read-only from user mode) A thread can share
+        bitmaps with other threads.</td>
       </tr>
 
       <tr>

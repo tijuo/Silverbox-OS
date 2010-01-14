@@ -197,3 +197,13 @@ int __set_sig_handler( void *handler )
   return retval;
 }
 
+int __set_io_perm( unsigned short start, unsigned short end, bool value, tid_t tid )
+{
+  int retval;
+
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SET_IO_PERM),
+		   "b"(start), "c"(end), "d"(value),"S"(tid));
+  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
+  return retval;
+}
+
