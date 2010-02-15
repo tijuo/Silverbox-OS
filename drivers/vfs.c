@@ -76,3 +76,26 @@ Uniform interface with other filesystems. These are, essentially, wrapper
     char data[];
   };
 */
+
+#include <os/adt/os_types.h>
+
+typedef SBArray SBFilePath;
+
+
+/* The requests */
+
+int createDir( SBString *name, SBFilePath *path );
+int listDir( SBFilePath *path );
+int createFile( SBString *name, SBFilePath *path );
+int readFile( SBFilePath *path, size_t numBytes );
+int writeFile( SBFilePath *path, char *buffer, size_t numBytes );
+int remove( SBFilePath *path );
+int link( SBString *name, SBFilePath *path ); // Creates a hard link
+int unlink( SBFilePath *path );
+int getAttributes( SBFilePath *path );
+int setAttributes( SBFilePath *path, struct FileAttributes attrib );
+int fsctl( int operation, ... );
+
+int mount( int device, SBString *filesystem, SBFilePath *path );
+int unmount( SBFilePath *path );
+

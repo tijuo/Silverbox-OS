@@ -1,0 +1,10 @@
+To do for video driver:
+
+* = Done
+
+* 1) Cursor movement/hiding.
+* 2) Hardware scrolling.
+* 3) Colors/Blinking.
+* 4) Printing text on specific lines.
+5) Changing video modes.
+6) Changing fonts

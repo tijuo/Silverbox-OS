@@ -1,3 +1,9 @@
+#ifndef OS_TYPES_H
+#define OS_TYPES_H
+
+#include "sbarray.h"
+#include "sbstring.h"
+
 struct _SBRange
 {
   int start;
@@ -6,12 +12,4 @@ struct _SBRange
 
 typedef struct _SBRange SBRange;
 
-struct _SBString
-{
-  unsigned char *data;
-  size_t length;
-  int char_width;
-  // locale;
-};
-
-typedef struct _SBString SBString;
+#endif /* OS_TYPES_H */

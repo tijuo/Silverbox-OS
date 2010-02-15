@@ -20,25 +20,23 @@ static unsigned long _hash_func( unsigned char *key, size_t keysize )
   return hash;
 }
 
-HashTable hashCreate( size_t numBuckets )
+int sbAssocArrayCreate( SBAssocArray *array, size_t numBuckets )
 {
-  HashTable table = { NULL, 0 };
+  if( !array )
+    return SBAssocArrayError;
 
-  table.buckets = calloc( numBuckets, sizeof( struct _KV_Pair ) );
-  table.numBuckets = numBuckets;
+  array->buckets = calloc( numBuckets, sizeof( struct _KeyValPair ) );
+  array->numBuckets = numBuckets;
 }
 
-int hashInsert( void *key, size_t keysize, void *value, HashTable *table )
+int sbAssocArrayInsert( SBAssocArray *array, void *key, size_t keysize, void *value )
 {
-  struct _KV_Pair *pair;
+  struct _KeyValPair *pair;
   unsigned i = 0;
   size_t hash_index;
 
-  if( table == NULL || key == NULL || table->buckets == NULL || 
-      table->numBuckets == 0 )
-  {
-    return -1;
-  }
+  if( !array || !key || !table->buckets || table->numBuckets == 0 )
+    return SBAssocArrayError;
 
   hash_index = _hash_func(key,keysize);
 
@@ -49,30 +47,30 @@ int hashInsert( void *key, size_t keysize, void *value, HashTable *table )
 
     if( !pair->valid )
     {
-      pair->key = key;
-      pair->keysize = keysize;
-      pair->val = value;
+      pair->pair.key = key;
+      pair->pair.keysize = keysize;
+      pair->pair.val = value;
       pair->valid = 1;
       break;
     }
 
     if( i * i >= table->numBuckets )
-      return -1;
+      return SBAssocArrayFull;
   }
 
   return 0;
 }
 
-int hashLookup( void *key, size_t keysize, void **val, HashTable *table )
+int sbAssocArrayLookup( SBAssocArray *array, void *key, size_t keysize, void **val )
 {
-  struct _KV_Pair *pair;
+  struct _KeyValPair *pair;
   unsigned i = 0;
   size_t hash_index;
 
   if( table == NULL || key == NULL || table->buckets == NULL ||
       table->numBuckets == 0 )
   {
-    return -1;
+    return SBAssocArrayError;
   }
 
   hash_index = _hash_func(key,keysize);
@@ -82,30 +80,30 @@ int hashLookup( void *key, size_t keysize, void **val, HashTable *table )
     pair = &table->buckets[(hash_index + (i*i)) % table->numBuckets];
     i++;
 
-    if( pair->valid && pair->keysize == keysize && memcmp(key, pair->key, keysize) )
+    if( pair->valid && pair->pair.keysize == keysize && memcmp(key, pair->pair.key, keysize) )
     {
-      if( pair->val )
-        *val = pair->val;
+      if( pair->pair.val )
+        *val = pair->pair.val;
 
       return 0;
     }
     if( i * i >= table->numBuckets )
-      return -1;
+      return SBAssocArrayNotFound;
   }
 
-  return -1;
+  return SBAssocArrayNotFound;
 }
 
-int hashRemove( void *key, size_t keysize, HashTable *table )
+int sbAssocArrayRemove( SBAssocArray *array, void *key, size_t keysize )
 {
-  struct _KV_Pair *pair;
+  struct _KeyValPair *pair;
   unsigned i = 0;
   size_t hash_index;
 
   if( table == NULL || key == NULL || table->buckets == NULL ||
       table->numBuckets == 0 )
   {
-    return -1;
+    return SBAssocArrayError;
   }
 
   hash_index = _hash_func(key,keysize);
@@ -115,16 +113,16 @@ int hashRemove( void *key, size_t keysize, HashTable *table )
     pair = &table->buckets[(hash_index + (i*i)) % table->numBuckets];
     i++;
 
-    if( pair->valid && pair->keysize == keysize && memcmp(key, pair->key, keysize) )
+    if( pair->valid && pair->pair.keysize == keysize && memcmp(key, pair->pair.key, keysize) )
     {
       pair->valid = 0;
       return 0;
     }
 
     if( i * i >= table->numBuckets )
-      return -1;
+      return SBArrayNotFound;
   }
 
-  return -1;
+  return SBArrayNotFound;
 }
 

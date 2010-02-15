@@ -10,11 +10,18 @@
 #include <os/signal.h>
 
 /* Video operations:
+   Low-level:
+   - putAttr( int attr, int pos )
+   - putCh( char c, int pos )
+   - putCh2( int c, int pos ) // puts character with attribute
+   - setCursorPos( int pos )
+   - setScreenOffset( int offset )
+   - showCursor( bool val )
+
+   Mid-level:
    - putChar( char c, int x, int y );
    - setCursor( int x, int y );
    - setCharPos( int x, int y );
-   - showCursor( bool val );
-   - enableCursor( bool val ); // if true, move the cursor while printing characters
    - scroll( int lines );
    - setAttr( int attrib )
    - setMode( int mode );
@@ -22,25 +29,24 @@
    - clear()
 */
 
-#define SERVER_NAME 	"video"
-#define DEVICE_NAME	"video"
-#define DEV_MAJOR	5
-#define NUM_DEVICES	1
-#define VIDEO_RAM   	0xB8000
+#define SERVER_NAME 		"video"
+#define DEVICE_NAME		"video"
+#define DEV_MAJOR		5
+#define NUM_DEVICES		1
 
-#define HTAB_WIDTH 	8
+#define HTAB_WIDTH 		8
 
-#define VID_PUTCH	0
-#define VID_GETCH	1
-#define VID_SETCURS	2
-#define VID_GET_CURS	3
-#define VID_SHOW_CURS	4
-#define VID_SCROLL	5
-#define VID_SET_ATTR	6
-#define VID_SET_MODE	7
-#define VID_RESET	8
-#define VID_CLEAR	9
-#define VID_ENAB_CURS	10
+#define VID_PUTCH		0
+#define VID_GETCH		1
+#define VID_SETCURS		2
+#define VID_GET_CURS		3
+#define VID_SHOW_CURS		4
+#define VID_SCROLL		5
+#define VID_SET_ATTR		6
+#define VID_SET_MODE		7
+#define VID_RESET		8
+#define VID_CLEAR		9
+#define VID_ENAB_CURS		10
 
 #define doCarrReturn() charXPos = 0;
 
@@ -67,9 +73,6 @@
   charXPos = ((charXPos == 0) ? maxWidth - 1 : charXPos - 1);
 
 #define setAttr( attr ) attrib = attr;
-
-#define enableCursor( value ) cursorOn = value;
-#define showCursor( value ) cursorVisible = value;
 
 char videoMsgBuffer[4096];
 
@@ -101,6 +104,90 @@ int addr_offset=0;
 void scrollToLine( unsigned line );
 void scroll( int lines );
 
+
+int setScreenOffset( int offset );
+
+int putAttr( char attr, int pos )
+{
+  char *vidmem = (char *)COLOR_TXT_ADDR;
+
+  if( pos < 0 || pos >= 0x8000 / 2 )
+    return -1;
+
+  vidmem[pos*2+1] = attr;
+  return 0;
+}
+
+int putCh( char c, int pos )
+{
+  char *vidmem = (char *)COLOR_TXT_ADDR;
+
+  if( pos < 0 || pos >= 0x8000 / 2 )
+    return -1;
+
+  vidmem[pos*2] = c;
+  return 0;
+}
+
+int putCh2( short int c, int pos )
+{
+  short int *vidmem = (short int *)COLOR_TXT_ADDR;
+
+  if( pos < || pos >= 0x8000 / 2 )
+    return -1;
+
+  vidmem[pos] = c;
+  return 0;
+}
+
+int setCursorPos( int pos )
+{
+  if( pos < 0 || pos >= 0x8000 / 2 )
+    return -1;
+
+  outByte( CRTC_INDEX, CURSOR_LOC_LOW );
+  outByte( CRTC_DATA, pos & 0xFF );
+  outByte( CRTC_INDEX, CURSOR_LOC_HIGH );
+  outByte( CRTC_DATA, pos >> 8 );
+  return 0;
+}
+
+int setScreenOffset( int offset )
+{
+  if( offset < 0 || offset >= 0x8000 )
+    return -1;
+
+  addr_offset &= 0xFFFF;
+
+  outByte( CRTC_INDEX, START_ADDRESS_LOW );
+  outByte( CRTC_DATA, addr_offset & 0xFF );
+  outByte( CRTC_INDEX, START_ADDRESS_HIGH );
+  outByte( CRTC_DATA, addr_offset >> 8 ); 
+
+  return 0;
+}
+
+int showCursor( bool val )
+{
+  byte data;
+
+  outByte( CRTC_INDEX, CURSOR_START );
+  data = inportb( CRTC_DATA );
+
+  if( val )
+    data |= 0x10;
+  else
+    data &= ~0x10;
+
+  outByte( CRTC_INDEX, CURSOR_START );
+  outByte( CRTC_DATA, data );
+
+  return 0;
+}
+
+/* ==========================================================================
+   ========================================================================== */
+
 void scroll( int lines )
 {
   if( addr_offset + lines * 80 < 0 )
@@ -110,10 +197,7 @@ void scroll( int lines )
   else
     addr_offset += lines * 80;
 
-  outByte( 0x3D4, 0x0D );
-  outByte( 0x3D5, addr_offset & 0xFF );
-  outByte( 0x3D4, 0x0C );
-  outByte( 0x3D5, addr_offset >> 8 );
+  setScreenOffset( addr_offset );
 }
 
 void scrollToLine( unsigned line )
@@ -123,10 +207,7 @@ void scrollToLine( unsigned line )
   if( addr_offset >= 0x8000 )
     addr_offset = 0x8000 - 80;
 
-  outByte( 0x3D4, 0x0D );
-  outByte( 0x3D5, addr_offset & 0xFF );
-  outByte( 0x3D4, 0x0C );
-  outByte( 0x3D5, addr_offset >> 8 );  
+  setScreenOffset( addr_offset );
 }
 
 int checkPos( int x, int y )
@@ -162,7 +243,7 @@ void printChar( char c )
 
 int putChar( register char c, int xPos, int yPos )
 {
-  char *vidmem = (char *)VIDEO_RAM;
+  char *vidmem = (char *)COLOR_TXT_ADDR;
 
   if( checkPos( xPos, yPos ) == -1 )
     return -1;
@@ -208,10 +289,7 @@ int setCursor( int xPos, int yPos )
 
     location = xPos + yPos * maxWidth;
 
-    outByte( 0x3D4, 0x0F );
-    outByte( 0x3D5, location & 0xFF );
-    outByte( 0x3D4, 0x0E );
-    outByte( 0x3D5, location >> 8 );
+    setCursorPos(location);
 
     charXPos = xPos;
     charYPos = yPos;
@@ -221,7 +299,7 @@ int setCursor( int xPos, int yPos )
 
 int setColor( int color, int xPos, int yPos )
 {
-  char *vidmem = (char *)VIDEO_RAM;
+  char *vidmem = (char *)COLOR_TXT_ADDR;
 
   if( checkPos( xPos, yPos ) == -1 )
     return -1;
@@ -250,14 +328,14 @@ void initVideo( void )
   maxHeight = 25;
   maxWidth = 80;
   maxLines = maxHeight * 8;
-  showCursor( true );
-  enableCursor( true );
+  cursorVisible = true;
+  cursorOn = true;
   setAttr( ATTRIB( GRAY, BLACK, NO_BLINK ) );
 
-  //__map( (void *)VIDEO_RAM, (void *)VIDEO_RAM, 8 );
-//  mapMem( (void *)VIDEO_RAM, (void *)VIDEO_RAM, 8, 0 );
+  //__map( (void *)COLOR_TXT_ADDR, (void *)COLOR_TXT_ADDR, 8 );
+//  mapMem( (void *)COLOR_TXT_ADDR, (void *)COLOR_TXT_ADDR, 8, 0 );
 
-//  __chioperm( 1, 0x3D4, 2 ); 	// Allocate port range
+//  __chioperm( 1, CRTC_INDEX, 2 ); 	// Allocate port range
 
   setCursor( 0, 1 );
   setCharPos( 0, 1 );

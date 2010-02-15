@@ -1,0 +1,2 @@
+Todo for keyboard driver:
+- Support multiple scancodes

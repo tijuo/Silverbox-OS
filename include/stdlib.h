@@ -13,6 +13,8 @@ typedef struct { long quot; long rem; } ldiv_t;
 #define EXIT_SUCCESS	0
 #define	EXIT_FAILURE	1
 
+#define RAND_MAX	0xFFFFFFFFUL
+
 int abs(int num);
 long labs(long n);
 

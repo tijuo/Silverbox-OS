@@ -19,6 +19,16 @@
 
 #define NUM_PTABLES     1024
 
+#define REG_NOEXIST	0
+#define REG_PHYS	1
+#define REG_FILE	2
+
+/*
+  Addresses in an address space can be non-existant, correspond to physical
+  memory, or file. An address region may be swapped out to disk.
+
+*/
+
 struct AddrRegion
 {
   struct MemRegion virtRegion;
@@ -31,6 +41,17 @@ struct AddrSpace
   void *phys_addr;
   bitmap_t bitmap[NUM_PTABLES / 8];
   struct ListType mem_region_list, tid_list;
+};
+
+struct Executable
+{
+  char *codeStart;
+  char *dataStart;
+  char *bssStart;
+
+  size_t codeLen;
+  size_t dataLen;
+  size_t bssLen;
 };
 
 struct RegionNode
