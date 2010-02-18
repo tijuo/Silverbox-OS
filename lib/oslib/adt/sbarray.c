@@ -1,16 +1,10 @@
 #include "sbarray.h"
+#include <string.h>
+#include <stdlib.h>
 #include <stdarg.h>
 
-static void shiftArray(void **ptr, int nElems, int shift);
-int sbArrayClear(SBArray *);
-SBArray *sbArrayCreate(int numElems, ...);
-int sbArrayElemAt(SBArray *array, int pos, void **elem);
-int sbArrayFind(SBArray *array, void *elem);
-int sbArrayInsert(SBArray *array, void *ptr, int pos);
-int sbArrayLength(SBArray *array);
-int sbArrayPop(SBArray *array, void **ptr);
-int sbArrayPush(SBArray *array, void *ptr);
-int sbArrayRemove(SBArray *array, int pos);
+static void shiftArray(int **ptr, int nElems, int shift);
+static int adjustArrayCapacity(SBArray *array);
 
 static void shiftArray(int **ptr, int nElems, int shift)
 {
@@ -37,6 +31,8 @@ static int adjustArrayCapacity(SBArray *array)
 
     if( !result )
       return -1;
+
+    array->ptrs = result;
   }
   else if( (int)(array->nElems * 1.6) < array->capacity )
   {
@@ -45,6 +41,8 @@ static int adjustArrayCapacity(SBArray *array)
 
     if( !result )
       return -1;
+
+    array->ptrs = result;
   }
 
   return 0;
@@ -63,8 +61,6 @@ int sbArrayClear(SBArray *array)
 
 int sbArrayCopy(const SBArray *array, SBArray *newArray)
 {
-  SBArray *newArray;
-
   if( !array || !newArray )
     return SBArrayError;
 
@@ -85,14 +81,22 @@ int sbArrayCopy(const SBArray *array, SBArray *newArray)
   return 0;
 }
 
+int sbArrayCount(const SBArray *array)
+{
+  if( !array )
+    return SBArrayError;
+  else
+    return array->nElems;
+}
+
 int sbArrayCreate(SBArray *array, int numElems, ...)
 {
-  va_args args;
+  va_list args;
 
   if( !array || numElems < 0 )
     return SBArrayError;
 
-  va_start(args);
+  va_start(args, numElems);
 
   array->nElems = 0;
   array->capacity = numElems + 2 > (int)(numElems * 1.5) ? 
@@ -122,7 +126,8 @@ int sbArrayDelete(SBArray *array)
     return SBArrayError;
 
   free(array->ptrs);
-  free(array);
+
+  array->ptrs = NULL;
   array->capacity = 0;
   array->nElems = 0;
 
@@ -134,7 +139,7 @@ int sbArrayElemAt(const SBArray *array, int pos, void **elem)
   if( !array )
     return SBArrayError;
 
-  if( pos >= nElems || pos < 0 )
+  if( pos >= array->nElems || pos < 0 )
     return SBArrayNotFound;
 
   if( elem )
@@ -157,6 +162,8 @@ int sbArrayFind(const SBArray *array, void *elem)
   return SBArrayNotFound;
 }
 
+/* XXX: Warning: This does not copy the pointer data into the array. */
+
 int sbArrayInsert(SBArray *array, void *ptr, int pos)
 {
   int newSize;
@@ -168,8 +175,14 @@ int sbArrayInsert(SBArray *array, void *ptr, int pos)
 
   if( newSize >= array->capacity )
   {
+    void *ptr;
     array->capacity = (int)(newSize * 1.5);
-    realloc(array->ptrs, array->capacity * sizeof(int *));
+    ptr = realloc(array->ptrs, array->capacity * sizeof(int *));
+
+    if( ptr == NULL )
+      return SBArrayFailed;
+
+    array->ptrs = ptr;
   }
 
   if( pos >= array->nElems )
@@ -188,14 +201,6 @@ int sbArrayInsert(SBArray *array, void *ptr, int pos)
   }
 
   return 0;
-}
-
-int sbArrayLength(const SBArray *array)
-{
-  if( !array )
-    return SBArrayError;
-  else
-    return array->nElems;
 }
 
 int sbArrayPop(SBArray *array, void **ptr)

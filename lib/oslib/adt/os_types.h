@@ -3,6 +3,7 @@
 
 #include "sbarray.h"
 #include "sbstring.h"
+#include "sbassocarray.h"
 
 struct _SBRange
 {

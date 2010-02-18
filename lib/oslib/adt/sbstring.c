@@ -1,11 +1,13 @@
 #include "sbstring.h"
+#include <string.h>
+#include <stdlib.h>
 
 int sbStringCharAt(const SBString *str, int index, void *c)
 {
   if( !str || index < 0 || index >= str->length || !c )
     return SBStringError;
 
-  memcpy(c, (void *)(str->data + index * str->width), str->charWidth );
+  memcpy(c, (void *)(str->data + index * str->charWidth), str->charWidth );
   return 0;
 }
 
@@ -36,6 +38,8 @@ int sbStringConcat(SBString *str, const SBString *addend)
     else
       return SBStringFailed;
   }
+  else
+    str->data = buf;
 
   memcpy( str->data + str->length * str->charWidth,
            addend->data, addend->length * addend->charWidth );
@@ -90,7 +94,7 @@ int sbStringCreate(SBString *sbString, const char *str, int width)
   return 0;
 }
 
-int SBStringDelete(SBString *sbString)
+int sbStringDelete(SBString *sbString)
 {
   if( sbString == NULL )
     return SBStringError;
@@ -102,7 +106,7 @@ int SBStringDelete(SBString *sbString)
   return 0;
 }
 
-int SBStringLength(const SBString *str)
+int sbStringLength(const SBString *str)
 {
   if(!str)
     return SBStringError;

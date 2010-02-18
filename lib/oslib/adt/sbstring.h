@@ -18,7 +18,7 @@ int sbStringCharWidth(const SBString *str);
 int sbStringConcat(SBString *str, const SBString *addend);
 int sbStringCopy(const SBString *str, SBString *newStr);
 int sbStringCreate(SBString *sbString, const char *str, int width);
-int SBStringDelete(SBString *sbString);
-int SBStringLength(const SBString *str);
+int sbStringDelete(SBString *sbString);
+int sbStringLength(const SBString *str);
 
 #endif /* SBSTRING_H */

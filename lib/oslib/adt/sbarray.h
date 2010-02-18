@@ -15,12 +15,12 @@ typedef struct _SBArray SBArray;
 
 int sbArrayClear(SBArray *);
 int sbArrayCopy(const SBArray *array, SBArray *newArray);
+int sbArrayCount(const SBArray *array);
 int sbArrayCreate(SBArray *array, int numElems, ...);
 int sbArrayDelete(SBArray *array);
 int sbArrayElemAt(const SBArray *array, int pos, void **elem);
 int sbArrayFind(const SBArray *array, void *elem);
 int sbArrayInsert(SBArray *array, void *ptr, int pos);
-int sbArrayLength(const SBArray *array);
 int sbArrayPop(SBArray *array, void **ptr);
 int sbArrayPush(SBArray *array, void *ptr);
 int sbArrayRemove(SBArray *array, int pos);
