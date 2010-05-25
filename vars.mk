@@ -1,6 +1,6 @@
 # Set PREFIX to the path of the source dir (this one)
 
-PREFIX	=/home/tiju/silverbox-os
+PREFIX	=$(SB_PREFIX)
 
 INC_DIR	=$(PREFIX)/include
 CC	=gcc

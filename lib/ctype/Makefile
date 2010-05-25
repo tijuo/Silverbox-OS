@@ -8,4 +8,4 @@ all: $(OBJ)
 include ../../vars.mk
 # DO NOT DELETE
 
-ctype.o: /home/tiju/silverbox-os/include/ctype.h
+ctype.o: /home/tiju/Silverbox-OS/include/ctype.h

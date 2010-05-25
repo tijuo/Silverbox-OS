@@ -9,7 +9,7 @@
 #define MSG_PROTO_DEVMGR	2
 #define MSG_PROTO_DEVICE	3
 #define MSG_PROTO_LONG		4
-#define MSG_PROTO_FS		5
+#define MSG_PROTO_VFS		5
 
 struct Message
 {

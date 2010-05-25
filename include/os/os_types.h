@@ -1,9 +1,9 @@
 #ifndef OS_TYPES_H
 #define OS_TYPES_H
 
-#include "sbarray.h"
-#include "sbstring.h"
-#include "sbassocarray.h"
+#include <os/ostypes/sbarray.h>
+#include <os/ostypes/sbstring.h>
+#include <os/ostypes/sbassocarray.h>
 
 struct _SBRange
 {

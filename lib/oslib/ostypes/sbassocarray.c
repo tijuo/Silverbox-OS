@@ -1,4 +1,4 @@
-#include "sbassocarray.h"
+#include <os/ostypes/sbassocarray.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -52,6 +52,8 @@ int sbAssocArrayCreate( SBAssocArray *array, size_t numBuckets )
   return 0;
 }
 
+/* Warning: Key and Value are not freed */
+
 int sbAssocArrayDelete( SBAssocArray *array )
 {
   if( !array )
@@ -61,8 +63,9 @@ int sbAssocArrayDelete( SBAssocArray *array )
   {
     free(array->buckets);
     array->buckets = NULL;
-    array->numBuckets = 0;
   }
+
+  array->numBuckets = 0;
 
   return 0;
 }
@@ -70,13 +73,16 @@ int sbAssocArrayDelete( SBAssocArray *array )
 /* XXX: Warning: This assumes that the key will stay in memory. It does not
    copy the key! */
 
-int sbAssocArrayInsert( SBAssocArray *array, void *key, size_t keysize, void *value )
+int sbAssocArrayInsert( SBAssocArray *array, void *key, size_t keysize, 
+                        void *value, size_t valsize )
 {
   struct _KeyValPair *pair;
   unsigned i = 0;
   size_t hash_index;
 
-  if( !array || !key || !array->buckets || array->numBuckets == 0 )
+  if( !array || !key || !array->buckets || array->numBuckets == 0 || keysize == 0 )
+    return SBAssocArrayError;
+  else if( value == NULL && valsize != 0 )
     return SBAssocArrayError;
 
   hash_index = _hash_func(key,keysize);
@@ -84,56 +90,116 @@ int sbAssocArrayInsert( SBAssocArray *array, void *key, size_t keysize, void *va
   while( 1 )
   {
     pair = &array->buckets[(hash_index + (i*i)) % array->numBuckets];
-    i++;
 
     if( !pair->valid )
     {
       pair->pair.key = key;
-      pair->pair.keysize = keysize;
       pair->pair.value = value;
+
+      pair->pair.keysize = keysize;
+      pair->pair.valsize = valsize;
       pair->valid = 1;
       break;
     }
 
     if( i * i >= array->numBuckets )
       return SBAssocArrayFull;
+
+    i++;
   }
 
   return 0;
 }
 
-int sbAssocArrayLookup( const SBAssocArray *array, void *key, size_t keysize, void **val )
+int sbAssocArrayKeys( const SBAssocArray *array, SBKey **keys, size_t *numKeys )
+{
+  size_t keyCount=0;
+  struct _KeyValPair *kvp;
+
+  if( !array )
+    return SBAssocArrayError;
+
+  if( keys )
+    *keys = NULL;
+
+  if( !array->buckets )
+  {
+    if( numKeys )
+      numKeys = 0;
+
+    return SBAssocArrayFailed;
+  }
+
+  kvp = (struct _KeyValPair *)&array->buckets;
+
+  for( unsigned i=0; i < array->numBuckets; i++ )
+  {
+    if( kvp->valid )
+    {
+      keyCount++;
+
+      if( keys )
+      {
+        *keys = realloc(*keys, keyCount * sizeof(SBKey));
+
+        if( !*keys )
+        {
+          *numKeys = 0;
+
+          return SBAssocArrayFailed;
+        }
+
+        keys[i]->key = kvp->pair.key;
+        keys[i]->keysize = kvp->pair.keysize;
+      }
+    }
+  }
+  return 0;
+}
+
+int sbAssocArrayLookup( const SBAssocArray *array, void *key, size_t keysize, 
+                        void **val, size_t *valsize )
 {
   struct _KeyValPair *pair;
   unsigned i = 0;
   size_t hash_index;
 
-  if( array == NULL || key == NULL || array->buckets == NULL ||
-      array->numBuckets == 0 )
-  {
+  if( array == NULL || key == NULL )
     return SBAssocArrayError;
-  }
+  else if( array->buckets == NULL || array->numBuckets == 0 )
+    return SBAssocArrayNotFound;
 
   hash_index = _hash_func(key,keysize);
 
   while( 1 )
   {
     pair = &array->buckets[(hash_index + (i*i)) % array->numBuckets];
-    i++;
 
-    if( pair->valid && pair->pair.keysize == keysize && memcmp(key, pair->pair.key, keysize) == 0 )
+    if( pair->valid && pair->pair.keysize == keysize && 
+          memcmp(key, pair->pair.key, keysize) == 0 )
     {
       if( pair->pair.value )
-        *(int **)val = (int *)pair->pair.value;
+      {
+        if( val )
+          *(int **)val = (int *)pair->pair.value;
 
+        if( valsize )
+          *valsize = pair->pair.valsize;
+      }
       return 0;
     }
+
     if( i * i >= array->numBuckets )
       return SBAssocArrayNotFound;
+
+    i++;
   }
 
   return SBAssocArrayNotFound;
 }
+
+/* Since these associative arrays are of fixed size, two arrays can be
+   merged together to form a larger one. */
 
 int sbAssocArrayMerge( const SBAssocArray *array1, const SBAssocArray *array2,
                        SBAssocArray *newArray )
@@ -152,7 +218,8 @@ int sbAssocArrayMerge( const SBAssocArray *array1, const SBAssocArray *array2,
     if( array1->buckets[i].valid )
     {
       sbAssocArrayInsert(newArray, array1->buckets[i].pair.key,
-         array1->buckets[i].pair.keysize, array1->buckets[i].pair.value);
+         array1->buckets[i].pair.keysize, array1->buckets[i].pair.value,
+         array1->buckets[i].pair.valsize);
     }
   }
 
@@ -161,14 +228,16 @@ int sbAssocArrayMerge( const SBAssocArray *array1, const SBAssocArray *array2,
     if( array2->buckets[i].valid )
     {
       sbAssocArrayInsert(newArray, array2->buckets[i].pair.key,
-         array2->buckets[i].pair.keysize, array2->buckets[i].pair.value);
+         array2->buckets[i].pair.keysize, array2->buckets[i].pair.value,
+         array2->buckets[i].pair.valsize);
     }
   }
 
   return 0;
 }
 
-int sbAssocArrayRemove( SBAssocArray *array, void *key, size_t keysize )
+int sbAssocArrayRemove( SBAssocArray *array, void *key, size_t keysize,
+   void **value, size_t *valsize )
 {
   struct _KeyValPair *pair;
   unsigned i = 0;
@@ -185,18 +254,25 @@ int sbAssocArrayRemove( SBAssocArray *array, void *key, size_t keysize )
   while( 1 )
   {
     pair = &array->buckets[(hash_index + (i*i)) % array->numBuckets];
-    i++;
 
-    if( pair->valid && pair->pair.keysize == keysize && memcmp(key, pair->pair.key, keysize) == 0 )
+    if( pair->valid && pair->pair.keysize == keysize && 
+          memcmp(key, pair->pair.key, keysize) == 0 )
     {
+      if( value )
+        *(int **)value = (int *)pair->pair.value;
+
+      if( valsize )
+        *valsize = pair->pair.valsize;
+
       pair->valid = 0;
       return 0;
     }
 
     if( i * i >= array->numBuckets )
       return SBAssocArrayNotFound;
+
+    i++;
   }
 
   return SBAssocArrayNotFound;
 }
-

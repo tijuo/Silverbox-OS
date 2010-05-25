@@ -2,7 +2,7 @@
 
 # Compiles and links a C file into an executable
 
-source `dirname $0`/variables.sh
+source `dirname $0`/set_variables.sh
 
 C_STUB="cstart"
 SIG="_sig"

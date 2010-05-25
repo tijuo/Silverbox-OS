@@ -62,7 +62,7 @@ extern "C" {
 
 #define KERNEL_TID		(tid_t)0
 #define NULL_TID		(tid_t)0xFFFF
-#define NULL_SHMID		(shmid_t)-1  
+#define NULL_SHMID		(shmid_t)-1
 
 typedef unsigned long shmid_t;
 
@@ -92,7 +92,7 @@ struct PageMapRecord
   size_t size;
 };
 
-struct RegisterState 
+struct RegisterState
 {
   dword edi;
   dword esi;

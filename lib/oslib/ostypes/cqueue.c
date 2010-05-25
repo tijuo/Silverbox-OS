@@ -1,4 +1,4 @@
-#include <os/adt/cqueue.h>
+#include <os/ostypes/cqueue.h>
 #include <stdlib.h>
 #include <string.h>
 

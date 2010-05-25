@@ -1,4 +1,4 @@
-#include "sbarray.h"
+#include <os/ostypes/sbarray.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -148,6 +148,8 @@ int sbArrayElemAt(const SBArray *array, int pos, void **elem)
   return 0;
 }
 
+// Returns the index of the first occurence of elem (if found)
+
 int sbArrayFind(const SBArray *array, void *elem)
 {
   if( !array )
@@ -203,6 +205,8 @@ int sbArrayInsert(SBArray *array, void *ptr, int pos)
   return 0;
 }
 
+// Pops an element from the end of the array
+
 int sbArrayPop(SBArray *array, void **ptr)
 {
   if( !array )
@@ -219,6 +223,8 @@ int sbArrayPop(SBArray *array, void **ptr)
 
   return 0;
 }
+
+// Pushes an element to the end of the array
 
 int sbArrayPush(SBArray *array, void *ptr)
 {
@@ -254,6 +260,9 @@ int sbArrayRemove(SBArray *array, int pos)
   return 0;
 }
 
+/* Returns the subarray in an array between positions 'start' (inclusive) 
+   and 'end' (non-inclusive) */
+
 int sbArraySlice(const SBArray *array, int start, int end, SBArray *newArray)
 {
   if( !array || !newArray )
@@ -264,6 +273,8 @@ int sbArraySlice(const SBArray *array, int start, int end, SBArray *newArray)
 
   if( end > array->nElems )
     end = array->nElems;
+
+  sbArrayDelete(&newArray);
 
   newArray->ptrs = NULL;
   newArray->capacity = 0;

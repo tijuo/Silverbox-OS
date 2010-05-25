@@ -9,4 +9,4 @@ include ../../vars.mk
 
 # DO NOT DELETE
 
-errno.o: /home/tiju/silverbox-os/include/errno.h
+errno.o: /home/tiju/Silverbox-OS/include/errno.h

@@ -133,7 +133,7 @@ int putCh2( short int c, int pos )
 {
   short int *vidmem = (short int *)COLOR_TXT_ADDR;
 
-  if( pos < || pos >= 0x8000 / 2 )
+  if( pos < 0 || pos >= 0x8000 / 2 )
     return -1;
 
   vidmem[pos] = c;
@@ -172,7 +172,7 @@ int showCursor( bool val )
   byte data;
 
   outByte( CRTC_INDEX, CURSOR_START );
-  data = inportb( CRTC_DATA );
+  data = inByte( CRTC_DATA );
 
   if( val )
     data |= 0x10;

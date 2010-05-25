@@ -3,7 +3,7 @@
 # This copies executables into the appropriate directory on the drive
 # Assumes that SB_MNT_PT is an existing mount point for the drive image
 
-source `dirname $0`/variables.sh
+source `dirname $0`/set_variables.sh
 
 if [ $# -lt 1 ]; then
   echo "Usage: $0 <file1> [file2] ... [fileN]";

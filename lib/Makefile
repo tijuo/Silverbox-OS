@@ -9,11 +9,6 @@ all:
 	make libc.a
 	make libos.a
 
-gdsl: libc.a
-	cd gdsl-1.4;
-	./configure CC=gcc CFLAGS="-I /home/silverbox-os/include -nostdlib -fno-builtin -nostartfiles -ffreestanding -std=gnu99";
-	make
-
 ctype:
 	make -C $@ all
 

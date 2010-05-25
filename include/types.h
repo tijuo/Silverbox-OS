@@ -31,15 +31,19 @@ typedef u64 qword;
 typedef u8  uchar;
 typedef uchar uchar8;
 typedef u16 uchar16;
+typedef u16 ushort;
 typedef u16 uint16;
 typedef u32 uint32;
+typedef u32 uint;
 typedef u64 uint64;
+typedef u64 uquad;
 
 typedef s8 char8;
 typedef s16 char16;
 typedef s16 int16;
 typedef s32 int32;
 typedef s64 int64;
+typedef s64 quad;
 
 typedef unsigned short int tid_t;
 
