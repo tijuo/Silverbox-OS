@@ -3,15 +3,10 @@
 #include <oslib.h>
 #include <string.h>
 
-#define STACK_TABLE	0xE0000000
-#define TEMP_PTABLE	0xE0000000
-#define TEMP_PAGE	0x10000
-#define KPHYS_START	0x100000
-
 extern int _mapMem( void *phys, void *virt, int pages, int flags, void *pdir );
 
 void dump_regs( int cr2, struct ThreadInfo *info );
-void handle_exception( tid_t tid, int cr2 );
+void handle_exception( tid_t tid, unsigned int cr2 );
 
 void dump_regs( int cr2, struct ThreadInfo *info )
 {
@@ -69,7 +64,7 @@ void dump_regs( int cr2, struct ThreadInfo *info )
   print(toHexString(info->state.userSs));
 }
 
-void handle_exception( tid_t tid, int cr2 )
+void handle_exception( tid_t tid, unsigned int cr2 )
 {
   struct ThreadInfo thread_info;
 
@@ -87,7 +82,8 @@ void handle_exception( tid_t tid, int cr2 )
                (void *)(cr2 & ~0xFFF), 1, 0, (void *)thread_info.addr_space );
       __end_page_fault(thread_info.tid);
     }
-    else if( (thread_info.state.error_code & 0x05) && (cr2 & ~0x3FFFFF) == STACK_TABLE ) /* XXX: This can be done better. Will not work if there aren't
+    else if( (thread_info.state.error_code & 0x05) && 
+             (cr2 & ~0x3FFFFF) == STACK_TABLE ) /* XXX: This can be done better. Will not work if there aren't
                                                                                        any pages in the stack page! */
     {
       _mapMem( alloc_phys_page(NORMAL, (void *)thread_info.addr_space), 

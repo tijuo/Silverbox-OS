@@ -4,7 +4,7 @@
 
 extern void mapMemRange( void *virt, int pages );
 
-/* This doesn't handle negative increments. */
+/* XXX: This doesn't handle negative increments yet. */
 
 void *sbrk( int increment )
 {
@@ -14,14 +14,17 @@ void *sbrk( int increment )
   if( heapStart == NULL )
   {
     heapStart = heapEnd = prevHeap = (void *)HEAP_START;
-    mapMemRange((void *)heapStart, 1);
+    mapMemRange(heapStart, 1);
   }
 
   if( increment == 0 )
     return prevHeap;
 
-  heapEnd += increment;
+  heapEnd = (void *)((unsigned)heapEnd + increment);
   heapSize += increment;
+
+  if( increment < 0 && (unsigned)-increment > heapSize )
+    return (void *)-1;
 
   pages = ((unsigned)heapEnd / PAGE_SIZE) - ((unsigned)prevHeap / PAGE_SIZE);
 

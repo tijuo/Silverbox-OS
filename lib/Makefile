@@ -35,11 +35,9 @@ time:
 
 libc.a: $(LIBCDIRS)
 	for dir in $(LIBCDIRS); do $(AR) $(ARFLAGS) $@ $$dir/*.o; done
-	ranlib $@
 
 libos.a:$(LIBOSDIR)
 	for dir in $(LIBOSDIR); do $(AR) $(ARFLAGS) $@ $$dir/*.o; done
-	ranlib $@
 
 dep:
 	make depend

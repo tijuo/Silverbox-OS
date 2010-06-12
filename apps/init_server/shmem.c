@@ -8,7 +8,7 @@
 
 extern void *list_malloc( size_t );
 extern void list_free(void * );
-extern void _mapMem( void *phys, void *virt, int pages, int flags, void *pdir );
+extern int _mapMem( void *phys, void *virt, int pages, int flags, void *pdir );
 
 int init_shmem( shmid_t shmid, tid_t owner, unsigned pages, bool ro_perm )
 {

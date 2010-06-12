@@ -22,14 +22,39 @@ static unsigned long _hash_func( unsigned char *key, size_t keysize )
 
 int sbAssocArrayCopy( const SBAssocArray *array, SBAssocArray *copy )
 {
+  struct _KeyValPair *pair, *copyPair;
+
   if( !array || !copy )
     return SBAssocArrayError;
 
   if( sbAssocArrayCreate( copy, array->numBuckets ) != 0 )
     return SBAssocArrayFailed;
 
-  memcpy( copy->buckets, array->buckets, 
-          array->numBuckets * sizeof( struct _KeyValPair ) );
+  pair = array->buckets;
+
+  for( unsigned i=0; i < array->numBuckets; i++, pair++ )
+  {
+    if( pair->valid )
+    {
+      copyPair = &copy->buckets[i];
+
+      copyPair->pair.value = pair->pair.value;
+      copyPair->pair.valsize = pair->pair.valsize;
+      copyPair->pair.keysize = pair->pair.keysize;
+      copyPair->pair.key = malloc(pair->pair.keysize);
+
+      memcpy(copyPair->pair.key, pair->pair.key, pair->pair.keysize);
+
+      if( !copyPair->pair.key )
+      {
+        sbAssocArrayDelete( copy );
+        return SBAssocArrayFailed;
+      }
+
+      copyPair->valid = 1;
+    }
+    
+  }
 
   return 0;
 }
@@ -52,7 +77,7 @@ int sbAssocArrayCreate( SBAssocArray *array, size_t numBuckets )
   return 0;
 }
 
-/* Warning: Key and Value are not freed */
+/* XXX: Warning: Keys and Values are not freed */
 
 int sbAssocArrayDelete( SBAssocArray *array )
 {
@@ -93,7 +118,13 @@ int sbAssocArrayInsert( SBAssocArray *array, void *key, size_t keysize,
 
     if( !pair->valid )
     {
-      pair->pair.key = key;
+      pair->pair.key = malloc(keysize);
+
+      if( !pair->pair.key )
+        return SBAssocArrayFailed;
+
+      memcpy(pair->pair.key, key, keysize);
+
       pair->pair.value = value;
 
       pair->pair.keysize = keysize;
@@ -178,14 +209,11 @@ int sbAssocArrayLookup( const SBAssocArray *array, void *key, size_t keysize,
     if( pair->valid && pair->pair.keysize == keysize && 
           memcmp(key, pair->pair.key, keysize) == 0 )
     {
-      if( pair->pair.value )
-      {
-        if( val )
-          *(int **)val = (int *)pair->pair.value;
+      if( val )
+        *(int **)val = (int *)pair->pair.value;
 
-        if( valsize )
-          *valsize = pair->pair.valsize;
-      }
+      if( valsize )
+        *valsize = pair->pair.valsize;
       return 0;
     }
 
@@ -263,6 +291,8 @@ int sbAssocArrayRemove( SBAssocArray *array, void *key, size_t keysize,
 
       if( valsize )
         *valsize = pair->pair.valsize;
+
+      free(pair->pair.key);
 
       pair->valid = 0;
       return 0;

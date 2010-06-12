@@ -1,13 +1,12 @@
 #ifndef PHYS_ALLOC
 #define PHYS_ALLOC
 
-#include "pagersrv.h"
+#include "initsrv.h"
 #include "list.h"
+#include "paging.h"
 #include <stddef.h>
 #include <stdbool.h>
 
-#define PAGE_SIZE       4096
-#define PTABLE_SIZE     4194304
 #define NULL_PADDR      (void *)0xFFFFFFFF
 
 struct PageList

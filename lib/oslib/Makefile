@@ -1,6 +1,5 @@
-SRC     =strings.c sbrk.c region.c bitmap.c \
-	services.c longmsg.c fat_lib.c fat_alloc.c \
-	driver.c console.c
+SRC     =strings.c sbrk.c region.c bitmap.c elf.c \
+	services.c longmsg.c driver.c console.c
 
 AS_SRC	=mutex.s state.s
 AS_OBJ	=$(AS_SRC:.s=.o)
@@ -61,6 +60,13 @@ services.o: /home/tiju/Silverbox-OS/include/os/services.h
 services.o: /home/tiju/Silverbox-OS/include/os/device.h
 services.o: /home/tiju/Silverbox-OS/include/os/region.h
 services.o: /home/tiju/Silverbox-OS/include/os/message.h
+services.o: /home/tiju/Silverbox-OS/include/os/vfs.h
+services.o: /home/tiju/Silverbox-OS/include/os/file.h
+services.o: /home/tiju/Silverbox-OS/include/os/os_types.h
+services.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
+services.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
+services.o: /home/tiju/Silverbox-OS/include/stdlib.h
+services.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
 services.o: /home/tiju/Silverbox-OS/include/string.h
 services.o: /home/tiju/Silverbox-OS/include/os/dev_interface.h
 longmsg.o: /home/tiju/Silverbox-OS/include/oslib.h
@@ -72,32 +78,6 @@ longmsg.o: /home/tiju/Silverbox-OS/include/os/mutex.h
 longmsg.o: /home/tiju/Silverbox-OS/include/os/message.h
 longmsg.o: /home/tiju/Silverbox-OS/include/string.h
 longmsg.o: /home/tiju/Silverbox-OS/include/os/io.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/os/fatfs.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/types.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/stddef.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/stdbool.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/os/device.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/oslib.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/ipc.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/os/mutex.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/string.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/stdlib.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/ctype.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/os/vfs.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/os/file.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/os/dev_interface.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/os/services.h
-fat_lib.o: /home/tiju/Silverbox-OS/include/os/region.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/os/fatfs.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/types.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/stddef.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/stdbool.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/os/device.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/oslib.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/ipc.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/os/mutex.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/string.h
-fat_alloc.o: /home/tiju/Silverbox-OS/include/stdlib.h
 driver.o: /home/tiju/Silverbox-OS/include/oslib.h
 driver.o: /home/tiju/Silverbox-OS/include/types.h
 driver.o: /home/tiju/Silverbox-OS/include/stddef.h

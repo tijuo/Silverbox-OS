@@ -1,12 +1,21 @@
 #ifndef PAGERSRV_H
 #define PAGERSRV_H
 
+#include "addr_space.h"
 #include <types.h>
 
 void *allocEnd;
 unsigned int availBytes;
 
 int sysID;
+
+struct AddrSpace pager_addr_space;
+
+struct ProgramArgs
+{
+  char *data;
+  int length;
+};
 
 struct BootInfo
 {
@@ -51,7 +60,7 @@ char *server_name;
 struct BootInfo *boot_info;
 struct MemoryArea *memory_areas;
 struct BootModule *boot_modules;
-unsigned int *page_dir;
+unsigned int *page_dir; // The initial server page directory
 unsigned int total_pages;
 
 void mapVirt( void *virt, int pages );

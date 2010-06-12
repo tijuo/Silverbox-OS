@@ -61,7 +61,7 @@ int init_page_lists(void *table_address, unsigned num_pages, void *start_used_ad
         used_lists[page_type].head = &phys_page_list[i];
     }
     else
-    { 
+    {
       last_phys_page = free_lists[page_type].tail;
 
       if( free_lists[page_type].head == NULL )
@@ -77,7 +77,7 @@ int init_page_lists(void *table_address, unsigned num_pages, void *start_used_ad
     if( is_used )
       used_lists[page_type].tail = &phys_page_list[i];
     else
-      free_lists[page_type].tail = &phys_page_list[i];    
+      free_lists[page_type].tail = &phys_page_list[i];
   }
 
   return 0;
@@ -123,7 +123,6 @@ static void _remove_phys_page(unsigned page_num, struct PageList *page_list)
 
 static int _alloc_phys_page(enum PageType type)
 {
-  
   struct PhysPage *page_ptr = free_lists[type].head;
   unsigned page_num;
 
@@ -141,7 +140,7 @@ static int _alloc_phys_page(enum PageType type)
 static int _free_phys_page(unsigned page_num)
 {
   struct PhysPage *page_ptr;
-  
+
   if( page_num >= total_phys_pages )
     return -1;
 
@@ -155,7 +154,7 @@ static int _free_phys_page(unsigned page_num)
     return 0;
   }
   else
-    return -1;  
+    return -1;
 }
 
 void *alloc_phys_page(enum PageType type, void *addr_space)
@@ -175,7 +174,7 @@ void *alloc_phys_page(enum PageType type, void *addr_space)
   else
   {
     phys_page_list[page_num].pdir_page = (unsigned long)addr_space / PAGE_SIZE;
-    return (void *)(page_num * PAGE_SIZE);  
+    return (void *)(page_num * PAGE_SIZE);
   }
 }
 
