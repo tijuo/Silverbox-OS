@@ -2,6 +2,7 @@
 #include <os/services.h>
 #include <os/message.h>
 #include <os/region.h>
+#include <os/vfs.h>
 #include <string.h>
 #include <os/dev_interface.h>
 #include <os/device.h>
@@ -40,9 +41,10 @@ int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
 
 int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
 
-
+/*
 int allocatePortRange( int first_port, int num_ports );
 int releasePortRange( int first_port, int num_ports );
+*/
 
 /*
 void handleConnection( struct Message *msg )
@@ -341,6 +343,78 @@ int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs )
     *fs = reply->entry.fs;
 
   return reply->reply_status;
+}
+
+int mountFs( int device, const char fs[12], const char *path, int flags )
+{
+  struct FsReqHeader *req;
+  volatile struct FsReplyHeader *reply;
+  volatile struct Message msg;
+  size_t pathLen;
+  struct MountArgs *mountArgs;
+  tid_t vfsServer;
+
+  req = (struct FsReqHeader *)msg.data;
+  reply = (volatile struct FsReplyHeader *)msg.data;
+
+  if( path == NULL )
+    return -1;
+
+  pathLen = strlen(path);
+
+  req->request = MOUNT;
+  req->pathLen = pathLen;
+  req->argLen = sizeof(struct MountArgs);
+
+  memcpy( req->data, path, pathLen );
+  mountArgs = (struct MountArgs *)(req->data + pathLen);
+
+  mountArgs->device = device;
+  memcpy(mountArgs->fs, fs, sizeof fs);
+  mountArgs->flags = flags;
+
+  msg.length = sizeof *req;
+  msg.protocol = MSG_PROTO_VFS;
+
+  vfsServer = lookupName("vfs", strlen("vfs"));
+
+  while( __send( vfsServer, (struct Message *)&msg, 0 ) == 2 );
+  while( __receive( vfsServer, (struct Message *)&msg, 0 ) == 2 );
+
+  return reply->reply;
+}
+
+int unmountFs( const char *path )
+{
+  struct FsReqHeader *req;
+  volatile struct FsReplyHeader *reply;
+  volatile struct Message msg;
+  size_t pathLen;
+  tid_t vfsServer;
+
+  req = (struct FsReqHeader *)msg.data;
+  reply = (volatile struct FsReplyHeader *)msg.data;
+
+  if( path == NULL )
+    return -1;
+
+  pathLen = strlen(path);
+
+  req->request = UNMOUNT;
+  req->pathLen = pathLen;
+  req->argLen = 0;
+
+  memcpy( req->data, path, pathLen );
+
+  msg.length = sizeof *req;
+  msg.protocol = MSG_PROTO_VFS;
+
+  vfsServer = lookupName("vfs", strlen("vfs"));
+
+  while( __send( vfsServer, (struct Message *)&msg, 0 ) == 2 );
+  while( __receive( vfsServer, (struct Message *)&msg, 0 ) == 2 );
+
+  return reply->reply;
 }
 
 int allocatePortRange( int first_port, int num_ports )

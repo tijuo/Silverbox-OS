@@ -125,6 +125,9 @@ int registerName( const char *name, size_t len );
 int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
 int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
 
+int mountFs( int device, const char fs[12], const char *path, int flags );
+int unmountFs( const char *path );
+
 int allocatePortRange( int first_port, int num_ports );
 int releasePortRange( int first_port, int num_ports );
 

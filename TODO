@@ -1,8 +1,10 @@
 Kernel:
 
-Set thread's IO permissions based on TSS instead of the EFLAGS IOPL
-Allow lazy TSS IO bitmap switching
-Let the initial server be determined by an input from a boot parameter
+Fix conflict with sbrk()s in oslib and init server
+
+DONE: Set thread's IO permissions based on TSS instead of the EFLAGS IOPL
+DONE: Allow lazy TSS IO bitmap switching
+DONE: Let the initial server be determined by an input from a boot parameter
 Implement APIC timer
 Pass GRUB information to initial server
 Only allow the initial server to perform privileged system calls

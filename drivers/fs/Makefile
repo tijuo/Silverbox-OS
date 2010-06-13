@@ -1,7 +1,19 @@
-DIR	=
+SRC	=vfs.c
+EXE	=vfs.exe
 
-all:
-	for i in $(DIR); do cd $$i; make; cd ..; done
+include ../drivers.mk
+
+all:    $(SRC) $(EXE)
+	$(PREFIX)/tools/makec.sh $(SRC) $(EXE)
+
+#include ../vars.mk
+
+install: $(EXE)
+	$(PREFIX)/tools/copy_files.sh $(EXE)
 
 clean:
-	for i in $(DIR); do cd $$i; make clean; done
+	for i in $(DIRS); do make -C $$i clean; done
+	rm -f *.o
+	rm -f *.dmp
+	rm -f *.dbg
+	rm -f *.exe

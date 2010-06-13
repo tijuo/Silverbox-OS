@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <os/vfs.h>
 #include <os/services.h>
-#include <os/fatfs.h>
+// #include <os/fatfs.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -229,14 +229,15 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
 {
   if( strncmp( command, "help", 4 ) == 0 || strncmp( command, "?", 1 ) == 0 )
   {
-    printf("read <path> - Read the contents of a file\n");
-    printf("ld [path] - List the contents of a directory\n");
-    printf("cd <path> - Change current directory\n");
+//    printf("read <path> - Read the contents of a file\n");
+ //   printf("ld [path] - List the contents of a directory\n");
+ //   printf("cd <path> - Change current directory\n");
     printf("wd - Display the current working directory\n");
     printf("echo <msg> - Prints a message\n");
     printf("time - Displays the current time\n");
     printf("help OR ? - Prints this message\n");
   }
+/*
   else if( strncmp( command, "read", 4 ) == 0 )
   {
     int result;
@@ -253,8 +254,10 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     else
       printf("%.*s\n", result, file_buffer );
   }
+*/
   else if( strncmp( command, "wd", 2 ) == 0 )
     printf("%.*s\n", PATH_LEN, currDir);
+/*
   else if( strncmp( command, "cd", 2 ) == 0 )
   {
     char *path;
@@ -269,6 +272,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     else
       return -1;
   }
+*/
   else if( strncmp( command, "time", 4 ) == 0 )
   {
     time_t t = time(NULL);
@@ -277,6 +281,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
 
     return 0;
   }
+/*
   else if( strncmp( command, "ld", 2 ) == 0 )
   {
     int n;
@@ -307,6 +312,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
         printf("%.*s%c\n", attrib_list[i].nameLen, attrib_list[i].name, ((attrib_list[i].flags & FS_DIR) ? '/' : '\0'));
     }
   }
+*/
   else if( strncmp( command, "echo", 4 ) == 0 )
   {
     if( arg_str )
@@ -328,7 +334,7 @@ int main(void)
 //  mapMem((void *)0xB8000, (void *)0xB8000, 8, 0);
 //  dev_num = lookupName( dev_name, strlen(dev_name) );
 
-  parseDevice(dev_name, &dev_num);
+//  parseDevice(dev_name, &dev_num);
 
   dev_num = 0xA00;
 
@@ -340,6 +346,14 @@ int main(void)
 
   currDir[0] = '/';
   currDir[1] = '\0';
+
+  char fs[12];
+  memcpy(fs, "fat         ", 12);
+
+  if( mountFs(123, fs, "/devices/ramdisk0", 35) == 0 )
+    printf("Mounted\n");
+  if( unmountFs("/devices/ramdisk0") == 0 )
+    printf("Unmounted\n");
 
   while( true )
   {

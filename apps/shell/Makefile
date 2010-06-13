@@ -16,11 +16,14 @@ shell.o: /home/tiju/Silverbox-OS/include/os/variables.h
 shell.o: /home/tiju/Silverbox-OS/include/ctype.h
 shell.o: /home/tiju/Silverbox-OS/include/os/vfs.h
 shell.o: /home/tiju/Silverbox-OS/include/os/file.h
+shell.o: /home/tiju/Silverbox-OS/include/os/os_types.h
+shell.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
+shell.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
+shell.o: /home/tiju/Silverbox-OS/include/stdlib.h
+shell.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
 shell.o: /home/tiju/Silverbox-OS/include/os/services.h
 shell.o: /home/tiju/Silverbox-OS/include/os/device.h
 shell.o: /home/tiju/Silverbox-OS/include/os/region.h
-shell.o: /home/tiju/Silverbox-OS/include/os/fatfs.h
-shell.o: /home/tiju/Silverbox-OS/include/stdlib.h
 shell.o: /home/tiju/Silverbox-OS/include/stdio.h
 shell.o: /home/tiju/Silverbox-OS/include/stdarg.h
 shell.o: /home/tiju/Silverbox-OS/include/time.h

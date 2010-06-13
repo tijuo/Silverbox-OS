@@ -334,11 +334,11 @@ void initVideo( void )
 
   //__map( (void *)COLOR_TXT_ADDR, (void *)COLOR_TXT_ADDR, 8 );
 //  mapMem( (void *)COLOR_TXT_ADDR, (void *)COLOR_TXT_ADDR, 8, 0 );
-
 //  __chioperm( 1, CRTC_INDEX, 2 ); 	// Allocate port range
 
   setCursor( 0, 1 );
   setCharPos( 0, 1 );
+
 //  clearScreen( attrib );
 }
 /*
@@ -516,7 +516,7 @@ int main( void )
   for( int i=0; i < 5; i++ )
   {
     status = registerDevice(DEVICE_NAME, strlen(DEVICE_NAME), &dev);
-    
+
     if( status != 0 )
       __sleep( (i*i+1) * 500 );
     else

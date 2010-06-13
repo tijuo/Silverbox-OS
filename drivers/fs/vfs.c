@@ -380,12 +380,10 @@ static int handleRequest(struct FsReqHeader *req, char *inBuffer, size_t inBytes
   struct FSOps *ops;
   int ret;
 
+  printf("handling request\n");
+
   *outBuffer = NULL;
   *outBytes = 0;
-
-  sbStringCreate(&path, NULL, 1);
-  sbStringCreate(&name, NULL, 1);
-  sbFilePathCreate(&fPath);
 
   if( req->request != FSCTL )
   {
@@ -406,9 +404,15 @@ static int handleRequest(struct FsReqHeader *req, char *inBuffer, size_t inBytes
           return -1;
         }
       default:
+        sbStringCreate(&name, NULL, 1);
         break;
     }
   }
+  else
+    sbStringCreate(&path, NULL, 1);
+
+  sbFilePathCreate(&fPath);
+printf("about to switch...\n");
 
   switch(req->request)
   {
@@ -452,10 +456,12 @@ static int handleRequest(struct FsReqHeader *req, char *inBuffer, size_t inBytes
     {
       struct MountArgs *args = (struct MountArgs *)inBuffer;
       ret = mount(args->device, args->fs, &path, args->flags);
+      printf("mounted\n");
       break;
     }
     case UNMOUNT:
       ret = unmount(&path);
+      printf("unmounted\n");
       break;
     default:
       ret = -1;
@@ -487,17 +493,22 @@ int main(void)
       break;
   }
 
+  printf("vfs registered\n");
+
   while(1)
   {
     while( __receive(NULL_TID, (struct Message *)&msg, 0) == 2 );
 
     if( msg.protocol == MSG_PROTO_VFS )
     {
+      printf("received msg\n");
       inBuffer = malloc(req->argLen);
 
+/*
+// XXX: need to reimplement this
       if( inBuffer )
         while( _receive(msg.sender, inBuffer, req->argLen, 0) == 2 );
-
+*/
       header.reply = handleRequest((struct FsReqHeader *)req, inBuffer, 
                        req->argLen, &outBuffer, &argLen);
       header.argLen = argLen;
@@ -514,15 +525,20 @@ int main(void)
       }
       else
       {
+/*
         *(struct FsReplyHeader *)sendBuffer = header;
         memcpy((struct FsReplyHeader *)sendBuffer + 1, outBuffer, argLen);
+*/
+        while( __send(msg.sender, (struct Message *)&msg, 0) == 2 );
 
-        while( _send(msg.sender, sendBuffer, sizeof header + argLen, 0) == 2 );
+//        while( _send(msg.sender, sendBuffer, sizeof header + argLen, 0) == 2 );
       }
 
       free(outBuffer);
       free(sendBuffer);
     }
+    else
+      printf("vfs: Unrecognized protocol\n");
   }
   return 1;
 }

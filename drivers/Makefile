@@ -1,6 +1,6 @@
-SRC	=vidtest.c kbtest.c rdsktst.c memtst.c read_fat.c vfs.c
+SRC	=vidtest.c kbtest.c rdsktst.c memtst.c
 EXE	=$(SRC:.c=.exe)
-DIRS	=char block bus
+DIRS	=char block bus fs
 
 .PHONY:	$(DIRS)
 
@@ -17,6 +17,9 @@ block:
 	make -C $@ all
 
 bus:
+	make -C $@ all
+
+fs:
 	make -C $@ all
 
 install: $(DIRS) $(EXE)
@@ -72,31 +75,3 @@ memtst.o: /home/tiju/Silverbox-OS/include/types.h
 memtst.o: /home/tiju/Silverbox-OS/include/stdbool.h
 memtst.o: /home/tiju/Silverbox-OS/include/ipc.h
 memtst.o: /home/tiju/Silverbox-OS/include/os/mutex.h
-read_fat.o: /home/tiju/Silverbox-OS/include/oslib.h
-read_fat.o: /home/tiju/Silverbox-OS/include/types.h
-read_fat.o: /home/tiju/Silverbox-OS/include/stddef.h
-read_fat.o: /home/tiju/Silverbox-OS/include/stdbool.h
-read_fat.o: /home/tiju/Silverbox-OS/include/ipc.h
-read_fat.o: /home/tiju/Silverbox-OS/include/os/mutex.h
-read_fat.o: /home/tiju/Silverbox-OS/include/os/vfs.h
-read_fat.o: /home/tiju/Silverbox-OS/include/os/file.h
-read_fat.o: /home/tiju/Silverbox-OS/include/string.h
-read_fat.o: /home/tiju/Silverbox-OS/include/stdlib.h
-read_fat.o: /home/tiju/Silverbox-OS/include/os/services.h
-read_fat.o: /home/tiju/Silverbox-OS/include/os/device.h
-read_fat.o: /home/tiju/Silverbox-OS/include/os/region.h
-read_fat.o: /home/tiju/Silverbox-OS/include/os/dev_interface.h
-read_fat.o: /home/tiju/Silverbox-OS/include/os/console.h
-vfs.o: /home/tiju/Silverbox-OS/include/oslib.h
-vfs.o: /home/tiju/Silverbox-OS/include/types.h
-vfs.o: /home/tiju/Silverbox-OS/include/stddef.h
-vfs.o: /home/tiju/Silverbox-OS/include/stdbool.h
-vfs.o: /home/tiju/Silverbox-OS/include/ipc.h
-vfs.o: /home/tiju/Silverbox-OS/include/os/mutex.h
-vfs.o: /home/tiju/Silverbox-OS/include/os/message.h
-vfs.o: /home/tiju/Silverbox-OS/include/os/os_types.h
-vfs.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
-vfs.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
-vfs.o: /home/tiju/Silverbox-OS/include/stdlib.h
-vfs.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
-vfs.o: /home/tiju/Silverbox-OS/include/string.h
