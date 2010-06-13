@@ -69,6 +69,7 @@ void init_addr_space(struct AddrSpace *addr_space, void *phys_addr)
 
   createBitmap(addr_space->bitmap, NUM_PTABLES);
   addr_space->phys_addr = phys_addr;
+  sbArrayCreate(&addr_space->memoryRegions);
   list_init(&addr_space->mem_region_list, list_malloc, list_free);
 }
 

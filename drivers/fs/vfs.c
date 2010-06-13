@@ -164,7 +164,7 @@ int sbFilePathAtLevel(const SBFilePath *path, int level, SBString *str)
   if( level >= path->nElems )
     return SBFilePathFailed;
 
-  if( sbArrayElemAt(path, level, (void **)&str) != 0 )
+  if( sbArrayElemAt(path, level, (void **)&str, NULL) != 0 )
     return SBFilePathFailed;
 
   return 0;
@@ -172,7 +172,7 @@ int sbFilePathAtLevel(const SBFilePath *path, int level, SBString *str)
 
 int sbFilePathCreate(SBFilePath *path)
 {
-  return sbArrayCreate(path, 0);
+  return sbArrayCreate(path);
 }
 
 int sbFilePathDelete(SBFilePath *path)
@@ -184,7 +184,7 @@ int sbFilePathDelete(SBFilePath *path)
 
   while( sbArrayCount(path) )
   {
-    sbArrayPop(path, (void **)&str);
+    sbArrayPop(path, (void **)&str, NULL);
     sbStringDelete(str);
   }
 
@@ -220,7 +220,6 @@ static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
 {
   SBFilePath fPath;
   SBFilePath tmpPath;
-  SBArray array;
   SBKey *keys, *bestKey=NULL;
   size_t numKeys, bestLength=0;
 

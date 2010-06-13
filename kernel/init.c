@@ -141,7 +141,7 @@ int memcmp(const char *s1, const char *s2, register size_t n)
     return 0;
 
   if( !s1 )
-    return -*s2
+    return -*s2;
 
   if( !s2 )
     return *s1;
