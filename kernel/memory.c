@@ -2,17 +2,7 @@
 
 void *memcpy( void *dest, const void *src, size_t count );
 void *memset( void *buffer, int c, size_t num );
-/*
-void *memcpy( void *dest, void *src, size_t len )
-{
-  unsigned char *_dest = (unsigned char *)dest, *_src = (unsigned char *)src;
 
-  while( len-- > 0 )
-    *_dest++ = *_src++;
-
-  return dest;
-}
-*/
 /********************************************************************
  ** File:     memcpy.c
  **

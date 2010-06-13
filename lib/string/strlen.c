@@ -7,8 +7,11 @@ size_t strlen(const char *string)
   if( string == NULL )
     return 0;
 
-  while( *string++ != '\0' )
+  while( *string )
+  {
     i++;
+    string++;
+  }
 
   return i;
 }

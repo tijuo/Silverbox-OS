@@ -21,8 +21,11 @@ tid_t getFreeTID(void)
   static tid_t lastTID = INITIAL_TID;
   int count = 0;
 
-  while( tcbTable[lastTID].state != DEAD && count++ < maxThreads )
+  while( tcbTable[lastTID].state != DEAD && count < maxThreads )
+  {
     lastTID = (lastTID == maxThreads - 1 ? INITIAL_TID + 1 : lastTID + 1);
+    count++;
+  }
 
   if( tcbTable[lastTID].state == DEAD )
     return lastTID;

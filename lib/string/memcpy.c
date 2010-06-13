@@ -7,9 +7,12 @@ void *memcpy(void *dest, const void *src, size_t num)
   if( src == NULL || dest == NULL )
     return NULL;
 
-  while( num-- )
+  while( num )
+  {
     *_dest++ = *_src++;
-  
+    num--;
+  }
+
   return (void *)dest;
 }
 

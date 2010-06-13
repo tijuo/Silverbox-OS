@@ -4,8 +4,7 @@ char *strcat(char *dest, const char *src)
 {
   char *start = dest;
 
-  while(*dest++);
-  dest--;
+  dest += strlen(dest);
 
   while(*src)
     *dest++ = *src++;

@@ -50,6 +50,10 @@ region.o: /home/tiju/Silverbox-OS/include/stdbool.h
 bitmap.o: /home/tiju/Silverbox-OS/include/os/bitmap.h
 bitmap.o: /home/tiju/Silverbox-OS/include/stddef.h
 bitmap.o: /home/tiju/Silverbox-OS/include/string.h
+elf.o: /home/tiju/Silverbox-OS/include/types.h
+elf.o: /home/tiju/Silverbox-OS/include/stddef.h
+elf.o: /home/tiju/Silverbox-OS/include/stdbool.h
+elf.o: /home/tiju/Silverbox-OS/include/elf.h
 services.o: /home/tiju/Silverbox-OS/include/oslib.h
 services.o: /home/tiju/Silverbox-OS/include/types.h
 services.o: /home/tiju/Silverbox-OS/include/stddef.h

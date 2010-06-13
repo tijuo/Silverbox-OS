@@ -52,7 +52,7 @@ int cqueue_put( struct CQueue *cqueue, void *buffer, unsigned num_elems )
   if( buffer == NULL || cqueue == NULL )
     return -1;
 
-  while( num_elems-- )
+  while( num_elems )
   {
     if( cqueue->state == CQUEUE_FULL )
       return -2;
@@ -63,6 +63,7 @@ int cqueue_put( struct CQueue *cqueue, void *buffer, unsigned num_elems )
     cqueue->tail = (cqueue->tail + 1) % cqueue->n_elems;
     cqueue->state = (cqueue->tail == cqueue->head ? CQUEUE_FULL : 
                     CQUEUE_PARTIAL );
+    num_elems--;
   }
 
   if( cqueue->state == CQUEUE_FULL )
@@ -81,7 +82,7 @@ int cqueue_get( struct CQueue *cqueue, void *buffer, unsigned num_elems )
   if( cqueue == NULL )
     return -1;
 
-  while( num_elems-- )
+  while( num_elems )
   {
     if( cqueue->state == CQUEUE_EMPTY )
       return -2;
@@ -95,6 +96,7 @@ int cqueue_get( struct CQueue *cqueue, void *buffer, unsigned num_elems )
     cqueue->head = (cqueue->head + 1) % cqueue->n_elems;
     cqueue->state = (cqueue->tail == cqueue->head ? CQUEUE_EMPTY : 
                     CQUEUE_PARTIAL );
+    num_elems--;
   }
 
   if( cqueue->state == CQUEUE_EMPTY )
@@ -114,12 +116,13 @@ int cqueue_peek( struct CQueue *cqueue, void *buffer, unsigned index,
   if( index >= cqueue->n_elems )
     index %= cqueue->n_elems;
 
-  while( n_elems-- )
+  while( n_elems )
   {
     memcpy(buf, (void *)((unsigned)cqueue->queue + index * 
            cqueue->elem_size), cqueue->elem_size);
     buf += cqueue->elem_size;
     index = (index + 1) % cqueue->n_elems;
+    n_elems--;
   }
   return 0;
 }
@@ -132,12 +135,13 @@ int cqueue_poke( struct CQueue *cqueue, void *buffer, unsigned index,
   if( cqueue == NULL || buffer == NULL || index >= cqueue->n_elems )
     return -1;
 
-  while( n_elems-- )
+  while( n_elems )
   {
     memcpy((void *)((unsigned)cqueue->queue + index *
            cqueue->elem_size), buf, cqueue->elem_size);
     buf += cqueue->elem_size;
     index = (index + 1) % cqueue->n_elems;
+    n_elems--;
   }
   return 0;
 }

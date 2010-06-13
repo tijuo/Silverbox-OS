@@ -13,7 +13,7 @@ int isalpha(int c)
 int iscntrl(int c)
 {
   return ((c >= 0x00 && c <= 0x1F) || c == 0x7F);
-}  
+}
 
 int isdigit(int c)
 {

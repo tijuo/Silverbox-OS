@@ -137,33 +137,36 @@ int clearPhysPage( void *phys )
 
 int memcmp(const char *s1, const char *s2, register size_t n)
 {
-  if( !(s1 && s2) )
-    return -1;
+  if( n == 0 || s1 && !s2 )
+    return 0;
 
-  while( n-- )
-  {
-    if(*s1++ != *s2++)
-      return (int)(*(const int *)--s1 - *(const int *)--s2);
-  }
-  return 0;
+  if( !s1 )
+    return -*s2
+
+  if( !s2 )
+    return *s1;
+
+  for(; n && *s1 == *s2; n--, s1++, s2++);
+
+  if( !n )
+    return 0;
+  else
+    return *s1 - *s2;
 }
 
 int strncmp( const char *str1, const char *str2, size_t num )
 {
-  while( num-- && *str1 == *str2 && *str1 != '\0' )
+  while( num && *str1 == *str2 && *str1 != '\0' )
   {
     str1++;
     str2++;
+    num--;
   }
 
-  if( *str1 == *str2 && *str1 == '\0' )
+  if( !num )
     return 0;
-  else if( *str1 > *str2 )
-    return 1;
-  else if( *str2 > *str1 )
-    return -1;
   else
-    return 0;
+    return *str1 - *str2;
 }
 
 char *strstr( const char *str, const char *substr )

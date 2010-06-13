@@ -5,8 +5,11 @@ void *memset(void *buffer, int c, size_t num)
   register size_t i = num;
   char *buff = (char *)buffer;
 
-  while( i-- )
+  while( i )
+  {
     *buff++ = (char)c;
+    i--;
+  }
 
   return (void *)buffer;
 }

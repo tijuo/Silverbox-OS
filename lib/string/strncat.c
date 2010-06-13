@@ -4,14 +4,15 @@ char *strncat(char *dest, const char *src, size_t num)
 {
   char *start = dest;
 
-  while(*dest++);
-  dest--;
+  dest += strlen(dest);
 
-  while(*src && num--)
+  while(*src && num)
+  {
     *dest++ = *src++;
+    num--;
+  }
 
-  if( num )
-    *dest = '\0'; 
+  *dest = '\0';
 
   return (char *)start;
 }
