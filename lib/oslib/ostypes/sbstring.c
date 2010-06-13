@@ -195,7 +195,7 @@ int sbStringSplit(const SBString *sbString, const SBString *delimiter,
   if( !sbString || !array )
     return SBStringError;
 
-  if( sbArrayCreate(array, 0) != 0 )
+  if( sbArrayCreate(array) != 0 )
     return SBStringFailed;
 
   while(1)
@@ -207,7 +207,8 @@ int sbStringSplit(const SBString *sbString, const SBString *delimiter,
     if( (end == SBStringNotFound || limit == 0) && tempStr )
     {
       sbStringCopy(&endStr, tempStr);
-      sbArrayPush(array,tempStr);
+      sbArrayPush(array,tempStr, sizeof *tempStr);
+      sbStringDelete(&endStr);
       return 0;
     }
     else if( !tempStr || (end < 0 && end != SBStringNotFound) )
@@ -216,22 +217,26 @@ int sbStringSplit(const SBString *sbString, const SBString *delimiter,
 
       while( sbArrayCount(array) )
       {
-        sbArrayPop(array, (void **)&str);
+        sbArrayPop(array, (void **)&str, NULL);
         sbStringDelete(str);
       }
 
       if( tempStr )
         free(tempStr);
+
+      sbStringDelete(&endStr);
       return SBStringFailed;
     }
     else
     {
       sbStringSubString(&endStr, 0, end, tempStr);
-      sbArrayPush(array, tempStr);
+      sbArrayPush(array, tempStr, sizeof *tempStr);
       start += end + delimiter->length;
 
       if( limit > 0 )
         limit--;
+
+      sbStringDelete(&endStr);
     }
   }
 

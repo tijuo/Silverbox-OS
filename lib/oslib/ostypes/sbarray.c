@@ -3,10 +3,10 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
-static void shiftArray(int **ptr, int nElems, int shift);
+static void shiftArray(struct _SBArrayElem *ptr, int nElems, int shift);
 static int adjustArrayCapacity(SBArray *array);
 
-static void shiftArray(int **ptr, int nElems, int shift)
+static void shiftArray(struct _SBArrayElem *ptr, int nElems, int shift)
 {
   if( shift > 0 )
   {
@@ -22,27 +22,27 @@ static void shiftArray(int **ptr, int nElems, int shift)
 
 static int adjustArrayCapacity(SBArray *array)
 {
-  void *result;
+  struct _SBArrayElem *result;
 
   if( array->nElems == array->capacity )
   {
     array->capacity = (int)(array->nElems * 1.5);
-    result = realloc(array->ptrs, array->capacity * sizeof(int *));
+    result = realloc(array->elems, array->capacity * sizeof(struct _SBArrayElem));
 
     if( !result )
       return -1;
 
-    array->ptrs = result;
+    array->elems = result;
   }
   else if( (int)(array->nElems * 1.6) < array->capacity )
   {
     array->capacity = array->nElems + 3;
-    result = realloc(array->ptrs, array->capacity * sizeof(int *));
+    result = realloc(array->elems, array->capacity * sizeof(struct _SBArrayElem));
 
     if( !result )
       return -1;
 
-    array->ptrs = result;
+    array->elems = result;
   }
 
   return 0;
@@ -64,19 +64,32 @@ int sbArrayCopy(const SBArray *array, SBArray *newArray)
   if( !array || !newArray )
     return SBArrayError;
 
-  newArray->ptrs = (int **)malloc(array->capacity * sizeof(int *));
+  newArray->elems = (struct _SBArrayElem *)malloc(array->capacity * 
+    sizeof(struct _SBArrayElem));
 
-  if( !newArray->ptrs )
+  if( !newArray->elems )
   {
     newArray->capacity = newArray->nElems = 0;
     return SBArrayFailed;
   }
 
-  for(int i=0; i < array->nElems; i++)
-    memcpy(newArray->ptrs, array->ptrs, array->nElems * sizeof(int *));
+  newArray->nElems = 0;
+
+  for(unsigned i=0; i < (unsigned)array->nElems; i++, newArray->nElems++)
+  {
+    newArray->elems[i].size = array->elems[i].size;
+    newArray->elems[i].ptr = malloc(array->elems[i].size);
+
+    if( !newArray->elems[i].ptr )
+    {
+      sbArrayDelete(newArray);
+      return SBArrayFailed;
+    }
+
+    memcpy(newArray->elems[i].ptr, array->elems[i].ptr, array->elems[i].size);
+  }
 
   newArray->capacity = array->capacity;
-  newArray->nElems = array->nElems;
 
   return 0;
 }
@@ -89,33 +102,22 @@ int sbArrayCount(const SBArray *array)
     return array->nElems;
 }
 
-int sbArrayCreate(SBArray *array, int numElems, ...)
+int sbArrayCreate(SBArray *array)
 {
-  va_list args;
-
-  if( !array || numElems < 0 )
+  if( !array )
     return SBArrayError;
 
-  va_start(args, numElems);
-
   array->nElems = 0;
-  array->capacity = numElems + 2 > (int)(numElems * 1.5) ? 
-                       numElems + 2 : (int)(numElems * 1.5);
-  array->ptrs = (int **)malloc(array->capacity * sizeof(int *));
+  array->capacity = 5;
 
-  if( array->ptrs == NULL )
+  array->elems = (struct _SBArrayElem *)malloc(array->capacity *
+     sizeof(struct _SBArrayElem));
+
+  if( array->elems == NULL )
   {
     array->capacity = array->nElems = 0;
     return SBArrayFailed;
   }
-
-  for(int i=0; i < numElems; i++)
-  {
-    array->ptrs[i] = va_arg(args, int *);
-    array->nElems++;
-  }
-
-  va_end(args);
 
   return 0;
 }
@@ -125,16 +127,19 @@ int sbArrayDelete(SBArray *array)
   if( !array )
     return SBArrayError;
 
-  free(array->ptrs);
+  for(unsigned i=0; i < (unsigned)array->nElems; i++)
+    free(array->elems[i].ptr);
 
-  array->ptrs = NULL;
+  free(array->elems);
+
+  array->elems = NULL;
   array->capacity = 0;
   array->nElems = 0;
 
   return 0;
 }
 
-int sbArrayElemAt(const SBArray *array, int pos, void **elem)
+int sbArrayElemAt(const SBArray *array, int pos, void **elem, size_t *size)
 {
   if( !array )
     return SBArrayError;
@@ -143,62 +148,83 @@ int sbArrayElemAt(const SBArray *array, int pos, void **elem)
     return SBArrayNotFound;
 
   if( elem )
-    *(int **)elem = array->ptrs[pos];
+    *(int **)elem = (int *)array->elems[pos].ptr;
+
+  if( size )
+    *size = array->elems[pos].size;
 
   return 0;
 }
 
 // Returns the index of the first occurence of elem (if found)
 
-int sbArrayFind(const SBArray *array, void *elem)
+int sbArrayFind(const SBArray *array, void *elem, size_t size)
 {
-  if( !array )
+  if( !array || size == 0 )
     return SBArrayError;
 
-  for(int i=0; i < array->nElems; i++)
+  for(unsigned i=0; i < (unsigned)array->nElems; i++)
   {
-    if( array->ptrs[i] == (int *)elem )
-      return i;
+    if( size == array->elems[i].size && 
+        memcmp(array->elems[i].ptr, elem, size) == 0 )
+    {
+      return (int)i;
+    }
   }
 
   return SBArrayNotFound;
 }
 
-/* XXX: Warning: This does not copy the pointer data into the array. */
+// Insert an element into a location in the array.
 
-int sbArrayInsert(SBArray *array, void *ptr, int pos)
+int sbArrayInsert(SBArray *array, int pos, void *ptr, size_t size)
 {
   int newSize;
 
-  if( !array || pos < 0 )
+  if( !array || pos < 0 || size == 0 )
     return SBArrayError;
 
-  newSize = (pos >= array->nElems ? pos : array->nElems) + 1;
+  if( pos > array->nElems )
+    pos = array->nElems;
+
+  newSize = (pos == array->nElems ? pos : array->nElems) + 1;
 
   if( newSize >= array->capacity )
   {
-    void *ptr;
-    array->capacity = (int)(newSize * 1.5);
-    ptr = realloc(array->ptrs, array->capacity * sizeof(int *));
+    struct _SBArrayElem *newElems;
 
-    if( ptr == NULL )
+    array->capacity = (int)(newSize * 1.5);
+    newElems = realloc(array->elems, array->capacity * 
+       sizeof(struct _SBArrayElem));
+
+    if( newElems == NULL )
       return SBArrayFailed;
 
-    array->ptrs = ptr;
+    array->elems = newElems;
   }
 
-  if( pos >= array->nElems )
+  if( pos == array->nElems )
   {
-    for( int i=array->nElems; i < pos; i++ )
-      array->ptrs[i] = NULL;
+    array->elems[pos].ptr = malloc(size);
 
-    array->ptrs[pos] = (int *)ptr;
+    if( !array->elems[pos].ptr )
+      return SBArrayFailed;
+
+    memcpy(array->elems[pos].ptr, ptr, size);
+    array->elems[pos].size = size;
     array->nElems = pos + 1;
   }
   else
   {
-    shiftArray( array->ptrs + pos, array->nElems - pos, 1 );
-    array->ptrs[pos] = (int *)ptr;
+    shiftArray( array->elems + pos, array->nElems - pos, 1 );
+
+    array->elems[pos].ptr = malloc(size);
+
+    if( !array->elems[pos].ptr )
+      return SBArrayFailed;
+
+    memcpy(array->elems[pos].ptr, ptr, size);
+    array->elems[pos].size = size;
     array->nElems++;
   }
 
@@ -207,15 +233,21 @@ int sbArrayInsert(SBArray *array, void *ptr, int pos)
 
 // Pops an element from the end of the array
 
-int sbArrayPop(SBArray *array, void **ptr)
+int sbArrayPop(SBArray *array, void **ptr, size_t *size)
 {
   if( !array )
     return SBArrayError;
 
   if( array->nElems == 0 )
     return SBArrayEmpty;
-  else if( ptr )
-    *(int **)ptr = array->ptrs[array->nElems-1];
+
+  if( ptr )
+    *(int **)ptr = (int *)array->elems[array->nElems-1].ptr;
+  else
+    free(array->elems[array->nElems-1].ptr);
+
+  if( size )
+    *size = array->elems[array->nElems-1].size;
 
   array->nElems--;
 
@@ -226,18 +258,22 @@ int sbArrayPop(SBArray *array, void **ptr)
 
 // Pushes an element to the end of the array
 
-int sbArrayPush(SBArray *array, void *ptr)
+int sbArrayPush(SBArray *array, void *ptr, size_t size)
 {
-  if( !array )
+  if( !array || !ptr || size == 0 )
     return SBArrayError;
 
   if( adjustArrayCapacity(array) < 0 )
     return SBArrayFailed;
 
-  if( ptr )
-    array->ptrs[array->nElems] = (int *)ptr;
-  else
-    array->ptrs[array->nElems] = NULL;
+  array->elems[array->nElems].ptr = malloc(size);
+
+  if( !array->elems[array->nElems].ptr )
+    return SBArrayFailed;
+
+  array->elems[array->nElems].size = size;
+
+  memcpy(array->elems[array->nElems].ptr, ptr, size);
 
   array->nElems++;
 
@@ -252,7 +288,9 @@ int sbArrayRemove(SBArray *array, int pos)
   if( pos >= array->nElems || pos < 0 )
     return SBArrayNotFound;
 
-  shiftArray( array->ptrs + pos + 1, array->nElems - pos - 1, -1 );
+  free(array->elems[pos].ptr);
+
+  shiftArray( array->elems + pos + 1, array->nElems - pos - 1, -1 );
   array->nElems--;
 
   adjustArrayCapacity(array);
@@ -274,9 +312,9 @@ int sbArraySlice(const SBArray *array, int start, int end, SBArray *newArray)
   if( end > array->nElems )
     end = array->nElems;
 
-  sbArrayDelete(&newArray);
+//  sbArrayDelete(newArray);
 
-  newArray->ptrs = NULL;
+  newArray->elems = NULL;
   newArray->capacity = 0;
 
   if( end - start <= 0 )
@@ -295,7 +333,7 @@ int sbArraySlice(const SBArray *array, int start, int end, SBArray *newArray)
     }
 
     for( int i=start; i < end; i++ )
-      sbArrayPush(newArray, (void *)array->ptrs[i]);
+      sbArrayPush(newArray, (void *)array->elems[i].ptr, array->elems[i].size);
   }
 
   return 0;
