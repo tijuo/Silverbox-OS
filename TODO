@@ -12,9 +12,12 @@ Check system call input addresses for mapping/granting
 Initial Server:
 
 Virtual File System
+Let memory regions in address spaces use SBArray instead of linked list
+Remove list_init,list_malloc,list.c,tree.c
 Virtual address space management (allocating, freeing virtual addresses)
 IO port management
 IRQ management
+Spawn a new thread per request
 
 Libraries:
 
