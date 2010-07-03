@@ -61,10 +61,12 @@ extern "C" {
 #define REQUEST_MORE		2  /* More to send */
 
 #define KERNEL_TID		(tid_t)0
-#define NULL_TID		(tid_t)0xFFFF
+#define NULL_RSPID		(rspid_t)0
 #define NULL_SHMID		(shmid_t)-1
+#define NULL_TID		(tid_t)0xFFFF
 
 typedef unsigned long shmid_t;
+typedef unsigned long rspid_t;
 
 #define MAX_MSG_LEN	MSG_LEN
 #define MSG_LEN         1024

@@ -8,23 +8,24 @@
 
 #include "paging.h"
 #include "name.h"
+#include "resources.h"
 #include "shmem.h"
 
 /* Malloc works here as long as 'pager_addr_space' exists and is correct*/
 
 int init( int argc, char **argv );
 extern void print( char * );
-extern void *list_malloc( size_t );
-extern void list_free( void * );
+//extern void *list_malloc( size_t );
+//extern void list_free( void * );
 
-extern struct ListType shmem_list;
+//extern struct ListType shmem_list;
 
-int extendHeap( unsigned pages );
+//int extendHeap( unsigned pages );
 
 void handle_message(void);
 
 /* This extends the end of the heap by a certain number of pages. */
-
+/*
 int extendHeap( unsigned pages )
 {
   void *virt;
@@ -36,7 +37,7 @@ int extendHeap( unsigned pages )
 
   return mapMemRange( virt, pages );
 }
-
+*/
 /* Handles exceptions, memory allocations, i/o permissions,
    DMA, address spaces, exit messages. */
 
@@ -66,12 +67,12 @@ void handle_message( void )
       case MAP_MEM:
       {
         struct AddrRegion region;
-        void *pdir;
+        struct ResourcePool *pool;
         int flags = req->arg[3];
 
-        pdir = lookup_tid(sender);
+        pool = lookup_tid(sender);
 
-        if( pdir == NULL_PADDR )
+        if( pool == NULL )
         {
           print("Request map_mem(): Oops! TID ");
           printInt(sender);
@@ -83,7 +84,7 @@ void handle_message( void )
 
         region.virtRegion.start = req->arg[1];
         region.physRegion.start = req->arg[0];
-        region.virtRegion.length = region.physRegion.length = 
+        region.virtRegion.length = region.physRegion.length =
            req->arg[2] * PAGE_SIZE;
         region.flags = MEM_MAP;
 
@@ -99,7 +100,7 @@ void handle_message( void )
         if( (flags & MEM_FLG_ALLOC) && !(flags & MEM_FLG_COW) ) // ALLOC would imply !COW
           region.flags &= ~MEM_MAP ;
 
-        if( attach_mem_region(pdir, &region) != 0 )
+        if( attach_mem_region(&pool->addrSpace, &region) != 0 )
         {
           print("attach_mem_region() failed.");
           result = -1;
@@ -108,8 +109,8 @@ void handle_message( void )
 
         if( !(flags & MEM_FLG_LAZY) && !(flags & MEM_FLG_ALLOC) )
         {
-          _mapMem((void *)req->arg[0], (void *)req->arg[1], 
-                    (unsigned)req->arg[2], req->arg[3], pdir); // doesn't return result
+          _mapMem((void *)req->arg[0], (void *)req->arg[1],
+                    (unsigned)req->arg[2], req->arg[3], pool->addrSpace.phys_addr); // doesn't return result
         }
 
         result = 0;
@@ -117,13 +118,16 @@ void handle_message( void )
       }
       case MAP_TID:
       {
-        if( req->arg[1] == (int)NULL_PADDR )
+        if( req->arg[1] == (int)NULL_RSPID )
           result = attach_tid(lookup_tid(sender), (tid_t)req->arg[0]);
         else
-          result = attach_tid((void *)req->arg[1], (tid_t)req->arg[0]);
-
+        {
+          result = attach_tid(lookup_rspid((rspid_t)req->arg[1]), 
+                              (tid_t)req->arg[0]);
+        }
         break;
       }
+/*
       case CREATE_SHM:
       {
         struct MemRegion region;
@@ -159,6 +163,7 @@ void handle_message( void )
 
         break;
       }
+*/
       case REGISTER_NAME:
       {
         struct NameRecord *record = _lookupName((char *)&req->arg[1],req->arg[0], THREAD);

@@ -14,7 +14,7 @@ int mapMem( void *phys, void *virt, int numPages, int flags );
 int allocatePages( void *address, int numPages );
 
 // Associates a tid with an address space
-int mapTid( tid_t tid, void *addr_space );
+int mapTid( tid_t tid, rspid_t pool_id );
 
 // Creates a region of shared memory
 int createShmem( shmid_t shmid, unsigned pages, struct MemRegion *region,
@@ -91,7 +91,7 @@ int allocatePages( void *address, int numPages )
   return mapMem( NULL_PADDR, address, numPages, MEM_FLG_LAZY | MEM_FLG_ALLOC );
 }
 
-int mapTid( tid_t tid, void *addr_space )
+int mapTid( tid_t tid, rspid_t pool_id )
 {
   volatile struct GenericReq *req;
   volatile struct Message msg;
@@ -100,7 +100,7 @@ int mapTid( tid_t tid, void *addr_space )
 
   req->request = MAP_TID;
   req->arg[0] = (int)tid;
-  req->arg[1] = (int)addr_space;
+  req->arg[1] = (int)pool_id;
 
   msg.length = sizeof *req;
   msg.protocol = MSG_PROTO_GENERIC;

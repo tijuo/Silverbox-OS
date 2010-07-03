@@ -1,4 +1,4 @@
-skin First modify the variables in tools/variables.sh and vars.mk. Do a 
+First modify the variables in tools/variables.sh and vars.mk. Do a 
 "make && make install" to install the kernel and boot modules to
 the disk. 
 

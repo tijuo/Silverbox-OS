@@ -4,6 +4,7 @@
 #include <os/elf.h>
 #include <os/signal.h>
 #include "paging.h"
+#include "phys_alloc.h"
 #include "shmem.h"
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,7 @@ static int get_boot_info( int argc, char **argv )
   unsigned int i, pages_needed=0, start_page_addr, max_mem_addr, max_mem_length;
   unsigned temp;
   char *ptr;
+  struct ResourcePool *newPool;
 
   server_name = argv[0];
   boot_info = (struct BootInfo *)argv[1];
@@ -116,23 +118,17 @@ static int get_boot_info( int argc, char **argv )
   allocEnd = (void *)((unsigned)allocEnd + bytes_to_allocate);
   availBytes = PAGE_SIZE - ((unsigned)allocEnd & (PAGE_SIZE - 1));
 
-  init_addr_space(&pager_addr_space, page_dir);
+  sbAssocArrayCreate(&tidTable, 512); // XXX: May need to do an update operation on full
+  sbAssocArrayCreate(&resourcePools, 512);  // XXX: May need to do an update operation on full
+  sbAssocArrayCreate(&physAspaceTable, 512); // XXX: May need to do an update operation on full
 
-  sbAssocArrayCreate(&addrSpaces, 512); // XXX: May need to do an update operation on full
-
-  addAddrSpace(&pager_addr_space);
+  initsrv_pool = _create_resource_pool(page_dir);
 
   for(i=0; i < bytes_to_allocate; i += PTABLE_SIZE)
-    set_ptable_status(page_dir, (void *)(temp + i), true);
+    set_ptable_status(&initsrv_pool->addrSpace, (void *)(temp + i), true);
 
-  sbAssocArrayCreate(&threadTable, 512); // XXX: May need to do an update operation on full
-  attach_tid(page_dir, 1);
+  attach_tid(initsrv_pool, 1);
 
-/*
-  mappingTable.map( 1, (void *)page_dir );
-  mappingTable.setPTable( (void *)page_dir, allocEnd ); */
-
-//  allocTable.insert( (memreg_addr_t) 0x1000, 10000, (void *)(0x1032) );
   return 0;
 }
 
@@ -148,7 +144,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   size_t length = module->mod_end - module->mod_start;
   void *addrSpace, *temp;;
   unsigned lastTable = 1;
-  struct AddrSpace *addr_space_struct;
+  struct ResourcePool *newPool;
   unsigned arg_len=8;
 
   if( module == NULL )
@@ -195,12 +191,9 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 
   /* Create an address space for the new exe */
 
-  addrSpace = alloc_phys_page(NORMAL, page_dir);//pageAllocator->alloc();
-  clearPage(addrSpace);
+  newPool = create_resource_pool();
 
-  addr_space_struct = malloc( sizeof( struct AddrSpace ) );
-  init_addr_space(addr_space_struct, addrSpace);
-  addAddrSpace(addr_space_struct);
+  addrSpace = newPool->addrSpace.phys_addr;
 
   /* Map the stack in the current address space, so the program arguments can
      be placed there. */
@@ -252,7 +245,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   if( tid == -1 )
     return -1; // XXX: But first, free physical memory before returning
 
-  attach_tid(addrSpace, tid); //mappingTable.map( tid, addrSpace );
+  attach_tid(newPool, tid); //mappingTable.map( tid, addrSpace );
 
 //  __grant_page_table( (void *)TEMP_PTABLE, (void *)STACK_TABLE, addrSpace, 1 );
 //  set_ptable_status( addrSpace, (void *)STACK_TABLE, true );
@@ -332,7 +325,7 @@ int init(int argc, char **argv)
   sbAssocArrayCreate(&deviceNames, 256);
   sbAssocArrayCreate(&threadNames, 256);  // XXX: May need to do an update operation on full
 
-  list_init(&shmem_list, list_malloc, list_free);
+  //list_init(&shmem_list, list_malloc, list_free);
 
   set_signal_handler( &signal_handler );
 

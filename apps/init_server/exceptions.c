@@ -66,17 +66,19 @@ void dump_regs( int cr2, struct ThreadInfo *info )
 
 void handle_exception( tid_t tid, unsigned int cr2 )
 {
+  struct ResourcePool *pool;
   struct ThreadInfo thread_info;
 
   __get_thread_info( tid, &thread_info );
+  pool = lookup_tid(tid);
 
   if( thread_info.state.int_num == 14 )
   {
   /* Only accept if exception was caused by accessing a non-existant user page.
      Then check to make sure that the accessed page was allocated to the thread. */
 
-    if ( (thread_info.state.error_code & 0x5) == 0x4 && find_address((void *)thread_info.addr_space, 
-          (void *)cr2))
+    if ( (thread_info.state.error_code & 0x5) == 0x4 && 
+         find_address(&pool->addrSpace, (void *)cr2))
     {
       _mapMem( alloc_phys_page(NORMAL, (void *)thread_info.addr_space), 
                (void *)(cr2 & ~0xFFF), 1, 0, (void *)thread_info.addr_space );

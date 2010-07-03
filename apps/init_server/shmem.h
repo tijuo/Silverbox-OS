@@ -3,7 +3,6 @@
 
 #include "addr_space.h"
 #include <stdbool.h>
-#include "list.h"
 #include <os/region.h>
 #include <oslib.h>
 
@@ -13,17 +12,18 @@ struct SharedMemory
   shmid_t shmid;
   bool ro_perm;
   unsigned long *phys_pages;
-  struct ListType shmem_region_list;
+  SBArray memoryRegions;
+//  struct ListType shmem_region_list;
 };
 
 struct ShMemRegion
 {
   struct MemRegion region;
   struct AddrSpace *addr_space;
-  bool rw;       
+  bool rw;
 };
 
-struct ListType shmem_list;
+//struct ListType shmem_list;
 
 int init_shmem( shmid_t shmid, tid_t owner, unsigned pages, bool ro_perm );
 int _shmem_attach( struct SharedMemory *shmem, struct AddrSpace \

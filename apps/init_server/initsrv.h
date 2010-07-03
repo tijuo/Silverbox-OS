@@ -1,7 +1,8 @@
-#ifndef PAGERSRV_H
-#define PAGERSRV_H
+#ifndef INITSRV_H
+#define INITSRV_H
 
 #include "addr_space.h"
+#include "resources.h"
 #include <types.h>
 
 void *allocEnd;
@@ -9,7 +10,7 @@ unsigned int availBytes;
 
 int sysID;
 
-struct AddrSpace pager_addr_space;
+struct ResourcePool *initsrv_pool;
 
 struct ProgramArgs
 {
@@ -66,4 +67,4 @@ unsigned int total_pages;
 void mapVirt( void *virt, int pages );
 void mapPage( void );
 
-#endif /* PAGERSRV_H */
+#endif /* INITSRV_H */

@@ -16,5 +16,6 @@ int _mapMem( void *phys, void *virt, int pages, int flags, void *pdir );
 void *_unmapMem( void *virt, void *pdir );
 int mapMemRange( void *virt, int pages );
 void clearPage( void *page );
+void setPage( void *page, char data );
 
 #endif

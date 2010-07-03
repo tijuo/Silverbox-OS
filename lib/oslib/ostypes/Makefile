@@ -13,8 +13,8 @@ cqueue.o: /home/tiju/Silverbox-OS/include/stddef.h
 cqueue.o: /home/tiju/Silverbox-OS/include/stdlib.h
 cqueue.o: /home/tiju/Silverbox-OS/include/string.h
 sbarray.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
-sbarray.o: /home/tiju/Silverbox-OS/include/string.h
 sbarray.o: /home/tiju/Silverbox-OS/include/stddef.h
+sbarray.o: /home/tiju/Silverbox-OS/include/string.h
 sbarray.o: /home/tiju/Silverbox-OS/include/stdlib.h
 sbarray.o: /home/tiju/Silverbox-OS/include/stdarg.h
 sbassocarray.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h

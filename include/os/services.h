@@ -95,12 +95,13 @@ struct AttachShmRegArgs
 
 struct DetachShmRegArgs
 {
-  
+  shmid_t shmid;
+  struct MemRegion region;
 } __PACKED__;
 
 struct DeleteShmArgs
 {
-  
+  shmid_t shmid;
 } __PACKED__;
 
 struct ConnectArgs
@@ -111,7 +112,7 @@ struct ConnectArgs
 
 int mapMem( void *phys, void *virt, int numPages, int flags );
 int allocatePages( void *address, int numPages );
-int mapTid( tid_t tid, void *addr_space );
+int mapTid( tid_t tid, rspid_t pool_id );
 int createShmem( shmid_t shmid, unsigned pages, struct MemRegion *region, bool ro_perm );
 int attachShmemReg( shmid_t shmid, struct MemRegion *region );
 
@@ -127,8 +128,5 @@ int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
 
 int mountFs( int device, const char fs[12], const char *path, int flags );
 int unmountFs( const char *path );
-
-int allocatePortRange( int first_port, int num_ports );
-int releasePortRange( int first_port, int num_ports );
 
 #endif /* OS_SERVICES_H */

@@ -483,7 +483,7 @@ int do_printf(void *s, const char *format, va_list ap, int is_stream)
               if( !(precision == 0 && *buf == '0' && int_len == 1) )
               {
                 for( int i=0; i < int_len; i++, write_count++ )
-                  add_char(buf[i], &s, is_stream);    
+                  add_char(buf[i], &s, is_stream);
                 count += int_len;
               }
 
@@ -593,7 +593,7 @@ int do_printf(void *s, const char *format, va_list ap, int is_stream)
 
                 for( int i=0; i < h_len; i++, write_count++ )
                   add_char(buf[i], &s, is_stream);
-              }         
+              }
             }
             break;
           }

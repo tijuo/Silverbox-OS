@@ -63,7 +63,7 @@ int mapMemRange( void *virt, int pages )
   return 0;
 }
 
-void clearPage( void *page )
+void setPage( void *page, char data )
 {
   if( __map((void *)TEMP_PAGE, page, 1, 0, NULL_PADDR) < 1 )
   {
@@ -71,6 +71,12 @@ void clearPage( void *page )
     return;
   }
 
-  memset((void *)TEMP_PAGE, 0, PAGE_SIZE);
+  memset((void *)TEMP_PAGE, data, PAGE_SIZE);
   __unmap((void *)TEMP_PAGE, NULL_PADDR);
+
+}
+
+void clearPage( void *page )
+{
+  setPage(page, 0);
 }

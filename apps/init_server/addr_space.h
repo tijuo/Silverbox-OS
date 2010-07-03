@@ -1,10 +1,6 @@
 #ifndef ADDR_SPACE_H
 #define ADDR_SPACE_H
 
-#include <os/bitmap.h>
-#include "list.h"
-#include "phys_alloc.h"
-#include <os/os_types.h>
 #include <os/region.h>
 #include <stddef.h>
 #include <oslib.h>
@@ -25,6 +21,9 @@
 #define REG_PHYS	1
 #define REG_FILE	2
 
+#define IS_PNULL(x)	((void *)x == (void *)NULL_PADDR)
+#define IS_NULL(x)	((void *)x == (void *)NULL)
+
 /*
   Addresses in an address space can be non-existant, correspond to physical
   memory, or file. An address region may be swapped out to disk.
@@ -38,18 +37,14 @@ struct AddrRegion
   int flags;
 };
 
+#include <os/bitmap.h>
+#include <os/os_types.h>
+
 struct AddrSpace
 {
   void *phys_addr;
-  struct ListType mem_region_list;
   SBArray memoryRegions;
   bitmap_t bitmap[NUM_PTABLES / 8];
-};
-
-struct _Thread
-{
-  tid_t tid;
-  void *aspace_phys;
 };
 
 struct Executable
@@ -63,33 +58,29 @@ struct Executable
   size_t bssLen;
 };
 
+/*
 struct ListNode *free_list_nodes;
 struct ListType addr_space_list;
+*/
 
-SBAssocArray addrSpaces; // phys_addr -> struct AddrSpace
-SBAssocArray threadTable; // tid -> struct _Thread
-
-void *list_malloc( size_t size );
-void list_free( void *node );
+//SBAssocArray addrSpaces; // phys_addr -> struct AddrSpace
 
 void init_addr_space(struct AddrSpace *addr_space, void *phys_addr);
+void delete_addr_space(struct AddrSpace *addr_space);
+/*
 int addAddrSpace(struct AddrSpace *addrSpace);
 struct AddrSpace *lookupPhysAddr(void *phys_addr);
 struct AddrSpace *removeAddrSpace(void *phys_addr);
+*/
+bool get_ptable_status(struct AddrSpace *addr_space, void *virt);
+int set_ptable_status(struct AddrSpace *addr_space, void *virt, bool status);
 
-bool get_ptable_status(void *aspace_phys, void *virt);
-int set_ptable_status(void *aspace_phys, void *virt, bool status);
+//int attach_mem_region(void *aspace_phys, struct AddrRegion *region);
+//bool region_overlaps(void *aspace_phys, struct MemRegion *region);
+//bool find_address(void *aspace_phys, void *addr);
 
-int attach_tid(void *aspace_phys, tid_t tid);
-int detach_tid(tid_t tid);
-void *lookup_tid(tid_t tid);
-struct AddrSpace *_lookup_tid(tid_t tid);
-
-int attach_mem_region(void *aspace_phys, struct AddrRegion *region);
-int _attach_mem_region(struct AddrSpace *addr_space, struct AddrRegion *region);
-bool _region_overlaps(struct AddrSpace *addr_space, struct MemRegion *region);
-bool region_overlaps(void *aspace_phys, struct MemRegion *region);
-bool find_address(void *aspace_phys, void *addr);
-bool _find_address(struct AddrSpace *addr_space, void *addr);
+int attach_mem_region(struct AddrSpace *addr_space, struct AddrRegion *region);
+bool region_overlaps(struct AddrSpace *addr_space, struct MemRegion *region);
+bool find_address(struct AddrSpace *addr_space, void *addr);
 
 #endif /* ADDR_SPACE_H */
