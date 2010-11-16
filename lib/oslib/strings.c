@@ -76,3 +76,22 @@ char *toIntString(int num)
   s_num[j] = '\0';
   return s_num;
 }
+
+char *copyCString(char *string)
+{
+  size_t len;
+  char *newString;
+
+  if( !string )
+    return NULL;
+
+  len = strlen(string);
+
+  if( (newString = malloc(len+1)) == NULL )
+    return NULL;
+
+  strncpy(newString, string, len);
+  newString[len] = '\0';
+
+  return newString;
+}

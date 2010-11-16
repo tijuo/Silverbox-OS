@@ -4,45 +4,21 @@
 #include <os/device.h>
 #include <string.h>
 #include "name.h"
-
-/*
-static struct NameRecord threadNames[MAX_NAME_RECS], 
-              deviceNames[MAX_NAME_RECS]/*, fsNames[MAX_NAME_RECS]* /;
-static unsigned numThreadNames = 0, / *numFsNames = 0,* / numDeviceNames = 0;
-*/
-
-/*
-int registerThreadName(char *name, size_t len, tid_t tid);
-tid_t lookupThreadName(char *name, size_t len);
-int registerDeviceName(char *name, size_t len, struct Device *dev);
-struct Device *lookupDeviceMajor( char major );
-struct _NameEntry *lookupDeviceName( char *name, size_t len );
-*/
+#include "vfs.h"
 
 static int registerThreadName(char *name, size_t len, tid_t tid);
-//static int registerFsName(char *name, size_t len, struct Filesystem *fs);
+static int registerFsName(char *name, size_t len, struct VFS_Filesystem *fs);
 static int registerDeviceName(char *name, size_t len, struct Device *dev);
 
 static int _registerDevice(struct Device *device);
 static struct Device * _unregisterDevice(int major);
+static int _registerFs(struct VFS_Filesystem *fs)
+static struct VFS_Filesystem *_unregisterFs(char *name, size_t len)
 
 struct Device *lookupDeviceMajor(int major);
 int _registerName(char *name, size_t len, enum _NameType type, void *data);
 struct NameRecord *_lookupName(char *name, size_t len, enum _NameType type);
 int _unregisterName(char *name, size_t len, enum _NameType type);
-
-/*
-tid_t lookupThreadName(char *name, size_t len)
-{
-  for(int i=0; i < numThreadNames; i++)
-  {
-    if( strncmp(threadNames[i].name, name, len) == 0 )
-      return threadNames[i].tid;
-  }
-
-  return NULL_TID;
-}
-*/
 
 static int _registerDevice(struct Device *device)
 {
@@ -50,7 +26,7 @@ static int _registerDevice(struct Device *device)
     return -1;
 
   if( sbAssocArrayInsert( &deviceTable, &device->major, sizeof device->major,
-        device, sizeof device ) < 0 )
+        device, sizeof *device ) < 0 )
   {
     return -1;
   }
@@ -58,7 +34,7 @@ static int _registerDevice(struct Device *device)
     return 0;
 }
 
-static struct Device * _unregisterDevice(int major)
+static struct Device *_unregisterDevice(int major)
 {
   struct Device *dev;
 
@@ -68,9 +44,34 @@ static struct Device * _unregisterDevice(int major)
     return dev;
 }
 
+static int _registerFs(struct VFS_Filesystem *fs)
+{
+  if( !fs )
+    return -1;
+
+  if( sbAssocArrayInsert( &fsTable, fs->name, fs->nameLen, fs, sizeof *fs ) 
+        != 0 )
+  {
+    return -1;
+  }
+  else
+    return 0;
+}
+
+static struct VFS_Filesystem *_unregisterFs(char *name, size_t len)
+{
+  struct VFS_Filesystem *fs;
+
+  if( sbAssocArrayRemove( &fsTable, name, len (void **)&fs, NULL ) != 0 )
+    return NULL;
+  else
+    return fs;
+}
+
 int _registerName(char *name, size_t len, enum _NameType type, void *data)
 {
   int ret = -1;
+  struct NameRecord *record;
 
   if( !data )
     return ret;
@@ -82,10 +83,7 @@ int _registerName(char *name, size_t len, enum _NameType type, void *data)
       break;
     case DEVICE:
     {
-      struct Device *dev = (struct Device *)data;
-      struct NameRecord *record;
-
-      if( registerDeviceName(name, len, dev) != 0 )
+      if( registerDeviceName(name, len, (struct Device *)data) != 0 )
         break;
 
       record = _lookupName(name, len, DEVICE);
@@ -95,8 +93,18 @@ int _registerName(char *name, size_t len, enum _NameType type, void *data)
 
       break;
     }
-    //case FS:
-    //  return registerFsName(name, len, *(struct Filesystem *)fs);
+    case FS:
+    {
+      if( registerFsName(name, len, (struct Filesystem *)fs) != 0 )
+        break;
+
+      record = _lookupName(name, len, FS);
+
+      if( record )
+        ret = _registerFs(&record->entry.fs);
+
+      break;
+    }
     default:
       break;
   }
@@ -117,6 +125,9 @@ int _unregisterName(char *name, size_t len, enum _NameType type)
     case DEVICE:
       array = &deviceNames;
       break;
+    case FS:
+      array = &fsNames;
+      break;
     default:
       break;
   }
@@ -125,7 +136,9 @@ int _unregisterName(char *name, size_t len, enum _NameType type)
     return -1;
 
   if( type == DEVICE )
-    _unregisterDevice(record->entry.device.major);
+    free(_unregisterDevice(record->entry.device.major));
+  else if( type == FS )
+    free(_unregisterFs(record->entry.fs.name, record->entry.fs.nameLen));
 
   free(record);
 
@@ -183,23 +196,33 @@ static int registerDeviceName(char *name, size_t len, struct Device *dev)
 
   return 0;
 }
-/*
-int registerFsName(char *name, size_t len, struct Filesystem *fs)
+
+static int registerFsName(char *name, size_t len, struct VFS_Filesystem *fs)
 {
-  if( len > MAX_NAME_LEN )
+  struct NameRecord *record;
+
+  if( len > VFS_NAME_MAXLEN )
     return -1;
-  else if( numFsNames >= MAX_NAME_RECS )
+
+  record = malloc(sizeof *record);
+
+  if( !record )
     return -1;
 
-  memcpy(deviceNames[numFsNames].name, name, len);
+  memcpy(record->name, name, len);
+  record->name_len = len;
+  record->entry.fs = *fs;
+  record->name_type = FS;
 
-  fsNames[numFsNames].name_len = len;
-  fsNames[numFsNames].entry.fs = *fs;
+  if( sbAssocArrayInsert(&fsName, name, len, record, sizeof *record) != 0 )
+  {
+    free(record);
+    return -1;
+  }
 
-  numFsNames++;
   return 0;
 }
-*/
+
 
 struct NameRecord *_lookupName(char *name, size_t len, enum _NameType type)
 {
@@ -214,12 +237,9 @@ struct NameRecord *_lookupName(char *name, size_t len, enum _NameType type)
     case DEVICE:
       array = &deviceNames;
       break;
-/*
     case FS:
-    {
+      array = &fsNames;
       break;
-    }
-*/
     default:
       break;
   }

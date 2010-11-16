@@ -12,11 +12,11 @@
 union _NameEntry
 {
   struct Device device;
-//  struct Filesystem fs;
+  struct VFS_Filesystem fs;
   tid_t tid;
 };
 
-enum _NameType { THREAD, DEVICE /*; FS */ };
+enum _NameType { THREAD, DEVICE  FS };
 
 struct NameRecord
 {
@@ -27,7 +27,7 @@ struct NameRecord
   
 };
 
-SBAssocArray threadNames, deviceNames, deviceTable;
+SBAssocArray threadNames, deviceNames, fsNames, deviceTable, fsTable;
 
 struct Device *lookupDeviceMajor(int major);
 int _registerName(char *name, size_t len, enum _NameType type, void *data);

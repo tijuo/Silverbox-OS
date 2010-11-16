@@ -6,6 +6,8 @@
 #include <os/os_types.h>
 //#include <time.h>
 
+#define VFS_NAME_MAXLEN		12
+
 typedef SBArray SBFilePath;
 
 struct FileAttributes
@@ -35,14 +37,15 @@ struct FSOps
 struct MountEntry
 {
   int device;
-  struct VFS_FS *fs;
+  struct VFS_Filesystem *fs;
   SBString path;
   int flags;
 };
 
-struct VFS_FS
+struct VFS_Filesystem
 {
-  char name[12];
+  char name[VFS_NAME_MAXLEN];
+  size_t nameLen;
   struct FSOps fsOps;
 };
 
@@ -77,7 +80,8 @@ struct FsReplyHeader
 struct MountArgs
 {
   int device;
-  char fs[12];
+  size_t fsLen;
+  char fs[VFS_NAME_MAXLEN];
   int flags;
 };
 

@@ -1,0 +1,521 @@
+types: byte int16 int32 int64
+complex: string/binary (sequence of bytes), array( sequence of types ), hash
+
+\x*0 - null/zero
+
+\x*3 <8-bit value> - char/byte
+\x*4 <16-bit value> - int16/uint16
+\x*5 <32-bit value> - int32/uint32
+\x*6 <64-bit value> - int64/uint32
+
+\x01 - true(boolean)
+\x02 - false(boolean)
+\x07 <128-bit value> - UUID
+
+complex (least significant nibble is ORed with a storage type variable
+
+\x2* (number of elements) ...(array data) - array
+\x3* (size of string/binary[in bytes]) ...(bytes) - string/binary
+\x4* (number of pairs) <key value>* - associative array
+
+17, [2,'hello',{'yes': [1,true]}]  would be encoded as:
+
+       17             [             2                  'hello' {            'yes' [            1              true ]}]
+"\x05\x11\x00\x00\x00\x23\x03\x05\x02\x00\x00\x00\x33\x05hello\x43\x01\x33\x03yes\x23\x02\x05\x01\x00\x00\x00\x01"
+
+34 bytes
+
+compact - 21 bytes
+
+rpc call and response
+
+rpc call
+
+[\x01] (protocol number) \x50 [\x3* ...](string: function_name)
+	[\x07 ...] (uuid: tag) [\x2* or \x4* or \x00](arguments[if any])
+
+rpc response
+
+\x01 (protocol number) \x60 [\x3* ...](string: function_name)
+	[\x07 ...] (uuid: tag) [\x2* or \x4* or \x00](arguments[if any])
+
+#define RPC_PROTOCOL		1
+
+#define RPC_NULL		0
+#define RPC_TRUE		1
+#define RPC_FALSE		2
+#define RPC_CHAR		3
+#define RPC_BYTE		RPC_CHAR
+#define	RPC_INT16		4
+#define RPC_UINT16		RPC_INT16
+#define RPC_INT32		5
+#define RPC_UINT32		RPC_INT32
+#define RPC_INT64		6
+#define RPC_UINT64		RPC_INT64
+#define RPC_UUID		7
+
+#define RPC_ARRAY		0x20
+#define RPC_STRING		0x30
+#define RPC_HASH		0x40
+#define RPC_CALL		0x50
+#define RPC_RESPONSE		0x60
+
+#define RPC_PAIR		0x100
+#define	RPC_KEY			0x101
+#define RPC_VALUE		0x102
+
+struct RPC_Node
+{
+  int type;
+  struct RPC_Node *children;
+  unsigned long long numChildren;
+
+  union RPC_Data
+  {
+    char8 b;
+    int16 i16;
+    int32 i32;
+    int64 i64;
+    uuid_t uuid;
+
+    struct
+    {
+      struct RPC_Node *functionName;
+      uuid_t tag;
+    };
+
+    struct
+    {
+      char8 *seq;
+      unsigned long long len;
+    };
+  } data;
+};
+
+enum RPC_Error { RPC_OK, RPC_PARSE_ERROR, RPC_FAIL };
+
+struct RPC_Node *parse_rpc_string(char *str)
+{
+  enum RPC_Error _error;
+  struct RPC_Node *node;
+
+  if( str )
+  {
+    if( *str++ != RPC_PROTOCOL )
+    {
+      SET_RPC_ERROR(error, RPC_PARSE_ERROR);
+      return NULL;
+    }
+
+    
+  }
+}
+
+void free_rpc_nodes(struct RPC_Node *node)
+{
+  if( !node )
+    return;
+
+  switch(node->type)
+  {
+    case RPC_STRING:
+      free(node->seq);
+      break;
+    case RPC_CALL:
+    case RPC_RESPONSE:
+      free(node->data.functionName);
+    case RPC_ARRAY:
+    case RPC_HASH:
+    case RPC_PAIR:
+    case RPC_KEY:
+    case RPC_VALUE:
+      while(node->numChildren)
+        free_rpc_nodes(&node->children[--node->numChildren]);
+      free(node->children);
+      break;
+    default:
+      break;
+  }
+}
+
+static enum RPC_Error _parse_null(char **str, struct RPC_Node *node)
+{
+  if( **str != RPC_NULL )
+    return RPC_PARSE_ERROR;
+
+  node->numChildren = 0;
+  node->type = RPC_NULL;
+  node->children = NULL;
+  (*str)++;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_true(char **str, struct RPC_Node *node)
+{
+  if( **str != RPC_TRUE )
+    return RPC_PARSE_ERROR;
+
+  node->numChildren = 0;
+  node->type = RPC_TRUE;
+  node->children = NULL;
+  (*str)++;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_false(char **str, struct RPC_Node *node)
+{
+  if( **str != RPC_FALSE )
+    return RPC_PARSE_ERROR;
+
+  node->numChildren = 0;
+  node->type = RPC_FALSE;
+  node->children = NULL;
+  (*str)++;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_byte(char **str, struct RPC_Node *node)
+{
+  if( **str != RPC_BYTE )
+    return RPC_PARSE_ERROR;
+
+  node->numChildren = 0;
+  node->type = RPC_BYTE;
+  node->children = NULL;
+  node->data.b = *(++(*str));
+  (*str)++;
+
+  return RPC_OK;
+}
+
+
+static enum RPC_Error _parse_int16(char **str, struct RPC_Node *node)
+{
+  if( **str != RPC_INT16 )
+    return RPC_PARSE_ERROR;
+
+  node->numChildren = 0;
+  node->type = RPC_INT16;
+  node->children = NULL;
+  node->data.i16 = *((int16 *)++*str);
+  ((int16 *)*str)++;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_int32(char **str, struct RPC_Node *node)
+{
+  if( **str != RPC_INT32 )
+    return RPC_PARSE_ERROR;
+
+  node->numChildren = 0;
+  node->type = RPC_INT32;
+  node->children = NULL;
+  node->data.i32 = *((int32 *)++*str);
+  ((int32 *)*str)++;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_int64(char **str, struct RPC_Node *node)
+{
+  if( **str != RPC_INT64 )
+    return RPC_PARSE_ERROR;
+
+  node->numChildren = 0;
+  node->type = RPC_INT64;
+  node->children = NULL;
+  node->data.i64 = *((int64 *)++*str);
+  ((int64 *)*str)++;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_uuid(char **str, struct RPC_Node *node)
+{
+  if( **str != RPC_UUID )
+    return RPC_PARSE_ERROR;
+
+  node->numChildren = 0;
+  node->type = RPC_UUID;
+  node->children = NULL;
+  node->data.uuid = *((uuid_t *)++*str);
+  ((uuid_t *)*str)++;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_string(char **str, struct RPC_Node *node)
+{
+  unsigned long long length;
+
+  if( (**str & 0xF0) != RPC_STRING )
+    return RPC_PARSE_ERROR;
+
+  switch( **str & 0xF )
+  {
+    case RPC_NULL:
+      node->data.seq = NULL;
+      length = 0;
+      break;
+    case RPC_BYTE:
+      length = *(uchar8 *)(++(*str));
+      ++(*str);
+      break;
+    case RPC_UINT16:
+      length = *(uint16 *)(++(*str));
+      ++((uint16 *)*str);
+      break;
+    case RPC_UINT32:
+      length = *(uint32 *)(++(*str));
+      ++((uint32 *)*str);
+      break;
+    case RPC_UINT64:
+      length = *(uint64 *)(++(*str));
+      ++((uint64 *)*str);
+      break;
+    default:
+      return RPC_PARSE_ERROR;
+  }
+
+  node->data.len = length;
+
+  if( length )
+  {
+    node->data.seq = malloc(length);
+
+    if( !node->data.seq )
+      return RPC_FAIL;
+
+    // XXX: Need to add support for a 64-bit memcpy()
+
+    memcpy(node->data.seq, *str, (size_t)length);
+    *str += length;
+  }
+
+  node->numChildren = 0;
+  node->type = RPC_STRING;
+  node->children = NULL;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_array(char **str, struct RPC_Node *node)
+{
+  unsigned long long numElements=0;
+  enum RPC_Error status;
+
+  if( (**str & 0xF0) != RPC_ARRAY )
+    return RPC_PARSE_ERROR;
+
+  switch( **str & 0xF )
+  {
+    case RPC_NULL:
+      numElements = 0;
+      break;
+    case RPC_BYTE:
+      numElements = *(uchar8 *)(++(*str));
+      ++(*str);
+      break;
+    case RPC_UINT16:
+      numElements = *(uint16 *)(++(*str));
+      ++((uint16 *)*str);
+      break;
+    case RPC_UINT32:
+      numElements = *(uint32 *)(++(*str));
+      ++((uint32 *)*str);
+      break;
+    case RPC_UINT64:
+      numElements = *(uint64 *)(++(*str));
+      ++((uint64 *)*str);
+      break;
+    default:
+      return RPC_PARSE_ERROR;
+  }
+
+  if( numElements )
+  {
+    if( (node->children = calloc(numElements, sizeof *node)) == NULL )
+      return RPC_FAIL;
+
+    for( unsigned long long i=0; i < numElements; i++ )
+    {
+      if( (status=_parse_node(str, &node->children[i])) != RPC_OK )
+      {
+        while( i )
+          free_rpc_nodes(&node->children[i-- - 1]);
+
+        free(node->children);
+        return status;
+      }
+    }
+  }
+
+  node->numChildren = numElements;
+  node->type = RPC_ARRAY;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_hash(char **str, struct RPC_Node *node)
+{
+  unsigned long long numPairs=0;
+  enum RPC_Error status;
+
+  if( (**str & 0xF0) != RPC_ARRAY )
+    return RPC_PARSE_ERROR;
+
+  switch( **str & 0xF )
+  {
+    case RPC_NULL:
+      numPairs = 0;
+      break;
+    case RPC_BYTE:
+      numPairs = *(uchar8 *)(++(*str));
+      ++(*str);
+      break;
+    case RPC_UINT16:
+      numPairs = *(uint16 *)(++(*str));
+      ++((uint16 *)*str);
+      break;
+    case RPC_UINT32:
+      numPairs = *(uint32 *)(++(*str));
+      ++((uint32 *)*str);
+      break;
+    case RPC_UINT64:
+      numPairs = *(uint64 *)(++(*str));
+      ++((uint64 *)*str);
+      break;
+    default:
+      return RPC_PARSE_ERROR;
+  }
+
+  if( numPairs )
+  {
+    if( (node->children = calloc(numPairs, sizeof *node)) == NULL )
+      return RPC_FAIL;
+
+    for( unsigned long long i=0; i < numPairs; i++ )
+    {
+      if( (status=_parse_pair(str, &node->children[i])) != RPC_OK )
+      {
+        while( i )
+          free_rpc_nodes(&node->children[i-- - 1]);
+
+        free(node->children);
+        return status;
+      }
+    }
+  }
+
+  node->numChildren = numPair;
+  node->type = RPC_ARRAY;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_pair(char **str, struct RPC_Node *node)
+{
+  enum RPC_Error status;
+
+  if( (node->children = calloc(2, sizeof *node) == NULL )
+    return RPC_FAIL;
+
+  if( (status=_parse_key(str,&node->children[0])) != RPC_OK )
+  {
+    free(node->children);
+    return status;
+  }
+
+  if( (status=_parse_value(str, &node->children[1])) != RPC_OK )
+  {
+    free_rpc_nodes(&node->children[0]);
+    free(node->children);
+    return status;
+  }
+
+  node->numChildren = 2;
+  node->type = RPC_PAIR;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_key(char **str, struct RPC_Node *node)
+{
+  enum RPC_Error status;
+
+  if( (node->children = calloc(1, sizeof *node) == NULL )
+    return RPC_FAIL;
+
+  if( (status=_parse_node(str,&node->children[0])) != RPC_OK )
+  {
+    free(node->children);
+    return status;
+  }
+
+  node->numChildren = 1;
+  node->type = RPC_KEY;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_value(char **str, struct RPC_Node *node)
+{
+  enum RPC_Error status;
+
+  if( (node->children = calloc(1, sizeof *node) == NULL )
+    return RPC_FAIL;
+
+  if( (status=_parse_node(str,&node->children[0])) != RPC_OK )
+  {
+    free(node->children);
+    return status;
+  }
+
+  node->numChildren = 1;
+  node->type = RPC_VALUE;
+
+  return RPC_OK;
+}
+
+static enum RPC_Error _parse_node(char **str, struct RPC_Node *node)
+{
+  switch( **str )
+  {
+    case RPC_NULL:
+      return _parse_null(str,node);
+    case RPC_BYTE:
+      return _parse_byte(str,node);
+    case RPC_INT16:
+      return _parse_int16(str,node);
+    case RPC_INT32:
+      return _parse_int32(str,node);
+    case RPC_INT64:
+      return _parse_int64(str,node);
+    case RPC_UUID:
+      return _parse_uuid(str,node);
+    case RPC_CALL:
+      return _parse_call(str,node);
+    case RPC_RESPONSE:
+      return _parse_response(str,node);
+    default:
+      break;
+  }
+
+  switch( **str & 0xF0 )
+  {
+    case RPC_STRING:
+      return _parse_string(str,node);
+    case RPC_ARRAY:
+      return _parse_array(str,node);
+    case RPC_HASH:
+      return _parse_hash(str,node);
+    default:
+      break;
+  }
+
+  return RPC_PARSE_ERROR;
+}
