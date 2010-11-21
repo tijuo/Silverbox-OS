@@ -42,7 +42,7 @@ int isxdigit(int c)
 
 int isprint(int c)
 {
-  return ((c == 0x20) || isgraph(c));
+  return !iscntrl(c);
 }
 
 int ispunct(int c)
@@ -53,7 +53,7 @@ int ispunct(int c)
 
 int isgraph(int c)
 {
-  return ispunct(c) || isgraph(c);
+  return isprint(c) && !isspace(c);
 }
 
 int tolower(int c)

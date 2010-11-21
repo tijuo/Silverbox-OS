@@ -23,27 +23,22 @@ static void shiftArray(struct _SBArrayElem *ptr, int nElems, int shift)
 static int adjustArrayCapacity(SBArray *array)
 {
   struct _SBArrayElem *result;
+  int prev_capacity = array->capacity;
 
   if( array->nElems == array->capacity )
-  {
     array->capacity = (int)(array->nElems * 1.5);
-    result = realloc(array->elems, array->capacity * sizeof(struct _SBArrayElem));
-
-    if( !result )
-      return -1;
-
-    array->elems = result;
-  }
-  else if( (int)(array->nElems * 1.6) < array->capacity )
-  {
+  else
     array->capacity = array->nElems + 3;
-    result = realloc(array->elems, array->capacity * sizeof(struct _SBArrayElem));
 
-    if( !result )
-      return -1;
+  result = realloc(array->elems, array->capacity * sizeof(struct _SBArrayElem));
 
-    array->elems = result;
+  if( !result )
+  {
+    array->capacity = prev_capacity;
+    return -1;
   }
+
+  array->elems = result;
 
   return 0;
 }
