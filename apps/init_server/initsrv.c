@@ -24,7 +24,13 @@ extern void print( char * );
 
 static void handle_message(void);
 static int handle_generic_request(int, struct GenericReq *);
-static int handle_devmgr_request(int, struct
+static int handle_devmgr_request( tid_t sender, void *request,
+   DevReplyMsg *reply_msg );
+
+extern int handleVfsRequest(tid_t sender, struct FsReqHeader *req, char *inBuffer,
+size_t inBytes, char **outBuffer, size_t *outBytes);
+
+
 /* This extends the end of the heap by a certain number of pages. */
 /*
 int extendHeap( unsigned pages )

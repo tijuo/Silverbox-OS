@@ -19,7 +19,7 @@ addr_space.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
 addr_space.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 addr_space.o: /home/tiju/Silverbox-OS/include/stdlib.h
 addr_space.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
-addr_space.o: phys_alloc.h initsrv.h resources.h list.h paging.h
+addr_space.o: phys_alloc.h initsrv.h resources.h paging.h
 phys_alloc.o: phys_alloc.h initsrv.h addr_space.h
 phys_alloc.o: /home/tiju/Silverbox-OS/include/os/region.h
 phys_alloc.o: /home/tiju/Silverbox-OS/include/stddef.h
@@ -34,8 +34,7 @@ phys_alloc.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
 phys_alloc.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 phys_alloc.o: /home/tiju/Silverbox-OS/include/stdlib.h
 phys_alloc.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
-phys_alloc.o: resources.h list.h paging.h
-phys_alloc.o: /home/tiju/Silverbox-OS/include/string.h
+phys_alloc.o: resources.h paging.h /home/tiju/Silverbox-OS/include/string.h
 initsrv.o: /home/tiju/Silverbox-OS/include/oslib.h
 initsrv.o: /home/tiju/Silverbox-OS/include/types.h
 initsrv.o: /home/tiju/Silverbox-OS/include/stddef.h
@@ -83,7 +82,7 @@ exceptions.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
 exceptions.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 exceptions.o: /home/tiju/Silverbox-OS/include/stdlib.h
 exceptions.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
-exceptions.o: phys_alloc.h initsrv.h resources.h list.h paging.h
+exceptions.o: phys_alloc.h initsrv.h resources.h paging.h
 exceptions.o: /home/tiju/Silverbox-OS/include/string.h
 sbrk.o: /home/tiju/Silverbox-OS/include/oslib.h
 sbrk.o: /home/tiju/Silverbox-OS/include/types.h
@@ -112,7 +111,7 @@ init.o: name.h /home/tiju/Silverbox-OS/include/os/device.h
 init.o: /home/tiju/Silverbox-OS/include/os/elf.h
 init.o: /home/tiju/Silverbox-OS/include/elf.h
 init.o: /home/tiju/Silverbox-OS/include/os/signal.h paging.h phys_alloc.h
-init.o: list.h shmem.h /home/tiju/Silverbox-OS/include/string.h
+init.o: shmem.h /home/tiju/Silverbox-OS/include/string.h
 paging.o: /home/tiju/Silverbox-OS/include/oslib.h
 paging.o: /home/tiju/Silverbox-OS/include/types.h
 paging.o: /home/tiju/Silverbox-OS/include/stddef.h
@@ -126,7 +125,7 @@ paging.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
 paging.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 paging.o: /home/tiju/Silverbox-OS/include/stdlib.h
 paging.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
-paging.o: resources.h list.h /home/tiju/Silverbox-OS/include/string.h
+paging.o: resources.h /home/tiju/Silverbox-OS/include/string.h
 resources.o: phys_alloc.h initsrv.h addr_space.h
 resources.o: /home/tiju/Silverbox-OS/include/os/region.h
 resources.o: /home/tiju/Silverbox-OS/include/stddef.h
@@ -141,4 +140,4 @@ resources.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
 resources.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 resources.o: /home/tiju/Silverbox-OS/include/stdlib.h
 resources.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
-resources.o: resources.h list.h paging.h
+resources.o: resources.h paging.h

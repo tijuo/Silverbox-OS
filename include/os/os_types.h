@@ -5,6 +5,21 @@
 #include <os/ostypes/sbstring.h>
 #include <os/ostypes/sbassocarray.h>
 
+enum SBObjectType { SB_ARRAY, SB_STRING, SB_ASSOC_ARRAY };
+
+typedef struct
+{
+  enum SBObjectType type;
+
+  union ObjectData
+  {
+    SBArray array;
+    SBString string;
+    SBAssocArray assocArray;
+    SBRange range;
+  };
+} SBObject;
+
 struct _SBRange
 {
   int start;

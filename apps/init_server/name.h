@@ -5,6 +5,7 @@
 #include <oslib.h>
 #include <os/device.h>
 #include <os/os_types.h>
+#include <os/vfs.h>
 
 #define MAX_NAME_RECS	256
 #define MAX_NAME_LEN	18
@@ -16,7 +17,7 @@ union _NameEntry
   tid_t tid;
 };
 
-enum _NameType { THREAD, DEVICE  FS };
+enum _NameType { THREAD, DEVICE,  FS };
 
 struct NameRecord
 {
@@ -24,7 +25,6 @@ struct NameRecord
   size_t name_len;
   enum _NameType name_type;
   union _NameEntry entry;
-  
 };
 
 SBAssocArray threadNames, deviceNames, fsNames, deviceTable, fsTable;

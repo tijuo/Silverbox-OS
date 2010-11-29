@@ -2,7 +2,6 @@
 #define PHYS_ALLOC
 
 #include "initsrv.h"
-#include "list.h"
 #include "paging.h"
 #include <stddef.h>
 #include <stdbool.h>

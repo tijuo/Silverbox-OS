@@ -2,13 +2,13 @@
 #define LIMITS_H
 
 #define CHAR_BIT	8
-#define SCHAR_MIN	-127
-#define SCHAR_MAX	-SCHAR_MIN
+#define SCHAR_MIN	-128
+#define SCHAR_MAX	(-SCHAR_MIN - 1)
 #define UCHAR_MAX	255
 #define CHAR_MIN	0
 #define MB_LEN_MAX	2
-#define SHRT_MIN	-32767
-#define SHRT_MAX	-SHRT_MIN
+#define SHRT_MIN	-32768
+#define SHRT_MAX	(-SHRT_MIN - 1)
 #define USHRT_MAX	65535
 
 #if __INT_LEN__ == 2
@@ -16,8 +16,8 @@
 #define INT_MAX		SHRT_MAX
 #define UINT_MAX	USHRT_MAX
 #else
-#define INT_MIN		-2147483647
-#define INT_MAX		-INT_MIN
+#define INT_MIN		-2147483648
+#define INT_MAX		(-INT_MIN - 1)
 #define UINT_MAX	4294967295
 #endif /* __INT_LEN__ */
 
@@ -26,12 +26,12 @@
 #define LONG_MAX	-LONG_MIN
 #define ULONG_MAX	4294967295UL
 #else
-#define LONG_MIN	-9223372036854775807L
+#define LONG_MIN	-9223372036854775808L
 #define LONG_MAX	-LONG_MAX
 #define ULONG_MAX	18446744073709551615UL
 #endif /* __LONG_LEN__ */
 
-#define LLONG_MIN	-9223372036854775807LL
+#define LLONG_MIN	-9223372036854775808LL
 #define LLONG_MAX	-LLONG_MIN
 #define ULLONG_MAX	18446744073709551615ULL
 #endif /* LIMITS_H */
