@@ -24,7 +24,7 @@ void *sbrk( int increment )
   if( increment == 0 )
     return prevHeap;
 
-  heapEnd += increment;
+  heapEnd = (void *)((unsigned)heapEnd + increment);
   heapSize += increment;
 
   pages = ((unsigned)heapEnd / PAGE_SIZE) - ((unsigned)prevHeap / PAGE_SIZE);

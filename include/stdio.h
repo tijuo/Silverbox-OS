@@ -8,9 +8,12 @@
 #define BUFSIZ			1024
 #define FILENAME_MAX		256
 #define FOPEN_MAX		16
+
+// Buffer modes
 #define _IOFBF			1
 #define _IOLBF			2
 #define _IONBF			3
+
 #define L_tmpnam
 
 #ifndef NULL
@@ -20,6 +23,7 @@
 #define SEEK_CUR	0
 #define SEEK_END	1
 #define SEEK_SET	2
+
 #define TMP_MAX
 
 #define ACCESS_RD		1
@@ -34,12 +38,15 @@ struct _STDIO_FILE
   unsigned eof       : 1;
   unsigned error     : 1;
   unsigned user_buf  : 1;
+  unsigned is_device : 1;
+  char filename[FILENAME_MAX];
+  size_t filename_len;
   size_t file_pos;
   size_t file_len;
-  short dev_num;
+  short dev_num; // the device corresponding to the file
   char *buffer;
   size_t buffer_len; // the size of the buffer
-  size_t buf_pos; // 
+  size_t buf_pos; // current position of the buffer
 };
 
 typedef struct _STDIO_FILE FILE;
@@ -52,13 +59,16 @@ extern FILE _std_files[3];
 #define stderr   (&_std_files[2])
 
 void clearerr(FILE *stream);
+int fclose(FILE *stream);
 int feof(FILE *fp);
 int ferror(FILE *fp);
 int fflush(FILE *stream);
 int fgetc(FILE *stream);
+FILE *fopen(char *filename, char *mode);
 int fprintf(FILE *stream, const char *format, ...);
 int fputc(int c, FILE *stream);
 int fputs(const char *s, FILE *stream);
+int fread(void *ptr, size_t size, size_t count, FILE *stream);
 int fseek(FILE *stream, long offset, int whence);
 long ftell(FILE *stream);
 int getc(FILE *stream);

@@ -5,8 +5,6 @@
 #include <limits.h>
 #include "serialization.h"
 
-typedef uint8_t uchar;
-
 struct RPC_Node *parseJSON(uchar *s);
 void showNodes(struct RPC_Node *node);
 
@@ -104,7 +102,7 @@ static void _showNodes(struct RPC_Node *node, int depth)
 
   printf("\n");
 
-  for(int i=0; i < node->numChildren; i++)
+  for(unsigned long long i=0; i < node->numChildren; i++)
     _showNodes(&node->children[i], depth+1);
 }
 
@@ -200,9 +198,9 @@ static int _parseString(uchar **s, struct RPC_Node *node)
       }
     }
 
-    if( **s >= 0 && **s < 0x20 )
+    if( **s < 0x20 )
       return 0;
-    else if( **s == 0xC0 || **s == 0xC1 || (**s >= 0xF5 && **s <= 0xFF) )
+    else if( **s == 0xC0 || **s == 0xC1 || **s >= 0xF5 )
       return 0;
     else if( !bytes_left && **s >= 0x80 && **s <= 0xBF )
       return 0;

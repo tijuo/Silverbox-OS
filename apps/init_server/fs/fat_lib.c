@@ -1,10 +1,11 @@
-#include "os/fatfs.h"
+#include "fatfs.h"
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <os/vfs.h>
 #include <os/dev_interface.h>
 #include <os/services.h>
+#include "../name.h"
 
 struct FatDir
 {
@@ -19,13 +20,13 @@ struct FatDir
     unsigned sector;
   };
 
-  unsigned next;	// the next sector/cluster from which to read the entries
+  unsigned start;	// the starting sector/cluster of this directory
+  unsigned current;	// the current sector/cluster that corresponds with the entries
+  unsigned next;	// the next sector/cluster from which to read the entries (only valid if more is 1)
 
   char more : 1;	// indicates that there are more entries to be read
   char use_sects : 1;	// read from sectors instead of clusters
 };
-
-/* TODO: Need to implement LFNs and FAT32 */
 
 /* XXX: readCluster() and writeCluster() are broken! 
    If the size of a block isn't divisible by 512, then there's
@@ -57,6 +58,7 @@ static int _createEntry( SBFilePath *path, const char *name,
 static struct FatDir *readDirEntry( SBFilePath *path, struct FAT_Dev *fat_dev );
 static struct FatDir *readNextEntry( struct FatDir *fat_dir );
 static void freeFatDir( struct FatDir *fat_dir );
+
 int writeSector( struct FAT_Dev *fatDev, unsigned sector, void *buffer );
 
 int fatReadFile( SBFilePath *path, unsigned int offset, unsigned short devNum,
@@ -66,6 +68,11 @@ int fatGetDirList( SBFilePath *path, unsigned short devNum, struct FileAttribute
 int fatGetAttributes( SBFilePath *path, unsigned short devNum, struct FileAttributes *attrib );
 int fatCreateFile( SBFilePath *path, const char *name, unsigned short devNum );
 int fatCreateDir( SBFilePath *path, const char *name, unsigned short devNum );
+
+extern int sbFilePathAtLevel(const SBFilePath *path, int level, SBString *str);
+extern int sbFilePathCreate(SBFilePath *path);
+extern int sbFilePathDelete(SBFilePath *path);
+extern int sbFilePathDepth(const SBFilePath *path, size_t *depth);
 
 /* Indicates whether a character is valid for a FAT file/directory.
    Returns 0 on a valid char. -1 for invalid char. */
@@ -142,6 +149,8 @@ static int calcRootDirSecs(union FAT_BPB *bpb)
     rootdirs = bpb->fat12.root_ents;
   else if(type == FAT16)
     rootdirs = bpb->fat16.root_ents;
+  else
+    return -1;
 
   return (rootdirs * 32) / FAT_SECTOR_SIZE;
 }
@@ -167,6 +176,8 @@ static int firstDataSec(union FAT_BPB *bpb)
     resd = bpb->fat16.resd_secs;
     copies = bpb->fat16.fat_copies;
   }
+  else
+    return -1;
 
   if(fatsize == 0)
     fatsize = bpb->fat32.secs_per_fat;
@@ -187,6 +198,8 @@ static int calcFirstSecClus(int clusnum, union FAT_BPB *bpb)
     size = bpb->fat12.secs_per_clus;
   else if(type == FAT16)
     size = bpb->fat16.secs_per_clus;
+  else
+    return -1;
 
   if(size == 0)
     size = bpb->fat32.secs_per_clus;
@@ -214,6 +227,8 @@ static int calcDataSecs(union FAT_BPB *bpb)
     resd = bpb->fat16.resd_secs;
     copies = bpb->fat16.fat_copies;
   }
+  else
+    return -1;
 
   if(fatsize == 0)
     fatsize = bpb->fat32.secs_per_fat;
@@ -237,6 +252,8 @@ static int calcClusCount(union FAT_BPB *bpb)
     secs_per_clus = bpb->fat12.secs_per_clus;
   else if(type == FAT16)
     secs_per_clus = bpb->fat16.secs_per_clus;
+  else
+    return -1;
 
   return calcDataSecs(bpb) / secs_per_clus;
 }
@@ -250,7 +267,7 @@ static enum FAT_Type determineFAT_Type(union FAT_BPB *bpb)
   else if(count <= 65526)
     return FAT16;
   else
-    return FAT32;
+    return -1;
 }
 
 /* Find the the size of one FAT in sectors.
@@ -281,6 +298,8 @@ static int calcFatSize(union FAT_BPB *bpb)
     totalsecs = bpb->fat16.total_secs;
     fat_len = 2;
   }
+  else
+    return -1;
 
   result = (fat_len * (totalsecs - resdsecs - ((rootents * 32) / FAT_SECTOR_SIZE))) / \
 	(clussize * FAT_SECTOR_SIZE + 4);
@@ -333,6 +352,7 @@ static enum FAT_ClusterType getClusterType( unsigned cluster, enum FAT_Type type
       else if( cluster == 1 || (cluster >= 0xFFF0 && cluster <= 0xFFF6) )
         return RESD_CLUSTER;
       break;
+/*
     case FAT32:
       cluster &= 0xFFFFFFF;
 
@@ -346,6 +366,7 @@ static enum FAT_ClusterType getClusterType( unsigned cluster, enum FAT_Type type
         return BAD_CLUSTER;
       else if( cluster == 1 || (cluster >= 0xFFFFFF0 && cluster <= 0xFFFFFF6) )
         return RESD_CLUSTER;
+*/
     default:
       return INVALID_CLUSTER;
   }
@@ -478,15 +499,21 @@ int writeSector( struct FAT_Dev *fatDev, unsigned sector, void *buffer )
 static int getDeviceData( unsigned short devNum, struct FAT_Dev *fatDev )
 {
   byte *buffer;
+  struct Device *device;
 
   if( fatDev == NULL )
     return -1;
 
-  if( lookupDevMajor( MAJOR(devNum), &fatDev->device ) != 0 )
+  device = lookupDeviceMajor(MAJOR(devNum));
+
+  if( !device )
   {
-    free(buffer);
+    print("Couldn't find device! ");
+    print("0x"), printHex(MAJOR(devNum)), print("\n");
     return -1;
   }
+
+  fatDev->device = *device;
 
   if( (buffer = malloc( fatDev->device.dataBlkLen )) == NULL )
     return -1;
@@ -530,8 +557,10 @@ static int getDeviceData( unsigned short devNum, struct FAT_Dev *fatDev )
   else if( fatDev->cache.fatType == FAT16 )
     fatDev->cache.fatSize = fatDev->bpb.fat16.secs_per_fat;
   else
+    return -1;
+ /* else
     fatDev->cache.fatSize = fatDev->bpb.fat32.secs_per_fat;
-
+*/
   fatDev->cache.clusterCount = calcClusCount(&fatDev->bpb);
   fatDev->cache.firstDataSec = firstDataSec(&fatDev->bpb);
   fatDev->cache.numDataSecs = calcDataSecs(&fatDev->bpb);
@@ -553,7 +582,7 @@ static int getFAT_DirEntry( SBFilePath *path, struct FAT_Dev *fatDev,
 {
   unsigned int i;
   int startSector, clusterSize, rootEnts, ret=-1;
-  char *buffer, fileName[11], *retFname, *cFname;
+  char *buffer, fileName[11], *retFname;
   const char *nextToken;
   struct FAT_DirEntry entry;
   size_t fnameLen, dirSize;
@@ -562,11 +591,14 @@ static int getFAT_DirEntry( SBFilePath *path, struct FAT_Dev *fatDev,
   int depth, pathLevel=0;
   SBString dirName;
 
-  if( sbFilePathDepth( path, &depth ) < 0 )
-    return -1;
-
   if( path == NULL || fatDev == NULL || dirEntry == NULL )
     return -1;
+
+  if( sbFilePathDepth( path, &depth ) != 0 )
+    return -1;
+
+  if( depth == 0 )
+    print("Ooops! Depth = 0! (this isn't supposed to happen)\n");
 
   dirSize = FAT_SECTOR_SIZE;
 
@@ -582,20 +614,18 @@ static int getFAT_DirEntry( SBFilePath *path, struct FAT_Dev *fatDev,
     rootEnts = fatDev->bpb.fat16.root_ents;
     startSector = fatDev->bpb.fat16.resd_secs + fatDev->bpb.fat16.secs_per_fat * fatDev->bpb.fat16.fat_copies;
   }
+  else
+    return -1;
 
   if( sbFilePathAtLevel( path, pathLevel++, &dirName ) != 0 )
     return -1;
 
-  if( sbStringToCString(&dirName, &cFname) != 0 )
-    return -1;
-
-  retFname = generate8_3Name(cFname, sbStringLength(&dirName), fileName );
-  free(cFname);
+  retFname = generate8_3Name(dirName.data, sbStringLength(&dirName), fileName );
 
   if( retFname == NULL )
   {
     // This is not supposed to happen. The path should lead to a file
-
+    print("This is not supposed to happen.\n");
     return -1;
   }
 
@@ -652,16 +682,10 @@ static int getFAT_DirEntry( SBFilePath *path, struct FAT_Dev *fatDev,
       {
         cluster = entry.start_clus;
 
-        if( sbFilePathAtLevel( path, pathLevel++, &dirName ) != 0 || 
-            sbStringToCString(&dirName, &cFname) != 0 )
-        {
+        if( sbFilePathAtLevel( path, pathLevel++, &dirName ) != 0 )
           retFname = NULL;
-        }
         else
-        {
-          retFname = generate8_3Name(cFname, sbStringLength(&dirName), fileName );
-          free(cFname);
-        }
+          retFname = generate8_3Name(dirName.data, sbStringLength(&dirName), fileName );
 
         if( retFname == NULL || !(dirEntry->attrib & FAT_SUBDIR) ) // Reached the end of the path or the next item is not a valid directory
         {
@@ -825,7 +849,7 @@ int fatGetDirList( SBFilePath *path, unsigned short devNum, struct FileAttribute
       strncpy( fsEntry->name, (char *)fat_dir->entries[i].filename, nameLen );
 
       fsEntry->timestamp = 0; // FIXME
-      fsEntry->nameLen += nameLen;
+      fsEntry->name_len += nameLen;
 
       if( fat_dir->entries[i].attrib & FAT_RDONLY )
         fsEntry->flags |= FS_RDONLY;
@@ -842,14 +866,14 @@ int fatGetDirList( SBFilePath *path, unsigned short devNum, struct FileAttribute
         {
           fsEntry->name[nameLen] = '.';
           strncpy( &fsEntry->name[nameLen+1], (char *)&fat_dir->entries[i].filename[8], extLen );
-          fsEntry->nameLen += extLen + 1;
+          fsEntry->name_len += extLen + 1;
         }
       }
 
       entriesRead++;
     }
 
-    if( maxEntries > entriesRead )
+    if( maxEntries > (unsigned)entriesRead )
     {
       maxEntries -= entriesRead;
       entriesListed += entriesRead;
@@ -886,12 +910,30 @@ int fatGetAttributes( SBFilePath *path, unsigned short devNum, struct FileAttrib
   struct FAT_DirEntry entry;
   size_t nameLen, extLen;
   struct FAT_Dev fatInfo, *fat_dev = &fatInfo;
+  int depth = 0;
 
   if( path == NULL || attrib == NULL || getDeviceData( devNum, &fatInfo ) < 0 )
+  {
+    print("Something went wrong\n");
     return -1;
+  }
 
-  if( getFAT_DirEntry( path, fat_dev, &entry ) != 0 )
-    return -1;
+  if( sbFilePathDepth(path, &depth) == 0 && depth > 0 )
+  {
+    print("oops! depth failed\n");
+    if( getFAT_DirEntry( path, fat_dev, &entry ) != 0 )
+      return -1;
+  }
+  else if( depth == 0 )
+  {
+    print("Getting attributes of root\n");
+    attrib->size = 0;
+    attrib->timestamp = 0;
+    attrib->name_len = 0;
+    attrib->flags |= FS_DIR;
+
+    return 0;
+  }
 
   memset( attrib, 0, sizeof *attrib );
   attrib->size = entry.file_size;
@@ -900,7 +942,7 @@ int fatGetAttributes( SBFilePath *path, unsigned short devNum, struct FileAttrib
   strncpy( attrib->name, (char *)entry.filename, nameLen );
 
   attrib->timestamp = 0;
-  attrib->nameLen += nameLen;
+  attrib->name_len += nameLen;
 
   if( entry.attrib & FAT_RDONLY )
     attrib->flags |= FS_RDONLY;
@@ -917,7 +959,7 @@ int fatGetAttributes( SBFilePath *path, unsigned short devNum, struct FileAttrib
     {
       attrib->name[nameLen] = '.';
       strncpy( &attrib->name[nameLen+1], (char *)&entry.filename[8], extLen );
-      attrib->nameLen += extLen + 1;
+      attrib->name_len += extLen + 1;
     }
   }
   return 0;
@@ -982,6 +1024,8 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
       sector = fat_dev->bpb.fat16.resd_secs + fat_dev->bpb.fat16.secs_per_fat * 
                fat_dev->bpb.fat16.fat_copies;
     }
+    else
+      return -1;
 
     buffer = malloc( dirSize );
 
@@ -1048,8 +1092,7 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
 
         entry->attrib = dir ? FAT_SUBDIR : 0;
         entry->time = entry->date = 0;
-        entry->start_clus = fat_dev->cache.fatType == FAT12 ? 0xFF8 : 
-                      (fat_dev->cache.fatType == FAT16 ? 0xFFF8 : 0xFFFFFF8);
+        entry->start_clus = fat_dev->cache.fatType == FAT12 ? 0xFF8 : 0xFFF8;
         entry->file_size = dir ? dirSize : 0;
 
         if( dir )
@@ -1057,8 +1100,8 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
           unsigned dirCluster = getFreeCluster( fat_dev );
           struct FAT_DirEntry *entry2;
 
-          if( dirCluster == 1 || writeFAT( fat_dev, fat_dev->cache.fatType == FAT12 ? 0xFF8 : 
-                      (fat_dev->cache.fatType == FAT16 ? 0xFFF8 : 0xFFFFFF8), dirCluster ) < 0 )
+          if( dirCluster == 1 || writeFAT( fat_dev, 
+            fat_dev->cache.fatType == FAT12 ? 0xFF8 : 0xFFF8, dirCluster ) < 0 )
           {
             // Unable to get a free cluster for the directory or writeFAT() failed
 
@@ -1150,7 +1193,7 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
                 }
 
                 if( writeFAT( fat_dev, fat_dev->cache.fatType == FAT12 ? 0xFF8 : 
-                      (fat_dev->cache.fatType == FAT16 ? 0xFFF8 : 0xFFFFFF8), cluster2 ) < 0 )
+                    0xFFF8, cluster2 ) < 0 )
                 {
                // FIXME: The previous operation should be reversed, otherwise the FAT will be corrupted.
                   goto fat_error;
@@ -1248,33 +1291,35 @@ inRootDirectory:
     if( type == FAT12 )
     {
       numRootEnts = fat_dev->bpb.fat12.root_ents;
-      fat_dir->sector = fat_dev->bpb.fat12.resd_secs + fat_dev->bpb.fat12.secs_per_fat * 
+      fat_dir->start = fat_dir->current = fat_dev->bpb.fat12.resd_secs + fat_dev->bpb.fat12.secs_per_fat * 
                fat_dev->bpb.fat12.fat_copies;
     }
     else if( type == FAT16 )
     {
       numRootEnts = fat_dev->bpb.fat16.root_ents;
-      fat_dir->sector = fat_dev->bpb.fat16.resd_secs + fat_dev->bpb.fat16.secs_per_fat * 
+      fat_dir->start = fat_dir->current = fat_dev->bpb.fat16.resd_secs + fat_dev->bpb.fat16.secs_per_fat * 
                fat_dev->bpb.fat16.fat_copies;
     }
+    else
+      return NULL;
 
     fat_dir->use_sects = 1;
     max_entries = FAT_SECTOR_SIZE / sizeof( struct FAT_DirEntry );
     fat_dir->entries = malloc( FAT_SECTOR_SIZE );
 
+    if( !fat_dir->entries )
+      goto fat_err;
+
     if( numRootEnts >= max_entries )
     {
-      fat_dir->next = fat_dir->sector + 1;
+      fat_dir->next = fat_dir->current + 1;
       fat_dir->more = 1;
     }
     else
       fat_dir->more = 0;
 
-    if( fat_dir->entries == NULL || 
-        readSector( fat_dev, fat_dir->sector, fat_dir->entries ) < 0 )
-    {
+    if( readSector( fat_dev, fat_dir->current, fat_dir->entries ) < 0 )
       goto fat_err;
-    }
   }
   else
   {
@@ -1285,7 +1330,7 @@ inRootDirectory:
     }
 
     if( directory.start_clus == 0 && directory.file_size == 0 )
-      goto inRootDirectory; // I know I shouldn't, but...
+      goto inRootDirectory;
     else
     {
       if( getClusterType(directory.start_clus, fat_dev->cache.fatType) != USED_CLUSTER )
@@ -1294,8 +1339,13 @@ inRootDirectory:
       fat_dir->use_sects = 0;
       max_entries = calcClusterSize(&fat_dev->bpb) / sizeof( struct FAT_DirEntry );
       fat_dir->entries = malloc( max_entries * sizeof( struct FAT_DirEntry ) );
-      fat_dir->cluster = directory.start_clus;
-      fat_dir->next = readFAT( fat_dev, fat_dir->cluster );
+
+      if( readCluster( fat_dev, directory.start_clus, fat_dir->entries ) < 0 )
+        goto fat_err;
+
+// Actually put the entries in
+      fat_dir->start = fat_dir->current = directory.start_clus;
+      fat_dir->next = readFAT( fat_dev, fat_dir->current );
 
       if( fat_dir->entries == NULL )
         goto fat_err;
@@ -1325,6 +1375,8 @@ fat_err:
   return NULL;
 }
 
+// Loads
+
 static struct FatDir *readNextEntry( struct FatDir *fat_dir )
 {
   unsigned max_entries, numRootEnts, startSec;
@@ -1336,8 +1388,6 @@ static struct FatDir *readNextEntry( struct FatDir *fat_dir )
   if( fat_dir->use_sects )
   {
 inRootDirectory:
-    fat_dir->sector++;
-    fat_dir->next++;
 
     type = determineFAT_Type( &fat_dir->fatDev->bpb );
 
@@ -1356,26 +1406,29 @@ inRootDirectory:
 
     max_entries = FAT_SECTOR_SIZE / sizeof( struct FAT_DirEntry );
 
-    if( numRootEnts >= max_entries + (fat_dir->sector - startSec) * 
-        sizeof(struct FAT_DirEntry) )
+    if( numRootEnts >= max_entries + (fat_dir->current - startSec) * 
+        (FAT_SECTOR_SIZE / sizeof(struct FAT_DirEntry)) )
     {
       fat_dir->more = 1;
     }
     else
       fat_dir->more = 0;
 
-    if( readSector( fat_dir->fatDev, fat_dir->sector, fat_dir->entries ) < 0 )
-    {
+    fat_dir->current = fat_dir->next;
+    fat_dir->next++;
+
+    if( readSector( fat_dir->fatDev, fat_dir->current, fat_dir->entries ) < 0 )
       goto fat_err;
-    }
   }
   else
   {
-    if( fat_dir->cluster == 0 )
-      goto inRootDirectory; // I know I shouldn't, but...
+    if( fat_dir->current == 0 )
+      goto inRootDirectory;
     else
     {
-      if( getClusterType(fat_dir->cluster, fat_dir->fatDev->cache.fatType) != 
+      fat_dir->current = fat_dir->next;
+
+      if( getClusterType(fat_dir->current, fat_dir->fatDev->cache.fatType) != 
           USED_CLUSTER )
       {
         goto fat_err;
@@ -1383,7 +1436,11 @@ inRootDirectory:
 
       max_entries = calcClusterSize(&fat_dir->fatDev->bpb) 
                     / sizeof( struct FAT_DirEntry );
-      fat_dir->next = readFAT( fat_dir->fatDev, fat_dir->cluster );
+
+      if( readCluster( fat_dir->fatDev, fat_dir->current, fat_dir->entries ) != 0 )
+        goto fat_err;
+
+      fat_dir->next = readFAT( fat_dir->fatDev, fat_dir->next );
     }
   }
 
@@ -1400,8 +1457,8 @@ inRootDirectory:
     {
       fat_dir->num_entries = max_entries;
 
-      if( getClusterType(fat_dir->cluster, fat_dir->fatDev->cache.fatType) !=
-          USED_CLUSTER )
+      if( fat_dir->use_sects && getClusterType(fat_dir->current, 
+          fat_dir->fatDev->cache.fatType) != USED_CLUSTER )
       {
         fat_dir->more = 0;
       }

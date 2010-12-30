@@ -14,18 +14,18 @@ struct _SBString
 typedef struct _SBString SBString;
 
 enum SBStringResults { SBStringError=-1, SBStringFailed=-2, 
-       SBStringBadCharWidth=-3, SBStringNotFound=-4 };
+       SBStringNotFound=-3 };
 
 enum SBStringCompareResults { SBStringCompareError=-2, SBStringCompareLess=-1, 
                    SBStringCompareEqual=0, SBStringCompareGreater=1 };
 
-int sbStringCharAt(const SBString *str, int index, void *c);
+int sbStringCharAt(const SBString *str, int index, int *c);
 int sbStringCharWidth(const SBString *str);
 int sbStringCompare(const SBString *str1, const SBString *str2);
 int sbStringConcat(SBString *str, const SBString *addend);
 int sbStringCopy(const SBString *str, SBString *newStr);
-int sbStringCreate(SBString *sbString, const char *str, int width);
-int sbStringCreateN(SBString *sbString, const char *str, size_t len, int width);
+int sbStringCreate(SBString *sbString, const char *str);
+int sbStringCreateN(SBString *sbString, const char *str, size_t len);
 int sbStringDelete(SBString *sbString);
 int sbStringFind(const SBString *haystack, const SBString *needle);
 int sbStringFindChar(const SBString *sbString, int c);

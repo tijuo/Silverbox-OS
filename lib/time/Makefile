@@ -2,11 +2,15 @@ SRC     =time.c mktime.c gmtime.c asctime.c _time.c difftime.c\
 	ctime.c
 OBJ     =$(SRC:.c=.o)
 OPT_FLG =-O2
-CLEAN   =$(OBJ)
 
 all: $(OBJ)
 
+include ../../Makefile.inc
 include ../../vars.mk
+
+clean:
+	rm -f *.o
+
 # DO NOT DELETE
 
 time.o: /home/tiju/Silverbox-OS/include/time.h

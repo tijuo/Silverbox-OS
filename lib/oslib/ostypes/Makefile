@@ -1,11 +1,15 @@
 SRC     =cqueue.c sbarray.c sbassocarray.c sbstring.c
 OBJ     =$(SRC:.c=.o)
 OPT_FLG =-O0
-CLEAN   =$(OBJ)
 
 all: $(OBJ)
 
+include ../../../Makefile.inc
 include ../../../vars.mk
+
+clean:
+	rm -f *.o
+
 # DO NOT DELETE
 
 cqueue.o: /home/tiju/Silverbox-OS/include/os/ostypes/cqueue.h

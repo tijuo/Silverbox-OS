@@ -1,6 +1,11 @@
 #-fno-stack-protector stops the '__stack_chk_fail' problem
 # COPTFLAGS are the optimized flags
 
+all:    kernel.gz kernel.dmp kernel.dbg kernel.sym
+
+include ../Makefile.inc
+include ../vars.mk
+
 SRC     =init.c paging.c thread.c schedule.c exceptions.c \
         debug.c pic.c queue.c vmm.c message.c syscall.c \
         apic.c signal.c memory.c
@@ -8,10 +13,8 @@ SRC     =init.c paging.c thread.c schedule.c exceptions.c \
 OBJ     =$(SRC:.c=.o)
 LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL
 
-
-all:	kernel.gz kernel.dmp kernel.dbg kernel.sym
-
-include	../vars.mk
+asm_objs:
+	make -C asm/ all
 
 kernel.dmp: kernel.tmp
 	objdump -Dx $< > $@
@@ -22,22 +25,18 @@ kernel.dbg: kernel.tmp
 kernel.sym: kernel.dmp
 	$(PREFIX)/tools/extract_sym.pl $< > $@
 
-kernel.tmp: $(OBJ) asm/*.asm
-	make -C asm/ all
-	@cp asm/*.o .
-	$(LD) $(LDFLAGS) *.o -o $@
+kernel.tmp: $(OBJ) asm_objs
+	$(LD) $(LDFLAGS) *.o asm/*.o -o $@
 
-kernel.gz: $(OBJ) asm/*.asm
-	make -C asm/ all
-	@cp asm/*.o .
-	$(LD) $(LDFLAGS) -s -S *.o -o `basename $@ .gz`; \
+kernel.gz: $(OBJ) asm_objs
+	$(LD) $(LDFLAGS) -s -S *.o asm/*.o -o `basename $@ .gz`; \
 	rm -f $@
 	gzip `basename $@ .gz`
 
 memory.o: memory.c
 	$(CC) -O2 -c $(COPTFLAGS) -I$(INC_DIR) $< -o $@
 
-install:
+install: kernel.gz
 	$(PREFIX)/tools/copy_files.sh kernel.gz
 
 clean:

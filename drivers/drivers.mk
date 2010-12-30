@@ -2,6 +2,7 @@ EXE     =$(SRC:.c=.exe)
 
 all:    $(EXE)
 
+-include Makefile.inc ../Makefile.inc ../../Makefile.inc
 -include vars.mk ../vars.mk ../../vars.mk
 
 %.exe:  %.c $(PREFIX)/lib/libc.a $(PREFIX)/lib/libos.a

@@ -145,7 +145,7 @@ static int concatPaths( char *path, char *str )
 char *getFullPathName(char *str)
 {
   static char path[PATH_LEN+1];
-  
+
   if( str == NULL )
     return str;
 
@@ -229,71 +229,99 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
 {
   if( strncmp( command, "help", 4 ) == 0 || strncmp( command, "?", 1 ) == 0 )
   {
-//    printf("read <path> - Read the contents of a file\n");
- //   printf("ld [path] - List the contents of a directory\n");
- //   printf("cd <path> - Change current directory\n");
+    printf("read <path> - Read the contents of a file\n");
+    printf("ld [path] - List the contents of a directory\n");
+    printf("cd [path] - Change current directory\n");
     printf("wd - Display the current working directory\n");
     printf("echo <msg> - Prints a message\n");
     printf("time - Displays the current time\n");
     printf("help OR ? - Prints this message\n");
   }
-/*
   else if( strncmp( command, "read", 4 ) == 0 )
   {
+
+    printf("Reading arg_str: %s\n", arg_str);
     int result;
+    int len;
+    void *file_buffer = NULL;
+    printf("Getting full path name\n");
     char *path = getFullPathName( arg_str );
+    printf("Opening stream\n");
+    FILE *stream = fopen(path, "r");
 
-    char *file_buffer = malloc( 1920 );
+    if( !stream )
+    {
+      printf("Unable to open stream\n");
+      return -1;
+    }
+    else
+      printf("Stream ok\n");
 
-    result = fatReadFile( path, 0, dev_num,
-                 file_buffer, 1920 );
-    free(file_buffer);
+    fseek(stream, 0, SEEK_END);
+    len = ftell(stream);
 
-    if( result < 0 )
+    printf("File length: %d bytes\n", len);
+
+    if( len < 0 )
+    {
+      printf("Error\n");
+      return 0;
+    }
+    else if( len == 0 )
+    {
+      printf("Empty\n");
+      return 0;
+    }
+
+    file_buffer = malloc( len );
+    fseek(stream, 0, SEEK_SET);
+
+    result = fread(file_buffer, 1, len, stream);
+
+    if( !file_buffer || result < 0 )
       printf("Failed to read %s\n", path);
+    else if( result == 0 )
+      printf("No bytes to read\n");
     else
       printf("%.*s\n", result, file_buffer );
+
+    free(file_buffer);
+    fclose(stream);
   }
-*/
   else if( strncmp( command, "wd", 2 ) == 0 )
     printf("%.*s\n", PATH_LEN, currDir);
-/*
   else if( strncmp( command, "cd", 2 ) == 0 )
   {
     char *path;
+    size_t pathLen;
 
-    if( comm_len == 0 || arg_str == NULL )
+    if( arg_str == NULL || strlen(arg_str) == 0 )
       path = "/";
     else
       path = getFullPathName( arg_str );
 
-    if( fatGetAttributes( path, dev_num, attrib_list ) >= 0 )
+    if( getFileAttributes( path, attrib_list ) >= 0 )
       strncpy( currDir, path, PATH_LEN );
     else
       return -1;
   }
-*/
   else if( strncmp( command, "time", 4 ) == 0 )
   {
     time_t t = time(NULL);
 
     printf("The time/date is: %s", asctime(gmtime(&t)));
-
-    return 0;
   }
-/*
   else if( strncmp( command, "ld", 2 ) == 0 )
   {
     int n;
     char *path, *buffer;
 
-    if( comm_len == 0 || arg_str == NULL )
+    if( arg_str == NULL || strlen(arg_str) == 0 )
       path = currDir;
     else
       path = getFullPathName(arg_str);
 
-    n = fatGetDirList(path, dev_num, attrib_list, sizeof attrib_list / 
-                      sizeof(struct FileAttributes));
+    n = listDir(path, sizeof attrib_list / sizeof(struct FileAttributes), attrib_list);
 
     if( n < 0 )
     {
@@ -302,17 +330,16 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
       return -1;
     }
 
-    printf("Listing of %.*s:\n", PATH_LEN, path);
+    printf("Listing %d entries of %.*s:\n", n, PATH_LEN, path);
 
     if( n == 0 )
       printf("No entries\n");
     else
     {
       for(unsigned i=0; i < (unsigned)n; i++)
-        printf("%.*s%c\n", attrib_list[i].nameLen, attrib_list[i].name, ((attrib_list[i].flags & FS_DIR) ? '/' : '\0'));
+        printf("%.*s%c\n", attrib_list[i].name_len, attrib_list[i].name, ((attrib_list[i].flags & FS_DIR) ? '/' : '\0'));
     }
   }
-*/
   else if( strncmp( command, "echo", 4 ) == 0 )
   {
     if( arg_str )
@@ -347,13 +374,11 @@ int main(void)
   currDir[0] = '/';
   currDir[1] = '\0';
 
-  char fs[12];
-  memcpy(fs, "fat         ", 12);
+  if( mountFs(dev_num, "fat",3, "/", 35) != 0 )
+    print("Mount failed\n");
 
-  if( mountFs(123, fs, "/devices/ramdisk0", 35) == 0 )
-    printf("Mounted\n");
-  if( unmountFs("/devices/ramdisk0") == 0 )
-    printf("Unmounted\n");
+//  if( unmountFs("/devices/ramdisk0") == 0 )
+//    printf("Unmounted\n");
 
   while( true )
   {
@@ -380,8 +405,8 @@ int main(void)
 
     second_arg = *space_ptr ? space_ptr + 1 : NULL;
 
-    if( doCommand( charBuf, index, second_arg ) < 0 )
-      printf("Error: Bad command or argument.'%.*s'\n", index, charBuf);
+    if( doCommand( charBuf, index, second_arg ) != 0 )
+      printf("Error: Bad command or argument.\n");
   }
   return 1;
 }

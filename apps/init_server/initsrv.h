@@ -10,7 +10,7 @@ unsigned int availBytes;
 
 int sysID;
 
-struct ResourcePool *initsrv_pool;
+struct ResourcePool initsrv_pool;
 
 struct ProgramArgs
 {

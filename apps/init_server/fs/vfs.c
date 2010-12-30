@@ -3,7 +3,7 @@
 #include <os/os_types.h>
 #include <os/vfs.h>
 #include <string.h>
-#include "name.h"
+#include "../name.h"
 
 /* The VFS is in charge of keeping a record of all registered filesystems. */
 
@@ -134,11 +134,11 @@ struct Filesystem
 };
 */
 
+SBAssocArray mountTable;
+
 enum SBFilePathStatus { SBFilePathError=-1, SBFilePathFailed=-2 };
 
 // path(sbString) -> MountEntry
-
-SBAssocArray mountTable;
 
 int sbFilePathAtLevel(const SBFilePath *path, int level, SBString *str);
 int sbFilePathCreate(SBFilePath *path);
@@ -150,21 +150,55 @@ static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
 static int mount( int device, const char *fsName, size_t fsNameLen, 
     const SBString *path, int flags );
 static int unmount( const SBString *path );
-static int handleRequest(struct FsReqHeader *req, char *inBuffer, size_t inBytes,
-  char **outBuffer, size_t *outBytes);
+int handleVfsRequest(tid_t sender, struct FsReqHeader *req, char *inBuffer, 
+size_t inBytes, char **outBuffer, size_t *outBytes);
+
+void printFilePath(const SBFilePath *path);
+
+void printFilePath(const SBFilePath *path)
+{
+  SBString *tStr;
+
+  print("'");
+  if( path->nElems == 0 )
+    print("/");
+
+  for(int i=0; i < path->nElems; i++)
+  {
+    if( sbArrayElemAt(path, i, (void **)&tStr, NULL) != 0 )
+    {
+      print("unable to print path\n");
+      return;
+    }
+    print("/");
+    printN(tStr->data, sbStringLength(tStr));
+  }
+  print("'");
+}
 
 int sbFilePathAtLevel(const SBFilePath *path, int level, SBString *str)
 {
+  SBString *tStr;
+
   if( !path )
     return SBFilePathError;
+
+  if( level == 0 && path->nElems == 0 )
+  {
+    sbStringCreate(str, NULL);
+    return 0;
+  }
 
   if( level >= path->nElems )
     return SBFilePathFailed;
 
-  if( sbArrayElemAt(path, level, (void **)&str, NULL) != 0 )
+  if( sbArrayElemAt(path, level, (void **)&tStr, NULL) != 0 )
     return SBFilePathFailed;
 
-  return 0;
+  if( sbStringCopy(tStr, str) < 0 )
+    return -1;
+  else
+    return 0;
 }
 
 int sbFilePathCreate(SBFilePath *path)
@@ -201,15 +235,40 @@ int sbFilePathDepth(const SBFilePath *path, size_t *depth)
 
 int stringToPath(const SBString *string, SBFilePath *path)
 {
-  SBString separator;
+  SBString separator, name;
+  SBFilePath tmpPath;
   int retcode;
+  int depth;
+  int i=0;
 
-  if( !string || !path || sbStringCreate(&separator, "/", 1) != 0 )
+  if( !string || !path || sbStringCreate(&separator, "/") < 0 )
     return -1;
 
   retcode = (sbStringSplit(string, &separator,-1, path) != 0 ? -1 : 0);
   sbStringDelete(&separator);
-  return retcode;
+
+  if( retcode == -1 )
+    return -1;
+
+  if( sbFilePathDepth(path, &depth) != 0 )
+  {
+    sbFilePathDelete(path);
+    return -1;
+  }
+
+  while( depth-- )
+  {
+    sbFilePathAtLevel(path, i, &name);
+
+    if( sbStringLength(&name) == 0 )
+      sbArrayRemove(path, i);
+    else
+      i++;
+  }
+
+  sbFilePathDepth(path, &depth);
+
+  return 0;
 }
 
 static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
@@ -218,7 +277,7 @@ static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
   SBFilePath fPath;
   SBFilePath tmpPath;
   SBKey *keys, *bestKey=NULL;
-  size_t numKeys, bestLength=0;
+  size_t numKeys=0, bestLength=0;
 
   if( path == NULL )
     return -1;
@@ -232,16 +291,22 @@ static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
   }
 
   if( sbAssocArrayKeys(&mountTable, &keys, &numKeys ) != 0 )
+  {
+    sbFilePathDelete(&fPath);
     return -1;
+  }
 
   for(unsigned i=0; i < numKeys; i++, keys++)
   {
     size_t pathDepth, tmpDepth;
-    SBString subPath, subTmp;
+    SBString subPath, subTmp, keyStr;
+
+    if( sbStringCreateN(&keyStr, keys->key, keys->keysize) < 0 )
+      continue;
 
     sbFilePathCreate(&tmpPath);
 
-    if( stringToPath((const SBString *)keys->key, &tmpPath) != 0 )
+    if( stringToPath(&keyStr, &tmpPath) != 0 )
     {
       sbFilePathDelete(&tmpPath);
       continue;
@@ -255,21 +320,51 @@ static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
       sbFilePathDelete(&tmpPath);
       continue;
     }
+    else if( tmpDepth == 0 )
+    {
+      SBString rootPath;
+
+      if( sbStringCreate(&rootPath, "/") < 0 )
+      {
+        sbFilePathDelete(&fPath);
+        sbFilePathDelete(&tmpPath);
+        return -1;
+      }
+
+      if( entry )
+      {
+        if( sbAssocArrayLookup(&mountTable, rootPath.data, sbStringLength(&rootPath), (void **)entry, NULL) != 0 )
+        {
+          sbFilePathDelete(&fPath);
+          sbFilePathDelete(&tmpPath);
+          sbStringDelete(&rootPath);
+          return -1;
+        }
+      }
+
+      if( relPath )
+        stringToPath(path, relPath);
+
+      sbStringDelete(&rootPath);
+      sbFilePathDelete(&tmpPath);
+      sbFilePathDelete(&fPath);
+      return 0;
+    }
 
     for(unsigned j=0; j < tmpDepth; j++)
     {
-      if( j > bestLength )
-      {
-        bestLength = j;
-        bestKey = keys;
-      }
-
       if( sbFilePathAtLevel(&fPath, j, &subPath) != 0 )
         break;
       if( sbFilePathAtLevel(&tmpPath, j, &subTmp) != 0 )
         break;
       if( sbStringCompare(&subPath, &subTmp) != SBStringCompareEqual )
         break;
+
+      if( j + 1 > bestLength )
+      {
+        bestLength = j+1;
+        bestKey = keys;
+      }
     }
 
     sbFilePathDelete(&tmpPath);
@@ -277,23 +372,18 @@ static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
 
   if( !bestKey )
   {
-    SBString rootPath;
-
-    if( sbStringCreate(&rootPath, "/", 1) != 0 )
-      return -1;
-
-    if( entry )
-      sbAssocArrayLookup(&mountTable, &rootPath, sizeof rootPath, (void **)entry, NULL);
-
-    if( relPath )
-      stringToPath(path, relPath);
-
-    sbFilePathDelete(&fPath);
-    return 0;
+    print("No best key.\n");
+    return -1;
   }
 
   if( entry )
-    sbAssocArrayLookup(&mountTable, bestKey->key, bestKey->keysize, (void **) entry, NULL);
+  {
+    if( sbAssocArrayLookup(&mountTable, bestKey->key, bestKey->keysize, (void **)entry, NULL) != 0 )
+    {
+      sbFilePathDelete(&fPath);
+      return -1;
+    }
+  }
 
   if( relPath && sbArraySlice(&fPath, bestLength, -1, relPath) != 0 )
   {
@@ -320,55 +410,72 @@ int setAttributes( SBFilePath *path, struct FileAttributes *attrib );
 int fsctl( int operation, char *buffer, size_t argLen );
 */
 
-static int mount( int device, char *fsName, size_t fsNameLen,
+static int mount( int device, const char *fsName, size_t fsNameLen,
   const SBString *path, int flags )
 {
-  struct MountEntry entry;
+  struct MountEntry *entry;
+  struct NameRecord *record;
 
   if( fsNameLen > VFS_NAME_MAXLEN || fsNameLen == 0 )
     return MountError;
 
-  if( sbAssocArrayLookup(&mountTable, (void *)path, sizeof(SBString), NULL, NULL) != SBAssocArrayNotFound )
+  if( sbAssocArrayLookup(&mountTable, (void *)path->data, sbStringLength(path), NULL, NULL) != SBAssocArrayNotFound )
     return MountExists;
 
-  if( !path )
+  if( path )
   {
-    if( sbStringCopy(path, &entry.path) )
+    record = _lookupName(fsName, fsNameLen, FS);
+
+    if( !record )
       return MountFailed;
 
-    printf("Mounting device %d to %.*s using filesystem %.12s.\n",
-       device, sbStringLength(path), path->data);
+    entry = malloc(sizeof *entry);
 
-    memcpy(entry.fs, fsName, fsNameLen);
-    entry.fsLen = fsNameLen;
-    entry.device = device;
-    entry.flags = flags;
+    if( !entry )
+      return MountFailed;
+
+    if( sbStringCopy(path, &entry->path) < 0 )
+    {
+      free(entry);
+      return MountFailed;
+    }
+
+    entry->fs = &record->entry.fs;
+    entry->device = device;
+    entry->flags = flags;
   }
   else
     return MountError;
 
-  if( sbAssocArrayInsert(&mountTable, (void *)path, sbStringLength(path), &entry, sizeof(entry)) )
+  if( sbAssocArrayInsert(&mountTable, (void *)path->data, sbStringLength(path), 
+        entry, sizeof(entry)) != 0 )
+  {
+    sbStringDelete(&entry->path);
+    free(entry);
     return MountFailed;
+  }
 
   return 0;
 }
 
 static int unmount( const SBString *path )
 {
-  void *val = NULL;
+  struct MountEntry *entry=NULL;
 
   if( !path )
     return UnmountError;
 
-  if( sbAssocArrayLookup(&mountTable, (void *)path, sizeof(SBString), NULL, NULL) )
-    return UnmountNotExist;
+  if( sbAssocArrayRemove(&mountTable, (void *)path->data, sbStringLength(path), (void **)&entry, NULL) )
+  {
+    if( sbAssocArrayLookup(&mountTable, (void *)path->data, sbStringLength(path), NULL, NULL) )
+      return UnmountNotExist;
+    else
+      return UnmountFailed;
+  }
 
-  if( sbAssocArrayRemove(&mountTable, (void *)path, sizeof(SBString), &val, NULL) )
-    return UnmountFailed;
+  sbStringDelete(&entry->path);
 
-  printf("Unmounting filesystem.\n");
-
-  free(val);
+  free(entry);
   return 0;
 }
 
@@ -378,7 +485,13 @@ size_t inBytes, char **outBuffer, size_t *outBytes)
   SBString path, name;
   SBFilePath fPath;
   struct FSOps *ops;
-  int ret;
+  struct MountEntry *entry;
+  char *argStart = inBuffer + req->pathLen;
+  int ret = -1;
+
+  sbStringCreate(&name, NULL);
+  sbStringCreate(&path, NULL);
+  sbFilePathCreate(&fPath);
 
   // FIXME: ops is determined by the mount point in the path
   // To lookup mount point, start from the entire path and work
@@ -388,34 +501,43 @@ size_t inBytes, char **outBuffer, size_t *outBytes)
 
   *outBuffer = NULL;
   *outBytes = 0;
-
+/*
+  print("Request: 0x");
+  printHex(req->request);
+  print("\n");
+*/
   if( req->request != FSCTL )
   {
-    if( sbStringCreateN(&path, req->data, req->pathLen, 1) != 0 )
-      return -1;
+    if( sbStringCreateN(&path, inBuffer, req->pathLen) < 0 )
+    {
+      ret = -1;
+      goto vfsReturn;
+    }
 
     if( req->request != MOUNT && req->request != UNMOUNT )
-      stringToPath(&path, &fPath);
+    {
+      if( lookupMountEntry(&path, &entry, &fPath) != 0 )
+      {
+        ret = -1;
+        goto vfsReturn;
+      }
+      ops = &entry->fs->fsOps;
+    }
 
     switch(req->request)
     {
       case CREATE_DIR:
       case CREATE_FILE:
       case LINK:
-        if( sbStringCreateN(&name, req->data + req->pathLen, req->argLen, 1) != 0 )
+        if( sbStringCreateN(&name, argStart, req->argLen) < 0 )
         {
-          sbStringDelete(&path);
-          return -1;
+          ret = -1;
+          goto vfsReturn;
         }
       default:
-        sbStringCreate(&name, NULL, 1);
         break;
     }
   }
-  else
-    sbStringCreate(&path, NULL, 1);
-
-  sbFilePathCreate(&fPath);
 
   switch(req->request)
   {
@@ -423,18 +545,24 @@ size_t inBytes, char **outBuffer, size_t *outBytes)
       ret = ops->createDir(&name, &fPath);
       break;
     case LIST:
-      ops->list(&fPath, (struct FileAttributes **)outBuffer);
-      *outBytes = sizeof(struct FileAttributes);
+    {
+      struct VfsListArgs *args = (struct VfsListArgs *)argStart;
+      ret = ops->list(entry->device, &fPath, args, (struct FileAttributes **)outBuffer);
+       *outBytes = (ret < 0 ? 0 : ret * sizeof(struct FileAttributes));
       break;
+    }
     case CREATE_FILE:
       ret = ops->createFile(&name, &fPath);
       break;
     case READ:
-      ret = ops->read(&fPath, outBuffer, req->argLen);
+    {
+      struct VfsReadArgs *args = (struct VfsReadArgs *)argStart;
+      ret = ops->read(entry->device, &fPath, args, outBuffer);
       *outBytes = (ret < 0 ? 0 : ret);
       break;
+    }
     case WRITE:
-      ret = ops->write(&fPath, inBuffer, inBytes);
+      ret = ops->write(&fPath, argStart, inBytes);
       break;
     case REMOVE:
       ret = ops->remove(&fPath);
@@ -446,19 +574,22 @@ size_t inBytes, char **outBuffer, size_t *outBytes)
       ret = ops->unlink(&fPath);
       break;
     case GET_ATTRIB:
-      ret = ops->getAttributes(&fPath, (struct FileAttributes **)outBuffer);
-      *outBytes = sizeof(struct FileAttributes);
+    {
+      struct VfsGetAttribArgs *args = (struct VfsGetAttribArgs *)argStart;
+      ret = ops->getAttributes(entry->device, &fPath, args, (struct FileAttributes **)outBuffer);
+      *outBytes = (ret < 0 ? 0 : sizeof(struct FileAttributes));
       break;
+    }
     case SET_ATTRIB:
-      ret = ops->setAttributes(&fPath, (struct FileAttributes *)inBuffer);
+      ret = ops->setAttributes(&fPath, (struct FileAttributes *)argStart);
       break;
     case FSCTL:
-      ret = ops->fsctl(req->operation, inBuffer, inBytes, outBuffer, outBytes);
+      //ret = vfsFsctl(req->operation, argStart, inBytes, outBuffer, outBytes);
       break;
     case MOUNT:
     {
-      struct MountArgs *args = (struct MountArgs *)inBuffer;
-      ret = mount(args->device, args->fs, &path, args->flags);
+      struct MountArgs *args = (struct MountArgs *)argStart;
+      ret = mount(args->device, args->fs, args->fsLen, &path, args->flags);
       break;
     }
     case UNMOUNT:
@@ -469,6 +600,7 @@ size_t inBytes, char **outBuffer, size_t *outBytes)
       break;
   }
 
+vfsReturn:
   sbStringDelete(&path);
   sbStringDelete(&name);
   sbFilePathDelete(&fPath);

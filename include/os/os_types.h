@@ -5,8 +5,17 @@
 #include <os/ostypes/sbstring.h>
 #include <os/ostypes/sbassocarray.h>
 
-enum SBObjectType { SB_ARRAY, SB_STRING, SB_ASSOC_ARRAY };
+/* enum SBObjectType { SB_ARRAY, SB_STRING, SB_ASSOC_ARRAY, SB_RANGE };*/
 
+struct _SBRange
+{
+  int start;
+  int length;
+};
+
+typedef struct _SBRange SBRange;
+
+/*
 typedef struct
 {
   enum SBObjectType type;
@@ -19,13 +28,7 @@ typedef struct
     SBRange range;
   };
 } SBObject;
+*/
 
-struct _SBRange
-{
-  int start;
-  int length;
-};
-
-typedef struct _SBRange SBRange;
 
 #endif /* OS_TYPES_H */

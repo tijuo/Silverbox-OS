@@ -1,14 +1,16 @@
 SRC	=vidtest.c kbtest.c rdsktst.c memtst.c
 EXE	=$(SRC:.c=.exe)
-DIRS	=char block bus fs
+DIRS	=char block bus
 
 .PHONY:	$(DIRS)
 
-include drivers.mk
+-include Makefile.inc ../Makefile.inc ../../Makefile.inc
+-include vars.mk ../vars.mk ../../vars.mk
 
 all:    $(DIRS) $(EXE)
 
-#include ../vars.mk
+%.exe:  %.c $(PREFIX)/lib/libc.a $(PREFIX)/lib/libos.a
+	$(PREFIX)/tools/makec.sh $< $@
 
 char:
 	make -C $@ all
@@ -23,8 +25,6 @@ fs:
 	make -C $@ all
 
 install: $(DIRS) $(EXE)
-	for i in $(DIRS); do make -C $$i install; done
-	echo $(EXE)
 	$(PREFIX)/tools/copy_files.sh $(EXE)
 
 clean:
@@ -59,6 +59,7 @@ kbtest.o: /home/tiju/Silverbox-OS/include/os/services.h
 kbtest.o: /home/tiju/Silverbox-OS/include/os/device.h
 kbtest.o: /home/tiju/Silverbox-OS/include/os/region.h
 kbtest.o: /home/tiju/Silverbox-OS/include/os/keys.h
+kbtest.o: /home/tiju/Silverbox-OS/include/os/console.h
 rdsktst.o: /home/tiju/Silverbox-OS/include/os/console.h
 rdsktst.o: /home/tiju/Silverbox-OS/include/types.h
 rdsktst.o: /home/tiju/Silverbox-OS/include/stddef.h

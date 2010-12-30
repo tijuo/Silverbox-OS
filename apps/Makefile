@@ -1,3 +1,4 @@
+include ../Makefile.inc
 include ../vars.mk
 
 DIRS	=init_server shell
@@ -13,11 +14,7 @@ init_server:
 shell:
 	make -C $@ all
 
-install:$(DIRS)
-	for i in $(DIRS); do make -C $$i install; done
-
-dep:
-	make depend
+install: $(DIRS)
 
 depend:
 	for i in $(DIRS); do make -C $$i depend; done

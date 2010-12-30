@@ -4,6 +4,7 @@ all: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
 	make install
 
+-include ../../Makefile.inc ../Makefile.inc
 -include ../../vars.mk ../vars.mk
 
 $(OUTPUT): $(OBJ) $(PREFIX)/lib/libc.a $(PREFIX)/lib/libos.a

@@ -71,7 +71,7 @@ DISC_CODE(char *strstr(const char *str, const char *substr));
 DISC_CODE(int clearPhysPage(void *phys));
 DISC_CODE(void showCPU_Features(void));
 DISC_CODE(void showGrubSupport(multiboot_info_t *));
-DISC_CODE(void init_clock());
+DISC_CODE(void init_clock(void));
 DISC_CODE(unsigned bcd2bin(unsigned short num));
 DISC_CODE(unsigned long long mktime(int year, int month, int day, int hour, 
                           int minute, int second));
@@ -731,13 +731,13 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
         else
         {
           phys = (void *)VIRT_TO_PHYS((pheader->offset + (int)image + j * PAGE_SIZE));
-          priv = PAGING_RW; // TODO: Depends on whether it's read/write or read-only
+          priv = (pheader->flags & PF_W) ? PAGING_RW : PAGING_RO;
         }
-        
+
         //kprintf("mapping page: vaddr-0x%x phys-0x%x addrSpace-0x%x\n", pheader->vaddr+j*PAGE_SIZE, phys, addrSpace);
 
         mapPage( (void *)( pheader->vaddr + j * PAGE_SIZE ), phys, priv | PAGING_USER, addrSpace );
-  
+
         if( memSize < PAGE_SIZE )
           memSize = 0;
         else

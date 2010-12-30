@@ -83,7 +83,9 @@ int _receive( tid_t tid, void *buffer, size_t maxLen, int timeout )
 
   if( msg.protocol != MSG_PROTO_LONG || msg_ret_status < 0 )
   {
-    print("Bad protocol!\n");
+    print("Bad protocol! ");
+    printInt(msg.protocol);
+    print("\n");
     return msg_ret_status;
   }
 

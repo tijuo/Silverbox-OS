@@ -1,5 +1,5 @@
-SRC	=vfs.c
-EXE	=vfs.exe
+SRC	=
+EXE	=
 
 include ../drivers.mk
 

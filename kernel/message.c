@@ -49,6 +49,8 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
       (tcbTable[recipient].wait_tid == NULL_TID || 
       tcbTable[recipient].wait_tid == GET_TID(tcb)) )
   {
+    kprintf("%d is sending to %d\n", GET_TID(tcb), recipient);
+
     /* edx is the register for the receiver's buffer */
     if( pokeMem((void *)tcbTable[recipient].regs.ecx, MSG_LEN, msg, tcbTable[recipient].addrSpace) != 0 )
     {
@@ -71,7 +73,7 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
 
     tcb->state = WAIT_FOR_RECV;
     tcb->wait_tid = recipient;
-
+    kprintf("%d is waiting to send to %d\n", GET_TID(tcb), recipient);
     enqueue( &tcbTable[recipient].threadQueue, GET_TID(tcb) );
   }
   return -1;
@@ -111,6 +113,7 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout )
 
   if( send_tid != NULL_TID )
   {
+    kprintf("%d is receiving a message from %d\n", GET_TID(tcb), send_tid);
     /* edx is the register for the receiver's buffer */
     if( peekMem((void *)tcbTable[send_tid].regs.ecx, MSG_LEN, buf, tcbTable[send_tid].addrSpace) != 0 ) 
     {
@@ -136,7 +139,12 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout )
   {
     if( tcb->state == READY )
       detachRunQueue( tcb );
-    
+
+    if( sender == NULL_TID )
+      kprintf("%d is waiting for a message from anyone\n", GET_TID(tcb));
+    else
+      kprintf("%d is waiting for a message from %d\n", GET_TID(tcb), sender);
+
     tcb->state = WAIT_FOR_SEND;
     tcb->wait_tid = sender;
   }

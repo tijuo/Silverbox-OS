@@ -31,6 +31,7 @@
 #define RPC_VALUE		0x102
 
 typedef struct { int32_t n[4]; } uuid_t;
+typedef uint8_t uchar;
 
 struct RPC_Node
 {
@@ -65,13 +66,16 @@ struct RPC_Message
 
 enum RPC_Error { RPC_OK, RPC_PARSE_ERROR, RPC_FAIL };
 
-struct RPC_Node *parse_rpc_string(char *str);
+struct RPC_Node *parse_rpc_string(uchar *str);
+int rpc_to_string(struct RPC_Node *node, uchar **str, uint64_t *len);
+
 struct RPC_Node *rpc_new_node(void);
 int rpc_insert_child(struct RPC_Node *node, unsigned long long pos, 
   struct RPC_Node *parent);
 int rpc_append_child(struct RPC_Node *node, struct RPC_Node *parent);
 void rpc_delete_node(struct RPC_Node *node);
 void rpc_remove_children(struct RPC_Node *node);
+
 int rpc_null(struct RPC_Node *node);
 int rpc_bool(bool b, struct RPC_Node *node);
 int rpc_float(double f, struct RPC_Node *node);

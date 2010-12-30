@@ -1,8 +1,6 @@
 #ifndef FILE_H
 #define FILE_H
 
-#include <os/vfs.h>
-
 #define PIPE_SIZE	4096
 
 /*

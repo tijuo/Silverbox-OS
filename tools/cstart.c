@@ -12,9 +12,16 @@ struct StartArgs
   char **argv;
 };
 
+void printC( char c );
+void printN( char *str, int n );
+void print( char *str );
+void printInt( int n );
+void printHex( int n );
+void _start( struct StartArgs *start_args );
+
 mutex_t print_lock=0;
 
-void print( char *str )
+void printC( char c )
 {
   char volatile *vidmem = (char *)(0xB8000 + 160 * 4);
   static int i=0;
@@ -22,19 +29,27 @@ void print( char *str )
   while(mutex_lock(&print_lock))
     __yield();
 
-  while(*str)
+  if( c == '\n' )
+    i += 160 - (i % 160);
+  else
   {
-    if( *str == '\n' )
-    {
-      i += 160 - (i % 160);
-      str++;
-      continue;
-    }
-    vidmem[i++] = *str++;
+    vidmem[i++] = c;
     vidmem[i++] = 7;
   }
 
   mutex_unlock(&print_lock);
+}
+
+void printN( char *str, int n )
+{
+  for( int i=0; i < n; i++, str++ )
+    printC(*str);
+}
+
+void print( char *str )
+{
+  for(; *str; str++ )
+    printC(*str);
 }
 
 void printInt( int n )

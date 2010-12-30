@@ -10,18 +10,17 @@ if [ $# -lt 1 ]; then
   exit 1;
 fi
 
-UNMOUNT=0
+#UNMOUNT=0
 
 # If already mounted, do not mount/unmount
 
-if [ `cat /etc/mtab | grep "$SB_MNT_PT" > /dev/null; echo $?` -eq 1 ]; then \
-  mount $SB_MNT_PT; \
-  UNMOUNT=1; \
+if [ `cat /etc/mtab | grep "$SB_MNT_PT" > /dev/null; echo $?` -eq 1 ]; then
+  mount $SB_MNT_PT;
+#  UNMOUNT=1;
 fi
 
 cp $* $SB_MNT_PT/$SB_DISK_DIR
 
-if [ $UNMOUNT -eq 1 ]; then \
-  umount $SB_MNT_PT; \
-fi
+sleep 0.25
+umount $SB_MNT_PT
 

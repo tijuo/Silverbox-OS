@@ -1,6 +1,8 @@
 types: byte int16 int32 int64
 complex: string/binary (sequence of bytes), array( sequence of types ), hash
 
+data is in little endian format
+
 \x*0 - null/zero
 
 \x*3 <8-bit value> - int8/uint8

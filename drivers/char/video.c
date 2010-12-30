@@ -83,7 +83,7 @@ static int maxLines;
 static bool cursorOn, cursorVisible;
 static int attrib;
 
-void printChar( char c );
+void _printChar( char c );
 int putChar( char c, int xPos, int yPos );
 int setCursor( int xPos, int yPos );
 int setColor( int color, int xPos, int yPos );
@@ -227,7 +227,7 @@ int setCharPos( int x, int y )
   return 0;
 }
 
-void printChar( char c )
+void _printChar( char c )
 {
   if( putChar( c, charXPos, charYPos ) == 0 )
   {
@@ -352,7 +352,7 @@ int handleWrite( char *buffer, struct MessageHeader *header )
   int i;
 
   for( i=0; i < header->length; i++ )
-    printChar( buffer[i] );
+    _printChar( buffer[i] );
 
   return i;
 }
@@ -431,7 +431,7 @@ void handle_dev_write( struct Message *msg )
   count = _receive( tid, videoMsgBuffer, sizeof videoMsgBuffer, 0 );
 
   for(int i=0; i < count; i++)
-    printChar(videoMsgBuffer[i]);
+    _printChar(videoMsgBuffer[i]);
 }
 
 void handle_dev_ioctl( struct Message *msg )

@@ -139,8 +139,6 @@ void handle_dev_error( struct Message *msg );
 
 void signal_handler(int signal, int arg);
 
-tid_t video_srv = NULL_TID;
-
 extern void __dummy_sig_handler(int, int);
 
 char kbMsgBuffer[4096];
@@ -488,16 +486,16 @@ void handleDevRequests( void )
     switch(req->msg_type)
     {
       case DEVICE_WRITE:
-        handle_dev_write(&msg);
+        handle_dev_write((struct Message *)&msg);
         break;
       case DEVICE_READ:
-        handle_dev_read(&msg);
+        handle_dev_read((struct Message *)&msg);
         break;
       case DEVICE_IOCTL:
-        handle_dev_ioctl(&msg);
+        handle_dev_ioctl((struct Message *)&msg);
         break;
       default:
-        handle_dev_error(&msg);
+        handle_dev_error((struct Message *)&msg);
         break;
     }
   }

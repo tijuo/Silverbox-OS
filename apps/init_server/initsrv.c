@@ -23,13 +23,26 @@ extern void print( char * );
 //int extendHeap( unsigned pages );
 
 static void handle_message(void);
-static int handle_generic_request(int, struct GenericReq *);
+static int handle_generic_request(tid_t, struct GenericReq *);
 static int handle_devmgr_request( tid_t sender, void *request,
-   DevReplyMsg *reply_msg );
+   struct DevMgrReply *reply_msg );
 
 extern int handleVfsRequest(tid_t sender, struct FsReqHeader *req, char *inBuffer,
 size_t inBytes, char **outBuffer, size_t *outBytes);
 
+/*
+struct
+{
+  char *fName;
+  struct RPC_Node *(*func)(struct RPC_Node *);
+  unsigned arity;
+} rpcFuncTable[] =;
+
+struct RPC_Node *mapMemHandler(struct RPC_Node * )
+{
+
+}
+*/
 
 /* This extends the end of the heap by a certain number of pages. */
 /*
@@ -48,6 +61,76 @@ int extendHeap( unsigned pages )
 /* Handles exceptions, memory allocations, i/o permissions,
    DMA, address spaces, exit messages. */
 
+static int doMapMem( void *physStart, void *virtStart, unsigned pages,
+int flags, tid_t sender )
+{
+  struct AddrRegion region;
+  struct ResourcePool *pool = lookup_tid(sender);
+
+  if( pool == NULL )
+  {
+     print("Request map_mem(): Oops! TID ");
+     printInt(sender);
+     print(" is not registered.");
+
+     return -1;
+  }
+
+  region.virtRegion.start = (int)virtStart;
+  region.physRegion.start = (int)physStart;
+  region.virtRegion.length = region.physRegion.length = pages * PAGE_SIZE;
+  region.flags = MEM_MAP;
+
+  if( flags & MEM_FLG_RO )
+    region.flags |= MEM_RO;
+
+  if( (flags & MEM_FLG_COW) && !(flags & MEM_FLG_ALLOC) ) // COW would imply !ALLOC
+    region.flags |= MEM_RO | MEM_COW;
+
+  if( flags & MEM_FLG_LAZY )	// I wonder how a lazy COW would work...
+    region.flags |= MEM_LAZY;
+
+  if( (flags & MEM_FLG_ALLOC) && !(flags & MEM_FLG_COW) ) // ALLOC would imply !COW
+    region.flags &= ~MEM_MAP ;
+
+  if( attach_mem_region(&pool->addrSpace, &region) != 0 )
+  {
+    print("attach_mem_region() failed.");
+    return -1;
+  }
+
+  if( !(flags & MEM_FLG_LAZY) && !(flags & MEM_FLG_ALLOC) )
+    _mapMem(physStart, virtStart, pages, flags, &pool->addrSpace);
+
+  return 0;
+}
+
+static int doMapTid( tid_t tid, rspid_t rspid, tid_t sender )
+{
+  if( rspid == NULL_RSPID )
+    return attach_tid(lookup_tid(sender), tid);
+  else
+    return attach_tid(lookup_rspid(rspid), tid);
+}
+
+static int doRegisterName( size_t nameLen, char *nameStr, tid_t sender )
+{
+  if( !_lookupName(nameStr, nameLen, THREAD) )
+    return _registerName(nameStr, nameLen, THREAD, &sender);
+  else
+    return -1;
+}
+
+static int doLookupName( size_t nameLen, char *nameStr )
+{
+  struct NameRecord *record = _lookupName(nameStr, nameLen, THREAD);
+
+  if( record )
+    return (int)record->entry.tid;
+  else
+    return -1;
+}
+
 static int handle_generic_request( tid_t sender, struct GenericReq *req )
 {
   int result;
@@ -55,68 +138,12 @@ static int handle_generic_request( tid_t sender, struct GenericReq *req )
   switch( req->request )
   {
     case MAP_MEM:
-    {
-      struct AddrRegion region;
-      struct ResourcePool *pool;
-      int flags = req->arg[3];
-
-      pool = lookup_tid(sender);
-
-      if( pool == NULL )
-      {
-        print("Request map_mem(): Oops! TID ");
-        printInt(sender);
-        print(" is not registered.");
-
-        result = -1;
-        break;
-      }
-
-      region.virtRegion.start = req->arg[1];
-      region.physRegion.start = req->arg[0];
-      region.virtRegion.length = region.physRegion.length =
-         req->arg[2] * PAGE_SIZE;
-      region.flags = MEM_MAP;
-
-      if( flags & MEM_FLG_RO )
-        region.flags |= MEM_RO;
-
-      if( (flags & MEM_FLG_COW) && !(flags & MEM_FLG_ALLOC) ) // COW would imply !ALLOC
-        region.flags |= MEM_RO | MEM_COW;
-
-      if( flags & MEM_FLG_LAZY )	// I wonder how a lazy COW would work...
-        region.flags |= MEM_LAZY;
-
-      if( (flags & MEM_FLG_ALLOC) && !(flags & MEM_FLG_COW) ) // ALLOC would imply !COW
-        region.flags &= ~MEM_MAP ;
-
-      if( attach_mem_region(&pool->addrSpace, &region) != 0 )
-      {
-        print("attach_mem_region() failed.");
-        result = -1;
-        break;
-      }
-
-      if( !(flags & MEM_FLG_LAZY) && !(flags & MEM_FLG_ALLOC) )
-      {
-        _mapMem((void *)req->arg[0], (void *)req->arg[1],
-                  (unsigned)req->arg[2], req->arg[3], pool->addrSpace.phys_addr); // doesn't return result
-      }
-
-      result = 0;
+      result = doMapMem( (void *)req->arg[0], (void *)req->arg[1], 
+                         (unsigned)req->arg[2], req->arg[3], sender );
       break;
-    }
     case MAP_TID:
-    {
-      if( req->arg[1] == (int)NULL_RSPID )
-        result = attach_tid(lookup_tid(sender), (tid_t)req->arg[0]);
-      else
-      {
-        result = attach_tid(lookup_rspid((rspid_t)req->arg[1]), 
-                            (tid_t)req->arg[0]);
-      }
+      result = doMapTid( (tid_t)req->arg[0], (rspid_t)req->arg[1], sender );
       break;
-    }
 /*
       case CREATE_SHM:
       {
@@ -155,28 +182,11 @@ static int handle_generic_request( tid_t sender, struct GenericReq *req )
       }
 */
     case REGISTER_NAME:
-    {
-      struct NameRecord *record = _lookupName((char *)&req->arg[1], 
-         req->arg[0], THREAD);
-
-      if( !record )
-        result = _registerName((char *)&req->arg[1],req->arg[0], THREAD, 
-           &sender);
-      else
-        result = -1;
+      result = doRegisterName((size_t)req->arg[0], (char *)&req->arg[1], sender);
       break;
-    }
     case LOOKUP_NAME:
-    {
-      struct NameRecord *record = _lookupName((char *)&req->arg[1], 
-         req->arg[0], THREAD);
-
-      if( record )
-        result = record->entry.tid;
-      else
-        result = -1;
+      result = doLookupName((size_t)req->arg[0], (char *)&req->arg[1]);
       break;
-    }
 /*      case SET_IO_PERM:
         result = set_io_perm(req->argv[0], req->argv[1], argv[2], sender);
         break; */
@@ -191,7 +201,7 @@ static int handle_generic_request( tid_t sender, struct GenericReq *req )
 }
 
 static int handle_devmgr_request( tid_t sender, void *request, 
-   DevReplyMsg *reply_msg )
+   struct DevMgrReply *reply_msg )
 {
   int type = *(int *)request;
   int status = REPLY_ERROR;
@@ -235,7 +245,7 @@ static int handle_devmgr_request( tid_t sender, void *request,
       struct NameRecord *record = NULL;
 
       if( type == DEV_LOOKUP_MAJOR )
-        device = lookupDeviceMajor( req->major );
+        device = lookupDeviceMajor( (unsigned char)req->major );
       else
         record = _lookupName( req->name, req->name_len, DEVICE );
 
@@ -266,97 +276,137 @@ static int handle_devmgr_request( tid_t sender, void *request,
   }
 
   if( status != REPLY_SUCCESS )
-    print("Device request 0x"), printHex(*type), print(" returned an error\n");
+    print("Device request 0x"), printHex(type), print(" returned an error\n");
 
   return status;
 }
 
 static void handle_message( void )
 {
-  volatile struct Message msg;
+  static struct Message * volatile msg = NULL;
   int result = 0;
   tid_t sender;
 
-  while( __receive( NULL_TID, (struct Message *)&msg, 0 ) == 2 );
-
-  sender = msg.sender;
-
-  if( msg.protocol == MSG_PROTO_GENERIC )
+  if( !msg )
   {
-    volatile struct GenericReq *req = (volatile struct GenericReq *)msg.data;
+    if( !(msg = malloc(sizeof(*msg))) )
+      return;
+  }
 
-    if( req->request == MSG_REPLY )
+  while( __receive( NULL_TID, (struct Message *)msg, 0 ) == 2 );
+
+  sender = msg->sender;
+
+  if( msg->protocol == MSG_PROTO_GENERIC )
+  {
+    volatile struct GenericReq *req = (volatile struct GenericReq *)msg->data;
+
+    if( req->request == (int)MSG_REPLY )
     {
       print("Received a reply?\n");
       return;
     }
 
-    result = handle_generic_message( sender, (struct GenericReq *)req );
+    result = handle_generic_request( sender, (struct GenericReq *)req );
 
     if( result < 0 )
       print("Generic request 0x"), printHex(req->request), print(" returned an error\n");
 
     req->request = MSG_REPLY;
     req->arg[0] = result;
-    msg.length = sizeof *req;
+    msg->length = sizeof *req;
 
-    while( __send( sender, (struct Message *)&msg, 0 ) == 2 );
+    while( __send( sender, (struct Message *)msg, 0 ) == 2 );
   }
-  else if( msg.protocol == MSG_PROTO_DEVMGR )
+  else if( msg->protocol == MSG_PROTO_DEVMGR )
   {
     struct DevMgrReply reply_msg;
 
-    result = handle_devmgr_request( sender, msg.data, &reply_msg );
+    result = handle_devmgr_request( sender, (void *)msg->data, &reply_msg );
 
     reply_msg.reply_status = result;
-    msg.length = sizeof reply_msg;
-    *(DevMgrReply *)msg.data = reply_msg;
+    msg->length = sizeof reply_msg;
+    *(struct DevMgrReply *)msg->data = reply_msg;
 
-    while( __send( sender, (struct Message *)&msg, 0 ) == -2 );
+    while( __send( sender, (struct Message *)msg, 0 ) == 2 );
   }
-  else if( msg.protocol == MSG_PROTO_VFS )
+  else if( msg->protocol == MSG_PROTO_VFS )
   {
-    struct FsReqHeader *req = (struct FsReqHeader *)msg.data;
-    void *inBuffer = NULL, *outBuffer;
-    size_t outBytes;
+    struct FsReqHeader *req = (struct FsReqHeader *)msg->data;
+    char *inBuffer = NULL, *outBuffer=NULL;
+    size_t outBytes=0;
 
-    if( req->argLength > 0 )
+    if( req->argLen + req->pathLen )
     {
-      inBuffer = malloc( req->argLength );
-      _receive( sender, inBuffer, req->argLength, 0 );
+      inBuffer = malloc( req->argLen + req->pathLen );
+      _receive( sender, inBuffer, req->argLen + req->pathLen, 0 );
     }
 
-    result = handleVfsRequest( sender, req, inBuffer, req->argLength,
+    result = handleVfsRequest( sender, req, inBuffer, req->argLen + req->pathLen,
        &outBuffer, &outBytes );
 
-    free( inBuffer );
+    if( req->argLen + req->pathLen )
+      free( inBuffer );
 
-    _send( sender, outBuffer, outBytes, 0 );
+    msg->length = sizeof(int);
+    *(int *)msg->data = result;
+    while( __send( sender, (struct Message *)msg, 0 ) == 2 );
 
-    free( outBuffer );
-
-    msg.length = sizeof int;
-    *(int *)msg.data = result;
-
-    while( __send( sender, (struct Message *)&msg, 0 ) == -2 );
+    if( outBytes )
+    {
+      _send( sender, outBuffer, outBytes, 0 );
+      free( outBuffer );
+    }
   }
+/*
+  else if( msg.protocol == MSG_PROTO_RPC )
+  {
+    char *fName;
+    struct RPC_Node *node, *retNode;
+    uchar *rpc_str;
+    uint64_t strLength;
+
+    receiveRPC(&msg, &fName, &node);
+
+    for( int i=0; i < sizeof rpcFuncTable / sizeof (struct RPC_Func); i++ )
+    {
+      if( strncmp(fName, rpcFuncTable[i].fName) == 0 )
+      {
+        retNode = rpcFuncTable[i].fName(node);
+        break;
+      }
+    }
+
+    rpc_delete_node(node);
+
+    rpc_to_string(retNode, &rpc_str, &strLength);
+
+    rpc_delete_node(retNode);
+
+    sendRPCMessage(msg.sender, *fName, rpc_str, strLength, RPC_PROTO_RPC);
+    free(fName);
+    free(rpc_str);
+  }
+*/
   else
   {
     print("Invalid message protocol: ");
-    print(toIntString(msg.protocol));
+    print(toIntString(msg->protocol));
     print(" ");
     print(toIntString(sender));
     print(" ");
-    print(toIntString(msg.length));
+    print(toIntString(msg->length));
     print("\n");
     return;
   }
 }
 
+extern int registerFAT(void);
+
 int main( int argc, char **argv )
 {
   init(argc, argv);
-  print("Initialized.\n");
+  registerFAT();
 
   while(1)
     handle_message();

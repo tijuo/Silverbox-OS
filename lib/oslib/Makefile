@@ -4,19 +4,20 @@ SRC     =strings.c sbrk.c region.c bitmap.c elf.c \
 AS_SRC	=mutex.s state.s
 AS_OBJ	=$(AS_SRC:.s=.o)
 OBJ     =$(SRC:.c=.o) $(AS_OBJ)
-OPT_FLG =-O0
-CLEAN   =$(OBJ)
 
-.PHONY:	ostypes
+.PHONY:	all ostypes
 
 all: $(OBJ)
 	make -C ostypes/ all
 	@cp ostypes/*.o .
 
-include ../../vars.mk
+include ../../Makefile.inc
 
-dep:
-	make depend
+.c.o:
+	$(CC) $(OPT_FLG) -c $(CFLAGS) -I$(INC_DIR) $< -o $@
+
+.s.o:
+	$(AS) $(AFLAGS) $< -o $@
 
 depend:
 	make -C ostypes/ depend

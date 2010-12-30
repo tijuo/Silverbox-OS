@@ -4,18 +4,18 @@
 #include <os/device.h>
 #include <string.h>
 #include "name.h"
-#include "vfs.h"
+#include <os/vfs.h>
 
 static int registerThreadName(char *name, size_t len, tid_t tid);
 static int registerFsName(char *name, size_t len, struct VFS_Filesystem *fs);
 static int registerDeviceName(char *name, size_t len, struct Device *dev);
 
 static int _registerDevice(struct Device *device);
-static struct Device * _unregisterDevice(int major);
-static int _registerFs(struct VFS_Filesystem *fs)
-static struct VFS_Filesystem *_unregisterFs(char *name, size_t len)
+static struct Device * _unregisterDevice(unsigned char major);
+static int _registerFs(struct VFS_Filesystem *fs);
+static struct VFS_Filesystem *_unregisterFs(char *name, size_t len);
 
-struct Device *lookupDeviceMajor(int major);
+struct Device *lookupDeviceMajor(unsigned char major);
 int _registerName(char *name, size_t len, enum _NameType type, void *data);
 struct NameRecord *_lookupName(char *name, size_t len, enum _NameType type);
 int _unregisterName(char *name, size_t len, enum _NameType type);
@@ -34,7 +34,7 @@ static int _registerDevice(struct Device *device)
     return 0;
 }
 
-static struct Device *_unregisterDevice(int major)
+static struct Device *_unregisterDevice(unsigned char major)
 {
   struct Device *dev;
 
@@ -62,7 +62,7 @@ static struct VFS_Filesystem *_unregisterFs(char *name, size_t len)
 {
   struct VFS_Filesystem *fs;
 
-  if( sbAssocArrayRemove( &fsTable, name, len (void **)&fs, NULL ) != 0 )
+  if( sbAssocArrayRemove( &fsTable, name, len, (void **)&fs, NULL ) != 0 )
     return NULL;
   else
     return fs;
@@ -95,7 +95,7 @@ int _registerName(char *name, size_t len, enum _NameType type, void *data)
     }
     case FS:
     {
-      if( registerFsName(name, len, (struct Filesystem *)fs) != 0 )
+      if( registerFsName(name, len, (struct VFS_Filesystem *)data) != 0 )
         break;
 
       record = _lookupName(name, len, FS);
@@ -214,7 +214,7 @@ static int registerFsName(char *name, size_t len, struct VFS_Filesystem *fs)
   record->entry.fs = *fs;
   record->name_type = FS;
 
-  if( sbAssocArrayInsert(&fsName, name, len, record, sizeof *record) != 0 )
+  if( sbAssocArrayInsert(&fsNames, name, len, record, sizeof *record) != 0 )
   {
     free(record);
     return -1;
@@ -253,7 +253,7 @@ struct NameRecord *_lookupName(char *name, size_t len, enum _NameType type)
     return record;
 }
 
-struct Device *lookupDeviceMajor(int major)
+struct Device *lookupDeviceMajor(unsigned char major)
 {
   struct Device *dev;
 

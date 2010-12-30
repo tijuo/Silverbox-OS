@@ -1,5 +1,6 @@
 #include <types.h>
 #include <elf.h>
+#include <os/progload.h>
 
 bool isValidElfExe( elf_header_t *image )
 {
@@ -23,7 +24,7 @@ bool isValidElfExe( elf_header_t *image )
 }
 
 /*  */
-
+/*
 int load_elf_exec( void *image, struct ProgramArgs *args )
 {
   elf_header_t *elf_img = image;
@@ -38,7 +39,7 @@ int load_elf_exec( void *image, struct ProgramArgs *args )
   if( !isValidElfExe(elf_img) )
     return -1;
 }
-
+*/
 
 /*
 int loadExe( const char *path )

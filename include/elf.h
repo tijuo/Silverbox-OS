@@ -9,6 +9,9 @@
 #define ET_LOPROC		0xFF00
 #define ET_HIPROC		0xFFFF
 
+#define PF_R			4
+#define PF_W			2
+#define PF_X			1
 
 #define EM_NONE			0
 #define EM_M32			1

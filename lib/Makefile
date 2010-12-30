@@ -5,9 +5,7 @@ LIBOSDIR=syscall oslib
 
 .PHONY:	$(LIBCDIRS) $(LIBOSDIR) all dep depend clean
 
-all:
-	make libc.a
-	make libos.a
+all: libc.a libos.a
 
 ctype:
 	make -C $@ all
@@ -32,6 +30,8 @@ stdio:
 
 time:
 	make -C $@ all
+
+install:
 
 libc.a: $(LIBCDIRS)
 	for dir in $(LIBCDIRS); do $(AR) $(ARFLAGS) $@ $$dir/*.o; done

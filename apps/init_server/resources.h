@@ -23,6 +23,7 @@ SBAssocArray tidTable; // tid -> struct ResourcePool *
 SBAssocArray physAspaceTable; // phys addr -> struct ResourcePool *
 SBAssocArray resourcePools; // rspid -> struct ResourcePool *
 
+int __create_resource_pool(struct ResourcePool *pool, void *phys_aspace);
 struct ResourcePool *_create_resource_pool(void *phys_aspace);
 struct ResourcePool *create_resource_pool(void);
 int destroy_resource_pool(struct ResourcePool *);

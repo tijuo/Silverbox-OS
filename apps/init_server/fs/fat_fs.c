@@ -1,42 +1,90 @@
 #include <os/vfs.h>
+#include "../name.h"
 #include <os/os_types.h>
+#include <string.h>
+#include <stdlib.h>
 
-extern SBAssocArray filesystems;
+extern int fatReadFile( SBFilePath *path, unsigned int offset, unsigned short devNum,
+                 char *fileBuffer, size_t length );
+extern int fatGetDirList( SBFilePath *path, unsigned short devNum, struct FileAttributes *attrib,
+                   size_t maxEntries );
+extern int fatGetAttributes( SBFilePath *path, unsigned short devNum, struct FileAttributes *attrib );
+extern int fatCreateFile( SBFilePath *path, const char *name, unsigned short devNum );
+extern int fatCreateDir( SBFilePath *path, const char *name, unsigned short devNum );
 
-int fatList( SBFilePath *path, struct FileAttributes **attrib )
+int registerFAT(void);
+static int fatList( unsigned short devNum, SBFilePath *path, 
+  struct VfsListArgs *args, struct FileAttributes **attrib );
+static int fatGetAttr( unsigned short devNum, SBFilePath *path, 
+  struct VfsGetAttribArgs *args, struct FileAttributes **attrib );
+static int fatRead( unsigned short devNum, SBFilePath *path, 
+  struct VfsReadArgs *args, char **buffer );
+
+static int fatList( unsigned short devNum, SBFilePath *path, 
+  struct VfsListArgs *args, struct FileAttributes **attrib )
 {
-  // then use the relative path for the fat operations
+  int ret;
+  *attrib = malloc(sizeof(struct FileAttributes) * args->maxEntries);
+
+  if( !attrib )
+    return -1;
+
+  ret = fatGetDirList( path, devNum, *attrib, args->maxEntries );
+
+  if( ret < 0 )
+    free( *attrib );
+
+  return ret;
 }
 
-int fatGetAttr( SBFilePath *path, struct FileAttributes **attrib )
+static int fatGetAttr( unsigned short devNum, SBFilePath *path, 
+  struct VfsGetAttribArgs *args, struct FileAttributes **attrib )
 {
+  int ret;
+  *attrib = malloc(sizeof(struct FileAttributes));
 
+  if( !attrib )
+    return -1;
+
+  ret = fatGetAttributes( path, devNum, *attrib );
+
+  if( ret < 0 )
+    free( *attrib );
+
+  return ret;
 }
 
-int fatRead( SBFilePath *path, char **buffer, size_t bytes )
+static int fatRead( unsigned short devNum, SBFilePath *path, 
+  struct VfsReadArgs *args, char **buffer )
 {
+  int ret;
+  *buffer = malloc(args->length);
 
+  if( !buffer )
+    return -1;
+
+  ret = fatReadFile( path, args->offset, devNum, *buffer, args->length );
+
+  if( ret < 0 )
+    free( *buffer );
+
+  return ret;
 }
 
 int registerFAT(void)
 {
-  struct Filesystem *fs = calloc(1, sizeof (struct Filesystem));
-  struct SBString *name = malloc(sizeof (SBString));
+  struct VFS_Filesystem *fs = calloc(1, sizeof (struct VFS_Filesystem));
 
-  if( !fs || ! name )
-  {
-    free(fs);
-    free(name);
-
+  if( !fs )
     return -1;
-  }
 
-  fs->ops.list = fatList;
-  fs->ops.read = fatRead;
-  fs->ops.getAttributes = fatGetAttr;
+  fs->fsOps.list = fatList;
+  fs->fsOps.read = fatRead;
+  fs->fsOps.getAttributes = fatGetAttr;
 
-  sbStringCreate(name, "fat", 1);
-  memcpy(fs->name, "fat", 3);
-  sbAssocArrayInsert(&filesystems, name, sizeof *name, fs, sizeof *fs);
-  return 0;
+  fs->nameLen = 3;
+
+  memcpy(fs->name, "fat", fs->nameLen);
+
+  return _registerName(fs->name, fs->nameLen, FS, fs);
 }

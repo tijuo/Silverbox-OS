@@ -3,6 +3,7 @@
 #include <os/dev_interface.h>
 #include <os/services.h>
 #include <os/keys.h>
+#include <os/console.h>
 
 //#define LINE_READ
 
@@ -18,30 +19,6 @@ int printChar( char c )
   return send( 5, DEVICE_WRITE, &c, 1, -1 );
 }
 */
-
-tid_t video_srv=NULL_TID;
-tid_t kb_srv=NULL_TID;
-
-int printChar( char c )
-{
-/*
-  if( video_srv == NULL_TID )
-    video_srv = lookupName("video", strlen("video"));
-
-  return deviceWrite( video_srv, 0, 0, 1, 1, &c );
-*/
-  char ch[2] = { c, 0 };
-  print(ch);
-  return 0;
-}
-
-int printMsg( char *msg )
-{
-  if( video_srv == NULL_TID )
-    video_srv = lookupName("video", strlen("video"));
-
-  return deviceWrite( video_srv, 0, 0, strlen(msg), 1, msg );
-}
 
 char convert_raw_char( unsigned char c )
 {
@@ -107,18 +84,6 @@ char convert_raw_char( unsigned char c )
   return '\0';
 }
 
-char getChar( void )
-{
-  unsigned char kbChar;
-
-  if( kb_srv == NULL_TID )
-    kb_srv = lookupName("keyboard", strlen("keyboard"));
-  
-  deviceRead( kb_srv, 0, 0, 1, 1, &kbChar );
-
-  return convert_raw_char(kbChar);
-}
-
 int main( void )
 {
   char kbChar;
@@ -145,7 +110,7 @@ int main( void )
 
     printMsg( buffer );
 */
-    kbChar = getChar();
+    kbChar = kbGetChar();
 /*
     if( kbChar == '\b' )
     {

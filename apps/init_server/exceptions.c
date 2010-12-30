@@ -3,7 +3,7 @@
 #include <oslib.h>
 #include <string.h>
 
-extern int _mapMem( void *phys, void *virt, int pages, int flags, void *pdir );
+extern int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSpace );
 
 void dump_regs( int cr2, struct ThreadInfo *info );
 void handle_exception( tid_t tid, unsigned int cr2 );
@@ -81,7 +81,7 @@ void handle_exception( tid_t tid, unsigned int cr2 )
          find_address(&pool->addrSpace, (void *)cr2))
     {
       _mapMem( alloc_phys_page(NORMAL, (void *)thread_info.addr_space), 
-               (void *)(cr2 & ~0xFFF), 1, 0, (void *)thread_info.addr_space );
+               (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
       __end_page_fault(thread_info.tid);
     }
     else if( (thread_info.state.error_code & 0x05) && 
@@ -89,7 +89,7 @@ void handle_exception( tid_t tid, unsigned int cr2 )
                                                                                        any pages in the stack page! */
     {
       _mapMem( alloc_phys_page(NORMAL, (void *)thread_info.addr_space), 
-               (void *)(cr2 & ~0xFFF), 1, 0, (void *)thread_info.addr_space );
+               (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
       __end_page_fault(thread_info.tid);
     }
     else

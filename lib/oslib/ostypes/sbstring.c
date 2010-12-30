@@ -2,21 +2,13 @@
 #include <string.h>
 #include <stdlib.h>
 
-int sbStringCharAt(const SBString *str, int index, void *c)
+int sbStringCharAt(const SBString *str, int index, int *c)
 {
   if( !str || index < 0 || index >= str->length || !c )
     return SBStringError;
 
-  memcpy(c, &str->data[index * str->charWidth], str->charWidth );
+  *c = str->data[index];
   return 0;
-}
-
-int sbStringCharWidth(const SBString *str)
-{
-  if( !str )
-    return SBStringError;
-
-  return str->charWidth;
 }
 
 int sbStringConcat(SBString *str, const SBString *addend)
@@ -25,11 +17,8 @@ int sbStringConcat(SBString *str, const SBString *addend)
 
   if( !addend || !str )
     return SBStringError;
-  else if( addend->charWidth != str->charWidth )
-    return SBStringBadCharWidth;
 
-  buf = realloc( str->data, (str->length + addend->length) * 
-                 addend->charWidth );
+  buf = realloc( str->data, str->length + addend->length );
 
   if( buf == NULL )
   {
@@ -41,8 +30,8 @@ int sbStringConcat(SBString *str, const SBString *addend)
   else
     str->data = buf;
 
-  memcpy( &str->data[str->length * str->charWidth],
-           addend->data, addend->length * addend->charWidth );
+  memcpy( &str->data[str->length],
+           addend->data, addend->length );
 
   str->length += addend->length;
 
@@ -54,8 +43,7 @@ int sbStringCopy(const SBString *str, SBString *newStr)
   if( !str || !newStr )
     return SBStringError;
 
-  newStr->charWidth = str->charWidth;
-  newStr->data = malloc(str->length * str->charWidth);
+  newStr->data = malloc(str->length);
 
   if( newStr->data == NULL )
   {
@@ -63,22 +51,20 @@ int sbStringCopy(const SBString *str, SBString *newStr)
     return SBStringFailed;
   }
 
-  memcpy(newStr->data, str->data, str->length * str->charWidth);
+  memcpy(newStr->data, str->data, str->length);
   newStr->length = str->length;
   return str->length;
 }
 
-int sbStringCreate(SBString *sbString, const char *str, int width)
+int sbStringCreate(SBString *sbString, const char *str)
 {
-  return sbStringCreateN(sbString, str, strlen(str), width);
+  return sbStringCreateN(sbString, str, strlen(str));
 }
 
-int sbStringCreateN(SBString *sbString, const char *str, size_t len, int width)
+int sbStringCreateN(SBString *sbString, const char *str, size_t len)
 {
-  if( sbString == NULL || width < 1 )
+  if( sbString == NULL )
     return SBStringError;
-  
-  sbString->charWidth = width;
 
   if( str == NULL || len == 0 )
   {
@@ -88,8 +74,8 @@ int sbStringCreateN(SBString *sbString, const char *str, size_t len, int width)
   else
   {
     sbString->length = len;
-    sbString->data = malloc(sbString->length*width);
-    memcpy(sbString->data, str, sbString->length*width);
+    sbString->data = malloc(sbString->length);
+    memcpy(sbString->data, str, sbString->length);
   }
 
   return sbString->length;
@@ -99,12 +85,11 @@ int sbStringCompare(const SBString *str1, const SBString *str2)
 {
   int i=0;
 
-  if( str1 == NULL || str2 == NULL || str1->charWidth != str2->charWidth )
+  if( str1 == NULL || str2 == NULL )
     return SBStringCompareError;
 
-  while( str1->data && str2->data && i < i < str1->length &&
-         i < str2->length && memcmp(str1->data + i * str1->charWidth,
-         str2->data + i * str2->charWidth, str2->charWidth ) == 0 )
+  while( str1->data && str2->data && i < str1->length &&
+         i < str2->length && str1->data[i] == str2->data[i] )
   {
     i++;
   }
@@ -113,10 +98,7 @@ int sbStringCompare(const SBString *str1, const SBString *str2)
   if( str1->length == str2->length )
     return SBStringCompareEqual;
   else if( i < str1->length && i < str2->length )
-  {
-    return memcmp(str1->data + i * str1->charWidth,
-         str2->data + i * str2->charWidth, str2->charWidth );
-  }
+    return memcmp(str1->data + i, str2->data + i, 1 );
   else if( i >= str1->length )
     return SBStringCompareLess;
   else
@@ -143,16 +125,14 @@ int sbStringFind(const SBString *haystack, const SBString *needle)
 {
   if( !haystack || !needle )
     return SBStringError;
-  else if( haystack->charWidth != needle->charWidth )
-    return SBStringBadCharWidth;
 
   if( needle->length == 0 )
     return 0;
 
-  for(int i=0; i < haystack->length - needle->length - 1; i++)
+  for(int i=0; i <= haystack->length - needle->length; i++)
   {
-    if( memcmp(haystack->data + i * haystack->charWidth, 
-               needle->data, needle->length * needle->charWidth) == 0 )
+    if( memcmp(haystack->data + i, 
+               needle->data, needle->length ) == 0 )
     {
       return i;
     }
@@ -168,11 +148,8 @@ int sbStringFindChar(const SBString *sbString, int c)
 
   for(int i=0; i < sbString->length; i++)
   {
-    if( memcmp(&sbString->data[i * sbString->charWidth], &c, 
-           sbString->charWidth) == 0 )
-    {
+    if( memcmp(&sbString->data[i], &c, 1) == 0 )
       return i;
-    }
   }
 
   return SBStringNotFound;
@@ -190,7 +167,7 @@ int sbStringSplit(const SBString *sbString, const SBString *delimiter,
                   int limit, SBArray *array)
 {
   int start=0, end=0;
-  SBString *tempStr, endStr;
+  SBString tempStr, endStr;
 
   if( !sbString || !array )
     return SBStringError;
@@ -201,17 +178,23 @@ int sbStringSplit(const SBString *sbString, const SBString *delimiter,
   while(1)
   {
     sbStringSubString(sbString, start, -1, &endStr);
-    tempStr = malloc(sizeof(SBString));
+    sbStringCreate(&tempStr, NULL);
     end = sbStringFind(&endStr, delimiter);
 
-    if( (end == SBStringNotFound || limit == 0) && tempStr )
+    if( (end == SBStringNotFound || limit == 0) )
     {
-      sbStringCopy(&endStr, tempStr);
-      sbArrayPush(array,tempStr, sizeof *tempStr);
+      if( endStr.length > 0 )
+      {
+        sbStringCopy(&endStr, &tempStr);
+        sbArrayPush(array,&tempStr, sizeof tempStr);
+      }
+      else
+        sbStringDelete(&tempStr);
+
       sbStringDelete(&endStr);
       return 0;
     }
-    else if( !tempStr || (end < 0 && end != SBStringNotFound) )
+    else if( (end < 0 && end != SBStringNotFound) )
     {
       SBString *str;
 
@@ -221,16 +204,13 @@ int sbStringSplit(const SBString *sbString, const SBString *delimiter,
         sbStringDelete(str);
       }
 
-      if( tempStr )
-        free(tempStr);
-
       sbStringDelete(&endStr);
       return SBStringFailed;
     }
     else
     {
-      sbStringSubString(&endStr, 0, end, tempStr);
-      sbArrayPush(array, tempStr, sizeof *tempStr);
+      sbStringSubString(&endStr, 0, end, &tempStr);
+      sbArrayPush(array, &tempStr, sizeof tempStr);
       start += end + delimiter->length;
 
       if( limit > 0 )
@@ -257,13 +237,11 @@ int sbStringSubString(const SBString *sbString, int start, int end,
   if( end < 0 )
     end = sbString->length;
 
-  newString->data = NULL;
-  newString->charWidth = sbString->charWidth;
-  newString->length = 0;
+  sbStringCreate(newString, NULL);
 
   if( end - start > 0 )
   {
-    newString->data = malloc((end-start)*newString->charWidth);
+    newString->data = malloc(end-start);
 
     if( !newString->data )
       return SBStringFailed;
@@ -273,8 +251,7 @@ int sbStringSubString(const SBString *sbString, int start, int end,
   else
     return 0;
 
-  memcpy(newString->data, &sbString->data[start*sbString->charWidth], 
-         newString->length * sbString->charWidth);
+  memcpy(newString->data, &sbString->data[start], newString->length);
   return newString->length;
 }
 
@@ -283,11 +260,11 @@ int sbStringToCString(SBString *sbString, char **cString)
   if( !sbString || !cString )
     return SBStringError;
 
-  *cString = malloc(sbString->length * sbString->charWidth);
+  *cString = malloc(sbString->length);
 
   if( !*cString )
     return SBStringFailed;
 
-  memcpy( *cString, sbString->data, sbString->length * sbString->charWidth );
-  return sbString->length * sbString->charWidth;
+  memcpy( *cString, sbString->data, sbString->length );
+  return sbString->length;
 }

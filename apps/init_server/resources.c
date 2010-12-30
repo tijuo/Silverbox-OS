@@ -14,7 +14,7 @@ static int _attach_op(void *key, size_t keysize, struct ResourcePool *pool,
   if( !pool || !key )
     return -1;
 
-  if( sbAssocArrayInsert(assocArray, key, keysize, &pool, sizeof pool) != 0 )
+  if( sbAssocArrayInsert(assocArray, key, keysize, pool, sizeof pool) != 0 )
     return -1;
   else
     return 0;
@@ -42,19 +42,15 @@ static struct ResourcePool *_lookup_op(void *key, size_t keysize,
     return pool;
 }
 
-struct ResourcePool *_create_resource_pool(void *phys_aspace)
+int __create_resource_pool(struct ResourcePool *pool, void *phys_aspace)
 {
-  struct ResourcePool *pool = malloc(sizeof(struct ResourcePool));
-  static rspid_t rspid_counter=1;
+  static rspid_t counter=2;
 
   if( !pool || IS_PNULL(phys_aspace) )
-    return NULL;
+    return -1;  
 
   if( sbArrayCreate(&pool->tids) < 0 )
-  {
-    free(pool);
-    return NULL;
-  }
+    return -1;
 
   pool->ioBitmaps.phys1 = alloc_phys_page(NORMAL, page_dir);
   pool->ioBitmaps.phys2 = alloc_phys_page(NORMAL, page_dir);
@@ -68,8 +64,8 @@ struct ResourcePool *_create_resource_pool(void *phys_aspace)
       free_phys_page(pool->ioBitmaps.phys2);
 
     sbArrayDelete(&pool->tids);
-    free(pool);
-    return NULL;
+
+    return -1;
   }
 
   init_addr_space(&pool->addrSpace, phys_aspace);
@@ -80,9 +76,20 @@ struct ResourcePool *_create_resource_pool(void *phys_aspace)
   setPage(pool->ioBitmaps.phys1, 0xFF);
   setPage(pool->ioBitmaps.phys2, 0xFF);
 
-  pool->id = rspid_counter++;
+  pool->id = counter++;
 
-  return pool;
+  return 0;
+}
+
+struct ResourcePool *_create_resource_pool(void *phys_aspace)
+{
+  struct ResourcePool *pool = malloc(sizeof(struct ResourcePool));
+  
+  if( __create_resource_pool(pool, phys_aspace) == 0 )
+    return pool;
+
+  free(pool);
+  return NULL;
 }
 
 struct ResourcePool *create_resource_pool(void)

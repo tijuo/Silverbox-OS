@@ -1,5 +1,7 @@
 SRC     =addr_space.c phys_alloc.c initsrv.c name.c \
-	exceptions.c sbrk.c init.c paging.c resources.c
+	exceptions.c sbrk.c init.c paging.c resources.c \
+	fs/vfs.c fs/fat_lib.c fs/fat_fs.c fs/fat_alloc.c
+
 OUTPUT	=pagersrv.exe
 
 include apps.mk
@@ -47,13 +49,14 @@ initsrv.o: /home/tiju/Silverbox-OS/include/os/services.h
 initsrv.o: /home/tiju/Silverbox-OS/include/os/device.h
 initsrv.o: /home/tiju/Silverbox-OS/include/os/region.h
 initsrv.o: /home/tiju/Silverbox-OS/include/os/message.h
-initsrv.o: /home/tiju/Silverbox-OS/include/os/dev_interface.h paging.h name.h
+initsrv.o: /home/tiju/Silverbox-OS/include/os/dev_interface.h paging.h
+initsrv.o: addr_space.h /home/tiju/Silverbox-OS/include/os/bitmap.h
 initsrv.o: /home/tiju/Silverbox-OS/include/os/os_types.h
 initsrv.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
 initsrv.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
-initsrv.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
-initsrv.o: resources.h addr_space.h
-initsrv.o: /home/tiju/Silverbox-OS/include/os/bitmap.h shmem.h
+initsrv.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h name.h
+initsrv.o: /home/tiju/Silverbox-OS/include/os/vfs.h
+initsrv.o: /home/tiju/Silverbox-OS/include/os/file.h resources.h shmem.h
 name.o: /home/tiju/Silverbox-OS/include/oslib.h
 name.o: /home/tiju/Silverbox-OS/include/types.h
 name.o: /home/tiju/Silverbox-OS/include/stddef.h
@@ -69,6 +72,8 @@ name.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 name.o: /home/tiju/Silverbox-OS/include/stdlib.h
 name.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
 name.o: /home/tiju/Silverbox-OS/include/string.h name.h
+name.o: /home/tiju/Silverbox-OS/include/os/vfs.h
+name.o: /home/tiju/Silverbox-OS/include/os/file.h
 exceptions.o: addr_space.h /home/tiju/Silverbox-OS/include/os/region.h
 exceptions.o: /home/tiju/Silverbox-OS/include/stddef.h
 exceptions.o: /home/tiju/Silverbox-OS/include/stdbool.h
@@ -108,6 +113,8 @@ init.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 init.o: /home/tiju/Silverbox-OS/include/stdlib.h
 init.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h resources.h
 init.o: name.h /home/tiju/Silverbox-OS/include/os/device.h
+init.o: /home/tiju/Silverbox-OS/include/os/vfs.h
+init.o: /home/tiju/Silverbox-OS/include/os/file.h
 init.o: /home/tiju/Silverbox-OS/include/os/elf.h
 init.o: /home/tiju/Silverbox-OS/include/elf.h
 init.o: /home/tiju/Silverbox-OS/include/os/signal.h paging.h phys_alloc.h
@@ -117,15 +124,16 @@ paging.o: /home/tiju/Silverbox-OS/include/types.h
 paging.o: /home/tiju/Silverbox-OS/include/stddef.h
 paging.o: /home/tiju/Silverbox-OS/include/stdbool.h
 paging.o: /home/tiju/Silverbox-OS/include/ipc.h
-paging.o: /home/tiju/Silverbox-OS/include/os/mutex.h paging.h phys_alloc.h
-paging.o: initsrv.h addr_space.h /home/tiju/Silverbox-OS/include/os/region.h
+paging.o: /home/tiju/Silverbox-OS/include/os/mutex.h paging.h addr_space.h
+paging.o: /home/tiju/Silverbox-OS/include/os/region.h
 paging.o: /home/tiju/Silverbox-OS/include/os/bitmap.h
 paging.o: /home/tiju/Silverbox-OS/include/os/os_types.h
 paging.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
 paging.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 paging.o: /home/tiju/Silverbox-OS/include/stdlib.h
 paging.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
-paging.o: resources.h /home/tiju/Silverbox-OS/include/string.h
+paging.o: phys_alloc.h initsrv.h resources.h
+paging.o: /home/tiju/Silverbox-OS/include/string.h
 resources.o: phys_alloc.h initsrv.h addr_space.h
 resources.o: /home/tiju/Silverbox-OS/include/os/region.h
 resources.o: /home/tiju/Silverbox-OS/include/stddef.h
@@ -141,3 +149,19 @@ resources.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
 resources.o: /home/tiju/Silverbox-OS/include/stdlib.h
 resources.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
 resources.o: resources.h paging.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/oslib.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/types.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/stddef.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/stdbool.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/ipc.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/mutex.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/message.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/os_types.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbarray.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbstring.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/stdlib.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/ostypes/sbassocarray.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/vfs.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/file.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/string.h name.h
+fs/vfs.o: /home/tiju/Silverbox-OS/include/os/device.h

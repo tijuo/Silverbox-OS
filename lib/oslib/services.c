@@ -3,6 +3,7 @@
 #include <os/message.h>
 #include <os/region.h>
 #include <os/vfs.h>
+#include <stdlib.h>
 #include <string.h>
 #include <os/dev_interface.h>
 #include <os/device.h>
@@ -345,55 +346,181 @@ int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs )
   return reply->reply_status;
 }
 
-int mountFs( int device, const char fs[12], const char *path, int flags )
+int listDir( const char *path, size_t maxEntries, struct FileAttributes *attrib )
 {
   struct FsReqHeader *req;
-  volatile struct FsReplyHeader *reply;
+  volatile struct Message msg;
+  struct VfsListArgs *args;
+  char *buffer;
+
+  if( !path || !attrib )
+    return -1;
+
+  req = (struct FsReqHeader *)msg.data;
+
+  req->request = LIST;
+  req->pathLen = strlen(path);
+  req->argLen = sizeof(struct VfsListArgs);
+
+  msg.length = sizeof *req;
+  msg.protocol = MSG_PROTO_VFS;
+ 
+  while( __send( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
+
+  buffer = malloc(sizeof(struct VfsListArgs) + req->pathLen);
+
+  if( !buffer )
+    return -1;
+
+  args = (struct VfsListArgs *)(buffer + req->pathLen);
+
+  args->maxEntries = maxEntries;
+  memcpy( buffer, path, req->pathLen );
+
+  _send( INIT_SERVER, buffer, sizeof(*args) + req->pathLen, 0 );
+  free(buffer);
+  while( __receive( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
+
+  if( *(int *)msg.data > 0 )
+    _receive( INIT_SERVER, attrib, *(int *)msg.data * sizeof(struct FileAttributes), 0 );
+
+  return *(int *)msg.data;
+}
+
+int getFileAttributes( const char *path, struct FileAttributes *attrib )
+{
+  struct FsReqHeader *req;
+  volatile struct Message msg;
+  struct VfsGetAttribArgs *args;
+  char *buffer;
+
+  if( !path || !attrib )
+    return -1;
+
+  req = (struct FsReqHeader *)msg.data;
+
+  req->request = GET_ATTRIB;
+  req->pathLen = strlen(path);
+  req->argLen = sizeof(struct VfsGetAttribArgs);
+
+  msg.length = sizeof *req;
+  msg.protocol = MSG_PROTO_VFS;
+ 
+  while( __send( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
+
+  buffer = malloc(sizeof(struct VfsGetAttribArgs) + req->pathLen);
+
+  if( !buffer )
+    return -1;
+
+  args = (struct VfsGetAttribArgs *)(buffer + req->pathLen);
+
+  memcpy( buffer, path, req->pathLen );
+
+  _send( INIT_SERVER, buffer, sizeof(*args) + req->pathLen, 0 );
+  free(buffer);
+  while( __receive( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
+
+  if( *(int *)msg.data == 0 )
+    _receive( INIT_SERVER, attrib, sizeof(struct FileAttributes), 0 );
+
+  return *(int *)msg.data;
+}
+
+int readFile( const char *path, int offset, char *buffer, size_t bytes )
+{
+  struct FsReqHeader *req;
+  volatile struct Message msg;
+  struct VfsReadArgs *args;
+  char *buf;
+
+  if( !path || !buffer )
+    return -1;
+
+  req = (struct FsReqHeader *)msg.data;
+
+  req->request = READ;
+  req->pathLen = strlen(path);
+  req->argLen = sizeof(struct VfsReadArgs);
+
+  msg.length = sizeof *req;
+  msg.protocol = MSG_PROTO_VFS;
+ 
+  while( __send( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
+
+  buf = malloc(sizeof(struct VfsReadArgs) + req->pathLen);
+
+  if( !buf )
+    return -1;
+
+  args = (struct VfsReadArgs *)(buf + req->pathLen);
+
+  args->offset = offset;
+  args->length = bytes;
+
+  memcpy( buf, path, req->pathLen );
+
+  _send( INIT_SERVER, buf, sizeof(*args) + req->pathLen, 0 );
+  free(buf);
+  while( __receive( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
+
+  if( *(int *)msg.data > 0 )
+    _receive( INIT_SERVER, buffer, *(int *)msg.data, 0 );
+
+  return *(int *)msg.data;
+}
+
+int mountFs( int device, const char *fs, size_t fsLen, const char *path, int flags )
+{
+  struct FsReqHeader *req;
   volatile struct Message msg;
   size_t pathLen;
   struct MountArgs *mountArgs;
-  tid_t vfsServer;
-
-  req = (struct FsReqHeader *)msg.data;
-  reply = (volatile struct FsReplyHeader *)msg.data;
+  char *buffer;
 
   if( path == NULL )
     return -1;
 
   pathLen = strlen(path);
 
+  req = (struct FsReqHeader *)msg.data;
+
   req->request = MOUNT;
   req->pathLen = pathLen;
   req->argLen = sizeof(struct MountArgs);
 
-  memcpy( req->data, path, pathLen );
-  mountArgs = (struct MountArgs *)(req->data + pathLen);
-
-  mountArgs->device = device;
-  memcpy(mountArgs->fs, fs, sizeof fs);
-  mountArgs->flags = flags;
-
   msg.length = sizeof *req;
   msg.protocol = MSG_PROTO_VFS;
 
-  vfsServer = lookupName("vfs", strlen("vfs"));
+  buffer = malloc(sizeof(struct MountArgs) + pathLen);
 
-  while( __send( vfsServer, (struct Message *)&msg, 0 ) == 2 );
-  while( __receive( vfsServer, (struct Message *)&msg, 0 ) == 2 );
+  if( !buffer )
+    return -1;
 
-  return reply->reply;
+  while( __send( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
+
+  mountArgs = (struct MountArgs *)(buffer + pathLen);
+
+  memcpy( buffer, path, pathLen );
+
+  mountArgs->device = device;
+  mountArgs->fsLen = fsLen;
+  memcpy(mountArgs->fs, fs, fsLen);
+  mountArgs->flags = flags;
+
+  _send( INIT_SERVER, buffer, sizeof(struct MountArgs) + pathLen, 0 );
+  while( __receive( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
+  free(buffer);
+  return *(int *)msg.data;
 }
 
 int unmountFs( const char *path )
 {
   struct FsReqHeader *req;
-  volatile struct FsReplyHeader *reply;
   volatile struct Message msg;
   size_t pathLen;
-  tid_t vfsServer;
 
   req = (struct FsReqHeader *)msg.data;
-  reply = (volatile struct FsReplyHeader *)msg.data;
 
   if( path == NULL )
     return -1;
@@ -404,25 +531,14 @@ int unmountFs( const char *path )
   req->pathLen = pathLen;
   req->argLen = 0;
 
-  memcpy( req->data, path, pathLen );
-
   msg.length = sizeof *req;
   msg.protocol = MSG_PROTO_VFS;
 
-  vfsServer = lookupName("vfs", strlen("vfs"));
+  while( __send( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
 
-  while( __send( vfsServer, (struct Message *)&msg, 0 ) == 2 );
-  while( __receive( vfsServer, (struct Message *)&msg, 0 ) == 2 );
+  _send( INIT_SERVER, path, pathLen, 0 );
+  
+  while( __receive( INIT_SERVER, (struct Message *)&msg, 0 ) == 2 );
 
-  return reply->reply;
-}
-
-int allocatePortRange( int first_port, int num_ports )
-{
-  return -1;
-}
-
-int releasePortRange( int first_port, int num_ports )
-{
-  return -1;
+  return *(int *)msg.data;
 }

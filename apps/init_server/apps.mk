@@ -8,6 +8,7 @@ all: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
 	make install
 
+-include ../../Makefile.inc
 -include ../../vars.mk
 
 libos.a: $(PREFIX)/lib/libos.a

@@ -147,44 +147,40 @@ int sbAssocArrayKeys( const SBAssocArray *array, SBKey **keys, size_t *numKeys )
   size_t keyCount=0;
   struct _KeyValPair *kvp;
 
-  if( !array )
+  if( !array || !array->buckets )
     return SBAssocArrayError;
 
   if( keys )
     *keys = NULL;
 
-  if( !array->buckets )
-  {
-    if( numKeys )
-      numKeys = 0;
-
-    return SBAssocArrayFailed;
-  }
-
-  kvp = (struct _KeyValPair *)&array->buckets;
-
   for( unsigned i=0; i < array->numBuckets; i++ )
   {
+    kvp = &array->buckets[i];
     if( kvp->valid )
     {
       keyCount++;
 
       if( keys )
       {
-        *keys = realloc(*keys, keyCount * sizeof(SBKey));
+        void *ptr;
+        ptr = realloc(*keys, keyCount * sizeof(SBKey));
 
-        if( !*keys )
+        if( !ptr )
         {
-          *numKeys = 0;
-
+          free( *keys );
+          *keys = NULL;
           return SBAssocArrayFailed;
         }
 
-        keys[i]->key = kvp->pair.key;
-        keys[i]->keysize = kvp->pair.keysize;
+        *keys = (SBKey *)ptr;
+        (*keys)[keyCount - 1].key = kvp->pair.key;
+        (*keys)[keyCount - 1].keysize = kvp->pair.keysize;
       }
     }
   }
+
+  if( numKeys )
+    *numKeys = keyCount;
   return 0;
 }
 

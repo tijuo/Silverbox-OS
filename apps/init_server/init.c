@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+extern SBAssocArray mountTable;
+
 static int get_boot_info( int argc, char **argv );
 int init( int argc, char **argv );
 void signal_handler(int signal, int arg);
@@ -22,7 +24,6 @@ static int get_boot_info( int argc, char **argv )
   unsigned int i, pages_needed=0, start_page_addr, max_mem_addr, max_mem_length;
   unsigned temp;
   char *ptr;
-  struct ResourcePool *newPool;
 
   server_name = argv[0];
   boot_info = (struct BootInfo *)argv[1];
@@ -74,7 +75,7 @@ static int get_boot_info( int argc, char **argv )
     }
   }
 
-  int tables_needed = pages_needed / 1024;
+  unsigned tables_needed = pages_needed / 1024;
   unsigned addr, vAddr;
 
   if( pages_needed % 1024 )
@@ -118,16 +119,29 @@ static int get_boot_info( int argc, char **argv )
   allocEnd = (void *)((unsigned)allocEnd + bytes_to_allocate);
   availBytes = PAGE_SIZE - ((unsigned)allocEnd & (PAGE_SIZE - 1));
 
-  sbAssocArrayCreate(&tidTable, 512); // XXX: May need to do an update operation on full
-  sbAssocArrayCreate(&resourcePools, 512);  // XXX: May need to do an update operation on full
-  sbAssocArrayCreate(&physAspaceTable, 512); // XXX: May need to do an update operation on full
+  initsrv_pool.addrSpace.phys_addr = page_dir;
+  initsrv_pool.execInfo = NULL;
+  initsrv_pool.id = 1;
 
-  initsrv_pool = _create_resource_pool(page_dir);
+  initsrv_pool.ioBitmaps.phys1 = alloc_phys_page(NORMAL, page_dir);
+  initsrv_pool.ioBitmaps.phys2 = alloc_phys_page(NORMAL, page_dir);
+  init_addr_space(&initsrv_pool.addrSpace, page_dir);
 
   for(i=0; i < bytes_to_allocate; i += PTABLE_SIZE)
-    set_ptable_status(&initsrv_pool->addrSpace, (void *)(temp + i), true);
+    set_ptable_status(&initsrv_pool.addrSpace, (void *)(temp + i), true);
 
-  attach_tid(initsrv_pool, 1);
+  sbAssocArrayCreate(&physAspaceTable, 512); // XXX: May need to do an update operation on full
+  sbAssocArrayCreate(&tidTable, 512); // XXX: May need to do an update operation on full
+  sbAssocArrayCreate(&resourcePools, 512);  // XXX: May need to do an update operation on full
+
+  sbArrayCreate(&initsrv_pool.tids);
+
+  setPage(initsrv_pool.ioBitmaps.phys1, 0xFF);
+  setPage(initsrv_pool.ioBitmaps.phys2, 0xFF);
+
+  attach_phys_aspace(&initsrv_pool, page_dir);
+  attach_tid(&initsrv_pool, 1);
+  attach_resource_pool(&initsrv_pool);
 
   return 0;
 }
@@ -150,9 +164,15 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   if( module == NULL )
     return -1;
 
-/* First, map in a page table for the image. */
+  /* Create an address space for the new exe */
 
-  _mapMem( (void *)module->mod_start, image, (length % PAGE_SIZE == 0) ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1, 0, page_dir );
+  newPool = create_resource_pool();
+
+  addrSpace = newPool->addrSpace.phys_addr;
+
+/* Map in a page table for the image. */
+
+  _mapMem( (void *)module->mod_start, image, (length % PAGE_SIZE == 0) ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1, 0, &initsrv_pool.addrSpace );
 
 /*
   tempPage = alloc_phys_page(NORMAL, page_dir);//pageAllocator->alloc();
@@ -189,19 +209,13 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 
   phtab_count = image->phnum;
 
-  /* Create an address space for the new exe */
-
-  newPool = create_resource_pool();
-
-  addrSpace = newPool->addrSpace.phys_addr;
-
   /* Map the stack in the current address space, so the program arguments can
      be placed there. */
 
   tempPage = alloc_phys_page(NORMAL, addrSpace);
 
-  _mapMem( tempPage, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, addrSpace );
-  _mapMem( tempPage, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, page_dir );
+  _mapMem( tempPage, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addrSpace );
+  _mapMem( tempPage, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );
 
   if( args != NULL )
   {
@@ -238,7 +252,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   }
 */
 
-  _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL_PADDR );
+  _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL );
 
   tid = __create_thread( (addr_t)image->entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
 
@@ -246,6 +260,8 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
     return -1; // XXX: But first, free physical memory before returning
 
   attach_tid(newPool, tid); //mappingTable.map( tid, addrSpace );
+  attach_phys_aspace(newPool, addrSpace);
+  attach_resource_pool(newPool);
 
 //  __grant_page_table( (void *)TEMP_PTABLE, (void *)STACK_TABLE, addrSpace, 1 );
 //  set_ptable_status( addrSpace, (void *)STACK_TABLE, true );
@@ -271,7 +287,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
         else
           phys = (void *)(pheader->offset + (unsigned)module->mod_start + j * PAGE_SIZE);
 
-        _mapMem( phys, (void *)(pheader->vaddr + j * PAGE_SIZE), 1, 0, addrSpace );
+        _mapMem( phys, (void *)(pheader->vaddr + j * PAGE_SIZE), 1, pheader->flags & PF_W ? 0 : MEM_RO, &newPool->addrSpace );
 
         if( memSize < PAGE_SIZE )
           memSize = 0;
@@ -289,7 +305,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   __start_thread( tid );
 
   for(i=0; i < (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1); i++)
-    _unmapMem( (void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR); //__unmap((void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR);
+    _unmapMem( (void *)((unsigned)image + i * PAGE_SIZE), NULL); //__unmap((void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR);
 
 //  tempPage = __unmap_page_table(image, NULL_PADDR);
 //  free_phys_page(tempPage);
@@ -322,8 +338,11 @@ int init(int argc, char **argv)
 
   get_boot_info(argc, argv);
   sbAssocArrayCreate(&deviceTable, 256);
+  sbAssocArrayCreate(&fsNames, 256);
+  sbAssocArrayCreate(&fsTable, 256);
   sbAssocArrayCreate(&deviceNames, 256);
   sbAssocArrayCreate(&threadNames, 256);  // XXX: May need to do an update operation on full
+  sbAssocArrayCreate(&mountTable, 256);
 
   //list_init(&shmem_list, list_malloc, list_free);
 

@@ -4,6 +4,7 @@
 #include <types.h>
 #include <os/device.h>
 #include <os/region.h>
+#include <os/vfs.h>
 
 #define MAP_MEM			1
 #define REGISTER_NAME		2
@@ -126,7 +127,11 @@ int registerName( const char *name, size_t len );
 int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
 int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
 
-int mountFs( int device, const char fs[12], const char *path, int flags );
+int listDir( const char *path, size_t maxEntries, struct FileAttributes *attrib );
+int getFileAttributes( const char *path, struct FileAttributes *attrib );
+int readFile( const char *path, int offset, char *buffer, size_t bytes );
+
+int mountFs( int device, const char *fs, size_t fsLen, const char *path, int flags );
 int unmountFs( const char *path );
 
 #endif /* OS_SERVICES_H */

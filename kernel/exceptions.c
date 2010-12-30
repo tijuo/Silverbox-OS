@@ -243,15 +243,15 @@ void handleCPUException(volatile TCB *thread  )
     {
       pte_t pte;
 
-      if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, getCR3() ) < 0 ||
+      if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, (void *)getCR3() ) < 0 ||
           !pte.present || 
-          pokeMem((void *)KERNEL_IO_BITMAP, 2 * PAGE_SIZE, (void *)TSS_IO_PERM_BMP, getCR3()) < 0 )
+          pokeMem((void *)KERNEL_IO_BITMAP, 2 * PAGE_SIZE, (void *)TSS_IO_PERM_BMP, (void *)getCR3()) < 0 )
       {
-        mapTemp(KERNEL_IO_BITMAP);
+        mapTemp((void *)KERNEL_IO_BITMAP);
         memset((void *)TEMP_PAGEADDR, 0xFF, PAGE_SIZE);
         unmapTemp();
 
-        mapTemp(KERNEL_IO_BITMAP+PAGE_SIZE);
+        mapTemp((void *)(KERNEL_IO_BITMAP+PAGE_SIZE));
         memset((void *)TEMP_PAGEADDR, 0xFF, PAGE_SIZE);
         unmapTemp();
       }
