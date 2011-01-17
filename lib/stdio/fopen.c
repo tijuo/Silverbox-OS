@@ -7,7 +7,7 @@
 FILE *fopen(char *filename, char *mode)
 {
   FILE *file = calloc(1, sizeof(FILE));
-  struct FileAttributes *attrib;
+  struct FileAttributes attrib;
   int bytes;
 
   if( !file )
@@ -27,9 +27,10 @@ FILE *fopen(char *filename, char *mode)
     return NULL;
   }
 
-  if( getFileAttributes(filename, attrib) != 0 )
+  int stat;
+
+  if( (stat=getFileAttributes(filename, &attrib)) != 0 )
   {
-    printf("Bad file attributes\n");
     free(file);
     return NULL;
   }
@@ -70,7 +71,7 @@ FILE *fopen(char *filename, char *mode)
   }
 */
 
-  file->file_len = (size_t)attrib->size;
+  file->file_len = (size_t)attrib.size;
   file->buffer_len = BUFSIZ;
   file->buf_mode = _IOFBF;
 

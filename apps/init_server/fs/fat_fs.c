@@ -26,7 +26,7 @@ static int fatList( unsigned short devNum, SBFilePath *path,
   int ret;
   *attrib = malloc(sizeof(struct FileAttributes) * args->maxEntries);
 
-  if( !attrib )
+  if( !*attrib )
     return -1;
 
   ret = fatGetDirList( path, devNum, *attrib, args->maxEntries );
@@ -41,26 +41,30 @@ static int fatGetAttr( unsigned short devNum, SBFilePath *path,
   struct VfsGetAttribArgs *args, struct FileAttributes **attrib )
 {
   int ret;
+
   *attrib = malloc(sizeof(struct FileAttributes));
 
-  if( !attrib )
+  if( !*attrib )
     return -1;
 
   ret = fatGetAttributes( path, devNum, *attrib );
 
   if( ret < 0 )
+  {
+    print("Freeing *attrib\n");
     free( *attrib );
+  }
 
   return ret;
 }
 
-static int fatRead( unsigned short devNum, SBFilePath *path, 
+static int fatRead( unsigned short devNum, SBFilePath *path,
   struct VfsReadArgs *args, char **buffer )
 {
   int ret;
   *buffer = malloc(args->length);
 
-  if( !buffer )
+  if( !*buffer )
     return -1;
 
   ret = fatReadFile( path, args->offset, devNum, *buffer, args->length );

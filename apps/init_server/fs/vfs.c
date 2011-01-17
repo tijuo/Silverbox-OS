@@ -145,12 +145,12 @@ int sbFilePathCreate(SBFilePath *path);
 int sbFilePathDelete(SBFilePath *path);
 int sbFilePathDepth(const SBFilePath *path, size_t *depth);
 int stringToPath(const SBString *string, SBFilePath *path);
-static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
+int lookupMountEntry(const SBString *path, struct MountEntry **entry,
     SBFilePath *relPath);
-static int mount( int device, const char *fsName, size_t fsNameLen, 
+static int mount( int device, const char *fsName, size_t fsNameLen,
     const SBString *path, int flags );
 static int unmount( const SBString *path );
-int handleVfsRequest(tid_t sender, struct FsReqHeader *req, char *inBuffer, 
+int handleVfsRequest(tid_t sender, struct FsReqHeader *req, char *inBuffer,
 size_t inBytes, char **outBuffer, size_t *outBytes);
 
 void printFilePath(const SBFilePath *path);
@@ -271,7 +271,7 @@ int stringToPath(const SBString *string, SBFilePath *path)
   return 0;
 }
 
-static int lookupMountEntry(const SBString *path, struct MountEntry **entry,
+int lookupMountEntry(const SBString *path, struct MountEntry **entry,
     SBFilePath *relPath)
 {
   SBFilePath fPath;

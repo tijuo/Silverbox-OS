@@ -31,7 +31,7 @@ int writeFAT(struct FAT_Dev *fatDev, dword entry, unsigned cluster)
   if( buffer == NULL)
     return -1;
 
-  if( cluster >= fatDev->cache.clusterCount )
+  if( cluster >= fatDev->cache.clusterCount || cluster < 2 )
     goto fat_error;
 
   if( fatDev->cache.fatType == FAT12 )
@@ -46,11 +46,13 @@ int writeFAT(struct FAT_Dev *fatDev, dword entry, unsigned cluster)
     sectorOffset = (unsigned)(cluster * clusSize) % FAT_SECTOR_SIZE;
   }
   else
+    goto fat_error;
+/*  else
   {
     clusSize = 4;
     sectorNum = (unsigned)(cluster * clusSize) / FAT_SECTOR_SIZE;
     sectorOffset = (unsigned)(cluster * clusSize) % FAT_SECTOR_SIZE;
-  }
+  }*/
 
   // read in either 2 or 4 bytes
 
@@ -144,7 +146,7 @@ unsigned readFAT(struct FAT_Dev *fatDev, unsigned cluster)
   if( buffer == NULL)
     return 1;
 
-  if( cluster >= fatDev->cache.clusterCount )
+  if( cluster >= fatDev->cache.clusterCount || cluster < 2 )
     goto fat_error;
 
   if( fatDev->cache.fatType == FAT12 )
@@ -159,11 +161,14 @@ unsigned readFAT(struct FAT_Dev *fatDev, unsigned cluster)
     sectorOffset = (unsigned)(cluster * clusSize) % FAT_SECTOR_SIZE;
   }
   else
+    goto fat_error;
+/*
   {
     clusSize = 4;
     sectorNum = (unsigned)(cluster * clusSize) / FAT_SECTOR_SIZE;
     sectorOffset = (unsigned)(cluster * clusSize) % FAT_SECTOR_SIZE;
   }
+*/
 
   // read in either 2 or 4 bytes
 
@@ -184,7 +189,7 @@ unsigned readFAT(struct FAT_Dev *fatDev, unsigned cluster)
   }
   else
   {
-    if( readSector( fatDev, fatDev->bpb.fat12.resd_secs, buffer ) < 0 )
+    if( readSector( fatDev, fatDev->bpb.fat12.resd_secs+sectorNum, buffer ) < 0 )
       goto fat_error;
 
     memcpy(entry, &buffer[sectorOffset], (fatDev->cache.fatType == FAT12 ? 2 : clusSize));
@@ -199,8 +204,8 @@ unsigned readFAT(struct FAT_Dev *fatDev, unsigned cluster)
         return (unsigned)(entry[0] | ((entry[1] & 0x0F) << 8));
     case FAT16:
       return (unsigned)*((word *)entry);
-    case FAT32:
-      return (unsigned)*((dword *)entry);
+/*    case FAT32:
+      return (unsigned)*((dword *)entry);*/
     default:
       goto fat_error;
   }
@@ -245,9 +250,9 @@ unsigned getFreeCluster(struct FAT_Dev *fatDev)
       case FAT16:
         entry =  (unsigned)*((word *)&buffer[sizeof(word)*i]);
         break;
-      case FAT32:
+/*      case FAT32:
         entry = (unsigned)*((dword *)&buffer[sizeof(dword)*i]);
-        break;
+        break;*/
       default:
         goto fat_error;
     }

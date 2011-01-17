@@ -11,6 +11,7 @@
 #include <string.h>
 
 extern SBAssocArray mountTable;
+extern int _readFile(const char *, int, void *, size_t);
 
 static int get_boot_info( int argc, char **argv );
 int init( int argc, char **argv );
@@ -158,17 +159,10 @@ int loadElfFile( char *filename, char *args )
   void *addrSpace;
   struct ResourcePool *newPool;
   unsigned arg_len=8;
-  FILE *file = fopen(filename, "r");
-print("a");
-  if( !file )
+
+  if( _readFile(filename, 0, &image, sizeof image) != sizeof image )
     return -1;
 
-  if( fread(&image, sizeof image, 1, file) != sizeof image )
-  {
-    fclose(file);
-    return -1;
-  }
-print("b");
   /* Create an address space for the new exe */
 
   newPool = create_resource_pool();
@@ -177,11 +171,10 @@ print("b");
 
   if( !isValidElfExe( &image ) )
   {
-    fclose(file);
     print("Not a valid ELF executable.\n");
     return -1;
   }
-print("c");
+
   /* Map the stack in the current address space, so the program arguments can
      be placed there. */
 
@@ -199,39 +192,36 @@ print("c");
   memset( (void *)(TEMP_PTABLE + PTABLE_SIZE - 8), 0, 8 );
 
   _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL );
-print("d");
+
   tid = __create_thread( (addr_t)image.entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
 
-  if( tid == -1 )
+  if( tid == NULL_TID )
   {
+    print("Bad TID\n");
     free_phys_page(phys);
     destroy_resource_pool(newPool);
-    fclose(file);
     return -1; // XXX: But first, free physical memory before returning
   }
 
   attach_tid(newPool, tid); //mappingTable.map( tid, addrSpace );
   attach_phys_aspace(newPool, addrSpace);
   attach_resource_pool(newPool);
-print("e");
+
   tempPage = malloc(PAGE_SIZE);
 
   if( !tempPage )
   {
+    print("Can't alloc temp page\n");
     free_phys_page(phys);
     destroy_resource_pool(newPool);
-    fclose(file);
     return -1; // XXX: But first, free physical memory before returning
   }
 
   for ( i = 0; i < image.phnum; i++ )
   {
-    print("Reading pheader\n");
-    fseek(file, image.phoff+i*sizeof pheader, SEEK_SET);
-
-    if( fread(&pheader, sizeof pheader, 1, file) != sizeof pheader )
+    if( _readFile(filename, image.phoff+i*sizeof pheader, &pheader, sizeof pheader) != sizeof pheader )
     {
-      print("Error reading ELF file\n");
+      print("Can't read pheader\n");
       return -1;
     }
 
@@ -248,8 +238,12 @@ print("e");
           clearPage( phys );
         else
         {
-          fseek(file, pheader.offset + j * PAGE_SIZE, SEEK_SET);
-          fread(tempPage, 1, PAGE_SIZE, file);
+          int num_read=0;
+          if( (num_read=_readFile(filename, pheader.offset + j * PAGE_SIZE, tempPage, PAGE_SIZE)) != PAGE_SIZE )
+          {
+            print("Can't read program page. Only read "), printInt(num_read), print(" bytes!\n");
+            return -1;
+          }
           pokePage(phys, tempPage);
         }
 

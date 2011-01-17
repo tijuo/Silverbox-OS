@@ -761,13 +761,23 @@ int fatReadFile( SBFilePath *path, unsigned int offset, unsigned short devNum,
   clusterSize = calcClusterSize( &fat_dev->bpb );
   clusterOffset = offset % clusterSize;
 
+  if( getClusterType( cluster, fat_dev->cache.fatType ) != USED_CLUSTER )
+    return -1;
+
   for( unsigned i=offset / clusterSize; i > 0; i-- )
+  {
     cluster = readFAT( fat_dev, cluster ); // FIXME: may cause errors
+
+    if( getClusterType( cluster, fat_dev->cache.fatType ) != USED_CLUSTER )
+      return -1;
+  }
 
   buffer = malloc( clusterSize );
 
   if( buffer == NULL )
     return -1;
+
+//    print("Offset: 0x"), printHex(offset), print(" File size: 0x"), printHex(entry.file_size), print("\n");
 
   while( getClusterType( cluster, fat_dev->cache.fatType ) == USED_CLUSTER && 
          length > 0 && entry.file_size > 0 )
@@ -787,7 +797,7 @@ int fatReadFile( SBFilePath *path, unsigned int offset, unsigned short devNum,
                entry.file_size <= length) ) // If there's enough buffer space, but the remaining file data is less than the size of a cluster AND the remaining file data can fit in the remaining buffer space
     {
       memcpy( fileBuffer, buffer + clusterOffset, entry.file_size - clusterOffset );
-      written += entry.file_size - clusterOffset;
+      written += (entry.file_size - clusterOffset);
       entry.file_size = 0;
       break;
     }
@@ -804,6 +814,7 @@ int fatReadFile( SBFilePath *path, unsigned int offset, unsigned short devNum,
   }
 
   free( buffer );
+
   return written;
 }
 
@@ -1345,6 +1356,9 @@ inRootDirectory:
       fat_dir->start = fat_dir->current = directory.start_clus;
       fat_dir->next = readFAT( fat_dev, fat_dir->current );
 
+      if( fat_dir->next == 1 )
+        goto fat_err;
+
       if( fat_dir->entries == NULL )
         goto fat_err;
     }
@@ -1439,6 +1453,9 @@ inRootDirectory:
         goto fat_err;
 
       fat_dir->next = readFAT( fat_dir->fatDev, fat_dir->next );
+
+      if( fat_dir->next == 1 )
+        goto fat_err;
     }
   }
 

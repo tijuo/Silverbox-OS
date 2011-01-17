@@ -95,24 +95,66 @@ size_t getStr( char *buffer, size_t maxLen )
   return num_read;
 }
 
-static int concatPaths( char *path, char *str )
-{
-  char *stack[256];
-  unsigned stackPtr=0;
-  char *strPtr = str, *nextPtr;
+/* Joins two paths together after truncating '.' and '..' entries */
 
-  if( path == NULL || str == NULL )
+static int concatPaths( char *_path, const char *_str, char **newPath )
+{
+  char **stack=NULL;
+  char *str, *path;
+  unsigned stackPtr=1;
+  char *strPtr, *nextPtr=NULL;
+  size_t slen, plen;
+
+  if( _path == NULL || newPath == NULL || _str == NULL )
     return -1;
 
-  while( (nextPtr=strchr( strPtr, '/' )) != NULL && stackPtr < 256 )
+  slen = strlen(_str);
+  plen = strlen(_path);
+
+  if( plen == 0 || slen == 0 )
+    return -1;
+
+  if( _str[slen-1] != '/' )
+    str = strappend(_str, "/");
+  else
+    str = strdup(_str);
+
+  if( !str )
+    return -1;
+
+  if( _path[plen-1] != '/' )
+    path = strappend(_path, "/");
+  else
+    path = strdup(_path);
+
+  if( !path )
+  {
+    free(str);
+    return -1;
+  }
+
+  stack = (char **)calloc(512, sizeof(char *));
+
+  if( !stack )
+  {
+    free(str);
+    free(path);
+    return -1;
+  }
+
+  stack[0] = "";
+
+  strPtr = path;
+
+  while( (nextPtr=strchr( strPtr, '/' )) != NULL && stackPtr < 512 )
   {
     if( nextPtr != strPtr )
     {
       *nextPtr = '\0';
 
-      if( strncmp( strPtr, ".", 1 ) == 0 )
+      if( strPtr[1] == '\0' && strncmp( strPtr, ".", 1 ) == 0 )
         ;
-      else if( strncmp( strPtr, "..", 2 ) == 0 && stackPtr > 0 )
+      else if( strPtr[2] == '\0' && strncmp( strPtr, "..", 2 ) == 0 && stackPtr > 0 )
         stackPtr--;
       else
         stack[stackPtr++] = strPtr;
@@ -121,30 +163,64 @@ static int concatPaths( char *path, char *str )
     strPtr = nextPtr + 1;
   }
 
-  if( stackPtr < 256 )
+  if( stackPtr < 512 && *strPtr != '\0' )
     stack[stackPtr++] = strPtr;
 
-      // FIXME: The following may cause a buffer overflow if the argument is too long
+  strPtr = str;
+
+  while( (nextPtr=strchr( strPtr, '/' )) != NULL && stackPtr < 512 )
+  {
+    if( nextPtr != strPtr )
+    {
+      *nextPtr = '\0';
+
+      if( strPtr[1] == '\0' && strncmp( strPtr, ".", 1 ) == 0 )
+        ;
+      else if( strPtr[2] == '\0' && strncmp( strPtr, "..", 2 ) == 0 && stackPtr > 0 )
+        stackPtr--;
+      else
+        stack[stackPtr++] = strPtr;
+    }
+
+    strPtr = nextPtr + 1;
+  }
+
+  if( stackPtr < 512 && *strPtr != '\0' )
+    stack[stackPtr++] = strPtr;
 
   for(unsigned i=0; i < stackPtr; i++)
   {
-    if( i != stackPtr - 1 )
-    {
-      size_t len = strlen(stack[i]);
-      stack[i][len] = '/';
+    char *oldPath = *newPath;
+    char *addPath = stack[i];
 
-      strncat(path, stack[i], len+1);
+    if( i < stackPtr - 1 || stackPtr == 1 )
+      addPath = strappend(stack[i], "/");
+
+    *newPath = strappend(*newPath, addPath);
+
+    if( addPath != stack[i] )
+      free(addPath);
+
+    free(oldPath);
+
+    if( !*newPath )
+    {
+      free(path);
+      free(str);
+      free(stack);
+      return -1;
     }
-    else
-      strncat(path, stack[i], strlen(stack[i]));
   }
 
+  free(path);
+  free(stack);
+  free(str);
   return 0;
 }
 
 char *getFullPathName(char *str)
 {
-  static char path[PATH_LEN+1];
+  char *path, *dir;
 
   if( str == NULL )
     return str;
@@ -152,15 +228,10 @@ char *getFullPathName(char *str)
   while( *str == ' ' )
     str++;
 
-  if( str[0] == '/' )
-    return str;
+  dir = strndup(currDir, PATH_LEN);
+  concatPaths( dir, str, &path);
 
-  path[PATH_LEN] = '\0';
-  strncpy( path, currDir, PATH_LEN );
-  concatPaths( path, str );
-//  strncpy( &path[len], str, PATH_LEN );
-
-  printf("Path: '%s'\n", path);
+//  printf("Path: '%s'\n", path);
 
   return path;
 }
@@ -241,13 +312,10 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
   else if( strncmp( command, "read", 4 ) == 0 )
   {
 
-    printf("Reading arg_str: %s\n", arg_str);
     int result;
     int len;
     void *file_buffer = NULL;
-    printf("Getting full path name\n");
     char *path = getFullPathName( arg_str );
-    printf("Opening stream\n");
     FILE *stream = fopen(path, "r");
 
     if( !stream )
@@ -255,19 +323,12 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
       printf("Unable to open stream\n");
       return -1;
     }
-    else
-      printf("Stream ok\n");
 
     fseek(stream, 0, SEEK_END);
     len = ftell(stream);
 
-    printf("File length: %d bytes\n", len);
-
     if( len < 0 )
-    {
-      printf("Error\n");
       return 0;
-    }
     else if( len == 0 )
     {
       printf("Empty\n");
@@ -280,10 +341,8 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     result = fread(file_buffer, 1, len, stream);
 
     if( !file_buffer || result < 0 )
-      printf("Failed to read %s\n", path);
-    else if( result == 0 )
-      printf("No bytes to read\n");
-    else
+      return -1;
+    else if( len > 0 )
       printf("%.*s\n", result, file_buffer );
 
     free(file_buffer);
@@ -298,6 +357,8 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
 
     if( arg_str == NULL || strlen(arg_str) == 0 )
       path = "/";
+    else if( arg_str[0] == '/' )
+      path = arg_str;
     else
       path = getFullPathName( arg_str );
 
@@ -316,6 +377,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
   {
     int n;
     char *path, *buffer;
+    size_t pathLen;
 
     if( arg_str == NULL || strlen(arg_str) == 0 )
       path = currDir;
@@ -331,7 +393,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
       return -1;
     }
 
-    printf("Listing %d entries of %.*s:\n", n, PATH_LEN, path);
+    printf("Listing %d entries of %.*s:\n", n, strlen(path), path);
 
     if( n == 0 )
       printf("No entries\n");
@@ -349,7 +411,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
   else if( strncmp( command, "exec", 4 ) == 0 )
   {
     char *fName = strtok(arg_str, " "), *args="";
-    printf("Executing %s\n", fName);
+    printf("Executing '%s'\n", fName);
     return exec(fName, args);
   }
   else
@@ -411,9 +473,9 @@ int main(void)
     charBuf[index-1] = '\0';
 
     second_arg = *space_ptr ? space_ptr + 1 : NULL;
-
-    if( doCommand( charBuf, index, second_arg ) != 0 )
-      printf("Error: Bad command or argument.\n");
+int stat;
+    if( (stat=doCommand( charBuf, index, second_arg )) != 0 )
+      printf("Error: Bad command or argument. %d\n", stat);
   }
   return 1;
 }
