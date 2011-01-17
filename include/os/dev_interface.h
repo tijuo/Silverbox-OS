@@ -38,6 +38,9 @@ struct DeviceMsg
   unsigned char data[];
 };
 
+// Non-timeout version
+int _deviceRead( tid_t tid, unsigned char device, unsigned offset, size_t num_blks,
+                size_t blk_len, void *buffer );
 int deviceRead( tid_t tid, unsigned char device, unsigned offset, size_t num_blks,
                 size_t blk_len, void *buffer );
 int deviceWrite( tid_t tid, unsigned char device, unsigned offset, size_t num_blks, size_t blk_size, void *buffer );

@@ -101,6 +101,9 @@ HOT(int accessMem( void *address, size_t len, void *buffer, void *addrSpace, boo
 HOT(int peekMem( void *address, size_t len, void *buffer, void *addrSpace ));
 HOT(int pokeMem( void *address, size_t len, void *buffer, void *addrSpace ));
 
+bool is_readable( void *addr, void *addrSpace );
+bool is_writable( void *addr, void *addrSpace );
+
 //extern void addGDTEntry( word, addr_t, uint32, uint32 );
 
 #endif

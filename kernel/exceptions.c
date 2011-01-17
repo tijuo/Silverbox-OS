@@ -29,9 +29,9 @@ bool IRQState[ 16 ] =
 
 /// The TIDs that are responsible for handling an IRQ
 
-tid_t IRQHandlers[ 16 ] = { NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID, 
-			       NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID, 
-			       NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID, 
+tid_t IRQHandlers[ 16 ] = { NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID,
+			       NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID,
+			       NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID,
                                NULL_TID };
 
 /* sysEndIRQ() should be called to complete the handling of

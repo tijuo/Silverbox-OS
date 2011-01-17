@@ -16,8 +16,15 @@
 #define DETACH_SHM_REG		8
 #define DELETE_SHM		9
 #define CONNECT_REQ		10
+#define UNREGISTER_NAME		11
+#define SET_IO_PERM		12
+#define DEV_REGISTER            13
+#define DEV_LOOKUP_MAJOR        14
+#define DEV_LOOKUP_NAME         15
+#define DEV_UNREGISTER		16
+#define EXEC			17
 
-#define MSG_REPLY		0x80000000
+#define GEN_REPLY_TYPE		0x80000000
 #define SHARE_MEM_REQ		0xFFF0
 #define EXIT_MSG		0xFFFF
 
@@ -60,6 +67,14 @@ struct GenericReq
   int arg[8];
 } __PACKED__;
 
+struct ExecReq
+{
+  size_t nameLen;
+  size_t argsLen;
+  char data[];
+} __PACKED__;
+
+/*
 struct AllocMemInfo
 {
   void *addr;
@@ -110,6 +125,7 @@ struct ConnectArgs
   unsigned int pages;
   struct MemRegion region;
 } __PACKED__;
+*/
 
 int mapMem( void *phys, void *virt, int numPages, int flags );
 int allocatePages( void *address, int numPages );
@@ -124,8 +140,8 @@ int lookupDevMajor( unsigned char major, struct Device *device );
 tid_t lookupName( const char *name, size_t len );
 int registerName( const char *name, size_t len );
 
-int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
-int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
+//int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
+//int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
 
 int listDir( const char *path, size_t maxEntries, struct FileAttributes *attrib );
 int getFileAttributes( const char *path, struct FileAttributes *attrib );
@@ -133,5 +149,7 @@ int readFile( const char *path, int offset, char *buffer, size_t bytes );
 
 int mountFs( int device, const char *fs, size_t fsLen, const char *path, int flags );
 int unmountFs( const char *path );
+
+int exec( char *filename, char *args );
 
 #endif /* OS_SERVICES_H */

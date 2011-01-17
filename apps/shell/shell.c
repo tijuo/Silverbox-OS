@@ -66,12 +66,12 @@ size_t getStr( char *buffer, size_t maxLen )
 
   for( num_read=0; num_read < maxLen; num_read++ )
   {
-    do 
-    { 
-      kbChar = getchar(); 
+    do
+    {
+      kbChar = getchar();
 
-      if( kbChar && kbChar != '\b' ) 
-        putchar(kbChar); 
+      if( kbChar && kbChar != '\b' )
+        putchar(kbChar);
       else if( kbChar == '\b' && num_read > 0 )
         printf("\b \b");
 
@@ -233,6 +233,7 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
     printf("ld [path] - List the contents of a directory\n");
     printf("cd [path] - Change current directory\n");
     printf("wd - Display the current working directory\n");
+    printf("exec <path> - Explicitly execute a file\n");
     printf("echo <msg> - Prints a message\n");
     printf("time - Displays the current time\n");
     printf("help OR ? - Prints this message\n");
@@ -344,6 +345,12 @@ int doCommand( char *command, size_t comm_len, char *arg_str )
   {
     if( arg_str )
       printf("%.*s\n", comm_len, arg_str);
+  }
+  else if( strncmp( command, "exec", 4 ) == 0 )
+  {
+    char *fName = strtok(arg_str, " "), *args="";
+    printf("Executing %s\n", fName);
+    return exec(fName, args);
   }
   else
   {

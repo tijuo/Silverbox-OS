@@ -17,7 +17,7 @@ int accessMem( void *address, size_t len, void *buffer, void *addrSpace,
 int pokeMem( void *address, size_t len, void *buffer, void *addrSpace );
 int peekMem( void *address, size_t len, void *buffer, void *addrSpace );
 //addr_t getPhysAddr( void *addr, void *addrSpace );
-int mapPageTable( void *phys, void *virt, u32 flags, 
+int mapPageTable( void *phys, void *virt, u32 flags,
      void *addrSpace );
 int mapPage( void *phys, void *virt, u32 flags, void *addrSpace );
 addr_t unmapPageTable( void *virt, void *addrSpace );
@@ -25,6 +25,35 @@ addr_t unmapPage( void *virt, void *addrSpace );
 
 inline void reload_cr3(void) __attribute__((always_inline));
 inline void invalidate_page( void *virt ) __attribute__((always_inline));
+
+bool is_readable( void *addr, void *addrSpace );
+bool is_writable( void *addr, void *addrSpace );
+
+bool is_readable( void *addr, void *addrSpace )
+{
+  pte_t pte;
+
+  if( readPTE( addr, &pte, addrSpace ) != 0 )
+    return false;
+
+  if( pte.present )
+    return true;
+  else
+    return false;
+}
+
+bool is_writable( void *addr, void *addrSpace )
+{
+  pte_t pte;
+
+  if( readPTE( addr, &pte, addrSpace ) != 0 )
+    return false;
+
+  if( pte.present && pte.rwPriv )
+    return true;
+  else
+    return false;
+}
 
 /**
   Flushes the entire TLB by reloading the CR3 register.
@@ -195,7 +224,7 @@ int readPTE( void *virt, pte_t *pte, void *addrSpace )
 /*
   This is commented out because it fixes the message passing code. This
   means that the address space doesn't have it's page directory mapped
-  in itself for user-created kernel threads. 
+  in itself for user-created kernel threads.
 
   if( (unsigned)addrSpace == (unsigned)getCR3() )
   {
@@ -312,6 +341,50 @@ int accessMem( void *address, size_t len, void *buffer, void *addrSpace, bool re
 
   if( addrSpace == NULL_PADDR || buffer == NULL )
     return -1;
+
+  /* Make sure the memory regions can be read from/written to to avoid
+     causing a page fault */
+
+  if( read )
+  {
+    for( char *addr=address; addr < (char *)address + len; addr += PAGE_SIZE )
+    {
+      if( !is_readable( addr, addrSpace ) )
+      {
+        kprintf("0x%x is not readable in address space: 0x%x\n", addr, addrSpace);
+        return -1;
+      }
+    }
+
+    for( char *addr=buffer; addr < (char *)buffer + len; addr += PAGE_SIZE )
+    {
+      if( !is_writable( addr, (void *)getCR3() ) )
+      {
+        kprintf("0x%x is not writable in address space: 0x%x\n", addr, addrSpace);
+        return -1;
+      }
+    }
+  }
+  else
+  {
+    for( char *addr=address; addr < (char *)address + len; addr += PAGE_SIZE )
+    {
+      if( !is_writable( addr, addrSpace ) )
+      {
+        kprintf("0x%x is not writable in address space: 0x%x\n", addr, addrSpace);
+        return -1;
+      }
+    }
+
+    for( char *addr=buffer; addr < (char *)buffer + len; addr += PAGE_SIZE )
+    {
+      if( !is_readable( addr, (void *)getCR3() ) )
+      {
+        kprintf("0x%x is not readable in address space: 0x%x\n", addr, addrSpace);
+        return -1;
+      }
+    }
+  }
 
   while( len > 0 )
   {
@@ -482,8 +555,7 @@ int kMapPage( void *virt, void *phys, u32 flags)
   assert( virt != (void *)INVALID_VADDR );
   assert( phys != (void *)NULL_PADDR );
 
-  if( virt == (void *)INVALID_VADDR || 
-      phys == (void *)NULL_PADDR )
+  if( virt == (void *)INVALID_VADDR || phys == (void *)NULL_PADDR )
   {
     kprintf("mapPage(): Error!!! ");
     return -1;
@@ -507,7 +579,7 @@ int kMapPage( void *virt, void *phys, u32 flags)
   {
     kprintf("%x -> %x: 0x%x is already mapped!\n", virt, phys, virt);
     assert( false );
-    return -2; 
+    return -2;
   }
 
   *(u32 *)ptePtr = (u32)phys | flags | 1;

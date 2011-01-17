@@ -616,9 +616,19 @@ int initTables( addr_t start, int numThreads, int numRunQueues )
   for(i=0; i < numThreads; i++)
     tcbNodes[i].next = tcbNodes[i].prev = NULL_TID;
 
-  ptr += sizeof( struct NodePointer );
+  ptr += sizeof( struct NodePointer ) * numThreads;
 
-  sleepQueue.head = NULL_TID;
+  timerNodes = (struct TimerNode *)ptr;
+
+  for(i=0; i < numThreads; i++)
+  {
+    timerNodes[i].next = NULL_TID;
+    timerNodes[i].delta = 0;
+  }
+
+  ptr += sizeof( struct TimerNode ) * numThreads;
+
+  timerQueue.head = NULL_TID;
 
   return (unsigned)ptr - (unsigned)start;
 }

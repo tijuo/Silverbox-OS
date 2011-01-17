@@ -14,6 +14,7 @@ install: $(OUTPUT)
 	$(PREFIX)/tools/copy_files.sh $(OUTPUT)
 
 clean:
+	for i in $(DIRS); do make -C $$i clean; done
 	rm -f *.o
 	rm -f *.dbg
 	rm -f *.dmp

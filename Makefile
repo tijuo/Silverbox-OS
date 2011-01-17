@@ -2,10 +2,6 @@
 
 .SILENT :
 
-export SB_PREFIX=/home/tiju/Silverbox-OS
-export SB_DISK_DIR=sbos
-export SB_MNT_PT=/home/tiju/os_floppy
-
 DIRS	=lib apps drivers kernel
 
 all:	$(DIRS)

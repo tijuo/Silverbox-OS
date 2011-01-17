@@ -18,6 +18,8 @@ int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSp
 void *_unmapMem( void *virt, struct AddrSpace *aSpace );
 int mapMemRange( void *virt, int pages );
 void clearPage( void *page );
+int peekPage(void *phys, void *data);
+int pokePage(void *phys, void *data);
 void setPage( void *page, char data );
 
 #endif

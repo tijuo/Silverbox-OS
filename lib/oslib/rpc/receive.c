@@ -1,6 +1,8 @@
 #include <os/rpc/rpc.h>
 #include <os/message.h>
 
+#define MSG_TIMEOUT
+
 int receiveRPC(struct Message *msg, char **fName, struct RPC_Node **node)
 {
   struct RpcHeader *header = (struct RpcHeader *)msg->data;
@@ -12,7 +14,7 @@ int receiveRPC(struct Message *msg, char **fName, struct RPC_Node **node)
   if( !buffer )
     return -1;
 
-  if( _receive(msg->sender, buffer, header->nameLen+header->dataLen, 0) != 0 )
+  if( receiveLong(msg->sender, buffer, header->nameLen+header->dataLen, MSG_TIMEOUT) != 0 )
   {
     free(buffer);
     return -1;

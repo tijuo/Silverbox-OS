@@ -149,17 +149,6 @@ typedef struct
 
 //void _sysenter( int callNum, struct SysCallArgs *args );
 
-struct LongMsg
-{
-  size_t length;
-  char reply : 1;
-  char fail : 1;
-  char _resd : 6;
-} __PACKED__;
-
-int _receive( tid_t tid, void *buffer, size_t maxLen, int timeout );
-int _send( tid_t tid, void *data, size_t len, int timeout );
-
 int __send( tid_t recipient, void *msg, int timeout );
 int __receive( tid_t sender, void *buf, int timeout );
 int __pause( void );

@@ -3,6 +3,7 @@
 #include <kernel/debug.h>
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
+#include <kernel/signal.h>
 
 extern void init2( void );
 extern int numBootMods;
@@ -19,7 +20,7 @@ int detachPausedQueue( TCB *thread );
 */
 
 /** There is a specific reason why this isn't a regular C function. It has to do
-    with the way the compiler compiles C functions and stack memory. The idle thread 
+    with the way the compiler compiles C functions and stack memory. The idle thread
     code has to be specifically like this. */
 
 __asm__(".globl idle\n" \
@@ -116,12 +117,12 @@ TCB *schedule( volatile TCB *thread )
 
   for( level=HIGHEST_PRIORITY; level < NUM_PRIORITIES; level++ ) // Cycle through the queues to find a queue with ready threads
   {
+    assert( (runQueues[level].head == NULL_TID && runQueues[level].tail == NULL_TID)
+          || (runQueues[level].head != NULL_TID && runQueues[level].tail != NULL_TID) );
+
     if( runQueues[ level ].tail != NULL_TID || runQueues[ level ].head != NULL_TID ) // The || is used instead of && to do the assert checking
     {
-      assert( runQueues[ level ].head != GET_TID(thread) ); /* The previously running thread should NOT be in the run(ready-to-run) queue */
-      assert( runQueues[ level ].tail != GET_TID(thread) );
-      assert( runQueues[ level ].head != NULL_TID );
-      assert( runQueues[ level ].tail != NULL_TID );
+      assert( !isInQueue( &runQueues[level], GET_TID(thread) ) ); /* The previously running thread should NOT be in the run(ready-to-run) queue */
       break;
     }
   }
@@ -230,6 +231,7 @@ int attachRunQueue( TCB *thread )
 {
   assert( thread != NULL );
   assert( thread->priority < NUM_PRIORITIES );
+  assert( thread->state == READY );
 
   if( thread == NULL )
     return -1;
@@ -243,15 +245,14 @@ int attachRunQueue( TCB *thread )
   int ret;
 
   ret = enqueue( &runQueues[ thread->priority ], GET_TID(thread) );
-  assert( runQueues[ thread->priority ].head != NULL_TID );
-  assert( runQueues[ thread->priority ].tail != NULL_TID );
+
   return ret;
   #else
     return enqueue( &runQueues[thread->priority ], GET_TID(thread) );
   #endif
 }
 
-/** 
+/**
     Removes a thread from the run queue.
 
     @param thread The TCB of the thread to detach.
@@ -276,7 +277,7 @@ int detachRunQueue( TCB *thread )
   return 0;
 }
 
-/** 
+/**
   Handles a timer interrupt.
 
   @note This function should only be called by low-level IRQ handler routines.
@@ -301,28 +302,37 @@ void timerInt( volatile TCB *thread )
 
     thread->quantaLeft--;
 
-    /* TODO: Put a sleepDequeue() that dequeues a thread only if the head has 0 delta.
-       It will also return the TID. Use the TID number to wake it up. Repeat until
-       there is no head or the head's delta > 0. */
+    if( timerQueue.head != NULL_TID )
+      timerNodes[timerQueue.head].delta--;
 
-    if( sleepQueue.head != NULL_TID )
-      tcbNodes[sleepQueue.head].delta--;
-
-    while( sleepQueue.head != NULL_TID && tcbNodes[sleepQueue.head].delta == 0 )
+    while( timerQueue.head != NULL_TID && timerNodes[timerQueue.head].delta == 0 )
     {
-      tid = sleepDequeue( &sleepQueue );
+      tid = timerPop();
 
       assert( tid != NULL_TID );
       wokenThread = &tcbTable[tid];
-      assert( wokenThread->state == SLEEPING );
+      assert( wokenThread->state != READY && wokenThread->state != RUNNING );
 
-      #ifndef DEBUG
-        attachRunQueue( wokenThread );
-      #else
-        assert( attachRunQueue( wokenThread ) == 0 );
-      #endif
+      assert( !isInTimerQueue( tid ) );
+
+      if( wokenThread->state == WAIT_FOR_SEND || wokenThread->state == WAIT_FOR_RECV )
+      {
+        kprintf("SIGTMOUT to %d\n", GET_TID(wokenThread));
+        sysRaise(wokenThread, SIGTMOUT, 0);
+      }
+      else
+      {
+        wokenThread->state = READY;
+
+        #ifndef DEBUG
+          attachRunQueue( wokenThread );
+        #else
+          assert( attachRunQueue( wokenThread ) == 0 );
+        #endif
+      }
+
       assert( wokenThread != currentThread );
-      wokenThread->state = READY;
+
       wokenThread->quantaLeft = wokenThread->priority + 1; // This is important. Scheduler breaks without this for some reason?
     }
 

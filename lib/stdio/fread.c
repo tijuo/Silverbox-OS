@@ -23,6 +23,10 @@ int fread(void *ptr, size_t size, size_t count, FILE *stream)
     return EOF;
   }
 
+  bytes_read = readFile(stream->filename, 0, ptr, size * count);
+
+  stream->file_pos += bytes_read;
+/*
   if( stream->buf_pos + size * count > stream->buffer_len )
   {
     memcpy(ptr, &stream->buffer[stream->buf_pos],
@@ -38,6 +42,7 @@ int fread(void *ptr, size_t size, size_t count, FILE *stream)
     stream->file_pos += size * count;
     stream->buf_pos += size * count;
   }
+*/
 
   /* XXX: Read more data from the file if there is more to be read,
      but the buffer has been completely read. */

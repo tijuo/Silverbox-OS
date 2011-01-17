@@ -126,7 +126,7 @@ char kbGetRawChar( void )
   if( kb_srv == NULL_TID )
     kb_srv = lookupName("keyboard", strlen("keyboard"));
 
-  if( deviceRead( kb_srv, 0, 0, 1, 1, &kbChar ) < 0 )
+  if( _deviceRead( kb_srv, 0, 0, 1, 1, &kbChar ) < 0 )
     return '\0';
   else
     return kbChar;
@@ -135,7 +135,7 @@ char kbGetRawChar( void )
 char kbGetChar( void )
 {
   char c = '\0';
-  
+
   do
   {
     c = kbConvertRawChar(kbGetRawChar());

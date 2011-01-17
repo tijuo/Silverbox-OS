@@ -9,6 +9,7 @@
 #define SIGEXP		5
 #define SIGALRM		6
 #define SIGEXIT		7
+#define SIGTMOUT	8
 
 extern void set_signal_handler( void (*handler)(int, int) );
 

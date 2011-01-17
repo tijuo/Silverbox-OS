@@ -598,7 +598,10 @@ static int getFAT_DirEntry( SBFilePath *path, struct FAT_Dev *fatDev,
     return -1;
 
   if( depth == 0 )
+  {
     print("Ooops! Depth = 0! (this isn't supposed to happen)\n");
+    return -1;
+  }
 
   dirSize = FAT_SECTOR_SIZE;
 
@@ -913,21 +916,16 @@ int fatGetAttributes( SBFilePath *path, unsigned short devNum, struct FileAttrib
   int depth = 0;
 
   if( path == NULL || attrib == NULL || getDeviceData( devNum, &fatInfo ) < 0 )
-  {
-    print("Something went wrong\n");
     return -1;
-  }
 
   if( sbFilePathDepth(path, &depth) == 0 && depth > 0 )
   {
-    print("oops! depth failed\n");
     if( getFAT_DirEntry( path, fat_dev, &entry ) != 0 )
       return -1;
   }
   else if( depth == 0 )
   {
-    print("Getting attributes of root\n");
-    attrib->size = 0;
+    attrib->size = calcRootDirSecs(&fatInfo.bpb) * fatInfo.bpb.fat12.bytes_per_sec;
     attrib->timestamp = 0;
     attrib->name_len = 0;
     attrib->flags |= FS_DIR;

@@ -6,6 +6,7 @@
 #include "paging.h"
 #include "phys_alloc.h"
 #include "shmem.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -146,6 +147,131 @@ static int get_boot_info( int argc, char **argv )
   return 0;
 }
 
+int loadElfFile( char *filename, char *args )
+{
+  unsigned i, j;
+  elf_header_t image;
+  elf_pheader_t pheader;
+  tid_t tid;
+  void *phys;
+  void *tempPage;
+  void *addrSpace;
+  struct ResourcePool *newPool;
+  unsigned arg_len=8;
+  FILE *file = fopen(filename, "r");
+print("a");
+  if( !file )
+    return -1;
+
+  if( fread(&image, sizeof image, 1, file) != sizeof image )
+  {
+    fclose(file);
+    return -1;
+  }
+print("b");
+  /* Create an address space for the new exe */
+
+  newPool = create_resource_pool();
+
+  addrSpace = newPool->addrSpace.phys_addr;
+
+  if( !isValidElfExe( &image ) )
+  {
+    fclose(file);
+    print("Not a valid ELF executable.\n");
+    return -1;
+  }
+print("c");
+  /* Map the stack in the current address space, so the program arguments can
+     be placed there. */
+
+  phys = alloc_phys_page(NORMAL, addrSpace);
+
+  _mapMem( phys, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addrSpace );
+  _mapMem( phys, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );
+
+  if( args != NULL )
+  {
+    memcpy( (void *)(TEMP_PTABLE + PTABLE_SIZE - strlen(args) - 8), args, strlen(args) );
+    arg_len += strlen(args);
+  }
+
+  memset( (void *)(TEMP_PTABLE + PTABLE_SIZE - 8), 0, 8 );
+
+  _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL );
+print("d");
+  tid = __create_thread( (addr_t)image.entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
+
+  if( tid == -1 )
+  {
+    free_phys_page(phys);
+    destroy_resource_pool(newPool);
+    fclose(file);
+    return -1; // XXX: But first, free physical memory before returning
+  }
+
+  attach_tid(newPool, tid); //mappingTable.map( tid, addrSpace );
+  attach_phys_aspace(newPool, addrSpace);
+  attach_resource_pool(newPool);
+print("e");
+  tempPage = malloc(PAGE_SIZE);
+
+  if( !tempPage )
+  {
+    free_phys_page(phys);
+    destroy_resource_pool(newPool);
+    fclose(file);
+    return -1; // XXX: But first, free physical memory before returning
+  }
+
+  for ( i = 0; i < image.phnum; i++ )
+  {
+    print("Reading pheader\n");
+    fseek(file, image.phoff+i*sizeof pheader, SEEK_SET);
+
+    if( fread(&pheader, sizeof pheader, 1, file) != sizeof pheader )
+    {
+      print("Error reading ELF file\n");
+      return -1;
+    }
+
+    if ( pheader.type == PT_LOAD )
+    {
+      unsigned memSize = pheader.memsz;
+      unsigned fileSize = pheader.filesz;
+
+      for ( j = 0; memSize > 0; j++ )
+      {
+        phys = alloc_phys_page(NORMAL, addrSpace);
+
+        if ( fileSize == 0 )
+          clearPage( phys );
+        else
+        {
+          fseek(file, pheader.offset + j * PAGE_SIZE, SEEK_SET);
+          fread(tempPage, 1, PAGE_SIZE, file);
+          pokePage(phys, tempPage);
+        }
+
+        _mapMem( phys, (void *)(pheader.vaddr + j * PAGE_SIZE), 1, pheader.flags & PF_W ? 0 : MEM_RO, &newPool->addrSpace );
+
+        if( memSize < PAGE_SIZE )
+          memSize = 0;
+        else
+          memSize -= PAGE_SIZE;
+
+        if( fileSize < PAGE_SIZE )
+          fileSize = 0;
+        else
+          fileSize -= PAGE_SIZE;
+      }
+    }
+  }
+
+  __start_thread( tid );
+
+  return 0;
+}
 
 static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 {

@@ -1,6 +1,7 @@
 #include <oslib.h>
 #include <os/memory.h>
 #include <os/services.h>
+#include <errno.h>
 
 //extern void mapVirt( void *virt, int pages );
 
@@ -13,12 +14,17 @@ void *sbrk( int increment )
   void *prevHeap = heapEnd;
   int pages;
 
+  errno = 0;
+
   if( heapStart == NULL )
   {
     heapStart = heapEnd = prevHeap = (void *)HEAP_START;
 
-    if( allocatePages((void *)heapStart, 1 ) == -1 )
+    if( allocatePages((void *)heapStart, 1 ) < 0 )
+    {
+      errno = -ENOMEM;
       return (void *)-1;
+    }
   }
 
   if( increment == 0 )
@@ -31,8 +37,11 @@ void *sbrk( int increment )
 
   if( pages > 0 )
   {
-    if( allocatePages( (void *)(((unsigned)prevHeap & ~(PAGE_SIZE - 1)) + PAGE_SIZE), pages ) == -1 )
+    if( allocatePages( (void *)(((unsigned)prevHeap & ~(PAGE_SIZE - 1)) + PAGE_SIZE), pages ) < 0 )
+    {
+      errno = -ENOMEM;
       return (void *)-1;
+    }
   }
   else if( pages < 0 )
   {

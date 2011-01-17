@@ -60,7 +60,7 @@ FILE *fopen(char *filename, char *mode)
     return NULL;
   }
 
-  bytes = readFile( filename, 0, file->buffer, BUFSIZ );
+/*  bytes = readFile( filename, 0, file->buffer, BUFSIZ );
 
   if( bytes < 0 )
   {
@@ -68,9 +68,10 @@ FILE *fopen(char *filename, char *mode)
     free(file);
     return NULL;
   }
+*/
 
   file->file_len = (size_t)attrib->size;
-  file->buffer_len = bytes;
+  file->buffer_len = BUFSIZ;
   file->buf_mode = _IOFBF;
 
   return file;

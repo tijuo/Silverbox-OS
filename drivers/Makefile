@@ -24,7 +24,8 @@ bus:
 fs:
 	make -C $@ all
 
-install: $(DIRS) $(EXE)
+install:
+	for i in $(DIRS); do make -C $$i install; done
 	$(PREFIX)/tools/copy_files.sh $(EXE)
 
 clean:

@@ -12,20 +12,18 @@
 #define MAX_FILESYSTEMS		32
 #define MAX_MOUNT_ENTRIES	32
 
-#define REGISTER_DEVICE	 	0
-#define LOOKUP_DEV_MAJOR      	1
-#define LOOKUP_DEV_NAME       	2
+// #define REGISTER_DEVICE	 	0
+// #define LOOKUP_DEV_MAJOR      	1
+// #define LOOKUP_DEV_NAME       	2
 
-#define DEV_REGISTER		0
-#define DEV_LOOKUP_MAJOR	1
-#define DEV_LOOKUP_NAME		2
+// #define DEV_REGISTER		0
+// #define DEV_LOOKUP_MAJOR	1
+// #define DEV_LOOKUP_NAME		2
 
 #define DEV_REG_SERVER		30
 
 enum DeviceTypes { CHAR_DEV, BLOCK_DEV };
 enum CacheTypes { NO_CACHE, WRITE_THRU, WRITE_BACK };
-
-enum NameType { DEV_NAME, FS_NAME };
 
 /* Maybe use a linked list instead... */
 
@@ -41,24 +39,22 @@ struct Device
   enum CacheTypes cacheType;
 } devices[MAX_DEVICES];
 
+/*
 struct Filesystem
 {
   tid_t ownerTID;
   unsigned long flags;
 } filesystems[MAX_FILESYSTEMS];
+*/
 
 union Entry
 {
   struct Device device;
-  struct Filesystem fs;
+//  struct Filesystem fs;
 };
 
 struct RegisterNameReq
 {
-  int req_type;
-
-  enum NameType name_type;
-
   union Entry entry;
 
   char name[N_MAX_NAME_LEN];
@@ -67,8 +63,6 @@ struct RegisterNameReq
 
 struct NameLookupReq
 {
-  int req_type;
-
   union
   {
     unsigned char major;
@@ -83,9 +77,6 @@ struct NameLookupReq
 
 struct DevMgrReply
 {
-  int reply_status;
-  enum NameType type;
-
   union Entry entry;
 };
 

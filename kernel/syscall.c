@@ -144,7 +144,7 @@ static int enableIO_Permissions( volatile TCB *thread, unsigned short begin,
     }
   }
   else // otherwise, modify the beginning and ending byte
-  { 
+  {
     for(unsigned i=begin % 8; i <= 7; i++)
     {
       if( value == false )
@@ -249,7 +249,7 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
       break;
     case SYS_UNMAP:
       *result = (int)sysUnmap( _thread, (void *)regs->ebx, (addr_t)regs->ecx );
-      break; 
+      break;
     case SYS_UNMAP_PAGE_TABLE:
       *result = (int)sysUnmapPageTable( _thread, (void *)regs->ebx, (addr_t)regs->ecx );
       break;
@@ -260,11 +260,11 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
       *result = sysSetSigHandler( _thread, (void *)regs->ebx );
       break;
     case SYS_SET_IO_PERM:
-      *result = enableIO_Permissions( _thread, (unsigned short)regs->ebx, 
+      *result = enableIO_Permissions( _thread, (unsigned short)regs->ebx,
 				 (unsigned short)regs->ecx, (bool)regs->edx, (tid_t)regs->esi );
       break;
     default:
-      kprintf("Invalid system call: 0x%x %d 0x%x\n", regs->eax, 
+      kprintf("Invalid system call: 0x%x %d 0x%x\n", regs->eax,
 		GET_TID(_thread), _thread->regs.eip);
       assert(false);
       *result = -1;

@@ -8,6 +8,8 @@
 #include "scancodes.h"
 #include <os/keys.h>
 
+#define MSG_TIMEOUT		3000
+
 /* Keyboard commands(via interface) */
 
 #define KB_WRITE_OUTPUT		0x90
@@ -338,7 +340,7 @@ void signal_handler(int signal, int arg)
         {
           if( ext1 == 0 )
           {
-            putKeyCode( xt_scancodes[key & 0x7F] | 
+            putKeyCode( xt_scancodes[key & 0x7F] |
                ((key & 0x80) ? VK_BREAK : VK_MAKE) );
             ext1 = 0;
           }
@@ -346,7 +348,7 @@ void signal_handler(int signal, int arg)
           {
             switch( key & 0x7F )
             {
-              case 0x1C: 
+              case 0x1C:
                 putKeyCode( VK_KP_ENTER | ((key & 0x80) ? VK_BREAK : VK_MAKE) );
 		ext1 = 0;
                 break;
@@ -441,17 +443,18 @@ void handle_dev_read( struct Message *msg )
 
   req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_SUCCESS;
 
-  while( __send( tid, msg, 0 ) == 2 );
+  if( sendMsg( tid, msg, MSG_TIMEOUT ) < 0 )
+    return;
 
   for(int i=0; i < num_chars; i++)
   {
     while((code=getKeyCode()) == (byte)-1) // FIXME: potentially unsafe
-    {
       __pause();
-    }
     kbMsgBuffer[i] = code;
   }
-  _send( tid, kbMsgBuffer, sizeof kbMsgBuffer, 0 );
+
+  if( sendLong( tid, kbMsgBuffer, sizeof kbMsgBuffer, MSG_TIMEOUT ) < 0 )
+    return;
 }
 
 void handle_dev_write( struct Message *msg )
@@ -471,7 +474,9 @@ void handle_dev_error( struct Message *msg )
 
   msg->length = 0;
   req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_ERROR;
-  while( __send( tid, msg, 0 ) == 2 );
+
+  if( sendMsg( tid, msg, MSG_TIMEOUT ) < 0 )
+    return;
 }
 
 void handleDevRequests( void )
@@ -479,24 +484,31 @@ void handleDevRequests( void )
   volatile struct Message msg;
   volatile struct DeviceMsg *req = (volatile struct DeviceMsg *)msg.data;
 
-  while( __receive(NULL_TID, &msg, 0) == 2 );
-
-  if( msg.protocol == MSG_PROTO_DEVICE && (req->msg_type & 0x80) == DEVICE_REQUEST )
+  while(1)
   {
-    switch(req->msg_type)
+    if( receiveMsg(NULL_TID, &msg, -1) < 0 )
     {
-      case DEVICE_WRITE:
-        handle_dev_write((struct Message *)&msg);
-        break;
-      case DEVICE_READ:
-        handle_dev_read((struct Message *)&msg);
-        break;
-      case DEVICE_IOCTL:
-        handle_dev_ioctl((struct Message *)&msg);
-        break;
-      default:
-        handle_dev_error((struct Message *)&msg);
-        break;
+      print("fail\n");
+      return;
+    }
+
+    if( msg.protocol == MSG_PROTO_DEVICE && (req->msg_type & 0x80) == DEVICE_REQUEST )
+    {
+      switch(req->msg_type)
+      {
+        case DEVICE_WRITE:
+          handle_dev_write((struct Message *)&msg);
+          break;
+        case DEVICE_READ:
+          handle_dev_read((struct Message *)&msg);
+          break;
+        case DEVICE_IOCTL:
+          handle_dev_ioctl((struct Message *)&msg);
+          break;
+        default:
+          handle_dev_error((struct Message *)&msg);
+          break;
+      }
     }
   }
 }
@@ -519,7 +531,7 @@ int main( void )
 
   for( int i=0; i < 5; i++ )
   {
-    status = registerName(KEYBOARD_NAME, strlen(KEYBOARD_NAME));      
+    status = registerName(KEYBOARD_NAME, strlen(KEYBOARD_NAME));
 
     if( status != 0 )
       __sleep( (i*i+1) * 500 );
@@ -580,5 +592,6 @@ int main( void )
 */
   while(1)
     handleDevRequests();
+
   return 1;
 }

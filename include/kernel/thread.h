@@ -10,7 +10,7 @@
 #define SLEEPING		2  // Blocks until timer runs out
 #define READY			3  // <-- Do not touch(or the context switch code will break)
 #define RUNNING			4  // <-- Do not touch(or the context switch code will break)
-#define WAIT_FOR_SEND		5  
+#define WAIT_FOR_SEND		5
 #define WAIT_FOR_RECV		6
 #define ZOMBIE			7
 
@@ -31,11 +31,13 @@ typedef struct RegisterState Registers;
 
 struct NodePointer
 {
-  union
-  {
-    tid_t prev;
-    unsigned short delta;
-  };
+  tid_t prev;
+  tid_t next;
+};
+
+struct TimerNode
+{
+  unsigned short delta;
   tid_t next;
 };
 
@@ -60,9 +62,9 @@ struct ThreadCtrlBlk
   volatile unsigned char state : 4;
   volatile unsigned char priority : 3;
   volatile unsigned char resd : 1;
-  struct Queue threadQueue;
+  struct Queue threadQueue;	// the queue of waiting senders
   tid_t exHandler;
-  tid_t wait_tid;
+  tid_t wait_tid;		// the tid from which a receiver waits for a send
   void *sig_handler;
   unsigned short __packing;
   volatile Registers regs;
@@ -73,9 +75,10 @@ typedef struct ThreadCtrlBlk TCB;
 tid_t init_server_tid;
 TCB *tcbTable;
 struct NodePointer *tcbNodes;
+struct TimerNode *timerNodes;
 struct Queue *runQueues;
 //struct Queue pausedQueue;
-struct Queue sleepQueue;
+struct Queue timerQueue;
 
 int maxThreads;
 

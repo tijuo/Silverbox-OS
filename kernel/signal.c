@@ -28,16 +28,19 @@ int sysRaise( TCB *tcb, int signal, int arg )
   if( tcb->sig_handler == NULL )
     return 1;
 
+  if( tcb->state == WAIT_FOR_SEND || tcb->state == WAIT_FOR_RECV )
+    timerDetach( GET_TID(tcb) );
+
   if( tcb->state == WAIT_FOR_SEND )
   {
     tcb->wait_tid = NULL_TID;
     tcb->state = PAUSED;
-    tcb->regs.eax = 2;
+    tcb->regs.eax = (signal == SIGTMOUT ? -3 : -2);
     kprintf("receive interrupted\n");
   }
   else if( tcb->state == WAIT_FOR_RECV )
   {
-    tcb->regs.eax = 2;
+    tcb->regs.eax = (signal == SIGTMOUT ? -3 : -2);
 
     kprintf("send interrupted\n");
     tcb->state = PAUSED;
@@ -52,7 +55,7 @@ int sysRaise( TCB *tcb, int signal, int arg )
   stack[10] = tcb->regs.eflags;
   stack[11] = tcb->regs.eip;
 
-  if( pokeMem( (void *)(tcb->regs.userEsp - sizeof stack), sizeof stack, 
+  if( pokeMem( (void *)(tcb->regs.userEsp - sizeof stack), sizeof stack,
            stack, tcb->addrSpace ) != 0 )
   {
     tcb->regs.eax = -1;
@@ -62,9 +65,10 @@ int sysRaise( TCB *tcb, int signal, int arg )
   tcb->regs.eip = (dword)tcb->sig_handler;
   tcb->regs.userEsp -= sizeof stack;
 
-  assert( startThread( tcb ) >= 0 );
+  if( tcb->state != RUNNING && tcb->state != READY )
+    startThread( tcb );
 
-  kprintf("eax: 0x%x 0x%x\n", tcb->regs.eax, tcbTable[GET_TID(tcb)].regs.eax);
+//  kprintf("eax: 0x%x 0x%x\n", tcb->regs.eax, tcbTable[GET_TID(tcb)].regs.eax);
 
   if( tcb == currentThread )
     return -2;

@@ -9,6 +9,8 @@
 #include <string.h>
 #include <os/signal.h>
 
+#define MSG_TIMEOUT		3000
+
 /* Video operations:
    Low-level:
    - putAttr( int attr, int pos )
@@ -341,76 +343,6 @@ void initVideo( void )
 
 //  clearScreen( attrib );
 }
-/*
-int handleIoctl( int command, int numArgs, void *args )
-{
-  return -1;
-}
-
-int handleWrite( char *buffer, struct MessageHeader *header )
-{
-  int i;
-
-  for( i=0; i < header->length; i++ )
-    _printChar( buffer[i] );
-
-  return i;
-}
-*/
-
-/*
-void handle_dev_read( struct Message *msg )
-{
-
-}
-
-void handle_dev_write( struct Message *msg )
-{
-
-}
-
-void handle_dev_ioctl( struct Message *msg )
-{
-
-}
-
-void handle_dev_error( struct Message *msg )
-{
-
-}
-
-void handleDevRequests( void )
-{
-  struct Message msg;
-  struct DeviceMsg *req = (struct DeviceMsg *)msg.data;
-
-  while(1)
-  {
-    while( __receive(NULL_TID, &msg, 0) == 2 );
-
-    if( req->msg_type )
-    {
-      switch(req->msg_type)
-      {
-        case DEVICE_WRITE:
-          handle_dev_write(&msg);
-          break;
-        case DEVICE_READ:
-          handle_dev_read(&msg);
-          break;
-        case DEVICE_IOCTL:
-          handle_dev_ioctl(&msg);
-          break;
-        default:
-          handle_dev_error(&msg);
-          break;
-      }
-    }
-    else
-      handle_dev_error(&msg);
-  }
-}
-*/
 
 void handle_dev_read( struct Message *msg )
 {
@@ -426,9 +358,14 @@ void handle_dev_write( struct Message *msg )
   msg->length = sizeof *req;
 
   req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_SUCCESS;
-  while( __send( tid, msg, 0 ) == 2 );
 
-  count = _receive( tid, videoMsgBuffer, sizeof videoMsgBuffer, 0 );
+  if( sendMsg( tid, msg, MSG_TIMEOUT ) < 0 )
+    return;
+
+  count = receiveLong( tid, videoMsgBuffer, sizeof videoMsgBuffer, MSG_TIMEOUT );
+
+  if( count < 0 )
+    return;
 
   for(int i=0; i < count; i++)
     _printChar(videoMsgBuffer[i]);
@@ -446,7 +383,9 @@ void handle_dev_error( struct Message *msg )
 
   msg->length = 0;
   req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_ERROR;
-  while( __send( tid, msg, 0 ) == 2 );
+
+  if( sendMsg( tid, msg, MSG_TIMEOUT ) < 0 )
+    return;
 }
 
 void handleDevRequests( void )
@@ -456,7 +395,8 @@ void handleDevRequests( void )
 
   while(1)
   {
-    while( __receive(NULL_TID, &msg, 0) == 2 );
+    if( receiveMsg(NULL_TID, &msg, -1) < 0 )
+      return;
 
     if( msg.protocol == MSG_PROTO_DEVICE && (req->msg_type & 0x80) == DEVICE_REQUEST )
     {
@@ -478,13 +418,6 @@ void handleDevRequests( void )
       }
     }
   }
-/*
-  else
-  {
-    print("Received bad message!\n");
-    handle_dev_error(&msg);
-  }
-*/
 }
 
 int main( void )
@@ -497,7 +430,7 @@ int main( void )
   for( int i=0; i < 5; i++ )
   {
     status = registerName(SERVER_NAME, strlen(SERVER_NAME));
-    
+
     if( status != 0 )
       __sleep( (i*i+1) * 500 );
     else
@@ -526,10 +459,8 @@ int main( void )
   if( status != 0 )
     return 1;
 
-  handleDevRequests();
-
   while(1)
-    __pause();
+    handleDevRequests();
 
   return 1;
 }

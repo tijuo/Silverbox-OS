@@ -1,6 +1,8 @@
 #include <os/rpc/rpc.h>
 #include <os/message.h>
 
+#define MSG_TIMEOUT	3000
+
 int sendRPCMessage(tid_t recipient, char *name, uchar *message, uint64_t msgLen, int protocol)
 {
   int result = -1;
@@ -40,9 +42,7 @@ int _sendRPC(tid_t recipient, char *name, uchar *message, uint64_t msgLen, int p
   msg.length = sizeof *header;
   msg.protocol = MSG_PROTO_RPC;
 
-  while( (result=__send(recipient, &msg, 0)) == 2 );
-
-  if( result != 0 )
+  if( sendMsg(recipient, &msg, MSG_TIMEOUT) < 0 )
     return -1;
 
   buffer = malloc(header->dataLen + header->nameLen);
@@ -53,7 +53,7 @@ int _sendRPC(tid_t recipient, char *name, uchar *message, uint64_t msgLen, int p
   memcpy(buffer, name, header->nameLen);
   memcpy(buffer + header->nameLen, message, msgLen);
 
-  _send(recipient, buffer, 0);
+  sendLong(recipient, buffer, 0);
 
   free(buffer);
 

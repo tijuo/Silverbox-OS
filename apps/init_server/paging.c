@@ -81,3 +81,23 @@ void clearPage( void *page )
 {
   setPage(page, 0);
 }
+
+int peekPage(void *phys, void *data)
+{
+  if( __map((void *)TEMP_PAGE, phys, 1, 0, NULL_PADDR) < 1 )
+    return -1;
+
+  memcpy( data, (void *)TEMP_PAGE, PAGE_SIZE);
+  __unmap((void *)TEMP_PAGE, NULL_PADDR);
+}
+
+int pokePage(void *phys, void *data)
+{
+  if( __map((void *)TEMP_PAGE, phys, 1, 0, NULL_PADDR) < 1 )
+    return -1;
+
+  memcpy( (void *)TEMP_PAGE, data, PAGE_SIZE);
+  __unmap((void *)TEMP_PAGE, NULL_PADDR);
+
+  return 0;
+}

@@ -74,13 +74,23 @@ int switchToThread( volatile TCB *oldThread, volatile TCB *newThread )
 */
 int startThread( TCB *thread )
 {
-  assert( thread != NULL );
-
   if( thread == NULL )
     return -1;
 
+  if( isInTimerQueue(thread) )
+    kprintf("Thread is in timer queue!\n");
+
+  assert( !isInTimerQueue(thread) );
+
   if( thread->state == PAUSED ) /* A paused queue really isn't necessary. */
   {
+  for( int level=0; level < maxRunQueues; level++ )
+  {
+    if( isInQueue( &runQueues[level], GET_TID(thread) ) )
+      kprintf("Thread is in run queue, but it's paused?\n");
+    assert( !isInQueue( &runQueues[level], GET_TID(thread) ) );
+  }
+
     assert( thread != currentThread ); // A paused thread should NEVER be running
     //detachPausedQueue( thread );
     thread->state = READY;
@@ -124,7 +134,7 @@ int sleepThread( TCB *thread, int msecs )
   if( thread->state == READY && GET_TID(thread) != IDLE_TID )
     detachRunQueue( thread );
 
-  if( sleepEnqueue( &sleepQueue, GET_TID(thread), (msecs * HZ) / 1000 ) != 0 )
+  if( timerEnqueue( GET_TID(thread), (msecs * HZ) / 1000 ) != 0 )
   {
     assert( false );
     return -1;
