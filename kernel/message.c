@@ -68,6 +68,10 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
       timerDetach( recipient );
       tcbTable[recipient].state = READY;
       attachRunQueue( &tcbTable[recipient] );
+
+      if( tcbTable[recipient].priority > 0 )
+        setPriority( &tcbTable[recipient], tcbTable[recipient].priority - 1 );
+
       tcbTable[recipient].wait_tid = NULL_TID;
       tcbTable[recipient].regs.eax = 0;
       return 0;
@@ -152,6 +156,7 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout )
         timerDetach( send_tid );
         tcbTable[send_tid].state = READY;
         attachRunQueue( &tcbTable[send_tid] );
+        tcbTable[send_tid].quantaLeft = tcbTable[send_tid].priority + 1;
         tcbTable[send_tid].regs.eax = 0;
       }
       else

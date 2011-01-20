@@ -76,29 +76,19 @@ TCB *schedule( volatile TCB *thread )
   if( thread == NULL )
     return NULL;
 
-  /* Higher priorities *MUST* execute before lower priorities. */
-  /* Warning: This may cause starvation if incorrectly set. */
-
-  /* Why would the previously running thread's state ever be READY? */
+  /* Threads with lower priority numbers *MUST* execute before threads
+     with higher priority numbers. Warning: This may cause starvation
+     if incorrectly set. */
 
   assert( thread == currentThread );
-  assert( thread->state != READY );
 
-  if( thread->state == RUNNING || thread->state == READY )
+  if( thread->state == RUNNING /*|| thread->state == READY*/ )
   {
      if( thread != idleThread )
      {
-        // Set the priority
-        if( thread->quantaLeft == 0 && thread->priority < NUM_PRIORITIES - 1 )
-        {
-          if( thread->state == READY )
-            detachRunQueue( (TCB *)thread );
-
-          thread->priority++;
-
-          if( thread->state == READY )
-            attachRunQueue( (TCB *)thread );
-        }
+        // Increase the priority number
+       if( thread->quantaLeft == 0 && thread->priority < NUM_PRIORITIES - 1 )
+         thread->priority++;
      }
 
     thread->state = READY;
@@ -108,7 +98,6 @@ TCB *schedule( volatile TCB *thread )
     else
     {
       thread->quantaLeft = thread->priority + 1;
-    //  attachRunQueue( thread );
     }
   }
 
@@ -159,6 +148,7 @@ TCB *schedule( volatile TCB *thread )
       #else
         attachRunQueue( (TCB *)thread );
       #endif
+      thread->quantaLeft = thread->priority + 1;
     }
   }
 
@@ -181,8 +171,10 @@ int sysYield( TCB *thread )
 
   assert(thread == currentThread);
 
-//  schedule( thread );
-  thread->quantaLeft = 0; // Not sure if this actually works
+/* XXX: This wouldn't work, because it may lower
+   the priority level of the thread */
+
+  thread->state = READY; // Not sure if this actually works
   return 0;
 }
 
@@ -199,7 +191,7 @@ int sysYield( TCB *thread )
 */
 int setPriority( TCB *thread, int level )
 {
-  assert( thread != NULL );
+  int oldLevel = currentThread->priority;
 
   if( thread == NULL || thread == idleThread )
     return -1;
@@ -212,16 +204,18 @@ int setPriority( TCB *thread, int level )
   if( thread->state == READY )
     detachRunQueue( thread );
 
-    //  if( thread != currentThread )
-    thread->priority = level;
+  thread->priority = level;
 
   if( thread->state == READY )
     attachRunQueue( thread );
 
+  if( level < currentThread->priority && currentThread->state == RUNNING )
+    currentThread->state = READY;
+
   return 0;
 }
 
-/** 
+/**
     Adds a thread to the run queue.
 
     @param thread The TCB of the thread to attach.
@@ -329,11 +323,10 @@ void timerInt( volatile TCB *thread )
         #else
           assert( attachRunQueue( wokenThread ) == 0 );
         #endif
+        wokenThread->quantaLeft = wokenThread->priority + 1;
       }
 
       assert( wokenThread != currentThread );
-
-      wokenThread->quantaLeft = wokenThread->priority + 1; // This is important. Scheduler breaks without this for some reason?
     }
 
     sendEOI();

@@ -23,8 +23,8 @@ int mapPage( void *phys, void *virt, u32 flags, void *addrSpace );
 addr_t unmapPageTable( void *virt, void *addrSpace );
 addr_t unmapPage( void *virt, void *addrSpace );
 
-inline void reload_cr3(void) __attribute__((always_inline));
-inline void invalidate_page( void *virt ) __attribute__((always_inline));
+static inline void reload_cr3(void) __attribute__((always_inline));
+static inline void invalidate_page( void *virt ) __attribute__((always_inline));
 
 bool is_readable( void *addr, void *addrSpace );
 bool is_writable( void *addr, void *addrSpace );
@@ -62,7 +62,7 @@ bool is_writable( void *addr, void *addrSpace )
   If only a few entries need to be flushed, use invalidate_page().
 */
 
-inline void reload_cr3(void)
+static inline void reload_cr3(void)
 {
   __asm__ volatile("push %eax\n"
                    "movl %cr3, %eax\n"
@@ -77,7 +77,7 @@ inline void reload_cr3(void)
   This is faster than reload_cr3() for flushing a few entries.
 */
 
-inline void invalidate_page( void *virt )
+static inline void invalidate_page( void *virt )
 {
   __asm__ volatile( "invlpg %0\n" :: "m"( *(char *)virt ) );
 }

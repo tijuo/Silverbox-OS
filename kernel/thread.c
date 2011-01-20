@@ -33,38 +33,6 @@ tid_t getFreeTID(void)
     RET_MSG(NULL_TID, "Exhausted all TIDs!");
 }
 
-/*
-int switchToThread( volatile TCB *oldThread, volatile TCB *newThread )
-{
-  void *stack;
-  TCB *_oldThread, *_newThread;
-
-  assert( newThread != NULL );
-  assert( oldThread != NULL );
-
-  if( newThread == NULL || oldThread == NULL )
-    return -1;
-
-  _oldThread = (TCB *)oldThread;
-  _newThread = (TCB *)newThread;
-
-  // disableInt();
-
-  stack = _oldThread->stack;
-
-//  if( newThread->process->tssIOBitmap != NULL )
-//      memcpy( tssIOBitmap, newThread->process->tssIOBitmap, 128 );
-
-  saveAndSwitchContext( _oldThread, _newThread ); // <-- Low level
-
-  _oldThread->stack = stack;
-
-  // enableInt();
-
-  return 0;
-}
-*/
-
 /** Starts a non-running thread
 
     The thread is started by placing it on a run queue.
@@ -84,19 +52,17 @@ int startThread( TCB *thread )
 
   if( thread->state == PAUSED ) /* A paused queue really isn't necessary. */
   {
-  for( int level=0; level < maxRunQueues; level++ )
-  {
-    if( isInQueue( &runQueues[level], GET_TID(thread) ) )
-      kprintf("Thread is in run queue, but it's paused?\n");
-    assert( !isInQueue( &runQueues[level], GET_TID(thread) ) );
-  }
+    for( int level=0; level < maxRunQueues; level++ )
+    {
+      if( isInQueue( &runQueues[level], GET_TID(thread) ) )
+        kprintf("Thread is in run queue, but it's paused?\n");
+      assert( !isInQueue( &runQueues[level], GET_TID(thread) ) );
+    }
 
     assert( thread != currentThread ); // A paused thread should NEVER be running
-    //detachPausedQueue( thread );
+
     thread->state = READY;
     thread->quantaLeft = thread->priority + 1;
-
-    assert(thread->state != DEAD);
 
     attachRunQueue( thread );
     return 0;
@@ -106,7 +72,7 @@ int startThread( TCB *thread )
 }
 
 
-/** 
+/**
     Temporarily pauses a thread for an amount of time.
 
     @param thread The TCB of the thread to put to sleep.
@@ -118,11 +84,12 @@ int startThread( TCB *thread )
 
 int sleepThread( TCB *thread, int msecs )
 {
-  assert( thread != NULL );
   assert( msecs > 0 );
 
   if( thread->state == SLEEPING )
     RET_MSG(1, "Already sleeping!")//return -1;
+  else if( msecs <= 0 )
+    RET_MSG(1, "Invalid sleep interval");
 
   if( thread->state != READY && thread->state != RUNNING )
   {
@@ -152,8 +119,6 @@ int sleepThread( TCB *thread, int msecs )
 
 int pauseThread( TCB *thread )
 {
-  assert( thread != NULL );
-
   if( thread == NULL )
     RET_MSG(-1, "NULL ptr")
 
@@ -164,6 +129,7 @@ int pauseThread( TCB *thread )
     case RUNNING:
       //attachPausedQueue( thread ); /* A paused queue isn't necessary */
       thread->state = PAUSED;
+      thread->quantaLeft = 0;
       return 0;
     case PAUSED:
       RET_MSG(1, "Already Paused")//return 1;
@@ -172,7 +138,7 @@ int pauseThread( TCB *thread )
   }
 }
 
-/** 
+/**
     Creates and initializes a new thread.
 
     @param threadAddr The start address of the thread.
@@ -189,10 +155,6 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
    pde_t pde;
 // This should be changed
 //   struct RegisterState *state;
-
-   assert(addrSpace != (addr_t)NULL_PADDR);
-   assert( threadAddr != NULL );
-   assert( exHandler != NULL_TID );
 
    if( threadAddr == NULL )
      RET_MSG(NULL, "NULL thread addr")
@@ -213,7 +175,6 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
    //kprintf("TID: %d Thread: 0x%x\n", tid, thread);
 
     thread->priority = NORMAL_PRIORITY;
-    thread->quantaLeft = 0;
     thread->state = PAUSED;
     thread->addrSpace = addrSpace;
     thread->exHandler = exHandler;
@@ -277,16 +238,12 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
 int releaseThread( TCB *thread )
 {
-  assert( thread != NULL );
-
   if( thread == NULL )
     return -1;
 
-  // disableInt();
+  /* XXX: If the thread is in any queue, detach it. */
 
   thread->state = DEAD;
-
-  // enableInt();
 
   return 0;
 }

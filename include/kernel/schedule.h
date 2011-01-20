@@ -20,6 +20,8 @@ int detachPausedQueue( TCB *thread );
 int attachRunQueue( TCB *thread );
 int detachRunQueue( TCB *thread );
 
+int setPriority( TCB *thread, int level );
+
 HOT(TCB *schedule( volatile TCB *tcb ));
 HOT(void timerInt(volatile TCB *_currThread));
 void idle(void) __attribute__((noreturn));

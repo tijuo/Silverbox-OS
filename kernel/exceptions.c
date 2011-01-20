@@ -3,6 +3,7 @@
 #include <kernel/debug.h>
 #include <oslib.h>
 #include <kernel/memory.h>
+#include <kernel/schedule.h>
 #include <os/signal.h>
 
 int sysEndIRQ( TCB *thread, int irqNum );
@@ -112,7 +113,7 @@ int sysEndPageFault( TCB *currThread, tid_t tid )
 
 /// Handles an IRQ (from 0 to 15).
 /** If an IRQ occurs, the kernel will send a message to the
-    thread's exception handler (if it exists). */
+    thread that registered to handle the IRQ (if it exists). */
 
 void handleIRQ(volatile TCB *thread )
 {
@@ -139,6 +140,8 @@ void handleIRQ(volatile TCB *thread )
 
     if( IRQHandlers[regs->int_num - IRQ0] == NULL_TID )
       return;
+
+    setPriority(&tcbTable[IRQHandlers[regs->int_num - IRQ0]], HIGHEST_PRIORITY);
 
     sysRaise( &tcbTable[IRQHandlers[regs->int_num - IRQ0]], ((byte)regs->int_num << 8) | SIGINT, 0 );
 
@@ -219,7 +222,7 @@ static void dump_regs( TCB *thread )
 
 /// Handles the CPU exceptions
 
-void handleCPUException(volatile TCB *thread  )
+void handleCPUException(volatile TCB *thread)
 {
 /*  TCB *thread = (TCB *)(*tssEsp0 - sizeof(Registers) - sizeof(dword));*/
 //  struct Message *message = &__msg;

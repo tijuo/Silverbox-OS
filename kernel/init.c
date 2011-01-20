@@ -23,17 +23,17 @@
 
 #define INIT_SRV_FLAG	"initsrv="
 
-void contextSwitch( void *addrSpace, void *stack ) __attribute( (section(".dtext")) );
+static inline void contextSwitch( void *addrSpace, void *stack ) __attribute( (section(".dtext")) );
 
-inline void contextSwitch( void *addrSpace, void *stack )
+static inline void contextSwitch( void *addrSpace, void *stack )
 {
    __asm__ __volatile__( \
     "mov %0, %%ecx\n" \
     "mov %%cr3, %%edx\n" \
     "cmp %%edx, %%ecx\n" \
-    "jz   __skip\n" \
+    "jz   __load_regs\n" \
     "mov  %%ecx, %%cr3\n" \
-    "__skip: mov    %1, %%esp\n" \
+    "__load_regs: mov    %1, %%esp\n" \
     "popa\n" \
     "popw  %%es\n" \
     "popw  %%ds\n" \
