@@ -69,7 +69,7 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
       tcbTable[recipient].state = READY;
       attachRunQueue( &tcbTable[recipient] );
 
-      if( tcbTable[recipient].priority > 0 )
+      if( tcbTable[recipient].priority > 2 )
         setPriority( &tcbTable[recipient], tcbTable[recipient].priority - 1 );
 
       tcbTable[recipient].wait_tid = NULL_TID;
@@ -135,7 +135,7 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout )
      or non-mapped buffer */
 
   if( sender == NULL_TID )
-    send_tid = dequeue( &tcbTable[GET_TID(tcb)].threadQueue );
+    send_tid = popQueue( &tcbTable[GET_TID(tcb)].threadQueue );
   else
     send_tid = detachQueue( &tcbTable[GET_TID(tcb)].threadQueue, sender );
 

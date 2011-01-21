@@ -8,15 +8,13 @@ int timerEnqueue( tid_t tid, unsigned short time );
 tid_t timerPop( void );
 int enqueue( struct Queue *queue, tid_t tid );
 tid_t detachQueue( struct Queue *queue, tid_t tid );
-tid_t dequeue( struct Queue *queue );
+tid_t popQueue( struct Queue *queue );
+bool isInQueue( struct Queue *queue, tid_t tid );
+bool isInTimerQueue( tid_t tid );
 
-/**
-  Adds a thread to the timer queue with an associated time.
-
-  @param tid The TID of the thread to enqueue.
-  @param time The delta time in ticks. Must be non-zero.
-  @return 0 on success. -1 on failure.
-*/
+#if DEBUG
+int totalTimerTime(void);
+#endif
 
 bool isInQueue( struct Queue *queue, tid_t tid )
 {
@@ -45,6 +43,14 @@ bool isInTimerQueue( tid_t tid )
 
   return false;
 }
+
+/**
+  Adds a thread to the timer queue with an associated time.
+
+  @param tid The TID of the thread to enqueue.
+  @param time The delta time in ticks. Must be non-zero.
+  @return 0 on success. -1 on failure.
+*/
 
 int timerEnqueue( tid_t tid, unsigned short time )
 {
@@ -124,7 +130,9 @@ tid_t timerPop( void )
     return NULL_TID;
 }
 
-int totalTimerTime()
+#if DEBUG
+
+int totalTimerTime(void)
 {
   int total = 0;
 
@@ -133,6 +141,9 @@ int totalTimerTime()
 
   return total;
 }
+
+
+#endif
 
 /**
   Removes a thread from the timer queue.
@@ -249,7 +260,7 @@ tid_t detachQueue( struct Queue *queue, tid_t tid )
   tid_t nodeTID;
   struct NodePointer *ptr;
 
-  assert( (queue->head != NULL_TID && queue->tail != NULL_TID) || 
+  assert( (queue->head != NULL_TID && queue->tail != NULL_TID) ||
           (queue->head == NULL_TID && queue->tail == NULL_TID) );
 
   if( queue == NULL || queue->head == NULL_TID || tid == NULL_TID )
@@ -292,15 +303,15 @@ tid_t detachQueue( struct Queue *queue, tid_t tid )
 return NULL_TID;//  RET_MSG(NULL_TID, "NULL tid")//return NULL_TID;
 }
 
-/** 
+/**
   Removes the first thread from a thread queue.
 
   @param queue A thread queue.
-  @return The TID of the first thread on the thread queue. NULL_TID if the 
+  @return The TID of the first thread on the thread queue. NULL_TID if the
           thread queue is empty or on failure.
 */
 
-tid_t dequeue( struct Queue *queue )
+tid_t popQueue( struct Queue *queue )
 {
   if( queue == NULL )
     return NULL_TID;

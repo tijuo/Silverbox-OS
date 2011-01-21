@@ -12,13 +12,11 @@
 #define RUNNING			4  // <-- Do not touch(or the context switch code will break)
 #define WAIT_FOR_SEND		5
 #define WAIT_FOR_RECV		6
-#define ZOMBIE			7
+#define ZOMBIE			7  // Thread is waiting to be released
 
 #define NUM_PROCESSORS   1
 
 #define TID_MAX		(tid_t)32767
-
-#define yieldCPU() asm __volatile__("int    $32\n")
 
 typedef struct RegisterState Registers;
 
@@ -64,7 +62,7 @@ struct ThreadCtrlBlk
   volatile unsigned char resd : 1;
   struct Queue threadQueue;	// the queue of waiting senders
   tid_t exHandler;
-  tid_t wait_tid;		// the tid from which a receiver waits for a send
+  tid_t wait_tid;		// wait to receive from/send to this thread
   void *sig_handler;
   unsigned short __packing;
   volatile Registers regs;

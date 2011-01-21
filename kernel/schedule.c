@@ -132,7 +132,7 @@ TCB *schedule( volatile TCB *thread )
   }
   else                      // If a thread was found, then run it(assumes that the thread is ready since it's in the ready queue)
   {
-    newTID = dequeue( &runQueues[ level ] );
+    newTID = popQueue( &runQueues[ level ] );
 
     assert( newTID != NULL_TID );
 
@@ -219,31 +219,22 @@ int setPriority( TCB *thread, int level )
     Adds a thread to the run queue.
 
     @param thread The TCB of the thread to attach.
-    @return 0 on success. -1 on success. 1 if the thread was running (and shouldn't be on a run queue)
+    @return 0 on success. -1 on failure.
 */
+
+
 int attachRunQueue( TCB *thread )
 {
   assert( thread != NULL );
-  assert( thread->priority < NUM_PRIORITIES );
+  assert( thread->priority < NUM_PRIORITIES && thread->priority >= 0 );
   assert( thread->state == READY );
-
-  if( thread == NULL )
-    return -1;
 
   assert( thread != currentThread ); /* If the current thread is attached to its run queue, the scheduler will break! */
 
-  if( thread->state == RUNNING )
-    return 1;
+  if( thread->state != READY )
+    return -1;
 
-  #if DEBUG
-  int ret;
-
-  ret = enqueue( &runQueues[ thread->priority ], GET_TID(thread) );
-
-  return ret;
-  #else
-    return enqueue( &runQueues[thread->priority ], GET_TID(thread) );
-  #endif
+  return enqueue( &runQueues[thread->priority], GET_TID(thread) );
 }
 
 /**

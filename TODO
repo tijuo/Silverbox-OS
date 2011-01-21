@@ -2,7 +2,6 @@ Kernel:
 
 DONE: Set thread's IO permissions based on TSS instead of the EFLAGS IOPL
 DONE: Allow lazy TSS IO bitmap switching
-DONE: Let the initial server be determined by an input from a boot parameter
 
 Implement APIC timer
 Pass GRUB information to initial server
@@ -11,25 +10,25 @@ Check system call input addresses for mapping/granting
 
 Initial Server:
 
-Virtual File System
-DONE: Let memory regions in address spaces use SBArray instead of linked list
-DONE: Remove list_init,list_malloc,list.c,tree.c
+DONE: Virtual File System
 Virtual address space management (allocating, freeing virtual addresses)
 IO port management(set_io_perm, reserve_ports, release_ports)
 IRQ management(reserve_irq, release_irq)
 Spawn a new thread per request
+Shared Memory Regions
 
 Libraries:
 
-DONE: Fix conflict with sbrk()s in oslib and init server
-DONE: Fix SBArray to copy value data into the array instead of just storing pointers
 Implement the socket library
 Implement the math library
 
 Drivers:
 
 Create a floppy server from the floppy code
+USB Drivers
+PCI Drivers
+USB Driver
 
 Shell:
 
-Implement the "read" command
+DONE: Implement the "read" command

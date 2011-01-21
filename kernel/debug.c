@@ -21,6 +21,8 @@ void kprintf( const char *str, ... );
 //void doNewLine( int *x, int *y );
 char *kitoa(int value, char *str, int base);
 
+extern void dump_regs( TCB *thread );
+
 #define com1 0x3f8
 #define com2 0x2f8
 
@@ -296,6 +298,9 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
 {
   kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
 
+  if( currentThread )
+    dump_regs((TCB *)currentThread);
+
   if( badAssertHlt )
   {
     kprintf("\nSystem halted.");
@@ -305,7 +310,7 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
   }
 }
 
-/** Increments a counter that keeps track of the number of times that 
+/** Increments a counter that keeps track of the number of times that
     the scheduler was called.
 */
 

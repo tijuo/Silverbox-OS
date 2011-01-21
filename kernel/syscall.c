@@ -17,9 +17,8 @@ static void sysExit( TCB *thread, int code );
 
 extern int sysEndIRQ( TCB *thread, int irqNum );
 extern int sysRegisterInt( TCB *thread, int intNum );
+extern int sysUnregisterInt( TCB *thread, int intNum );
 extern int sysEndPageFault( TCB *thread, tid_t tid );
-
-//extern struct Message __msg;
 
 static void sysExit( TCB *thread, int code )
 {
@@ -29,46 +28,14 @@ static void sysExit( TCB *thread, int code )
     releaseThread(thread);
   else
     sysRaise(&tcbTable[thread->exHandler], (GET_TID(thread) << 8) | SIGEXIT, code);
-
-/*
-  struct Message *msg= &__msg;
-  struct UMPO_Header *header = (struct UMPO_Header *)msg->data;
-  struct ExitMsg *exitMsg = (struct ExitMsg *)(header + 1);
-
-  assert( thread != NULL );
-
-  if( thread == NULL )
-    return;
-
-  releaseThread( thread );
-
-  thread->state = DEAD;
-
-  if( thread->exHandler == NULL_TID )
-    return;
-  else
-  {
-    msg->sender = 0;
-    header->subject = SYS_EXIT_MSG;
-    msg->reply_mid = NULL_TID;
-    msg->length = sizeof *header + sizeof *exitMsg;
-
-    exitMsg->code = code;
-    exitMsg->tid = GET_TID(thread);
-
-//    attachMessage( &mboxTable[thread->exHandler].queue, 
-//         msg, mboxTable[thread->exHandler].owner );
-  }
-*/
 }
 
 static int sysGetThreadInfo( TCB *thread, tid_t tid, struct ThreadInfo *info )
 {
   TCB *other_thread;
   assert(info != NULL);
-  assert(thread != NULL);
 
-  if( info == NULL || thread == NULL )
+  if( info == NULL )
     return -ENULL;
 
   if( tid >= maxThreads )
@@ -263,6 +230,13 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
       *result = enableIO_Permissions( _thread, (unsigned short)regs->ebx,
 				 (unsigned short)regs->ecx, (bool)regs->edx, (tid_t)regs->esi );
       break;
+    case SYS_UNREGISTER_INT:
+      *result = sysUnregisterInt( _thread, (int)regs->ebx );
+      break;
+    case SYS_DESTROY_THREAD:
+      *result = -1;
+    case SYS_PAUSE_THREAD:
+      *result = -1;
     default:
       kprintf("Invalid system call: 0x%x %d 0x%x\n", regs->eax,
 		GET_TID(_thread), _thread->regs.eip);

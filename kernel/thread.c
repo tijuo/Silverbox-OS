@@ -45,10 +45,10 @@ int startThread( TCB *thread )
   if( thread == NULL )
     return -1;
 
-  if( isInTimerQueue(thread) )
+  if( isInTimerQueue(GET_TID(thread)) )
     kprintf("Thread is in timer queue!\n");
 
-  assert( !isInTimerQueue(thread) );
+  assert( !isInTimerQueue(GET_TID(thread)) );
 
   if( thread->state == PAUSED ) /* A paused queue really isn't necessary. */
   {
@@ -119,9 +119,6 @@ int sleepThread( TCB *thread, int msecs )
 
 int pauseThread( TCB *thread )
 {
-  if( thread == NULL )
-    RET_MSG(-1, "NULL ptr")
-
   switch( thread->state )
   {
     case READY:
@@ -229,8 +226,8 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
     return thread;
 }
 
-/** 
-    Deallocates a thread.
+/**
+    Destroys a thread and detaches it from all queues.
 
     @param thread The TCB of the thread to release.
     @return 0 on success. -1 on failure.
@@ -238,12 +235,56 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
 int releaseThread( TCB *thread )
 {
-  if( thread == NULL )
+  if( thread == NULL || thread->state == DEAD )
     return -1;
 
-  /* XXX: If the thread is in any queue, detach it. */
+  /* If the thread is a sender waiting for a recipient, remove the
+     sender from the recipient's wait queue. If the thread is a
+     receiver, clear its wait queue after
+     waking all of the waiting threads. */
+
+  switch( thread->state )
+  {
+    /* Assumes that a ready/running thread can't be on the timer queue. */
+
+    case READY:
+      for( int i=0; i < maxRunQueues; i++ )
+      {
+        if( isInQueue( &runQueues[i], GET_TID(thread) ) == true )
+        {
+          detachQueue( &runQueues[i], GET_TID(thread) );
+          break;
+        }
+      }
+      break;
+    case WAIT_FOR_RECV:
+    case WAIT_FOR_SEND:
+    case SLEEPING:
+      timerDetach( GET_TID(thread) );
+      break;
+  }
+
+  if( thread->state == WAIT_FOR_SEND )
+  {
+    tid_t tid;
+
+    while( (tid=popQueue( &thread->threadQueue )) != NULL_TID )
+    {
+      tcbTable[tid].quantaLeft = tcbTable[tid].priority + 1;
+      tcbTable[tid].state = READY;
+      attachRunQueue(&tcbTable[tid]);
+    }
+  }
+  else if( thread->state == WAIT_FOR_RECV )
+  {
+    assert( thread->wait_tid != NULL_TID );
+
+    detachQueue( &tcbTable[thread->wait_tid].threadQueue, GET_TID(thread) );
+  }
 
   thread->state = DEAD;
-
+  thread->quantaLeft = 0;
+  thread->wait_tid = NULL_TID;
+  thread->sig_handler = NULL;
   return 0;
 }

@@ -8,6 +8,7 @@
 
 int sysEndIRQ( TCB *thread, int irqNum );
 int sysRegisterInt( TCB *thread, int intNum );
+int sysUnregisterInt( TCB *thread, int intNum );
 int sysEndPageFault( TCB *thread, tid_t tid );
 void handleIRQ(volatile TCB *thread  );
 void handleCPUException(volatile TCB *thread );
@@ -16,7 +17,7 @@ extern int sysRaise( TCB *tcb, int signal, int arg );
 
 static bool registerIRQ( int irq );
 static bool releaseIRQ( int irq );
-static void dump_regs( TCB *thread );
+void dump_regs( TCB *thread );
 
 /// Indicates whether an IRQ is allocated
 /** true = no handler set
@@ -41,13 +42,9 @@ tid_t IRQHandlers[ 16 ] = { NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID,
 int sysEndIRQ( TCB *thread, int irqNum )
 {
   tid_t tid;
-  assert( thread != NULL );
   kprintf("sysEndIRQ(): %d\n", irqNum);
 
   assert( irqNum >= IRQ0 && irqNum <= IRQ15 );
-
-  if( thread == NULL )
-    return -1;
 
   if( irqNum >= IRQ0 && irqNum <= IRQ15 )
   {
@@ -65,26 +62,42 @@ int sysEndIRQ( TCB *thread, int irqNum )
 }
 
 /** This allows a thread to register an interrupt handler. All
-   interrupts will be sent to a mailbox. */
+   interrupts will be sent to the registered thread . */
 
 int sysRegisterInt( TCB *thread, int intNum )
 {
-  assert( thread != NULL );
-  assert( intNum >= IRQ0 && intNum <= IRQ15 );
-
   if( intNum - 0x20 >= 16 || intNum < 0x20 )
     return -1;
 
-  if( registerIRQ( intNum ) == false )
-    return -1;
-  else
+  if( registerIRQ( intNum ) == true )
   {
-    kprintf("Registering IRQ: 0x%x\n", intNum - 0x20);
+    kprintf("Thread %d registered IRQ: 0x%x\n", GET_TID(thread), intNum - IRQ0);
 
-    enableIRQ( intNum - IRQ0 );
+    enableIRQ(intNum - IRQ0);
     IRQHandlers[intNum - IRQ0] = GET_TID(thread);
     return 0;
   }
+
+  return -1;
+}
+
+int sysUnregisterInt( TCB *thread, int intNum )
+{
+  if( intNum - 0x20 >= 16 || intNum < 0x20 )
+    return -1;
+  else if( IRQHandlers[intNum - IRQ0] != GET_TID(thread) )
+    return -1;
+  else if( releaseIRQ( intNum ) == false )
+    return -1;
+  else
+  {
+    kprintf("IRQ 0x%x unregistered\n", intNum - IRQ0);
+
+    disableIRQ(intNum - IRQ0);
+    IRQHandlers[intNum - IRQ0] = NULL_TID;
+  }
+
+  return 0;
 }
 
 /** Notifies the kernel that a pager is finished handling a
@@ -95,11 +108,10 @@ int sysRegisterInt( TCB *thread, int intNum )
 
 int sysEndPageFault( TCB *currThread, tid_t tid )
 {
-  assert( currThread != NULL );
   assert( tid != NULL_TID );
   assert( tcbTable[tid].exHandler != NULL_TID );
 
-  if( currThread == NULL || tid == NULL_TID || tcbTable[tid].exHandler == NULL_TID )
+  if( tid == NULL_TID || tcbTable[tid].exHandler == NULL_TID )
     return -1;
 
   if( tcbTable[tid].exHandler != GET_TID(currThread) ) // Only a thread's exception handler should make this call
@@ -115,7 +127,7 @@ int sysEndPageFault( TCB *currThread, tid_t tid )
 /** If an IRQ occurs, the kernel will send a message to the
     thread that registered to handle the IRQ (if it exists). */
 
-void handleIRQ(volatile TCB *thread )
+void handleIRQ( volatile TCB *thread )
 {
   Registers *regs = (Registers *)&thread->regs;
 
@@ -181,9 +193,10 @@ static bool releaseIRQ( int irq )
 
 /// Prints useful debugging information about the current thread
 
-static void dump_regs( TCB *thread )
+void dump_regs( TCB *thread )
 {
   Registers *regs = (Registers *)&thread->regs;
+  dword stack;
 
   if( GET_TID(thread) == NULL_TID )
   {
@@ -193,10 +206,7 @@ static void dump_regs( TCB *thread )
 
   kprintf( "\nException: %d @ EIP: 0x%x", regs->int_num, regs->eip );
 
-  if( thread != NULL )
-  {
-    kprintf( " TID: %d", GET_TID(thread));
-  }
+  kprintf( " TID: %d", GET_TID(thread));
 
   kprintf( "\nEAX: 0x%x EBX: 0x%x ECX: 0x%x EDX: 0x%x", regs->eax, regs->ebx, regs->ecx, regs->edx );
   kprintf( "\nESI: 0x%x EDI: 0x%x ESP: 0x%x EBP: 0x%x", regs->esi, regs->edi, regs->esp, regs->ebp );
@@ -207,17 +217,34 @@ static void dump_regs( TCB *thread )
 
   kprintf( " error code: 0x%x\n", regs->error_code );
 
-  if( thread != NULL )
-    kprintf( "CR3: 0x%x actual CR3: 0x%x", (unsigned)thread->addrSpace, getCR3() );
+  kprintf( "Address Space: 0x%x Actual CR3: 0x%x", (unsigned)thread->addrSpace, getCR3() );
 
   kprintf("EFLAGS: 0x%x ", regs->eflags);
 
-  if( thread != NULL )
+  if( (addr_t)thread->addrSpace != (addr_t)kernelAddrSpace )
+    kprintf("User ESP: 0x%x User SS: 0x%x", regs->userEsp, regs->userSs);
+
+  kprintf("\n\nStack Trace:\n<Stack Frame>: Return-EIP args*\n");
+
+  stack = regs->ebp;
+
+  while( is_readable((void *)stack, thread->addrSpace) && is_readable((void *)(stack+4), thread->addrSpace) )
   {
-    if( (addr_t)thread->addrSpace != (addr_t)kernelAddrSpace )
-      kprintf("User ESP: 0x%x User SS: 0x%x", regs->userEsp, regs->userSs);
+    kprintf("<0x%x>: 0x%x", *(dword *)stack, *(dword *)(stack + 4));
+
+    for( int i=0; i < 4; i++ )
+    {
+      if( is_readable( (void *)(stack + 4 * (i+2)), thread->addrSpace) )
+        kprintf(" 0x%x", *(dword *)(stack + 4 * (i+2)));
+    }
+
+    kprintf("\n");
+
+    if( !is_readable((void *)(*(dword *)stack), thread->addrSpace) )
+      break;
+    else
+      stack = *(dword *)stack;
   }
-  kprintf("\n");
 }
 
 /// Handles the CPU exceptions
@@ -225,10 +252,14 @@ static void dump_regs( TCB *thread )
 void handleCPUException(volatile TCB *thread)
 {
 /*  TCB *thread = (TCB *)(*tssEsp0 - sizeof(Registers) - sizeof(dword));*/
-//  struct Message *message = &__msg;
-//  struct UMPO_Header *header = (struct UMPO_Header *)message->data;
 //  struct ExceptionInfo *exInfo = (struct ExceptionInfo *)(header + 1);
   Registers *regs;
+
+  if( thread == NULL )
+  {
+    kprintf("NULL thread. Unable to handle exception. System halted.\n");
+    asm("hlt\n");
+  }
 
   if( GET_TID(thread) == NULL_TID )
   {
@@ -247,7 +278,7 @@ void handleCPUException(volatile TCB *thread)
       pte_t pte;
 
       if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, (void *)getCR3() ) < 0 ||
-          !pte.present || 
+          !pte.present ||
           pokeMem((void *)KERNEL_IO_BITMAP, 2 * PAGE_SIZE, (void *)TSS_IO_PERM_BMP, (void *)getCR3()) < 0 )
       {
         mapTemp((void *)KERNEL_IO_BITMAP);
@@ -276,16 +307,11 @@ void handleCPUException(volatile TCB *thread)
     dump_regs( (TCB *)thread );
     asm("hlt\n");
   }
-  else if( GET_TID(thread) == 1 )
+  else if( GET_TID(thread) == init_server_tid )
   {
-    kprintf("Unable to handle exception. System Halted.\n");
+    kprintf("Exception for initial server. System Halted.\n");
     dump_regs( (TCB *)thread );
     asm("hlt\n");
-  }
-  else
-  {
-  //  kprintf("Exception. Sending notification...\n");
-  //  dump_regs( (TCB *)thread );
   }
   #endif
 
