@@ -27,20 +27,19 @@ static inline void contextSwitch( void *addrSpace, void *stack ) __attribute( (s
 
 static inline void contextSwitch( void *addrSpace, void *stack )
 {
-   __asm__ __volatile__( \
-    "mov %0, %%ecx\n" \
-    "mov %%cr3, %%edx\n" \
-    "cmp %%edx, %%ecx\n" \
-    "jz   __load_regs\n" \
-    "mov  %%ecx, %%cr3\n" \
-    "__load_regs: mov    %1, %%esp\n" \
-    "popa\n" \
-    "popw  %%es\n" \
-    "popw  %%ds\n" \
-    "add   $8, %%esp\n" \
-    "iret\n" :: "m"(addrSpace), \
-    "m"(stack) : "edx", "ecx", "esp" \
-    );
+   __asm__ __volatile__(
+    "mov %0, %%ecx\n"
+    "mov %%cr3, %%edx\n"
+    "cmp %%edx, %%ecx\n"
+    "jz   __load_regs\n"
+    "mov  %%ecx, %%cr3\n"
+    "__load_regs: mov    %1, %%esp\n"
+    "popa\n"
+    "popw  %%es\n"
+    "popw  %%ds\n"
+    "add   $8, %%esp\n"
+    "iret\n" :: "m"(addrSpace),
+    "m"(stack) : "edx", "ecx", "esp");
 }
 
 extern TCB *idleThread;
@@ -73,7 +72,7 @@ DISC_CODE(void showCPU_Features(void));
 DISC_CODE(void showGrubSupport(multiboot_info_t *));
 DISC_CODE(void init_clock(void));
 DISC_CODE(unsigned bcd2bin(unsigned short num));
-DISC_CODE(unsigned long long mktime(int year, int month, int day, int hour, 
+DISC_CODE(unsigned long long mktime(int year, int month, int day, int hour,
                           int minute, int second));
 DISC_DATA( addr_t init_server_img );
 DISC_DATA( int numBootMods );
@@ -372,38 +371,38 @@ int initMemory( multiboot_info_t *info )
 
 static int is_leap( int year )
 {
-  return ( ((year % 4) == 0 && (year % 100) != 0) || 
+  return ( ((year % 4) == 0 && (year % 100) != 0) ||
       (year % 400) == 0 );
 }
-                          
+
 unsigned bcd2bin(unsigned short num)
 {
-  return (num & 0x0F) + 10 * ((num & 0xF0) >> 4) + 100 * ((num & 0xF00) >> 8) 
+  return (num & 0x0F) + 10 * ((num & 0xF0) >> 4) + 100 * ((num & 0xF00) >> 8)
     + 1000 * ((num & 0xF000) >> 12);
 }
 
-unsigned long long mktime(int year, int month, int day, int hour, 
+unsigned long long mktime(int year, int month, int day, int hour,
                           int minute, int second)
 {
   unsigned long long elapsed = 0ull;
   int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
   kprintf("mktime: %d %d %d %d %d %d\n", year, month, day, hour, minute, second);
-  
+
   elapsed += second * 1024ull;
   elapsed += minute * 1024ull * 60ull;
   elapsed += hour * 1024ull * 60ull * 60ull;
   elapsed += day * 1024ull * 60ull * 60ull * 24ull;
-  
+
   for(int i=0; i < month; i++)
     elapsed += month_days[i] * 1024ull * 60ull * 60ull * 24ull;
-    
+
   if( is_leap(CENTURY_START+year) && month > 1 )
     elapsed += 1024ull * 60ull * 60ull * 24ull;
-  
+
   for(int i=UNIX_EPOCH; i < CENTURY_START + year; i++)
     elapsed += (is_leap(i) ? 366ull : 365ull) * 60ull * 60ull * 24ull * 1024ull;
-  
+
   return elapsed;
 }
 
@@ -427,41 +426,41 @@ void init_clock()
     _24hr = 1;
   else
     _24hr = 0;
-  
+
   outByte( RTC_INDEX, RTC_STATUS_B );
   outByte( RTC_DATA, status_b | RTC_PERIODIC );
-  
+
   kprintf("Enabling IRQ 8\n");
   enableIRQ(8);
-  
+
   outByte( RTC_INDEX, RTC_SECOND ); // second
   second = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
 
   outByte( RTC_INDEX, RTC_MINUTE ); // minute
   minute = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
-  
+
   outByte( RTC_INDEX, RTC_HOUR ); // hour
   hour = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
-  
+
   if( !_24hr )
   {
     hour--;
-    
+
     if( hour & 0x80 )
       hour = 12 + (hour & 0x7F);
     else
-      hour = (hour & 0x7F);    
+      hour = (hour & 0x7F);
   }
-  
+
   outByte( RTC_INDEX, RTC_DAY ); // day
   day = -1 + (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
-  
+
   outByte( RTC_INDEX, RTC_MONTH ); // month
   month = -1 + (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
 
   outByte( RTC_INDEX, RTC_YEAR ); // century year (00-99)
   year = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
-  
+
   *time = mktime(year, month, day, hour, minute, second);
 }
 
@@ -482,7 +481,6 @@ void initScheduler( addr_t addrSpace )
   currentThread = idleThread = createThread( (addr_t)idle, addrSpace, NULL, 0 );
   initTimer();
 }
-
 
 void initInterrupts( void )
 {

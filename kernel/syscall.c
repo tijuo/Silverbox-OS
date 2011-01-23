@@ -20,6 +20,9 @@ extern int sysRegisterInt( TCB *thread, int intNum );
 extern int sysUnregisterInt( TCB *thread, int intNum );
 extern int sysEndPageFault( TCB *thread, tid_t tid );
 
+int privSyscalls[] = { SYS_MAP, SYS_MAP_PAGE_TABLE, SYS_GRANT, SYS_GRANT_PAGE_TABLE,
+  SYS_UNMAP, SYS_UNMAP_PAGE_TABLE, SYS_SET_IO_PERM, SYS_REGISTER_INT, SYS_UNREGISTER_INT };
+
 static void sysExit( TCB *thread, int code )
 {
   thread->state = ZOMBIE;
@@ -143,13 +146,8 @@ static int enableIO_Permissions( volatile TCB *thread, unsigned short begin,
 void _syscall( volatile TCB *thread, volatile unsigned intInfo )
 {
   TCB *_thread = (TCB *)thread;
-//  TCB *_thread = (TCB *)(*tssEsp0 - sizeof(Registers) - sizeof(dword));
   Registers *regs = (Registers *)&_thread->regs;
   int *result = (int *)&regs->eax;
-
-  //kprintf("enter: regs->eax: 0x%x\n", _thread->regs.eax);
-
-  assert( _thread->addrSpace == (addr_t)getCR3() );
 
   switch ( regs->eax )
   {
@@ -234,9 +232,8 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
       *result = sysUnregisterInt( _thread, (int)regs->ebx );
       break;
     case SYS_DESTROY_THREAD:
-      *result = -1;
-    case SYS_PAUSE_THREAD:
-      *result = -1;
+      *result = releaseThread( _thread );
+       break;
     default:
       kprintf("Invalid system call: 0x%x %d 0x%x\n", regs->eax,
 		GET_TID(_thread), _thread->regs.eip);

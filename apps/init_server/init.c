@@ -444,7 +444,7 @@ void signal_handler(int signal, int arg)
   {
     tid_t tid = (signal >> 8) & 0xFFFF;
 
-    print("TID: "), printInt(tid), print(" exited\n");
+//    print("TID: "), printInt(tid), print(" exited\n");
     detach_tid(tid);
     // XXX: Unregister any associated names or devices
   }

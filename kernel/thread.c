@@ -42,9 +42,6 @@ tid_t getFreeTID(void)
 */
 int startThread( TCB *thread )
 {
-  if( thread == NULL )
-    return -1;
-
   if( isInTimerQueue(GET_TID(thread)) )
     kprintf("Thread is in timer queue!\n");
 
@@ -150,8 +147,6 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
    TCB * thread;
    tid_t tid = NULL_TID;
    pde_t pde;
-// This should be changed
-//   struct RegisterState *state;
 
    if( threadAddr == NULL )
      RET_MSG(NULL, "NULL thread addr")
@@ -160,16 +155,12 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
    else if( addrSpace == NULL_PADDR )
      RET_MSG(NULL, "NULL addrSpace")
 
-   // disableInt();
-
    tid = getFreeTID();
 
    if( tid == NULL_TID )
      RET_MSG(NULL, "NULL tid")
 
     thread = &tcbTable[tid];
-
-   //kprintf("TID: %d Thread: 0x%x\n", tid, thread);
 
     thread->priority = NORMAL_PRIORITY;
     thread->state = PAUSED;
@@ -178,9 +169,6 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
     thread->wait_tid = NULL_TID;
     thread->threadQueue.tail = thread->threadQueue.head = NULL_TID;
     thread->sig_handler = NULL;
-
-//    thread->stack = thread->stackMem + THREAD_STACK_LEN - sizeof( struct RegisterState );
-//    state = (struct RegisterState *)thread->regs;
 
     assert( thread->addrSpace == tcbTable[tid].addrSpace );
     assert( (u32)addrSpace == ((u32)addrSpace & ~0xFFF) );
@@ -194,8 +182,6 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
     readPDE( (void *)PHYSMEM_START, &pde, (void *)getCR3() );
     writePDE( (void *)PHYSMEM_START, &pde, addrSpace );
 
-//    thread->tid = tid;
-
     if( ((int)threadAddr & KERNEL_VSTART) != KERNEL_VSTART )
     {
       thread->regs.cs = UCODE;
@@ -207,8 +193,6 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
       thread->regs.cs = KCODE;
       thread->regs.ds = thread->regs.es = KDATA;
       thread->regs.esp = thread->regs.ebp = (unsigned)V_IDLE_STACK_TOP;
-      // this might not work
-//      thread->regs.esp = thread->regs.ebp =(unsigned)(V_IDLE_STACK_TOP - sizeof(Registers));
     }
     else
       assert(false);
@@ -221,8 +205,6 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
     if( tid == 0 )
       memcpy( (void *)(/*PHYSMEM_START + */V_IDLE_STACK_TOP - sizeof(Registers)), (void *)&thread->regs, sizeof(Registers) );
 
-//    attachPausedQueue( thread );
-    // enableInt();
     return thread;
 }
 
@@ -235,7 +217,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
 int releaseThread( TCB *thread )
 {
-  if( thread == NULL || thread->state == DEAD )
+  if( thread->state == DEAD )
     return -1;
 
   /* If the thread is a sender waiting for a recipient, remove the

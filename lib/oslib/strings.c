@@ -1,5 +1,6 @@
 #include <oslib.h>
 #include <string.h>
+#include <stdlib.h>
 
 char *strdup(const char *str)
 {

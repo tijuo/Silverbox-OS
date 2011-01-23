@@ -3,9 +3,9 @@
 
 static int _attach_op(void *key, size_t keysize, struct ResourcePool *pool,
     SBAssocArray *assocArray);
-static struct ResourcePool *_detach_op(void *key, size_t keysize, 
+static struct ResourcePool *_detach_op(void *key, size_t keysize,
     SBAssocArray *assocArray);
-static struct ResourcePool *_lookup_op(void *key, size_t keysize, 
+static struct ResourcePool *_lookup_op(void *key, size_t keysize,
     SBAssocArray *assocArray);
 
 static int _attach_op(void *key, size_t keysize, struct ResourcePool *pool,
@@ -20,7 +20,7 @@ static int _attach_op(void *key, size_t keysize, struct ResourcePool *pool,
     return 0;
 }
 
-static struct ResourcePool *_detach_op(void *key, size_t keysize, 
+static struct ResourcePool *_detach_op(void *key, size_t keysize,
     SBAssocArray *assocArray)
 {
   struct ResourcePool *pool = NULL;
@@ -31,7 +31,7 @@ static struct ResourcePool *_detach_op(void *key, size_t keysize,
     return pool;
 }
 
-static struct ResourcePool *_lookup_op(void *key, size_t keysize, 
+static struct ResourcePool *_lookup_op(void *key, size_t keysize,
     SBAssocArray *assocArray)
 {
   struct ResourcePool *pool = NULL;
@@ -47,7 +47,7 @@ int __create_resource_pool(struct ResourcePool *pool, void *phys_aspace)
   static rspid_t counter=2;
 
   if( !pool || IS_PNULL(phys_aspace) )
-    return -1;  
+    return -1;
 
   if( sbArrayCreate(&pool->tids) < 0 )
     return -1;
@@ -76,6 +76,7 @@ int __create_resource_pool(struct ResourcePool *pool, void *phys_aspace)
   setPage(pool->ioBitmaps.phys1, 0xFF);
   setPage(pool->ioBitmaps.phys2, 0xFF);
 
+
   pool->id = counter++;
 
   return 0;
@@ -84,7 +85,7 @@ int __create_resource_pool(struct ResourcePool *pool, void *phys_aspace)
 struct ResourcePool *_create_resource_pool(void *phys_aspace)
 {
   struct ResourcePool *pool = malloc(sizeof(struct ResourcePool));
-  
+
   if( __create_resource_pool(pool, phys_aspace) == 0 )
     return pool;
 

@@ -15,34 +15,34 @@ int init_shmem( shmid_t shmid, tid_t owner, unsigned pages, bool ro_perm )
   struct SharedMemory *new_shmem;
   unsigned phys_addr, addr;
   int i;
-  
+
   if( owner == NULL_TID || owner == KERNEL_TID )
     return -1;
 
   if( pages > total_pages )
     return -1;
-  
-  if( list_lookup(shmid, &shmem_list) == true )
-    return -1;
-  
+
+/*  if( list_lookup(shmid, &shmem_list) == true )
+    return -1;*/
+
   new_shmem = malloc(sizeof(struct SharedMemory));
-  
+
   if( new_shmem == NULL )
     return -1;
 
   new_shmem->owner = owner;
   new_shmem->shmid = shmid;
   new_shmem->ro_perm = ro_perm;
-  
+
   new_shmem->phys_pages = malloc( pages * sizeof( unsigned long ) );
-  
+
   if( new_shmem->phys_pages == NULL )
   {
     free(new_shmem);
     return -1;
   }
-  
-  list_init(&new_shmem->shmem_region_list, list_malloc, list_free);
+
+//  list_init(&new_shmem->shmem_region_list, list_malloc, list_free);
 
   for(i=0; i < pages; i++)
   {
@@ -59,13 +59,14 @@ int init_shmem( shmid_t shmid, tid_t owner, unsigned pages, bool ro_perm )
       free(new_shmem);
       return -1;
     }
+
     new_shmem->phys_pages[i] = phys_addr;
     phys_page_list[(unsigned int)phys_addr / PAGE_SIZE].shared = 1;
     phys_page_list[(unsigned int)phys_addr / PAGE_SIZE].pdir_page = shmid;
   }
 
-  list_insert(shmid, new_shmem, &shmem_list);
-  
+//  list_insert(shmid, new_shmem, &shmem_list);
+
   return 0;
 }
 

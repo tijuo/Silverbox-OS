@@ -10,13 +10,20 @@
 
 void init_addr_space(struct AddrSpace *addr_space, void *phys_addr)
 {
+  struct AddrRegion region1 = { { 0, 0xC0000 }, { 0, 0xC0000 }, MEM_RESD };
+  struct AddrRegion region2 = { { 0xFF400000, 0xC00000 }, { 0, 0 }, MEM_RESD };
+
   if( addr_space == NULL )
     return;
 
   createBitmap(addr_space->bitmap, NUM_PTABLES);
   addr_space->phys_addr = phys_addr;
   sbArrayCreate(&addr_space->memoryRegions);
-//  list_init(&addr_space->mem_region_list, list_malloc, list_free);
+
+  attach_mem_region(addr_space, &region1);
+  attach_mem_region(addr_space, &region2);
+  set_ptable_status(addr_space, (void *)0, true);
+  set_ptable_status(addr_space, (void *)0xFF400000, true);
 }
 
 void delete_addr_space(struct AddrSpace *addr_space)

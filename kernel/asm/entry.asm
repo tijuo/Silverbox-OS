@@ -110,7 +110,7 @@ initPaging:
   mov	ecx, _initKrnlPDIR
   mov   edx, _firstPTAB
   or	edx, 7
-  mov   dword [ecx], edx     ; 1:1 map the physical memory range (0x00-0xC0000)
+  mov   dword [ecx], edx     ; 1:1 map the physical memory range (0x00-0xBFFFF)
 
 ; No need to clear the PTEs since they'll be overwritten anyway
 
@@ -174,7 +174,7 @@ initPaging:
   or    edx, 3
   mov   dword [ecx], edx        ; Map the Kernel table
 
-;  mov   ecx, 1024           ; Assumes that the init code is within the 
+;  mov   ecx, 1024           ; Assumes that the init code is within the
 ;  mov   eax, kPhysStart    ; first 4MB of the kernel
 ;  or    eax, 0x03
 ;  lea   edi, [_firstKrnlPTAB]

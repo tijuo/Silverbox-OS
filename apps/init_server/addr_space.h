@@ -14,6 +14,7 @@
                                    addresses (as opposed to mapping virtual 
 				   addresses to any physical addresses. */
 #define MEM_ZERO	16	// Clear an address range before mapping it.
+#define MEM_RESD	0xF0000000 // Range is reserved and shouldn't be accessed. For internal use only.
 
 #define NUM_PTABLES     1024
 

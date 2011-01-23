@@ -27,8 +27,8 @@ extern void print( char * );
 
 static void handle_message(void);
 static int handle_generic_request( tid_t sender, struct GenericMsgHeader *header, struct Message *reply );
-static int handle_devmgr_request( tid_t sender, void *request,
-   struct DevMgrReply *reply_msg );
+/*static int handle_devmgr_request( tid_t sender, void *request,
+   struct DevMgrReply *reply_msg );*/
 
 extern int handleVfsRequest(tid_t sender, struct FsReqHeader *req, char *inBuffer,
 size_t inBytes, char **outBuffer, size_t *outBytes);
@@ -70,7 +70,12 @@ static int doMapMem( void *physStart, void *virtStart, unsigned pages,
 int flags, tid_t sender )
 {
   struct AddrRegion region;
-  struct ResourcePool *pool = lookup_tid(sender);
+  struct ResourcePool *pool = NULL;
+
+  if( region.flags & MEM_RESD )
+    return -1;
+
+  pool = lookup_tid(sender);
 
   if( pool == NULL )
   {
@@ -416,7 +421,7 @@ static void handle_message( void )
 
   if( !(replyMsg = malloc(sizeof(*replyMsg))) )
   {
-    free(msg);
+    free((void *)msg);
     return;
   }
 
@@ -424,8 +429,8 @@ static void handle_message( void )
   {
     if( receiveMsg( NULL_TID, (struct Message *)msg, -1 ) < 0 )
     {
-      free(msg);
-      free(replyMsg);
+      free((void *)msg);
+      free((void *)replyMsg);
       return;
     }
 

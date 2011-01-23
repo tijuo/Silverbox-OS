@@ -1,5 +1,8 @@
 #include <types.h>
 
+#define PCI_BIOS_PHYS                   0xE0000
+#define PCI_BIOS_ADDR                   0xE0000
+
 struct PCI_config_header {
   unsigned short vendor_id;
   unsigned short device_id;
@@ -111,8 +114,6 @@ typedef struct {
 #define PCI_DOCKING_STATION                     0x0A
 #define PCI_PROCESSOR                           0x0B
 #define PCI_SERIAL_BUS_CONTROLLER               0x0C
-
-#define LOWMEM					0x100000
 
 #define bcd_to_bin(num)      ((((num >> 4) & 0xF) * 10) + (num & 0xF))
 

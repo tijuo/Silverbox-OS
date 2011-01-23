@@ -424,7 +424,7 @@ static int mount( int device, const char *fsName, size_t fsNameLen,
 
   if( path )
   {
-    record = _lookupName(fsName, fsNameLen, FS);
+    record = _lookupName((char *)fsName, fsNameLen, FS);
 
     if( !record )
       return MountFailed;

@@ -528,8 +528,6 @@ int mapPageTable( void *virt, void *phys, u32 flags, void *addrSpace )
   else
   {
     kprintf("Already mapped 0x%x in address space 0x%x", virt, addrSpace);
-//    kprintfHex(*(u32 *)pdePtr);
-//    kprintf(" ");
 
     assert(false);
     return -2;
@@ -537,7 +535,7 @@ int mapPageTable( void *virt, void *phys, u32 flags, void *addrSpace )
   return 0;
 }
 
-/** 
+/**
   Maps a page in physical memory to virtual memory in the current address space
 
   @param virt The virtual address of the page.

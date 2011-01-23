@@ -89,7 +89,7 @@ typedef struct {
   word  descriptor;
 } far_ptr32;
 
-far_ptr32 bios32_indirect = { 0, /*0x08*/0x1B };
+far_ptr32 bios32_indirect = { 0, 0x1B };
 
 int (*pci_read_cfg_byte)(byte bus, byte df_num, short reg_num, byte *byte_read);
 int (*pci_read_cfg_word)(byte bus, byte df_num, short reg_num, word *word_read);
@@ -120,25 +120,9 @@ int locate_pci_bios(void);
 char *decode_pci_class(dword class, dword subclass, dword interface);
 void pci_scan_devices(void);
 
-int consoleID = -1;
-
 void initPCI(void)
 {
-/*
-  while( consoleID < 0 )
-  {
-    consoleID = lookupName( "console" );
-
-    if( consoleID < 0 )
-      __sleep( 100 );
-  }
-
-  if( consoleID < 0 )
-    __exit(-1);
-*/
-
-//  mapMem( (void *)0xB8000, (void *)0xB8000, 8, 0 );
-  mapMem( (void *)0xE0000, (void *)0xE0000, 32, 0 );
+  mapMem( (void *)PCI_BIOS_PHYS, (void *)PCI_BIOS_ADDR, 32, 0 );
 }
 
 unsigned long bios32_service_call(long service)
@@ -157,22 +141,24 @@ unsigned long bios32_service_call(long service)
 
   if(err_code == 0x80)
     return 0x80;
-  if(err_code == 0x81)
+  else if(err_code == 0x81)
     return 0x81;
-  if(err_code != 0)
+  else if(err_code != 0)
     return 0xFF;
-
-  return (unsigned)base_addr + offset;
+  else
+    return (unsigned)base_addr + offset;
 }
 
 byte detect_pcibios(void)
 {
-  byte           *ptr = (byte *)0xE0000;
+  byte           *ptr = (byte *)PCI_BIOS_ADDR;
   BIOS32         *bios32_sd;
   byte           checksum = 0;
   int            i;
 
-  while((unsigned long)ptr < LOWMEM) {
+  printf("Scanning for PCI BIOS...\n");
+
+  while((unsigned long)ptr < ((unsigned long)PCI_BIOS_ADDR + 32 * 4096)) {
     bios32_sd = (BIOS32*)ptr;
 
     if(bios32_sd->magic == 0x5F32335F) {
@@ -194,13 +180,10 @@ byte detect_pcibios(void)
       ptr += 0x10;
   }
 
-  if((int)ptr >= LOWMEM){
+  if((int)ptr >= ((unsigned long)PCI_BIOS_ADDR + 32 * 4096))
     return 0;
-  }
-
-  else {
-      return 1;
-  }
+  else
+    return 1;
 }
 
 /* BIOS int 0x1A, function 0xB181. Checks to see if the PCI 
@@ -222,7 +205,7 @@ int bios_pci_detect(pci_hardware *pci_struct)
 
   if(pci_sig != PCIBIOS_INSTALL_SIGNATURE)
     return 0;
-  
+
   pci_struct->minor = bcd_to_bin((bx & 0xFF));
   pci_struct->major = bcd_to_bin((bx >> 8));
 
@@ -557,8 +540,8 @@ int locate_pci_bus(void)
     printf("No support for PCI Configuration Space Access type 2(yet)\n");
     }
   }
-  else {
-
+  else
+  {
       pci_read_cfg_byte = &bios_read_config_byte;
       pci_read_cfg_word = &bios_read_config_word;
       pci_read_cfg_dword = &bios_read_config_dword;
@@ -573,24 +556,6 @@ int locate_pci_bus(void)
     printf("PCI Configuration Space Access Type 2: %s\n", detection_info.config2 ? "yes" : "no");
     printf("PCI Special Cycle Generation 1: %s\n", detection_info.spec_gen1 ? "yes" : "no");
     printf("PCI Special Cycle Generation 2: %s\n", detection_info.spec_gen2 ? "yes" : "no");
-
-/*
-    print("Last Bus: ");
-    printInt( detection_info.last_bus );
-    print(" Revision Major: ");
-    printInt( detection_info.major );
-    print(" Minor: ");
-    printInt( detection_info.minor );
-    print("\nPCI Configuration Space Access Type 1: ");
-    print( detection_info.config1 ? "yes" : "no" );
-    print("\nPCI Configuration Space Access Type 2: ");
-    print( detection_info.config2 ? "yes" : "no" );
-    print("\nPCI Special Cycle Generation 1: ");
-    print( detection_info.spec_gen1 ? "yes" : "no" );
-    print("\nPCI Special Cycle Generation 2: ");
-    print( detection_info.spec_gen2 ? "yes" : "no" );
-    print("\n");
-*/
   }
 
   return 1;

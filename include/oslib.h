@@ -34,8 +34,7 @@ extern "C" {
 #define SYS_SET_SIG_HANDLER	0x12
 #define SYS_SET_IO_PERM		0x13
 #define SYS_DESTROY_THREAD	0x14
-#define SYS_PAUSE_THREAD	0x15
-#define SYS_UNREGISTER_INT	0x16
+#define SYS_UNREGISTER_INT	0x15
 
 #define PAGE_FAULT_MSG      	0x0E
 #define DIE_MSG		    	0xF1FE
