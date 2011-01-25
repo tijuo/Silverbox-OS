@@ -15,7 +15,7 @@ struct ResourcePool
     char *phys2;
   } ioBitmaps;
 
-  struct Executable *execInfo;
+  struct Executable execInfo;
   SBArray tids;
 };
 

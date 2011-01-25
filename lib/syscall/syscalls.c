@@ -22,9 +22,14 @@ int __receive( tid_t sender, void *buf, int timeout )
 
 int __pause( void )
 {
+  return __pause_thread( NULL_TID );
+}
+
+int __pause_thread( tid_t tid )
+{
   int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_PAUSE));
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_PAUSE), "b"(tid));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
 }
@@ -34,6 +39,16 @@ int __start_thread( tid_t tid )
   int retval;
 
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_START_THREAD),
+                   "b"(tid));
+  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
+  return retval;
+}
+
+int __destroy_thread( tid_t tid )
+{
+  int retval;
+
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_DESTROY_THREAD),
                    "b"(tid));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
@@ -59,7 +74,17 @@ int __register_int( int intNum )
   return retval;
 }
 
-tid_t __create_thread( void *entry, void *addr_space, void *stack, 
+int __unregister_int( intNum )
+{
+  int retval;
+
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_UNREGISTER_INT),
+                   "b"(intNum));
+  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
+  return retval;
+}
+
+tid_t __create_thread( void *entry, void *addr_space, void *stack,
                        tid_t exhandler )
 {
   int retval;
@@ -127,7 +152,7 @@ void __yield( void )
   __sleep( 0 );
 }
 
-int __sleep( int msecs )
+int __sleep_thread( int msecs, tid_t tid )
 {
   int retval;
 
@@ -135,6 +160,11 @@ int __sleep( int msecs )
                    "b"(msecs));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
+}
+
+int __sleep( int msecs )
+{
+  return __sleep_thread( msecs, NULL_TID );
 }
 
 int __end_irq( int irqNum )

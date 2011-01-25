@@ -6,36 +6,82 @@
 #include	<os/dev_interface.h>
 #include	<os/services.h>
 #include	<drivers/pci.h>
+/*
+char *class_codes[][] = {
+{ "Unknown PCI device", "VGA device" },
 
-static char *class_code0[] = { "Unknown PCI device", "VGA device" };
+{  "SCSI controller", "IDE controller", "Floppy disk controller", 
+   "IPI controller", "RAID controller", "Unknown Mass Storage Controller" },
 
-static char *class_code1[] = {	"SCSI controller", "IDE controller",
+{  "Ethernet controller", "Token ring controller", "FDDI controller",
+   "ATM controller", "Unknown network controller" },
+
+{  "VGA controller", "8514 controller", "XGA controller",
+   "Unknown display controller" },
+
+{  "Video device", "Audio device", "Unknown multimedia device" },
+
+{  "RAM controller", "Flash memory controller", "Unknown memory controller" },
+
+{  "Host/PCI bridge", "PCI/ISA bridge", "PCI/EISA bridge",
+   "PCI/Micro Channel bridge", "PCI/PCI bridge", "PCI/PCMCIA bridge",
+   "PCI/NuBus bridge", "PCI/CardBus bridge", "Unknown bridge type" },
+
+{  "Generic XT serial controller", "16450 serial controller",
+   "16550 serial controller", "Parallel port", "Bi-directional parallel port",
+   "ECP 1.X parallel port", "Unknown communications device" },
+
+{  "Generic 8259 programmable interrupt controller",
+   "ISA programmable interrupt controller",
+   "EISA programmable interrupt controller",
+   "Generic 8237 DMA controller", "ISA DMA controller", "EISA DMA controller",
+   "Generic 8254 timer", "ISA system timer", "EISA system timer",
+   "Generic RTC controller", "ISA RTC controlller", 
+   "Unknown system peripheral" },
+
+{  "Keyboard controller", "Digitizer", "Mouse controller",
+   "Unknown input controller" },
+
+{ "Generic docking station", "Unknown docking station type" },
+
+{ "386 processor", "486 processor", "Pentium processor", "Alpha processor",
+  "PowerPC processor", "Co-Processor", "Unknown processor" },
+
+{ "Firewire (IEEE 1394) controller", "ACCESS bus controller", "SSA controller",
+  "USB controller", "Unknown serial bus controller" }
+};
+*/
+
+
+const char *class_code0[] = { "Unknown PCI device", "VGA device" };
+
+const char *class_code1[] = {	"SCSI controller", "IDE controller",
 				"Floppy disk controller", "IPI controller",
 				"RAID controller",
 				"Unknown Mass Storage Controller" };
 
-static char *class_code2[] = {	"Ethernet controller",
+const char *class_code2[] = {	"Ethernet controller",
 				"Token ring controller", "FDDI controller",
 				"ATM controller",
 				"Unknown network controller" };
 
-static char *class_code3[] = {	"VGA controller", "8514 controller",
+const char *class_code3[] = {	"VGA controller", "8514 controller",
 				"XGA controller",
 				"Unknown display controller" };
 
-static char *class_code4[] = {	"Video device", "Audio device",
+const char *class_code4[] = {	"Video device", "Audio device",
 				"Unknown multimedia device" };
 
-static char *class_code5[] = {	"RAM controller", "Flash memory controller",
+const char *class_code5[] = {	"RAM controller", "Flash memory controller",
 				"Unknown memory controller" };
 
-static char *class_code6[] = {	"Host/PCI bridge", "PCI/ISA bridge",
+const char *class_code6[] = {	"Host/PCI bridge", "PCI/ISA bridge",
 				"PCI/EISA bridge", "PCI/Micro Channel bridge",
 				"PCI/PCI bridge", "PCI/PCMCIA bridge",
 				"PCI/NuBus bridge", "PCI/CardBus bridge",
 				"Unknown bridge type" };
 
-static char *class_code7[] = {	"Generic XT serial controller",
+const char *class_code7[] = {	"Generic XT serial controller",
 				"16450 serial controller",
 				"16550 serial controller",
 				"Parallel port",
@@ -43,7 +89,7 @@ static char *class_code7[] = {	"Generic XT serial controller",
 				"ECP 1.X parallel port",
 				"Unknown communications device" };
 
-static char *class_code8[] = {	"Generic 8259 programmable interrupt controller",
+const char *class_code8[] = {	"Generic 8259 programmable interrupt controller",
 				"ISA programmable interrupt controller",
 				"EISA programmable interrupt controller",
 				"Generic 8237 DMA controller",
@@ -53,14 +99,14 @@ static char *class_code8[] = {	"Generic 8259 programmable interrupt controller",
 				"ISA RTC controlller",
 				"Unknown system peripheral" };
 
-static char *class_code9[] = {	"Keyboard controller", "Digitizer",
+const char *class_code9[] = {	"Keyboard controller", "Digitizer",
 				"Mouse controller",
 				"Unknown input controller" };
 
-static char *class_code10[] = { "Generic docking station",
+const char *class_code10[] = { "Generic docking station",
 				"Unknown docking station type" };
 
-static char *class_code11[] = { "386 processor",
+const char *class_code11[] = { "386 processor",
 				"486 processor",
 				"Pentium processor",
 				"Alpha processor",
@@ -68,12 +114,12 @@ static char *class_code11[] = { "386 processor",
 				"Co-Processor",
 				"Unknown processor" };
 
-static char *class_code12[] = { "Firewire (IEEE 1394) controller",
+const char *class_code12[] = { "Firewire (IEEE 1394) controller",
 				"ACCESS bus controller", "SSA controller",
 				"USB controller",
 				"Unknown serial bus controller" };
 
-static char unknown_dev[] = "Unknown Device";
+const char *unknown_dev = "Unknown Device";
 
 typedef struct {
         unsigned long   magic;
@@ -117,7 +163,7 @@ int locate_pci_bus(void);
 int locate_pci_bios(void);
 //void register_pci_device(pci_device device);
 //void unregister_pci_device(pci_device device);
-char *decode_pci_class(dword class, dword subclass, dword interface);
+const char *decode_pci_class(dword class, dword subclass, dword interface);
 void pci_scan_devices(void);
 
 void initPCI(void)
@@ -561,9 +607,9 @@ int locate_pci_bus(void)
   return 1;
 }
 
-char *decode_pci_class(dword class, dword subclass, dword interface)
+const char *decode_pci_class(dword pci_class, dword subclass, dword interface)
 {
-  switch(class){
+  switch(pci_class){
     case PCI_PRE_PCI_2_0:
       if(subclass == 0x1 && interface == 0x1)
         return class_code0[1];
@@ -721,7 +767,7 @@ void pci_scan_devices(void)
   byte multifunc;
   word data;
   dword class;
-  char *string;
+  const char *string;
 
   system_devices.pci_head = NULL;
 

@@ -25,6 +25,9 @@
 #define IS_PNULL(x)	((void *)x == (void *)NULL_PADDR)
 #define IS_NULL(x)	((void *)x == (void *)NULL)
 
+#define EXEC_RD_ONLY
+#define EXEC_ZERO
+
 /*
   Addresses in an address space can be non-existant, correspond to physical
   memory, or file. An address region may be swapped out to disk.
@@ -50,13 +53,11 @@ struct AddrSpace
 
 struct Executable
 {
-  char *codeStart;
-  char *dataStart;
-  char *bssStart;
+  char *path;
 
-  size_t codeLen;
-  size_t dataLen;
-  size_t bssLen;
+  struct MemRegion codeRegion;
+  struct MemRegion dataRegion;
+  struct MemRegion bssRegion;
 };
 
 /*
