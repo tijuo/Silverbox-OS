@@ -54,7 +54,7 @@ void putDebugChar(int ch)
 {
     while (!(inByte(combase + 5) & 0x20));
     outByte(combase, (char) ch);
-
+/*
 if( ch == '\r' )
 {
  sx=0;
@@ -79,7 +79,7 @@ if( sx >= SCREEN_WIDTH )
   if( sy >= SCREEN_HEIGHT )
     scrollDown();
 }
-
+*/
 }
 
 char *kitoa(int value, char *str, int base)

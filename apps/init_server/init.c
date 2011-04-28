@@ -90,7 +90,7 @@ static int get_boot_info( int argc, char **argv )
   }
 
   for(i=0, addr=start_page_addr, vAddr=allocEnd; i < tables_needed; i++, 
-      addr += PAGE_SIZE)
+      addr += PAGE_SIZE, vAddr +=  PTABLE_SIZE)
   {
     __map_page_table((void *)vAddr, (void *)addr, 0, NULL_PADDR);
   }
