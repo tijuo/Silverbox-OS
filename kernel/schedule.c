@@ -25,7 +25,7 @@ int detachPausedQueue( TCB *thread );
 
 __asm__(".globl idle\n" \
         "idle: \n" \
-/*        "cli\n" \*/
+        "cli\n" \
         "call init2\n" \
         "sti\n" \
         ".halt: hlt\n" \
