@@ -68,6 +68,7 @@ void handle_exception( tid_t tid, unsigned int cr2 )
 {
   struct ResourcePool *pool;
   struct ThreadInfo thread_info;
+  void *addr;
 
   __get_thread_info( tid, &thread_info );
   pool = lookup_tid(tid);
@@ -80,16 +81,18 @@ void handle_exception( tid_t tid, unsigned int cr2 )
     if( pool && (thread_info.state.error_code & 0x5) == 0x4 &&
          find_address(&pool->addrSpace, (void *)cr2))
     {
-      _mapMem( alloc_phys_page(NORMAL, (void *)thread_info.addr_space),
-               (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
+      addr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
+      clearPage(addr);
+      _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
       __end_page_fault(thread_info.tid);
     }
     else if( pool && (thread_info.state.error_code & 0x05) &&
              (cr2 & ~0x3FFFFF) == STACK_TABLE ) /* XXX: This can be done better. Will not work if there aren't
                                                                                        any pages in the stack page! */
     {
-      _mapMem( alloc_phys_page(NORMAL, (void *)thread_info.addr_space),
-               (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
+      addr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
+      clearPage(addr);
+      _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
       __end_page_fault(thread_info.tid);
     }
     else

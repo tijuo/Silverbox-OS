@@ -21,6 +21,8 @@ void kprintf( const char *str, ... );
 //void doNewLine( int *x, int *y );
 char *kitoa(int value, char *str, int base);
 
+int sx=0, sy=1;
+
 extern void dump_regs( TCB *thread );
 
 #define com1 0x3f8
@@ -52,6 +54,32 @@ void putDebugChar(int ch)
 {
     while (!(inByte(combase + 5) & 0x20));
     outByte(combase, (char) ch);
+
+if( ch == '\r' )
+{
+ sx=0;
+ sy++;
+ if( sy >= SCREEN_HEIGHT )
+   scrollDown();
+}
+else if( ch == '\t' )
+{
+ sx +=8;
+}
+else
+{
+  putChar(ch,sx,sy);
+  sx++;
+}
+
+if( sx >= SCREEN_WIDTH )
+{
+  sx=0;
+  sy++;
+  if( sy >= SCREEN_HEIGHT )
+    scrollDown();
+}
+
 }
 
 char *kitoa(int value, char *str, int base)
@@ -95,7 +123,7 @@ char *kitoa(int value, char *str, int base)
 
 void initVideo( void )
 {
-  useLowMem = true;
+  useLowMem = false;
   badAssertHlt = true;//false; // true;
 }
 
@@ -220,7 +248,7 @@ void setBadAssertHlt( bool value )
 {
   badAssertHlt = value;
 }
-/*
+
 void resetScroll( void )
 {
   volatile word address=0;
@@ -280,7 +308,7 @@ int scrollDown( void )
 
   return ret;
 }
-*/
+
 
 void kprintAt( const char *str, int x, int y )
 {
@@ -370,7 +398,7 @@ void clearScreen( void )
   //resetScroll();
 }
 
-/*
+
 void doNewLine( int *x, int *y )
 {
   (*y)++;
@@ -382,9 +410,9 @@ void doNewLine( int *x, int *y )
       *y = 0;
   }
 }
-*/
 
-/*
+
+
 void _putChar( char c, int x, int y, unsigned char attrib )
 {
   volatile char *vidmem = (char *)(VIDMEM_START);
@@ -400,7 +428,7 @@ void putChar( char c, int x, int y )
 {
   _putChar( c, x, y, 7 );
 }
-*/
+
 
 /** A simplified stdio printf() for debugging use
     @param str The formatted string to print with format specifiers

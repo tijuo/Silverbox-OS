@@ -180,6 +180,8 @@ int loadElfFile( char *filename, char *args )
 
   phys = alloc_phys_page(NORMAL, addrSpace);
 
+  clearPage(phys);
+
   _mapMem( phys, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addrSpace );
   _mapMem( phys, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );
 
@@ -333,6 +335,8 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
      be placed there. */
 
   tempPage = alloc_phys_page(NORMAL, addrSpace);
+
+  clearPage(tempPage);
 
   _mapMem( tempPage, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addrSpace );
   _mapMem( tempPage, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );

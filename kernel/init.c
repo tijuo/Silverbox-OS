@@ -954,7 +954,7 @@ void init( multiboot_info_t *info )
 #ifdef DEBUG
   init_serial();
   initVideo();
-  setVideoLowMem( false );
+  setVideoLowMem( true );
   clearScreen();
   showGrubSupport(info);
   showCPU_Features();

@@ -59,13 +59,19 @@ void *_unmapMem( void *virt, struct AddrSpace *aSpace )
 int mapMemRange( void *virt, int pages )
 {
   unsigned i=0;
+  void *addr;
 
   if( pages < 0 )
     return -1;
 
   while( pages-- )
-    _mapMem( alloc_phys_page(NORMAL, page_dir),
-             (void *)((unsigned)virt + i++ * PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );
+  {
+    addr = alloc_phys_page(NORMAL, page_dir);
+    clearPage(addr);
+
+    _mapMem( addr, (void *)((unsigned)virt + i++ * PAGE_SIZE), 1, 0,
+      &initsrv_pool.addrSpace );
+  }
 
   return 0;
 }
