@@ -311,7 +311,7 @@
 
       <tr>
         <td>Kernel Code &amp; Data</td>
-        <td>0xF4000000:0x08000000</td>
+        <td>0xFF400000:0x08000000</td>
         <td>Virtual</td>
         <td>This area is reserved for kernel code and data. This region is
             present in all memory regions.</td>
@@ -319,7 +319,7 @@
 
       <tr>
         <td>Page Tables</td>
-        <td>0xFC000000:0x00400000</td>
+        <td>0xFFC00000:0x00400000</td>
         <td>Virtual</td>
         <td>Since the last PDE in the page directory points to the page directory itself,
             The last page table in the page directory *is* the page directory.
