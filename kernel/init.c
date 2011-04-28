@@ -772,6 +772,7 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
 
 void init2( void )
 {
+  kprintf("Init part 2\n");
   assert( tcbTable->state != DEAD );
   int i;
   char **argv;
@@ -780,17 +781,17 @@ void init2( void )
   pde_t pde;
   char *string;
   int *ptr;
-//  tid_t tid;
   struct BootInfo *b_info;
   struct MemoryArea *memory_area;
   struct BootModule *boot_mods;
   char *init_server_stack = (char *)(KERNEL_VSTART - PAGE_SIZE);
 
-  /* Each entry in a page directory and page table must be cleared 
+  /* Each entry in a page directory and page table must be cleared
      prior to using. */
 
   clearPhysPage( (void *)INIT_SERVER_PDIR );
   clearPhysPage( (void *)INIT_SERVER_PTAB );
+  clearPhysPage( (void *)INIT_FIRST_PAGE_TAB );
   clearPhysPage( (void *)INIT_SERVER_USTACK_PTAB );
 //  clearPhysPage( (void *)INIT_SERVER_USTACK_PAGE ); This shouldn't need clearing
 
@@ -857,13 +858,13 @@ void init2( void )
     //kprintf("0x ");kprintHex(init_server_stack);
 
     *--ptr = (int)(init_server_stack + ((unsigned)&argv[5] & 0xFFF));  // ebp + 8 <- First argument
-    --ptr; // ebp + 4 <- The return address 
-   
+    --ptr; // ebp + 4 <- The return address
+
   /* Put the stack at the top of the physical memory area. */
     unmapTemp();
 
-    if ( (init_server_tid=load_elf_exec( init_server_img, 1, 
-         (addr_t)INIT_SERVER_PDIR, (init_server_stack + 
+    if ( (init_server_tid=load_elf_exec( init_server_img, 1,
+         (addr_t)INIT_SERVER_PDIR, (init_server_stack +
          ((unsigned)ptr & 0xFFF)) )) != 0 )
     {
       kprintf("Failed to initialize initial server.\n");

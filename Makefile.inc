@@ -12,11 +12,12 @@ AFLAGS	=
 ASIFLAGS=-f elf -I$(INC_DIR)/
 DEPEND	=makedepend
 DD	=dd
+EN_DEBUG=-DDEBUG
 CFLAGS  =-m32 -std=gnu99 -fno-builtin -nostdlib \
         -fno-leading-underscore -nostartfiles \
         -ffreestanding -falign-functions \
         -fno-optimize-sibling-calls -fno-stack-protector \
-        -I$(INC_DIR) $(CMOREFLG) -DDEBUG
+        -I$(INC_DIR) $(CMOREFLG) $(EN_DEBUG)
 CMOREFLG=-Wshadow -Wpointer-arith -Wsign-compare \
 	-Wsystem-headers -Wstrict-prototypes \
 	-Wunused-function -Wmissing-prototypes \
@@ -24,6 +25,6 @@ CMOREFLG=-Wshadow -Wpointer-arith -Wsign-compare \
 
 DEF_PHONY=all clean depend dep install
 
-.SILENT :
+#.SILENT :
 
 .PHONY:	$(DEF_PHONY)

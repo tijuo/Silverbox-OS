@@ -74,42 +74,12 @@ struct PageMapRecord
   size_t size;
 };
 
-struct RegisterState
-{
-  dword edi;
-  dword esi;
-  dword ebp;
-  dword esp;
-  dword ebx;
-  dword edx;
-  dword ecx;
-  dword eax;
-  word es;
-  word ds;
-  dword int_num;
-  dword error_code;
-  dword eip;
-  dword cs;
-  dword eflags;
-  dword userEsp;
-  dword userSs;
-};
-
 struct ExceptionInfo
 {
   tid_t tid;
   unsigned int_num, error_code;
   struct RegisterState state;
   dword cr0, cr2, cr3, cr4;
-};
-
-struct ThreadInfo
-{
-  tid_t tid;
-  tid_t exHandler;
-  int priority;
-  addr_t addr_space;
-  struct RegisterState state;
 };
 
 struct ExitMsg

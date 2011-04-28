@@ -4,12 +4,9 @@
 #include <kernel/debug.h>
 #include <kernel/thread.h>
 
-// TODO: map, grant, and unmap operations should be privileged syscalls
-// TODO: only the inital server should have access to them
-
 int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages, int flags, addr_t addrSpace );
 int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys, int flags, addr_t addrSpace );
-int sysGrant( TCB *tcb, addr_t srcAddr, addr_t destAddr, 
+int sysGrant( TCB *tcb, addr_t srcAddr, addr_t destAddr,
     addr_t addrSpace, size_t pages );
 int sysGrantPageTable( TCB *tcb, addr_t srcAddr, addr_t destAddr,
     addr_t addrSpace, size_t tables );
@@ -20,10 +17,9 @@ int sysMap( TCB *tcb, addr_t virt, addr_t phys, size_t pages, int flags, addr_t 
 {
   int result, retval=0;
 
-  assert( tcb != NULL );
   assert( phys != (addr_t)NULL_PADDR );
 
-  if( phys == (addr_t)NULL_PADDR || tcb == NULL )
+  if( phys == (addr_t)NULL_PADDR )
     return -1;
 
   for( ; pages > 0; pages--, virt += PAGE_SIZE, phys += PAGE_SIZE )
@@ -48,10 +44,9 @@ int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys, int flags, addr_t addrS
 {
   int result;
 
-  assert( tcb != NULL );
   assert( phys != (addr_t)NULL_PADDR );
 
-  if( phys == (addr_t)NULL_PADDR || tcb == NULL )
+  if( phys == (addr_t)NULL_PADDR )
     return -1;
 
   if( addrSpace == NULL_PADDR )
@@ -64,17 +59,16 @@ int sysMapPageTable( TCB *tcb, addr_t virt, addr_t phys, int flags, addr_t addrS
   return result;
 }
 
-int sysGrant( TCB *tcb, addr_t srcAddr, addr_t destAddr, addr_t addrSpace, 
+int sysGrant( TCB *tcb, addr_t srcAddr, addr_t destAddr, addr_t addrSpace,
     size_t pages )
 {
     int result, retval=0;
 
     addr_t physPage;
 
-    assert( tcb != NULL );
     assert( addrSpace != NULL_PADDR );
 
-    if( tcb == NULL || addrSpace == NULL_PADDR )
+    if( addrSpace == NULL_PADDR )
       return -1;
 
     for( ; pages > 0; pages--, srcAddr += PAGE_SIZE, destAddr += PAGE_SIZE )
@@ -108,10 +102,9 @@ int sysGrantPageTable( TCB *tcb, addr_t srcAddr, addr_t destAddr,
 
     addr_t physPage;
 
-    assert( tcb != NULL );
     assert( addrSpace != NULL_PADDR );
 
-    if( tcb == NULL || addrSpace == NULL_PADDR )
+    if( addrSpace == NULL_PADDR )
       return -1;
 
     for( ; tables > 0; tables--, srcAddr += TABLE_SIZE, destAddr += TABLE_SIZE )
@@ -140,8 +133,6 @@ int sysGrantPageTable( TCB *tcb, addr_t srcAddr, addr_t destAddr,
 
 void *sysUnmap( TCB *tcb, void *virt, addr_t addrSpace )
 {
-  assert( tcb != NULL );
-
   if( addrSpace == NULL_PADDR )
     return unmapPage( virt, tcb->addrSpace );
   else
@@ -150,8 +141,6 @@ void *sysUnmap( TCB *tcb, void *virt, addr_t addrSpace )
 
 void *sysUnmapPageTable( TCB *tcb, void *virt, addr_t addrSpace )
 {
-  assert( tcb != NULL );
-
   if( addrSpace == NULL_PADDR )
     return unmapPageTable( virt, tcb->addrSpace );
   else

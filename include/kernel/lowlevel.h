@@ -210,5 +210,5 @@ extern char *_firstKrnlPTAB, *_initServPDIR, *_initServStackPTAB;
 extern char *_initServStack, *_initServPTAB, *_idleStack, *_kernelStack;
 extern char *_kernelVars, *_firstPTAB, *_secondKrnlPTAB, *_kernelBootStack;
 extern char *_kernelIOBitmap, *kVirtToPhys, *kPhysToVirt, *VPhysMemStart;
-
+extern char *_initFirstPTAB;
 #endif

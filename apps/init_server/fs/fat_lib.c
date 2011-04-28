@@ -28,11 +28,6 @@ struct FatDir
   char use_sects : 1;	// read from sectors instead of clusters
 };
 
-/* XXX: readCluster() and writeCluster() are broken! 
-   If the size of a block isn't divisible by 512, then there's
-   a big problem. If the size of a block is greater than 512,
-   there's a problem. */
-
 extern int writeFAT(struct FAT_Dev *fatDev, dword entry, unsigned cluster);
 extern unsigned readFAT(struct FAT_Dev *fatDev, unsigned cluster);
 extern unsigned getFreeCluster(struct FAT_Dev *fatDev);
@@ -142,17 +137,24 @@ static char *generate8_3Name( const char *name, size_t nameLen, char *new_name )
 static int calcRootDirSecs(union FAT_BPB *bpb)
 {
   int rootdirs, type;
+  int secsize;
 
   type = determineFAT_Type(bpb);
 
   if(type == FAT12)
+  {
+    secsize = bpb->fat12.bytes_per_sec;
     rootdirs = bpb->fat12.root_ents;
+  }
   else if(type == FAT16)
+  {
+    secsize = bpb->fat16.bytes_per_sec;
     rootdirs = bpb->fat16.root_ents;
+  }
   else
     return -1;
 
-  return (rootdirs * 32) / FAT_SECTOR_SIZE;
+  return (rootdirs * 32) / secsize;
 }
 
 /* Returns the first data sector after the BPB, FAT, and
@@ -279,6 +281,7 @@ static int calcFatSize(union FAT_BPB *bpb)
   float result;
   enum FAT_Type type;
   float fat_len;
+  int secsize;
 
   type = determineFAT_Type(bpb);
 
@@ -288,6 +291,7 @@ static int calcFatSize(union FAT_BPB *bpb)
     resdsecs = bpb->fat12.resd_secs;
     rootents = bpb->fat12.root_ents;
     totalsecs = bpb->fat12.total_secs;
+    secsize = bpb->fat12.bytes_per_sec;
     fat_len = 1.5;
   }
   else if(type == FAT16)
@@ -296,13 +300,14 @@ static int calcFatSize(union FAT_BPB *bpb)
     resdsecs = bpb->fat16.resd_secs;
     rootents = bpb->fat16.root_ents;
     totalsecs = bpb->fat16.total_secs;
+    secsize = bpb->fat16.bytes_per_sec;
     fat_len = 2;
   }
   else
     return -1;
 
-  result = (fat_len * (totalsecs - resdsecs - ((rootents * 32) / FAT_SECTOR_SIZE))) / \
-	(clussize * FAT_SECTOR_SIZE + 4);
+  result = (fat_len * (totalsecs - resdsecs - ((rootents * 32) / secsize))) / \
+	(clussize * secsize + 4);
 
   if(result != (int)result)
     result = (int)result + 1;
@@ -317,9 +322,9 @@ static int calcClusterSize( union FAT_BPB *bpb )
   type = determineFAT_Type(bpb);
 
   if(type == FAT12)
-    return bpb->fat12.secs_per_clus * FAT_SECTOR_SIZE;
+    return bpb->fat12.secs_per_clus * bpb->fat12.bytes_per_sec;
   else if(type == FAT16)
-    return bpb->fat16.secs_per_clus * FAT_SECTOR_SIZE;
+    return bpb->fat16.secs_per_clus * bpb->fat16.bytes_per_sec;
 
   return -1;
 }
@@ -384,6 +389,7 @@ static int readCluster( struct FAT_Dev *fatDev, unsigned cluster, void *buffer )
   unsigned blocksPerSector, sectorsPerCluster;
   unsigned blockStart;
   enum FAT_ClusterType clusterType;
+  int secsize;
 
   if( fatDev == NULL || buffer == NULL )
     return -1;
@@ -396,18 +402,24 @@ static int readCluster( struct FAT_Dev *fatDev, unsigned cluster, void *buffer )
     return -1;
 
   if(fatDev->cache.fatType == FAT12)
+  {
     sectorsPerCluster = fatDev->bpb.fat12.secs_per_clus;
+    secsize = fatDev->bpb.fat12.bytes_per_sec;
+  }
   else if(fatDev->cache.fatType == FAT16)
+  {
     sectorsPerCluster = fatDev->bpb.fat16.secs_per_clus;
+    secsize = fatDev->bpb.fat16.bytes_per_sec;
+  }
   else
     return -1; // XXX: FAT32 unsupported
 
-  blocksPerSector = FAT_SECTOR_SIZE / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
+  blocksPerSector = secsize / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
 
   blockStart = (fatDev->cache.firstDataSec + (cluster-2) * sectorsPerCluster) * blocksPerSector;
 
   if( deviceRead( fatDev->device.ownerTID, MINOR(fatDev->deviceNum), blockStart, blocksPerSector * 
-                  sectorsPerCluster, FAT_SECTOR_SIZE * sectorsPerCluster, buffer ) == -1 )
+                  sectorsPerCluster, secsize * sectorsPerCluster, buffer ) == -1 )
   {
     return -1;
   }
@@ -420,17 +432,22 @@ int readSector( struct FAT_Dev *fatDev, unsigned sector, void *buffer )
 {
   unsigned blocksPerSector;
   unsigned blockStart;
+  int secsize;
 
   if( fatDev == NULL || buffer == NULL )
     return -1;
 
-  // FIXME: FAT sector size may be variable
-  blocksPerSector = FAT_SECTOR_SIZE / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
+  if( fatDev->cache.fatType == FAT12 )
+    secsize = fatDev->bpb.fat12.bytes_per_sec;
+  else if( fatDev->cache.fatType == FAT16 )
+    secsize = fatDev->bpb.fat16.bytes_per_sec;
+
+  blocksPerSector = secsize / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
 
   blockStart = sector * blocksPerSector;
 
   if( deviceRead( fatDev->device.ownerTID, MINOR(fatDev->deviceNum), blockStart, blocksPerSector,
-                  FAT_SECTOR_SIZE, buffer ) == -1 )
+                  secsize, buffer ) == -1 )
   {
     return -1;
   }
@@ -442,6 +459,7 @@ static int writeCluster( struct FAT_Dev *fatDev, unsigned cluster, void *buffer 
   unsigned blocksPerSector, sectorsPerCluster;
   unsigned blockStart;
   enum FAT_ClusterType clusterType;
+  int secsize;
 
   if( fatDev == NULL || buffer == NULL )
     return -1;
@@ -452,20 +470,24 @@ static int writeCluster( struct FAT_Dev *fatDev, unsigned cluster, void *buffer 
     return -1;
 
   if(fatDev->cache.fatType == FAT12)
+  {
     sectorsPerCluster = fatDev->bpb.fat12.secs_per_clus;
+    secsize = fatDev->bpb.fat12.bytes_per_sec;
+  }
   else if(fatDev->cache.fatType == FAT16)
+  {
     sectorsPerCluster = fatDev->bpb.fat16.secs_per_clus;
+    secsize = fatDev->bpb.fat16.bytes_per_sec;
+  }
   else
     return -1; // XXX: FAT32 unsupported
 
-  // FIXME: FAT sector size may be variable
-
-  blocksPerSector = FAT_SECTOR_SIZE / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
+  blocksPerSector = secsize / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
 
   blockStart = (fatDev->cache.firstDataSec + (cluster-2) * sectorsPerCluster) * blocksPerSector;
 
   if( deviceWrite( fatDev->device.ownerTID, MINOR(fatDev->deviceNum), blockStart, blocksPerSector * 
-                  sectorsPerCluster, FAT_SECTOR_SIZE * sectorsPerCluster, buffer ) == -1 )
+                  sectorsPerCluster, secsize * sectorsPerCluster, buffer ) == -1 )
   {
     return -1;
   }
@@ -478,31 +500,42 @@ int writeSector( struct FAT_Dev *fatDev, unsigned sector, void *buffer )
 {
   unsigned blocksPerSector;
   unsigned blockStart;
+  int secsize;
 
   if( fatDev == NULL || buffer == NULL )
     return -1;
 
-  // FIXME: FAT sector size may be variable
+  if( fatDev->cache.fatType == FAT12 )
+    secsize = fatDev->bpb.fat12.bytes_per_sec;
+  else if( fatDev->cache.fatType == FAT16 )
+    secsize = fatDev->bpb.fat16.bytes_per_sec;
 
-  blocksPerSector = FAT_SECTOR_SIZE / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
+  blocksPerSector = secsize / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
 
   blockStart = sector * blocksPerSector;
 
   if( deviceWrite( fatDev->device.ownerTID, MINOR(fatDev->deviceNum), blockStart, blocksPerSector,
-                  FAT_SECTOR_SIZE, buffer ) == -1 )
+                  secsize, buffer ) == -1 )
   {
     return -1;
   }
-  return 0;
+  else
+    return 0;
 }
 
 static int getDeviceData( unsigned short devNum, struct FAT_Dev *fatDev )
 {
   byte *buffer;
   struct Device *device;
+  int secsize;
 
   if( fatDev == NULL )
     return -1;
+
+  if(fatDev->cache.fatType == FAT12)
+    secsize = fatDev->bpb.fat12.bytes_per_sec;
+  else if(fatDev->cache.fatType == FAT16)
+    secsize = fatDev->bpb.fat16.bytes_per_sec;
 
   device = lookupDeviceMajor(MAJOR(devNum));
 
@@ -526,19 +559,9 @@ static int getDeviceData( unsigned short devNum, struct FAT_Dev *fatDev )
     return -1;
   }
 
-  memcpy( &fatDev->bpb, buffer, FAT_SECTOR_SIZE );
+  memcpy( &fatDev->bpb, buffer, secsize );
 
   // Using an unconventional sector size
-
-  if( fatDev->bpb.fat12.bytes_per_sec != FAT_SECTOR_SIZE )
-  {
-/*
-    print("Unconventional sector size! (Not 512 bytes)\n");
-    print(toIntString(fatDev->bpb.fat12.bytes_per_sec));
-    print("\n");*/
-    free(buffer);
-    return -1;
-  }
 
   // Not a fat device
 
@@ -590,6 +613,7 @@ static int getFAT_DirEntry( SBFilePath *path, struct FAT_Dev *fatDev,
   unsigned cluster=0;
   int depth, pathLevel=0;
   SBString dirName;
+  int secsize;
 
   if( path == NULL || fatDev == NULL || dirEntry == NULL )
     return -1;
@@ -603,22 +627,24 @@ static int getFAT_DirEntry( SBFilePath *path, struct FAT_Dev *fatDev,
     return -1;
   }
 
-  dirSize = FAT_SECTOR_SIZE;
-
   if(fatDev->cache.fatType == FAT12)
   {
-    clusterSize = FAT_SECTOR_SIZE * fatDev->bpb.fat12.secs_per_clus;
+    secsize = fatDev->bpb.fat12.bytes_per_sec;
+    clusterSize = secsize * fatDev->bpb.fat12.secs_per_clus;
     rootEnts = fatDev->bpb.fat12.root_ents;
     startSector = fatDev->bpb.fat12.resd_secs + fatDev->bpb.fat12.secs_per_fat * fatDev->bpb.fat12.fat_copies;
   }
   else if(fatDev->cache.fatType == FAT16)
   {
-    clusterSize = FAT_SECTOR_SIZE * fatDev->bpb.fat16.secs_per_clus;
+    secsize = fatDev->bpb.fat16.bytes_per_sec;
+    clusterSize = secsize * fatDev->bpb.fat16.secs_per_clus;
     rootEnts = fatDev->bpb.fat16.root_ents;
     startSector = fatDev->bpb.fat16.resd_secs + fatDev->bpb.fat16.secs_per_fat * fatDev->bpb.fat16.fat_copies;
   }
   else
     return -1;
+
+  dirSize = secsize;
 
   if( sbFilePathAtLevel( path, pathLevel++, &dirName ) != 0 )
     return -1;
@@ -701,7 +727,7 @@ static int getFAT_DirEntry( SBFilePath *path, struct FAT_Dev *fatDev,
           if( cluster == 0 ) // if the next entry is the root directory...
           {
             inRootDir = true;
-            dirSize = FAT_SECTOR_SIZE;
+            dirSize = secsize;
 
             if(fatDev->cache.fatType == FAT12)
             {
@@ -1007,6 +1033,7 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
   bool endEntry = false;
   char newFname[11];
   int depth;
+  int secsize;
 
   if( sbFilePathDepth( path, &depth ) < 0 )
     return -1;
@@ -1019,22 +1046,24 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
     isRootDir = true;
     type = determineFAT_Type( &fat_dev->bpb );
 
-    dirSize = FAT_SECTOR_SIZE;
-
     if( type == FAT12 )
     {
+      secsize = fat_dev->bpb.fat12.bytes_per_sec;
       numRootEnts = fat_dev->bpb.fat12.root_ents;
       sector = fat_dev->bpb.fat12.resd_secs + fat_dev->bpb.fat12.secs_per_fat * 
                fat_dev->bpb.fat12.fat_copies;
     }
     else if( type == FAT16 )
     {
+      secsize = fat_dev->bpb.fat16.bytes_per_sec;
       numRootEnts = fat_dev->bpb.fat16.root_ents;
       sector = fat_dev->bpb.fat16.resd_secs + fat_dev->bpb.fat16.secs_per_fat * 
                fat_dev->bpb.fat16.fat_copies;
     }
     else
       return -1;
+
+    dirSize = secsize;
 
     buffer = malloc( dirSize );
 
@@ -1089,8 +1118,8 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
       if( isRootDir && numRootEnts-- == 0 )
         goto fat_error;
 
-      /* Go through each entry and try to find the entry after the last or
-         a deleted entry */
+      /* Go through each entry and try to find the entry after the last (the first free entry)
+         or a deleted entry */
 
       if(entry->filename[0] == (byte)0 || entry->filename[0] == (byte)0xE5)
       {
@@ -1104,32 +1133,23 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
         entry->start_clus = fat_dev->cache.fatType == FAT12 ? 0xFF8 : 0xFFF8;
         entry->file_size = dir ? dirSize : 0;
 
-        if( dir )
+        if( dir ) // if we're creating a directory...
         {
           unsigned dirCluster = getFreeCluster( fat_dev );
           struct FAT_DirEntry *entry2;
+          byte *buffer2;
 
-          if( dirCluster == 1 || writeFAT( fat_dev, 
-            fat_dev->cache.fatType == FAT12 ? 0xFF8 : 0xFFF8, dirCluster ) < 0 )
-          {
-            // Unable to get a free cluster for the directory or writeFAT() failed
-
+          if( dirCluster == 1 )
             goto fat_error;
-          }
 
-          byte *buffer2 = malloc(calcClusterSize(&fat_dev->bpb));
+          buffer2 = malloc(calcClusterSize(&fat_dev->bpb));
 
           if( buffer2 == NULL )
-          {
-            // FIXME: The previous writeFAT() should be reversed, otherwise the FAT will be corrupted.
             goto fat_error;
-          }
 
           if( readCluster( fat_dev, dirCluster, buffer2 ) < 0 )
           {
             free(buffer2);
-
-            // FIXME: The previous writeFAT() should be reversed, otherwise the FAT will be corrputed.
             goto fat_error;
           }
 
@@ -1147,15 +1167,18 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
           entry2[0].time = entry2[0].date = entry2[1].time = entry2[1].date = 0;
           entry2[0].attrib = entry2[1].attrib = FAT_SUBDIR;
           entry2[0].start_clus = dirCluster;
-          entry2[0].file_size = fat_dev->cache.rootDirSecs * (FAT_SECTOR_SIZE / sizeof(struct FAT_DirEntry));
+          entry2[0].file_size = fat_dev->cache.rootDirSecs * (secsize / sizeof(struct FAT_DirEntry));
           entry2[1].start_clus = 0;
           entry2[1].file_size = calcClusterSize( &fat_dev->bpb );
 
           if( writeCluster( fat_dev, dirCluster, buffer2 ) != 0 )
           {
-            // FIXME: The previous writeFAT() should be reversed, otherwise the FAT will be corrputed.
+            free(buffer2);
             goto fat_error;
           }
+
+          if( writeFAT( fat_dev, fat_dev->cache.fatType == FAT12 ? 0xFF8 : 0xFFF8, dirCluster ) < 0 )
+            goto fat_error;
 
           free( buffer2 );
           entry->start_clus = dirCluster;
@@ -1170,64 +1193,40 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
           {
             if( isRootDir ) // we're in the root directory. only sectors are used here
             {
-              if( numRootEnts == 0 || writeSector( fat_dev, sector - 1, buffer ) < 0 )
+              char *buffer2 = calloc(1, secsize);
+
+              if( !buffer2 )
                 goto fat_error;
 
-              if( readSector( fat_dev, sector, buffer ) != 0 )
-                goto fat_error;
-
-              entry = (struct FAT_DirEntry *)buffer;
-
-              entry->filename[0] = (byte)0;
-
-              if( writeSector( fat_dev, sector, buffer ) != 0 )
+              if( numRootEnts == 0 || writeSector( fat_dev, sector, buffer2 ) != 0 ||
+                  writeSector(fat_dev, sector -1, buffer) != 0 )
               {
-                /* FIXME: If the end directory entry is unable to be written onto the new sector,
-                   then the previous operations need to be undone, otherwise the FAT will be corrputed. */
+                free(buffer2);
                 goto fat_error;
               }
+
+              free(buffer2);
             }
-            else 
+            else
             {
-              unsigned cluster2 = readFAT( fat_dev, cluster );
+              unsigned cluster2 = getFreeCluster( fat_dev );
+              byte *buffer2 = calloc(1, calcClusterSize(&fat_dev->bpb));
 
-              enum FAT_ClusterType clusType = getClusterType( cluster2, fat_dev->cache.fatType );
-
-              if( clusType == END_CLUSTER ) // This should never occur
-              {
-                if( (cluster2 = getFreeCluster( fat_dev )) == 1 || 
-                  writeFAT( fat_dev, cluster2, cluster) == -1 )
-                {
-                  goto fat_error;
-                }
-
-                if( writeFAT( fat_dev, fat_dev->cache.fatType == FAT12 ? 0xFF8 : 
-                    0xFFF8, cluster2 ) < 0 )
-                {
-               // FIXME: The previous operation should be reversed, otherwise the FAT will be corrupted.
-                  goto fat_error;
-                }
-              }
-
-              if( writeCluster( fat_dev, cluster, buffer ) < 0 )
-              {
-              // FIXME: The previous writeFAT() should be reversed, otherwise the FAT will be corrupted.
+              if( !buffer2 )
                 goto fat_error;
+
+              if( cluster2 == 1 || writeCluster( fat_dev, cluster2, buffer ) != 0 ||
+                  writeCluster( fat_dev, cluster, buffer) != 0 )
+              {
+                  free(buffer2);
+                  goto fat_error;
               }
 
-              if( readCluster( fat_dev, cluster2, buffer ) != 0 )
+              free(buffer2);
+
+              if( writeFAT( fat_dev, fat_dev->cache.fatType == FAT12 ? 0xFF8 : 0xFFF8, cluster2 ) != 0 ||
+                  writeFAT( fat_dev, cluster2, cluster ) != 0 )
               {
-              // FIXME: The previous writeCluster() should be reversed, otherwise the FAT will be corrupted.
-                goto fat_error;
-              }
-
-              entry = (struct FAT_DirEntry *)buffer;
-
-              entry->filename[0] = (byte)0;
-
-              if( writeCluster( fat_dev, cluster2, buffer ) != 0 )
-              {
-            // FIXME: The previous writeCluster() should be reversed, otherwise the FAT will be corrupted.
                 goto fat_error;
               }
             }
@@ -1237,22 +1236,16 @@ static int _createEntry( SBFilePath *path, const char *name, struct FAT_Dev *fat
             entry++;
             entry->filename[0] = (byte)0;
 
-             if( isRootDir )
-             {
-               if( writeSector( fat_dev, sector - 1, buffer ) != 0 )
-               {
-               // FIXME: The previous operation should be reversed, otherwise the FAT will be corrupted.
-                 goto fat_error;
-               }
-             }
-             else
-             {
-               if( writeCluster( fat_dev, cluster, buffer ) < 0 )
-               {
-               // FIXME: The previous operation should be reversed, otherwise the FAT will be corrupted.
-                 goto fat_error;
-               }
-             }
+            if( isRootDir )
+            {
+              if( writeSector( fat_dev, sector - 1, buffer ) != 0 )
+                goto fat_error;
+            }
+            else
+            {
+              if( writeCluster( fat_dev, cluster, buffer ) < 0 )
+                goto fat_error;
+            }
           }
         }
 
@@ -1279,6 +1272,7 @@ static struct FatDir *readDirEntry( SBFilePath *path, struct FAT_Dev *fat_dev )
   struct FatDir *fat_dir;
   struct FAT_DirEntry directory;
   unsigned numRootEnts;
+  int secsize;
   int depth;
 
   if( sbFilePathDepth( path, &depth ) < 0 )
@@ -1302,19 +1296,21 @@ inRootDirectory:
       numRootEnts = fat_dev->bpb.fat12.root_ents;
       fat_dir->start = fat_dir->current = fat_dev->bpb.fat12.resd_secs + fat_dev->bpb.fat12.secs_per_fat * 
                fat_dev->bpb.fat12.fat_copies;
+      secsize = fat_dev->bpb.fat12.bytes_per_sec;
     }
     else if( type == FAT16 )
     {
       numRootEnts = fat_dev->bpb.fat16.root_ents;
       fat_dir->start = fat_dir->current = fat_dev->bpb.fat16.resd_secs + fat_dev->bpb.fat16.secs_per_fat * 
                fat_dev->bpb.fat16.fat_copies;
+      secsize = fat_dev->bpb.fat16.bytes_per_sec;
     }
     else
       return NULL;
 
     fat_dir->use_sects = 1;
-    max_entries = FAT_SECTOR_SIZE / sizeof( struct FAT_DirEntry );
-    fat_dir->entries = malloc( FAT_SECTOR_SIZE );
+    max_entries = secsize / sizeof( struct FAT_DirEntry );
+    fat_dir->entries = malloc( secsize );
 
     if( !fat_dir->entries )
       goto fat_err;
@@ -1393,6 +1389,7 @@ static struct FatDir *readNextEntry( struct FatDir *fat_dir )
 {
   unsigned max_entries, numRootEnts, startSec;
   enum FAT_Type type;
+  int secsize;
 
   if( !fat_dir->more )
     return NULL;
@@ -1408,18 +1405,20 @@ inRootDirectory:
       numRootEnts = fat_dir->fatDev->bpb.fat12.root_ents;
       startSec = fat_dir->fatDev->bpb.fat12.resd_secs + fat_dir->fatDev->bpb.fat12.secs_per_fat * 
                fat_dir->fatDev->bpb.fat12.fat_copies;
+      secsize = fat_dir->fatDev->bpb.fat12.bytes_per_sec;
     }
     else if( type == FAT16 )
     {
       numRootEnts = fat_dir->fatDev->bpb.fat16.root_ents;
       startSec = fat_dir->fatDev->bpb.fat16.resd_secs + fat_dir->fatDev->bpb.fat16.secs_per_fat * 
                fat_dir->fatDev->bpb.fat16.fat_copies;
+      secsize = fat_dir->fatDev->bpb.fat12.bytes_per_sec;
     }
 
-    max_entries = FAT_SECTOR_SIZE / sizeof( struct FAT_DirEntry );
+    max_entries = secsize / sizeof( struct FAT_DirEntry );
 
     if( numRootEnts >= max_entries + (fat_dir->current - startSec) * 
-        (FAT_SECTOR_SIZE / sizeof(struct FAT_DirEntry)) )
+        (secsize / sizeof(struct FAT_DirEntry)) )
     {
       fat_dir->more = 1;
     }

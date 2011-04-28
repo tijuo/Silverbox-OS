@@ -267,56 +267,6 @@ int getAck(void)
   }
 }
 
-void start_mouse(void)
-{
-  unsigned char command = 0;
-
-  enable_mouse();
-
-  sendKB_Comm( 0x20 );
-  waitOutputEmpty();
-  command = inByte(KB_IO);
-  sendKB_Comm( 0x60 );
-  sendKB_Data( command | 2 );
-
-/*
-  waitForKbInput();
-  outByte(KB_STAT_CMD, 0xA8);
-  waitForKbInput();
-  outByte(KB_STAT_CMD, 0x20);
-
-  waitForKbInput();
-  outByte(KB_IO, 0x60);
-  waitForKbInput();
-  
-  command = inByte(KB_IO) | 3;
-  waitForKbInput();
-  outByte(KB_STAT_CMD, KB_IO);
-  waitForKbInput();
-  outByte(KB_IO, command);
-*/
-
-//  send_mouse(0xE8);
-//  send_mouse(0x00);
-//  send_mouse(0xE7);
-//  send_mouse(0xFF);
-//  send_mouse(0xF6);
-  send_mouse(0xF4);
-}
-
-void handleMouse( )
-{
-  byte buffer[3];
-
-//  printMsg("Mouse Interrupt.\n");
-
-  buffer[0] = inByte(KB_IO);
-  buffer[1] = inByte(KB_IO);
-  buffer[2] = inByte(KB_IO);
-
-  putMouseData( buffer );
-}
-
 void signal_handler(int signal, int arg)
 {
   static int ext1=0, ext2=0;
@@ -517,8 +467,9 @@ int main( void )
 {
   struct Device dev;
   int status;
-//  __chioperm( 1, KB_IO, 1 );
-//  __chioperm( 1, KB_STAT_CMD, 1 );
+
+  changeIoPerm( KB_IO, KB_IO, 1 );
+  changeIoPerm( KB_STAT_CMD, KB_STAT_CMD, 1 );
 
 //  __map(0xB8000,0xB8000, 8);
 
@@ -566,30 +517,6 @@ int main( void )
 
   /* !!! What does this do? !!! */
 
-/*
-  int command;
-  enable_kb();
-
-  sendKB_Comm( 0x20 );
-
-  waitOutputEmpty();
-  command = inByte(KB_IO);
-  sendKB_Comm( 0x60 );
-  sendKB_Data( command | 1 );
-*/
-
-//  start_mouse();
-
-//  sendKB_Comm(0x20);
-//  sendKB_Data( 0x3b );
-//  waitForKbInput();
-/*
-  int com;
-
-  com = inByte( KB_STAT_CMD );
-
-  sendKB_Data( / *com | 0x03* /0x3b );
-*/
   while(1)
     handleDevRequests();
 

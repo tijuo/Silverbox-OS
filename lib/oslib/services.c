@@ -727,3 +727,36 @@ int unmountFs( const char *path )
 
   return *(int *)msg.data;
 }
+
+int changeIoPerm( unsigned start, unsigned stop, int set )
+{
+  volatile struct GenericReq *req;
+  volatile struct GenericMsgHeader *header;
+  volatile struct Message msg;
+  int status;
+
+  header = (volatile struct GenericMsgHeader *)msg.data;
+  req = (volatile struct GenericReq *)header->data;
+
+  header->type = CHANGE_IO_PERM;
+  header->seq = 0;
+  header->status = GEN_STAT_OK;
+
+  req->arg[0] = (int)start;
+  req->arg[1] = (int)stop;
+  req->arg[2] = (int)set;
+
+  msg.length = sizeof *req + sizeof *header;
+  msg.protocol = MSG_PROTO_GENERIC;
+
+  if( sendMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
+    return -1;
+
+  if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
+    return -1;
+
+  if( header->status == GEN_STAT_OK )
+    return 0;
+  else
+    return -1;
+}

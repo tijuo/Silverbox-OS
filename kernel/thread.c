@@ -147,6 +147,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
    TCB * thread;
    tid_t tid = NULL_TID;
    pde_t pde;
+   pte_t pte;
 
    if( threadAddr == NULL )
      RET_MSG(NULL, "NULL thread addr")
@@ -179,8 +180,42 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
     readPDE( (void *)KERNEL_VSTART, &pde, (void *)getCR3() );
     writePDE( (void *)KERNEL_VSTART, &pde, addrSpace );
 
+    readPDE( (void *)(KERNEL_VSTART + TABLE_SIZE), &pde, (void *)getCR3() );
+    writePDE( (void *)(KERNEL_VSTART + TABLE_SIZE), &pde, addrSpace );
+
+    if( tid == 0 )
+    {
+      *(u32 *)&pde = (u32)FIRST_PAGE_TAB | PAGING_RW | PAGING_PRES;
+      writePDE( (void *)0, &pde, addrSpace );
+    }
+    else if( tid == 1 )
+    {
+      *(u32 *)&pde = (u32)INIT_FIRST_PAGE_TAB | PAGING_RW | PAGING_PRES | PAGING_USER;
+      writePDE( (void *)0, &pde, addrSpace );
+    }
+
+    // Assume that the first page table is already mapped
+
+    #if DEBUG
+      pde.present = 0;
+      readPDE((void *)0x0, &pde, addrSpace);
+      assert(pde.present);
+    #endif
+
+    for( unsigned addr=0; addr <= 0xc5000; addr += 0x1000 )
+    {
+      // Skip the io perm bitmap
+      if( addr >= 0xC0000 && addr < 0xC2000 )
+        continue;
+
+      readPTE( (void *)addr, &pte, (void *)getCR3() );
+      writePTE( (void *)addr, &pte, addrSpace );
+    }
+
+/*
     readPDE( (void *)PHYSMEM_START, &pde, (void *)getCR3() );
     writePDE( (void *)PHYSMEM_START, &pde, addrSpace );
+*/
 
     if( ((int)threadAddr & KERNEL_VSTART) != KERNEL_VSTART )
     {
@@ -199,7 +234,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
     thread->regs.userEsp = (unsigned)uStack;
 
-    thread->regs.eflags = 0x3201;//0x3201; // XXX: Warning: Magic Number
+    thread->regs.eflags = 0x0201;//0x3201; // XXX: Warning: Magic Number
     thread->regs.eip = ( dword ) threadAddr;
 
     if( tid == 0 )

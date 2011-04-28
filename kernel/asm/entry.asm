@@ -81,9 +81,10 @@ mboot:
 ; 0x8F000 - 0x90000 ; idle kernel stack
 ; 0x90000 - 0x91000 ; kernel stack
 ; 0x91000 - 0x92000 ; kernel variables
-; 0x92000 - 0x93000 ; the first page table
+; 0x92000 - 0x93000 ; the idle thread's first page table
 ; 0x93000 - 0x94000 ; The second kernel page table
-; 0x94000 - 0x95000 : Bootstrap stack
+; 0x94000 - 0x95000 ; The initial server's first page table
+; 0x95000 - 0x96000 : Bootstrap stack
 
 initPaging:
 ;  push  ebp

@@ -34,10 +34,11 @@ SECTIONS
   _kernelVars = _kernelStack + 0x1000;
   _firstPTAB = _kernelVars + 0x1000;
   _secondKrnlPTAB = _firstPTAB + 0x1000;
+  _initFirstPTAB = _secondKrnlPTAB + 0x1000;
 
   /* Note that this is the address of the bottom of the stack. */
 
-  _kernelBootStack = _secondKrnlPTAB + 0x1000;
+  _kernelBootStack = _initFirstPTAB + 0x1000;
 
   .text kVirtCode : AT(kPhysCode) {
      kCode = .;

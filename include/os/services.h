@@ -17,7 +17,7 @@
 #define DELETE_SHM		9
 #define CONNECT_REQ		10
 #define UNREGISTER_NAME		11
-#define SET_IO_PERM		12
+#define CHANGE_IO_PERM		12
 #define DEV_REGISTER            13
 #define DEV_LOOKUP_MAJOR        14
 #define DEV_LOOKUP_NAME         15
@@ -29,7 +29,7 @@
 #define EXIT_MSG		0xFFFF
 
 #define	MEM_FLG_RO		0x01		// Read only
-#define MEM_FLG_LAZY		0x02		// Map in pages only when needed
+#define MEM_FLG_LAZY		0x02		// Map in pages only when they are accessed
 #define MEM_FLG_ALLOC		0x04		// Do not perform a phys->virt mapping (implies read-write)
 #define MEM_FLG_COW		0x08		// Mark as copy-on-write(implies read-only)
 
@@ -139,6 +139,8 @@ int lookupDevMajor( unsigned char major, struct Device *device );
 
 tid_t lookupName( const char *name, size_t len );
 int registerName( const char *name, size_t len );
+
+int changeIoPerm( unsigned start, unsigned stop, int set );
 
 //int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
 //int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );

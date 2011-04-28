@@ -71,11 +71,13 @@ int __create_resource_pool(struct ResourcePool *pool, void *phys_aspace)
   init_addr_space(&pool->addrSpace, phys_aspace);
   attach_phys_aspace(pool, phys_aspace);
 
-  pool->execInfo = NULL;
+//  pool->execInfo = NULL;
 
   setPage(pool->ioBitmaps.phys1, 0xFF);
   setPage(pool->ioBitmaps.phys2, 0xFF);
 
+  _mapMem( (void *)pool->ioBitmaps.phys1, (void *)0xC0000, 1, 0, &pool->addrSpace );
+  _mapMem( (void *)pool->ioBitmaps.phys2, (void *)0xC1000, 1, 0, &pool->addrSpace );
 
   pool->id = counter++;
 

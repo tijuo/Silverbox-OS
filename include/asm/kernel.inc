@@ -35,6 +35,7 @@ IMPORT _kernelVars
 IMPORT _firstPTAB
 IMPORT _secondKrnlPTAB
 IMPORT _kernelBootStack
+IMPORT _initFirstPTAB
 
 kCodeSel  equ 0x08
 kDataSel  equ 0x10

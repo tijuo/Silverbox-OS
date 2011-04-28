@@ -3,34 +3,59 @@
 #define PCI_BIOS_PHYS                   0xE0000
 #define PCI_BIOS_ADDR                   0xE0000
 
-struct PCI_config_header {
-  unsigned short vendor_id;
-  unsigned short device_id;
-  unsigned short command;
-  unsigned short status;
-  unsigned long	 revision_id : 8;
-  unsigned long  class_code  : 24;
-  unsigned char  cache_line_sz;
-  unsigned char  latency_timer;
-  unsigned char  header_type;
-  unsigned char  bist;
-  unsigned long  base_address_reg[6];
-  unsigned long  cardbus_cis_ptr;
-  unsigned short subsystem_vendor_id;
-  unsigned short subsystem_id;
-  unsigned long  rom_base_address;
-  unsigned char	 capabilities_ptr;
-  unsigned char  reserved[7];
-  unsigned char  interrupt_line;
-  unsigned char  interrupt_pin;
-  unsigned char  min_gnt;
-  unsigned char  max_lat;
+#define PCI_CFG_ADDR			0xCF8
+#define PCI_CFG_DATA			0xCFC
+
+// Base address register
+
+union PCI_bar
+{
+  struct
+  {
+    dword type : 1; // 0 for memory
+    dword location : 2; // 0 - 32-bit; 1 - < 1 MB; 2 - 64-bit
+    dword prefetch : 1;
+    dword base_addr : 28;
+  } memory __PACKED__;
+
+  struct
+  {
+    dword type : 1; // 1 for I/0
+    dword _resd : 1;
+    dword base_addr : 30;
+  } io __PACKED__;
 };
 
+struct PCI_config_header {
+  word vendor_id;
+  word device_id;
+  word command;
+  word status;
+  dword	 revision_id : 8;
+  dword  class_code  : 24;
+  byte  cache_line_sz;
+  byte  latency_timer;
+  byte  header_type;
+  byte  bist;
+  union PCI_bar base_addr_regs[6];
+  dword  cardbus_cis_ptr;
+  word subsystem_vendor_id;
+  word subsystem_id;
+  dword  rom_base_address;
+  byte	 capabilities_ptr;
+  byte  _resd[7];
+  byte  interrupt_line;
+  byte  interrupt_pin;
+  byte  min_gnt;
+  byte  max_lat;
+} __PACKED__;
+
+/*
 static struct {
   addr_t offset;
   word s;
 } pci_indirect = { 0, 0x1B };
+*/
 
 typedef struct PCI_device {
   byte bus;
@@ -47,6 +72,7 @@ struct {
   pci_device *pci_head;
 } system_devices;
 
+/*
 typedef struct {
   byte last_bus;
   byte major;
@@ -56,7 +82,7 @@ typedef struct {
   byte spec_gen1;
   byte spec_gen2;
 } pci_hardware;
-
+*/
 
 #define PCI_CONFIG_VENDORID			0x00
 #define PCI_CONFIG_DEVICEID			0x02

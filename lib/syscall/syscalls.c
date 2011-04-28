@@ -74,7 +74,7 @@ int __register_int( int intNum )
   return retval;
 }
 
-int __unregister_int( intNum )
+int __unregister_int( int intNum )
 {
   int retval;
 
@@ -227,7 +227,7 @@ int __set_sig_handler( void *handler )
   return retval;
 }
 
-int __set_io_perm( unsigned short start, unsigned short end, bool value, tid_t tid )
+int __set_io_perm( unsigned start, unsigned end, bool value, tid_t tid )
 {
   int retval;
 

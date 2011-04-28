@@ -5,16 +5,16 @@
 #include <stddef.h>
 #include <oslib.h>
 
-#define MEM_RO		1	// Read-only memory range
-#define MEM_COW		2	/* Range is copy-on-write (if written to, copy 
+#define REG_RO		1	// Read-only memory range
+#define REG_COW		2	/* Range is copy-on-write (if written to, copy 
 				   range to another set of pages & mark that
 				   range as read-write [implies read-only]). */
-#define MEM_LAZY	4	// Do not immediately map the range into memory
-#define MEM_MAP		8	/* Map virtual addresses to a specific physical 
+#define REG_LAZY	4	// Do not immediately map the range into memory
+#define REG_MAP		8	/* Map virtual addresses to a specific physical 
                                    addresses (as opposed to mapping virtual 
 				   addresses to any physical addresses. */
-#define MEM_ZERO	16	// Clear an address range before mapping it.
-#define MEM_RESD	0xF0000000 // Range is reserved and shouldn't be accessed. For internal use only.
+#define REG_ZERO	16	// Clear an address range before mapping it.
+#define REG_RESD	0xF0000000 // Range is reserved and shouldn't be accessed. For internal use only.
 
 #define NUM_PTABLES     1024
 

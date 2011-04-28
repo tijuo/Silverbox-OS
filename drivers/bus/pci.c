@@ -10,7 +10,7 @@
 char *class_codes[][] = {
 { "Unknown PCI device", "VGA device" },
 
-{  "SCSI controller", "IDE controller", "Floppy disk controller", 
+{  "SCSI controller", "IDE controller", "Floppy disk controller",
    "IPI controller", "RAID controller", "Unknown Mass Storage Controller" },
 
 {  "Ethernet controller", "Token ring controller", "FDDI controller",
@@ -36,7 +36,7 @@ char *class_codes[][] = {
    "EISA programmable interrupt controller",
    "Generic 8237 DMA controller", "ISA DMA controller", "EISA DMA controller",
    "Generic 8254 timer", "ISA system timer", "EISA system timer",
-   "Generic RTC controller", "ISA RTC controlller", 
+   "Generic RTC controller", "ISA RTC controlller",
    "Unknown system peripheral" },
 
 {  "Keyboard controller", "Digitizer", "Mouse controller",
@@ -121,6 +121,7 @@ const char *class_code12[] = { "Firewire (IEEE 1394) controller",
 
 const char *unknown_dev = "Unknown Device";
 
+/*
 typedef struct {
         unsigned long   magic;
         unsigned long   entry;
@@ -136,19 +137,21 @@ typedef struct {
 } far_ptr32;
 
 far_ptr32 bios32_indirect = { 0, 0x1B };
+*/
 
-int (*pci_read_cfg_byte)(byte bus, byte df_num, short reg_num, byte *byte_read);
-int (*pci_read_cfg_word)(byte bus, byte df_num, short reg_num, word *word_read);
-int (*pci_read_cfg_dword)(byte bus, byte df_num, short reg_num, dword *dword_read);
+int (*pci_read_cfg_byte)(byte bus, byte dev, byte func, byte offset, byte *byte_read);
+int (*pci_read_cfg_word)(byte bus, byte dev, byte func, byte offset, word *word_read);
+int (*pci_read_cfg_dword)(byte bus, byte dev, byte func, byte offset, dword *dword_read);
 
-int (*pci_write_cfg_byte)(byte bus, byte df_num, short reg_num, byte data_to_write);
-int (*pci_write_cfg_word)(byte bus, byte df_num, short reg_num, word data_to_write);
-int (*pci_write_cfg_dword)(byte bus, byte df_num, short reg_num, dword data_to_write);
+int (*pci_write_cfg_byte)(byte bus, byte dev, byte func, byte offset, byte data_to_write);
+int (*pci_write_cfg_word)(byte bus, byte dev, byte func, byte offset, word data_to_write);
+int (*pci_write_cfg_dword)(byte bus, byte dev, byte func, byte offset, dword data_to_write);
 
-static pci_hardware detection_info;
+//static pci_hardware detection_info;
 
-unsigned long bios32_service_call(long service);
+//unsigned long bios32_service_call(long service);
 //byte detect_pcibios(void);
+/*
 int bios_pci_detect(pci_hardware *pci_struct);
 int bios_read_config_byte(byte bus, byte df_num, short reg_num,
 							byte *byte_read);
@@ -156,21 +159,24 @@ int bios_read_config_word(byte bus, byte df_num, short reg_num,
 							word *word_read);
 int bios_read_config_dword(byte bus, byte df_num, short reg_num,
 							dword *dword_read);
+*/
 int find_pci_device(word ven_id, word dev_id, word index,
 							pci_device *dev);
 int pci_type1_2_scan(void);
 int locate_pci_bus(void);
-int locate_pci_bios(void);
+//int locate_pci_bios(void);
 //void register_pci_device(pci_device device);
 //void unregister_pci_device(pci_device device);
-const char *decode_pci_class(dword class, dword subclass, dword interface);
+const char *decode_pci_class(dword pci_class, dword subclass, dword interface);
 void pci_scan_devices(void);
 
 void initPCI(void)
 {
-  mapMem( (void *)PCI_BIOS_PHYS, (void *)PCI_BIOS_ADDR, 32, 0 );
+//  mapMem( (void *)PCI_BIOS_PHYS, (void *)PCI_BIOS_ADDR, 32, 0 );
+  changeIoPerm( PCI_CFG_ADDR, PCI_CFG_ADDR + 7, 1 );
 }
 
+/*
 unsigned long bios32_service_call(long service)
 {
   byte  err_code;
@@ -207,16 +213,21 @@ byte detect_pcibios(void)
   while((unsigned long)ptr < ((unsigned long)PCI_BIOS_ADDR + 32 * 4096)) {
     bios32_sd = (BIOS32*)ptr;
 
-    if(bios32_sd->magic == 0x5F32335F) {
+    if(bios32_sd->magic == 0x5F32335F)
+    {
       for(i=0; i < (bios32_sd->length * 0x10); i++)
         checksum += *(ptr + (byte)i);
-      if(checksum == 0){
-        if(bios32_sd->rev != 0) {
+
+      if(checksum == 0)
+      {
+        if(bios32_sd->rev != 0)
+        {
           printf("Found unsupported PCI BIOS revision 0x%p\n",
                                                 bios32_sd->rev);
           continue;
         }
-        else {
+        else
+        {
           bios32_indirect.offset = bios32_sd->entry;
           break;
         }
@@ -231,10 +242,12 @@ byte detect_pcibios(void)
   else
     return 1;
 }
+*/
 
 /* BIOS int 0x1A, function 0xB181. Checks to see if the PCI 
    bus is present.*/
 
+/*
 int bios_pci_detect(pci_hardware *pci_struct)
 {
   byte bx, hwchar;
@@ -394,92 +407,62 @@ int bios_write_config_dword(byte bus, byte df_num, short reg_num, dword data_to_
   else
     return 0;
 }
+*/
+// Includes enable bit at most significant bit
 
-int mech1_pci_read_config_byte(byte bus, byte df_num, short reg_num, byte *byte_read)
+#define PCI_ADDR(bus,dev,func,off)	((bus << 16) | ((dev & 0x1f) << 11) \
+					| ((func & 7) << 8) | (off & 0x3f) \
+					| (1 << 31))
+
+int mech1_pci_read_config_byte(byte bus, byte dev, byte func, byte offset, byte *byte_read)
 {
-  dword data;
-
-  data = 0x80000000;
-  data |= (bus << 16);
-  data |= (df_num << 8);
-  data |= (reg_num & 0xFFFFFFFC);
-  outDword(0xCF8, data);
-  *byte_read = inByte(0xCFC + (reg_num & 3));
+  outDword(PCI_CFG_ADDR, PCI_ADDR(bus,dev,func,offset));
+  *byte_read = inByte(PCI_CFG_DATA + (offset % 4));
 
   return 0;
 }
 
-int mech1_pci_read_config_word(byte bus, byte df_num, short reg_num, word *word_read)
+int mech1_pci_read_config_word(byte bus, byte dev, byte func, byte offset, word *word_read)
 {
-  dword data;
-
-  data = 0x80000000;
-  data |= (bus << 16);
-  data |= (df_num << 8);
-  data |= (reg_num & 0xFFFFFFFC);
-  outDword(0xCF8, data);
-  *word_read = inWord(0xCFC + (reg_num & 2));
+  outDword(PCI_CFG_ADDR, PCI_ADDR(bus,dev,func,offset));
+  *word_read = inWord(PCI_CFG_DATA + (offset % 4));
 
   return 0;
 }
 
-int mech1_pci_read_config_dword(byte bus, byte df_num, short reg_num, dword *dword_read)
+int mech1_pci_read_config_dword(byte bus, byte dev, byte func, byte offset, dword *dword_read)
 {
-  dword data;
-
-  data = 0x80000000;
-  data |= (bus << 16);
-  data |= (df_num << 8);
-  data |= (reg_num & 0xFFFFFFFC);
-  outDword(0xCF8, data);
-  *dword_read = inDword(0xCFC + reg_num);
+  outDword(PCI_CFG_ADDR, PCI_ADDR(bus,dev,func,offset));
+  *dword_read = inDword(PCI_CFG_DATA);
 
   return 0;
 }
 
-int mech1_pci_write_config_byte(byte bus, byte df_num, short reg_num, byte data_to_write)
+int mech1_pci_write_config_byte(byte bus, byte dev, byte func, byte offset, byte data_to_write)
 {
-  dword data;
-
-  data = 0x80000000;
-  data |= (bus << 16);
-  data |= (df_num << 8);
-  data |= (reg_num & 0xFFFFFFFC);
-  outDword(0xCF8, data);
-  outByte(0xCFC + (reg_num & 3), data_to_write);
+  outDword(PCI_CFG_ADDR, PCI_ADDR(bus,dev,func,offset));
+  outByte(PCI_CFG_DATA + (offset % 4), data_to_write);
 
   return 0;
 }
 
-int mech1_pci_write_config_word(byte bus, byte df_num, short reg_num, word data_to_write)
+int mech1_pci_write_config_word(byte bus, byte dev, byte func, byte offset, word data_to_write)
 {
-  dword data;
-
-  data = 0x80000000;
-  data |= (bus << 16);
-  data |= (df_num << 8);
-  data |= (reg_num & 0xFFFFFFFC);
-  outDword(0xCF8, data);
-  outWord(0xCFC + (reg_num & 2), data_to_write);
+  outDword(PCI_CFG_ADDR, PCI_ADDR(bus,dev,func,offset));
+  outWord(PCI_CFG_DATA + (offset % 4), data_to_write);
 
   return 0;
 }
 
-int mech1_pci_write_config_dword(byte bus, byte df_num, short reg_num, dword data_to_write)
+int mech1_pci_write_config_dword(byte bus, byte dev, byte func, byte offset, dword data_to_write)
 {
-  dword data;
-
-  data = 0x80000000;
-  data |= (bus << 16);
-  data |= (df_num << 8);
-  data |= (reg_num & 0xFFFFFFFC);
-  outDword(0xCF8, data);
-  outDword(0xCFC + reg_num, data_to_write);
+  outDword(PCI_CFG_ADDR, PCI_ADDR(bus,dev,func,offset));
+  outDword(PCI_CFG_DATA, data_to_write);
 
   return 0;
 }
 
-
+/*
 int find_pci_device(word ven_id, word dev_id, word index, pci_device *dev)
 {
   word bx;
@@ -506,9 +489,10 @@ int find_pci_device(word ven_id, word dev_id, word index, pci_device *dev)
 
   return 0;
 }
-
+*/
 /* Attempts to locate PCI BIOS by using the BIOS Service Directory */
 
+/*
 int locate_pci_bios(void)
 {
   if(detect_pcibios() == 1)
@@ -523,6 +507,7 @@ int locate_pci_bios(void)
   else
     return 0;
 }
+*/
 
 int pci_type1_2_scan(void)
 {
@@ -531,6 +516,7 @@ int pci_type1_2_scan(void)
   outByte(0xCFB, 0x01);
   t = inDword(0xCF8);
   outDword( 0xCF8, 0x80000000 );
+
   if (inDword(0xCF8) == 0x80000000)
   {
     outDword(0xCF8, t);
@@ -542,23 +528,23 @@ int pci_type1_2_scan(void)
   outByte(0xCFB, 0x00);
   outByte(0xCF8, 0x00);
   outByte(0xCFA, 0x00);
+
   if(inByte(0xCF8) == 0x00 && inByte(0xCFA) == 0x00)
     return 2;
 
   return 0;
 }
 
-/* Attemps to locate the PCI bus by either trying to find PCI BIOS or using
-   configuration space access mechanism 1 or 2 */
+/* Attemps to locate the PCI bus by using configuration space access mechanism 1 or 2 */
 
 int locate_pci_bus(void)
 {
   int type;
-
+/*
   if(locate_pci_bios() == 0)
   {
     printf("Can't locate PCI BIOS\n");
-
+*/
     if((type = pci_type1_2_scan()) == 0)
     {
       printf("PCI bus not present\n");
@@ -585,9 +571,11 @@ int locate_pci_bus(void)
 */
     printf("No support for PCI Configuration Space Access type 2(yet)\n");
     }
-  }
+/*  }
+
   else
   {
+
       pci_read_cfg_byte = &bios_read_config_byte;
       pci_read_cfg_word = &bios_read_config_word;
       pci_read_cfg_dword = &bios_read_config_dword;
@@ -603,7 +591,7 @@ int locate_pci_bus(void)
     printf("PCI Special Cycle Generation 1: %s\n", detection_info.spec_gen1 ? "yes" : "no");
     printf("PCI Special Cycle Generation 2: %s\n", detection_info.spec_gen2 ? "yes" : "no");
   }
-
+*/
   return 1;
 }
 
@@ -763,54 +751,67 @@ void unregister_pci_device(pci_device device)
 
 void pci_scan_devices(void)
 {
+  int bus, device, func;
   pci_device dev;
   byte multifunc;
-  word data;
-  dword class;
+  dword data;
   const char *string;
 
   system_devices.pci_head = NULL;
 
-  for(dev.bus = 0; dev.bus <= detection_info.last_bus; dev.bus++){
-    for(dev.device = 0; dev.device < 32; dev.device++) {
-      dev.function = 0;
-      pci_read_cfg_byte(dev.bus, (dev.device << 3) | (dev.function), 0xE, &multifunc);
-      multifunc &= 0x80;
-      multifunc >>= 7;
+  printf("Scannng for PCI devices...\n");
 
-      while(dev.function < 8) {
-        pci_read_cfg_word(dev.bus, (dev.device << 3) | (dev.function), PCI_CONFIG_VENDORID, &data);
-        if(data == 0xFFFF)
+  for(bus = 0; bus <= 255/*detection_info.last_bus*/; bus++)
+  {
+    for(device = 0; device < 32; device++)
+    {
+      pci_read_cfg_dword(bus, device, 0, 0, &data);
+
+      if( data == 0xFFFFFFFF )
+      {
+        if( device == 0 )
           break;
-        else 
+        else
+          continue;
+      }
+
+      pci_read_cfg_byte(bus, device, 0, 0xE, &multifunc);
+
+      for( func=0; func < 8; func++ )
+      {
+        pci_read_cfg_dword(bus, device, func, 0,
+          ((dword *)&dev.config_header));
+
+        if( dev.config_header.vendor_id == 0xFFFF &&
+            dev.config_header.device_id == 0xFFFF )
         {
-          printf("Vendor ID: 0x%x ", data);
-	  dev.config_header.vendor_id = data;
-          pci_read_cfg_word(dev.bus, (dev.device << 3) | (dev.function), PCI_CONFIG_DEVICEID, &data);
-	  dev.config_header.device_id = data;
-
-          printf(" Device ID: 0x%x ", data);
-          printf(" Bus: %d Device: %d Function %d\n", dev.bus, dev.device, dev.function);
-
-          pci_read_cfg_dword(dev.bus, (dev.device << 3) | (dev.function), 8, &class);
-          class &= 0xFFFFFF;
-	  dev.config_header.class_code = class;
-	  dev.class = class >> 16;
-          dev.subclass = (class & 0xFF00) >> 8;
-          dev.interface = class & 0xFF;
-          string = decode_pci_class(class >> 16, ((class & 0xFF00) >> 8), class & 0xFF);
-
-	  printf("%s\n", string);
-
-	 /* register_pci_device(dev); */
-	  if(multifunc)
-            dev.function++;
-	  else
-            break;
+          continue;
         }
+
+        for( int i=1; i < 16; i++ )
+        {
+          pci_read_cfg_dword(bus, device, func, i << 2,
+            ((dword *)&dev.config_header) + i);
+        }
+
+        dev.bus = (byte)bus;
+        dev.device = (byte)device;
+        dev.function = (byte)func;
+
+        dev.class = dev.config_header.class_code >> 16;
+        dev.subclass = (dev.config_header.class_code >> 8) & 0xFF;
+        dev.interface = dev.config_header.class_code & 0xFF;
+        string = decode_pci_class(dev.class, dev.subclass, dev.interface);
+
+        printf("%s - <0x%x:0x%x> @ (%d:%d.%d)\n", string, dev.config_header.vendor_id,
+          dev.config_header.device_id, bus, device, func);
+
+	if(!(multifunc & 0x80))
+          break;
       }
     }
   }
+
   printf("PCI bus scan complete.\n");
 }
 

@@ -334,9 +334,10 @@ void initVideo( void )
   cursorOn = true;
   setAttr( ATTRIB( GRAY, BLACK, NO_BLINK ) );
 
+  changeIoPerm( CRTC_INDEX, CRTC_DATA, 1 );
+
   //__map( (void *)COLOR_TXT_ADDR, (void *)COLOR_TXT_ADDR, 8 );
 //  mapMem( (void *)COLOR_TXT_ADDR, (void *)COLOR_TXT_ADDR, 8, 0 );
-//  __chioperm( 1, CRTC_INDEX, 2 ); 	// Allocate port range
 
   setCursor( 0, 1 );
   setCharPos( 0, 1 );

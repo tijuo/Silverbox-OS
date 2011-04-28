@@ -236,18 +236,14 @@ int readPTE( void *virt, pte_t *pte, void *addrSpace )
   assert( addrSpace != (void *)NULL_PADDR );
   assert( pte != INVALID_VADDR );
 
-  if( _readPDE( dirEntryNum, &pde, addrSpace ) == -1 )
+  if( _readPDE( dirEntryNum, &pde, addrSpace ) != 0 )
   {
     kprintf("_readPDE() failed\n");
     return -1;
   }
 
   if( !pde.present )
-  {
-    kprintf("Error! - 0x%x 0x%x 0x%x\n", virt, pte, addrSpace);
-    assert(false);
     return -1;
-  }
 
   if( (unsigned)addrSpace == (unsigned)getCR3() )
   {
@@ -285,7 +281,7 @@ int writePTE( void *virt, pte_t *pte, void *addrSpace )
   assert( addrSpace != (void *)NULL_PADDR );
   assert( pte != INVALID_VADDR );
 
-  if( _readPDE( dirEntryNum, &pde, addrSpace ) == -1 )
+  if( _readPDE( dirEntryNum, &pde, addrSpace ) != 0 )
   {
     assert(false);
     return -1;
@@ -466,7 +462,7 @@ addr_t getPhysAddr( void *virt, void *addrSpace )
     pte_t pte;
     addr_t addr;
 
-    if( readPTE( virt, &pte, addrSpace ) == -1 )
+    if( readPTE( virt, &pte, addrSpace ) != 0 )
       return INVALID_VADDR;
 
     addr = (addr_t)(pte.base << 12);
@@ -502,7 +498,7 @@ int mapPageTable( void *virt, void *phys, u32 flags, void *addrSpace )
     pdePtr = ADDR_TO_PDE( virt );
   else
   {
-    if( readPDE( virt, pdePtr, addrSpace ) == -1 )
+    if( readPDE( virt, pdePtr, addrSpace ) != 0 )
     {
       assert(false);
       return -1;
@@ -628,7 +624,7 @@ int mapPage( void *virt, void *phys, u32 flags, void *addrSpace )
   }
   else
   {
-    if( readPDE( virt, pdePtr, addrSpace ) == -1 )
+    if( readPDE( virt, pdePtr, addrSpace ) != 0 )
     {
       assert(false);
       return -1;
@@ -637,15 +633,16 @@ int mapPage( void *virt, void *phys, u32 flags, void *addrSpace )
 
   if ( !pdePtr->present )
   {
+    kprintf("Page %d (0x%x-0x%x) table not present!", (unsigned)virt / TABLE_SIZE, (unsigned)virt & ~(TABLE_SIZE-1), (unsigned)virt + (TABLE_SIZE-1));
     assert( false );  /* Since page allocation isn't done in the kernel,
                          allocating a new page table needs to be done
-                         manually. */
+                         by the user. */
     return -3;
   }
 
   if( currPdir != addrSpace )
   {
-    if( readPTE( virt, ptePtr, addrSpace ) < 0 )
+    if( readPTE( virt, ptePtr, addrSpace ) != 0 )
     {
       assert(false);
       return -1;
@@ -654,7 +651,7 @@ int mapPage( void *virt, void *phys, u32 flags, void *addrSpace )
 
   if( ptePtr->present )
   {
-    kprintf("Already mapped! 0x%x->0x%x\n", phys, virt);
+    kprintf("Already mapped! 0x%x->0x%x addrSpace: 0x%x\n", phys, virt, addrSpace);
     assert( false );
 
     return -2;
@@ -758,7 +755,7 @@ addr_t unmapPage( void *virt, void *addrSpace )
             ptePtr->present = 0;
             returnAddr = ( addr_t )( ptePtr->base << 12 );
 
-            if( writePTE( virt, ptePtr, addrSpace ) == -1 )
+            if( writePTE( virt, ptePtr, addrSpace ) != 0 )
             {
               assert(false);
               returnAddr = (addr_t)NULL_PADDR;
@@ -813,7 +810,7 @@ addr_t unmapPageTable( void *virt, void *addrSpace )
             pdePtr->present = 0;
             returnAddr = ( addr_t )( pdePtr->base << 12 );
 
-            if( writePDE( virt, pdePtr, addrSpace ) == -1 )
+            if( writePDE( virt, pdePtr, addrSpace ) != 0 )
             {
               assert(false);
               returnAddr = (addr_t)NULL_PADDR;

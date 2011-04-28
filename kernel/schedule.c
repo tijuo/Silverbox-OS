@@ -25,7 +25,7 @@ int detachPausedQueue( TCB *thread );
 
 __asm__(".globl idle\n" \
         "idle: \n" \
-        "cli\n" \
+/*        "cli\n" \*/
         "call init2\n" \
         "sti\n" \
         ".halt: hlt\n" \
@@ -70,6 +70,7 @@ TCB *schedule( volatile TCB *thread )
   int level;
   tid_t newTID;
   TCB *newThread;
+  dword oldCR3;
 
   assert( thread != NULL );
 
@@ -81,6 +82,8 @@ TCB *schedule( volatile TCB *thread )
      if incorrectly set. */
 
   assert( thread == currentThread );
+
+  oldCR3 = (dword)thread->addrSpace;
 
   if( thread->state == RUNNING /*|| thread->state == READY*/ )
   {
@@ -155,6 +158,12 @@ TCB *schedule( volatile TCB *thread )
   assert( newThread != NULL );
 
   currentThread->state = newThread->state = RUNNING;
+
+  if( oldCR3 != (dword)thread->addrSpace )
+  {
+    struct TSS_Struct *tss = (struct TSS_Struct *)KERNEL_TSS;
+    tss->ioMap = IOMAP_LAZY_OFFSET;
+  }
 
   incSchedCount();
   return newThread;

@@ -72,9 +72,6 @@ int flags, tid_t sender )
   struct AddrRegion region;
   struct ResourcePool *pool = NULL;
 
-  if( region.flags & MEM_RESD )
-    return -1;
-
   pool = lookup_tid(sender);
 
   if( pool == NULL )
@@ -89,19 +86,22 @@ int flags, tid_t sender )
   region.virtRegion.start = (int)virtStart;
   region.physRegion.start = (int)physStart;
   region.virtRegion.length = region.physRegion.length = pages * PAGE_SIZE;
-  region.flags = MEM_MAP;
+  region.flags = REG_MAP;
+
+  if( region.virtRegion.start == 0xF0000000 )
+  { print("virt = 0xF0000000\n"); }
 
   if( flags & MEM_FLG_RO )
-    region.flags |= MEM_RO;
+    region.flags |= REG_RO;
 
   if( (flags & MEM_FLG_COW) && !(flags & MEM_FLG_ALLOC) ) // COW would imply !ALLOC
-    region.flags |= MEM_RO | MEM_COW;
+    region.flags |= REG_RO | REG_COW;
 
   if( flags & MEM_FLG_LAZY )	// I wonder how a lazy COW would work...
-    region.flags |= MEM_LAZY;
+    region.flags |= REG_LAZY;
 
   if( (flags & MEM_FLG_ALLOC) && !(flags & MEM_FLG_COW) ) // ALLOC would imply !COW
-    region.flags &= ~MEM_MAP ;
+    region.flags &= ~REG_MAP ;
 
   if( attach_mem_region(&pool->addrSpace, &region) != 0 )
   {
@@ -110,9 +110,9 @@ int flags, tid_t sender )
   }
 
   if( !(flags & MEM_FLG_LAZY) && !(flags & MEM_FLG_ALLOC) )
-    _mapMem(physStart, virtStart, pages, flags, &pool->addrSpace);
-
-  return 0;
+    return _mapMem(physStart, virtStart, pages, flags, &pool->addrSpace);
+  else
+    return 0;
 }
 
 static int doMapTid( tid_t tid, rspid_t rspid, tid_t sender )
@@ -296,9 +296,9 @@ static int handle_generic_request( tid_t sender, struct GenericMsgHeader *header
     }
     case DEV_UNREGISTER:
       break;
-    case SET_IO_PERM:
-//        result = set_io_perm(req->argv[0], req->argv[1], argv[2], sender);
-        break;
+    case CHANGE_IO_PERM:
+      result = __set_io_perm(req->arg[0], req->arg[1], req->arg[2], sender);
+      break;
     default:
       print("Received bad generic request 0x");
       printHex(header->type);

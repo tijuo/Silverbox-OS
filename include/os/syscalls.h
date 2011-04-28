@@ -28,6 +28,36 @@
 #define SYS_DESTROY_THREAD      0x14
 #define SYS_UNREGISTER_INT      0x15
 
+struct RegisterState
+{
+  dword edi;
+  dword esi;
+  dword ebp;
+  dword esp;
+  dword ebx;
+  dword edx;
+  dword ecx;
+  dword eax;
+  word es;
+  word ds;
+  dword int_num;
+  dword error_code;
+  dword eip;
+  dword cs;
+  dword eflags;
+  dword userEsp;
+  dword userSs;
+};
+
+struct ThreadInfo
+{
+  tid_t tid;
+  tid_t exHandler;
+  int priority;
+  addr_t addr_space;
+  struct RegisterState state;
+};
+
 int __send( tid_t recipient, void *msg, int timeout );
 int __receive( tid_t sender, void *buf, int timeout );
 int __pause( void );
@@ -52,7 +82,7 @@ void *__unmap( void *virt, void *addrSpace );
 void *__unmap_page_table( void *virt, void *addrSpace );
 int __raise( int signal, int arg );
 int __set_sig_handler( void *handler );
-int __set_io_perm( unsigned short start, unsigned short end, bool value, tid_t tid );
+int __set_io_perm( unsigned start, unsigned end, bool value, tid_t tid );
 int __destroy_thread( tid_t tid );
 
 #endif /* OS_SYSCALLS */

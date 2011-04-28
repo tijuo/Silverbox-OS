@@ -7,12 +7,18 @@ extern void print( char * );
 
 /* Maps a physical address range to a virtual address range in some address space. */
 
-// XXX: Implements flags
+// XXX: Implement flags
 
 int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSpace )
 {
   unsigned char *addr = (unsigned char *)virt;
   void *table_phys;
+
+  if( (unsigned)virt == 0xF0000000 )
+  {
+    print("virt = 0xF0000000\n");
+    printInt(pages);
+  }
 
   if( pages < 1 || !aSpace )
     return -1;

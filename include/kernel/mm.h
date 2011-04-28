@@ -44,6 +44,7 @@
 #define KERNEL_VAR_PAGE		((u32)&_kernelVars)
 #define FIRST_PAGE_TAB		((u32)&_firstPTAB)
 #define KERNEL_PAGE_TAB2	((u32)&_secondKrnlPTAB)
+#define INIT_FIRST_PAGE_TAB	((u32)&_initFirstPTAB)
 #define BOOTSTRAP_STACK_TOP	((u32)&_kernelBootStack + PAGE_SIZE)
 
 #define INVALID_VADDR       (void *)0xFFFFFFFF

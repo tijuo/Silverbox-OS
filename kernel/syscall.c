@@ -68,11 +68,8 @@ static int enableIO_Permissions( volatile TCB *thread, unsigned short begin,
   byte *data = (byte *)TEMP_PAGEADDR;
   int result;
 
-  if( GET_TID(thread) != init_server_tid ) // No permission to do this operation
-    return -2;
-
   if( tid == NULL_TID )
-    return -1;
+    tid = GET_TID(thread);
 
   if( begin < 32768 && end >= 32768 )   // spans two pages
   {
@@ -82,23 +79,23 @@ static int enableIO_Permissions( volatile TCB *thread, unsigned short begin,
     return enableIO_Permissions( thread, 32768, end, value, tid );
   }
 
-  if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, tcbTable[tid].addrSpace ) < 0 ||
-      !pte.present )
+  if( begin < 32768 && (readPTE( (void *)TSS_IO_PERM_BMP, &pte, tcbTable[tid].addrSpace ) != 0 ||
+      !pte.present) )
+  {
+    return -3;
+  }
+  else if( begin >= 32768 && (readPTE( (void *)(TSS_IO_PERM_BMP + PAGE_SIZE), &pte, tcbTable[tid].addrSpace ) != 0 ||
+      !pte.present) )
   {
     return -3;
   }
 
-  if( readPTE( (void *)(TSS_IO_PERM_BMP + PAGE_SIZE), &pte, tcbTable[tid].addrSpace ) < 0 ||
-      !pte.present )
-  {
-    return -3;
-  }
+  mapTemp((void *)(pte.base << 12));
 
   if( begin < 32768 ) // spans first page
-    mapTemp((void *)KERNEL_IO_BITMAP);
-  else // spans second
+    ;
+  else
   {
-    mapTemp((void *)(KERNEL_IO_BITMAP+PAGE_SIZE));
     begin -= 32768;
     end -= 32768;
   }
@@ -112,6 +109,7 @@ static int enableIO_Permissions( volatile TCB *thread, unsigned short begin,
       else
         data[begin / 8] &= ~(1 << i);
     }
+    kprintf("Enable IO? %s. 0x%x 0x%x: 0x%x\n", value ? "yes" : "no", begin, end, data[begin / 8]);
   }
   else // otherwise, modify the beginning and ending byte
   {
@@ -134,7 +132,7 @@ static int enableIO_Permissions( volatile TCB *thread, unsigned short begin,
     // and set the bytes in between(if any)
 
     if( end / 8 + 1 >= begin / 8 )
-      memset( data + 1, value == true ? 0xFF : 0, (end / 8) - (begin / 8) - 1 );
+      memset( data + 1, value == false ? 0xFF : 0, (end / 8) - (begin / 8) - 1 );
   }
 
   unmapTemp();
@@ -149,6 +147,16 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
   Registers *regs = (Registers *)&_thread->regs;
   int *result = (int *)&regs->eax;
 
+/*
+  for( unsigned i=0; i < sizeof privSyscalls / sizeof(int); i++ )
+  {
+    if( (int)regs->eax == privSyscalls[i] )
+    {
+      *result = -2;
+      break;
+    }
+  }
+*/
   switch ( regs->eax )
   {
     case SYS_SEND:
@@ -164,8 +172,8 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
     {
       TCB *new_thread;
 
-      new_thread = createThread( (addr_t)regs->ebx, (regs->ecx == (dword)NULL_PADDR ? 
-                                 _thread->addrSpace : (addr_t)regs->ecx), 
+      new_thread = createThread( (addr_t)regs->ebx, (regs->ecx == (dword)NULL_PADDR ?
+                                 _thread->addrSpace : (addr_t)regs->ecx),
                               (addr_t)regs->edx, (tid_t)regs->esi );
       *result = GET_TID(new_thread);
       break;
@@ -176,6 +184,11 @@ void _syscall( volatile TCB *thread, volatile unsigned intInfo )
     case SYS_START_THREAD:
       if( (tid_t)regs->ebx == NULL_TID )
         *result = -1;
+      else if( _thread == &tcbTable[(tid_t)regs->ebx] )
+      {
+        kprintf("Error: Attempted to started self (which has already started!)\n");
+        *result = -1;
+      }
       else
         *result = startThread( &tcbTable[(tid_t)regs->ebx] );
       break;

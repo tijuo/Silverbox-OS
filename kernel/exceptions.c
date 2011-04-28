@@ -119,6 +119,11 @@ int sysEndPageFault( TCB *currThread, tid_t tid )
 
   // XXX: How do you tell the kernel that a fatal exception has occurred?
 
+  if( currThread == &tcbTable[tid] )
+  {
+    kprintf("sysEndPageFault: currThread == &tcbTable[tid]\n");
+  }
+
   startThread( &tcbTable[tid] );
   return 0;
 }
@@ -204,7 +209,10 @@ void dump_regs( TCB *thread )
     regs--;
   }
 
-  kprintf( "\nException: %d @ EIP: 0x%x", regs->int_num, regs->eip );
+  if( regs->int_num == 0x40 )
+    kprintf("\nSyscall @ EIP: 0x%x", regs->eip);
+  else
+    kprintf( "\nException: 0x%x @ EIP: 0x%x", regs->int_num, regs->eip );
 
   kprintf( " TID: %d", GET_TID(thread));
 
@@ -217,7 +225,7 @@ void dump_regs( TCB *thread )
 
   kprintf( " error code: 0x%x\n", regs->error_code );
 
-  kprintf( "Address Space: 0x%x Actual CR3: 0x%x", (unsigned)thread->addrSpace, getCR3() );
+  kprintf( "Address Space: 0x%x Actual CR3: 0x%x\n", (unsigned)thread->addrSpace, getCR3() );
 
   kprintf("EFLAGS: 0x%x ", regs->eflags);
 
@@ -228,14 +236,19 @@ void dump_regs( TCB *thread )
 
   stack = regs->ebp;
 
-  while( is_readable((void *)stack, thread->addrSpace) && is_readable((void *)(stack+4), thread->addrSpace) )
+  while( is_readable((void *)stack, thread->addrSpace) && is_readable((void *)(stack+4), thread->addrSpace))
   {
+    if( *(dword *)stack < 0x100000 )
+      break;
+
     kprintf("<0x%x>: 0x%x", *(dword *)stack, *(dword *)(stack + 4));
 
-    for( int i=0; i < 4; i++ )
+    for( int i=0; i < 6; i++ )
     {
       if( is_readable( (void *)(stack + 4 * (i+2)), thread->addrSpace) )
         kprintf(" 0x%x", *(dword *)(stack + 4 * (i+2)));
+      else
+        break;
     }
 
     kprintf("\n");
@@ -272,31 +285,21 @@ void handleCPUException(volatile TCB *thread)
   if( regs->int_num == 13 ) // check for an io operation
   {
     struct TSS_Struct *tss = (struct TSS_Struct *)KERNEL_TSS;
+    pte_t pte;
 
     if( tss->ioMap == IOMAP_LAZY_OFFSET )
     {
-      pte_t pte;
-
-      if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, (void *)getCR3() ) < 0 ||
-          !pte.present ||
-          pokeMem((void *)KERNEL_IO_BITMAP, 2 * PAGE_SIZE, (void *)TSS_IO_PERM_BMP, (void *)getCR3()) < 0 )
+      if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, (void *)getCR3() ) == 0 &&
+          pte.present &&
+          pokeMem((void *)KERNEL_IO_BITMAP, 2 * PAGE_SIZE, (void *)TSS_IO_PERM_BMP, (void *)getCR3()) == 0 )
       {
-        mapTemp((void *)KERNEL_IO_BITMAP);
-        memset((void *)TEMP_PAGEADDR, 0xFF, PAGE_SIZE);
-        unmapTemp();
-
-        mapTemp((void *)(KERNEL_IO_BITMAP+PAGE_SIZE));
-        memset((void *)TEMP_PAGEADDR, 0xFF, PAGE_SIZE);
-        unmapTemp();
+        kprintf("Mapped IO Permission Bitmap\n");
+        tss->ioMap = 0x68;
+        return;
       }
-
-      tss->ioMap = 0x68;
-
-      kprintf("GPF due to IO bitmap\n");
-      return;
     }
-
-    kprintf("Unknown GPF caught.\n");
+    kprintf("Unknown GPF\n");
+    dump_regs( (TCB *)thread );
   }
 
   #if DEBUG

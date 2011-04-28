@@ -122,7 +122,7 @@ static int get_boot_info( int argc, char **argv )
   availBytes = PAGE_SIZE - ((unsigned)allocEnd & (PAGE_SIZE - 1));
 
   initsrv_pool.addrSpace.phys_addr = page_dir;
-  initsrv_pool.execInfo = NULL;
+//  initsrv_pool.execInfo = NULL;
   initsrv_pool.id = 1;
 
   initsrv_pool.ioBitmaps.phys1 = alloc_phys_page(NORMAL, page_dir);
@@ -247,7 +247,7 @@ int loadElfFile( char *filename, char *args )
           pokePage(phys, tempPage);
         }
 
-        _mapMem( phys, (void *)(pheader.vaddr + j * PAGE_SIZE), 1, pheader.flags & PF_W ? 0 : MEM_RO, &newPool->addrSpace );
+        _mapMem( phys, (void *)(pheader.vaddr + j * PAGE_SIZE), 1, /*pheader.flags & PF_W ? 0 : MEM_RO*/ 0, &newPool->addrSpace );
 
         if( memSize < PAGE_SIZE )
           memSize = 0;
@@ -407,7 +407,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
         else
           phys = (void *)(pheader->offset + (unsigned)module->mod_start + j * PAGE_SIZE);
 
-        _mapMem( phys, (void *)(pheader->vaddr + j * PAGE_SIZE), 1, pheader->flags & PF_W ? 0 : MEM_RO, &newPool->addrSpace );
+        _mapMem( phys, (void *)(pheader->vaddr + j * PAGE_SIZE), 1, /*pheader->flags & PF_W ? 0 : MEM_RO*/0, &newPool->addrSpace );
 
         if( memSize < PAGE_SIZE )
           memSize = 0;

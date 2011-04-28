@@ -81,7 +81,7 @@ int _shmem_attach( struct SharedMemory *shmem, struct AddrSpace \
 
   if( shmem == NULL || addr_space == NULL || region == NULL )
     return -1;
-  
+
   if( _region_overlaps( addr_space, region ) )
     return -1;
 
@@ -89,16 +89,16 @@ int _shmem_attach( struct SharedMemory *shmem, struct AddrSpace \
 
   if( shmem_region == NULL )
      return -1;
-  
+
   shmem_region->region = *region;
   shmem_region->addr_space = addr_space;
   shmem_region->rw = shmem->ro_perm;
-  
+
   for( addr = region->start, i=0; addr < region->start + region->length; \
        addr += PAGE_SIZE, i++ )
-  {    
-    _mapMem( (void *)shmem->phys_pages[i], (void *)addr, 1, 0, 
-             addr_space->phys_addr ); 
+  {
+    _mapMem( (void *)shmem->phys_pages[i], (void *)addr, 1, 0,
+             addr_space->phys_addr );
   }
   list_insert((int)shmem_region, shmem_region, &shmem->shmem_region_list);
   return 0;
@@ -108,7 +108,7 @@ int shmem_attach( shmid_t shmid, struct AddrSpace *addr_space, \
                  struct MemRegion *region )
 {
   struct SharedMemory *shmem;
-  
+
   list_get_element((int)shmid, (void **)&shmem, &shmem_list);
   return _shmem_attach( shmem, addr_space, region );
 }
