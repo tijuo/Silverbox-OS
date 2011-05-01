@@ -326,6 +326,13 @@ void handleCPUException(volatile TCB *thread)
     return;
   }
 
+  if( thread->exHandler == GET_TID(thread) )
+  {
+    kprintf("Oops! The thread is its own exception handler!\n");
+    dump_regs( (TCB *)thread );
+    return;
+  }
+
   if( sysRaise( &tcbTable[thread->exHandler], (GET_TID(thread) << 8) | SIGEXP, getCR2() ) < 0 )
   {
     kprintf("Exception handler not accepting exception\n");

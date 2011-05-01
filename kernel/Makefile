@@ -8,7 +8,7 @@ include ../vars.mk
 
 SRC     =init.c paging.c thread.c schedule.c exceptions.c \
         debug.c pic.c queue.c vmm.c message.c syscall.c \
-        signal.c memory.c
+        signal.c memory.c test.c
 
 OBJ     =$(SRC:.c=.o)
 LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL

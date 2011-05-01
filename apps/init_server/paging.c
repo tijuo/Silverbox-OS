@@ -67,7 +67,6 @@ int mapMemRange( void *virt, int pages )
   while( pages-- )
   {
     addr = alloc_phys_page(NORMAL, page_dir);
-    clearPage(addr);
 
     _mapMem( addr, (void *)((unsigned)virt + i++ * PAGE_SIZE), 1, 0,
       &initsrv_pool.addrSpace );

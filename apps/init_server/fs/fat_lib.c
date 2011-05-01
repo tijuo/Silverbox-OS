@@ -527,15 +527,9 @@ static int getDeviceData( unsigned short devNum, struct FAT_Dev *fatDev )
 {
   byte *buffer;
   struct Device *device;
-  int secsize;
 
   if( fatDev == NULL )
     return -1;
-
-  if(fatDev->cache.fatType == FAT12)
-    secsize = fatDev->bpb.fat12.bytes_per_sec;
-  else if(fatDev->cache.fatType == FAT16)
-    secsize = fatDev->bpb.fat16.bytes_per_sec;
 
   device = lookupDeviceMajor(MAJOR(devNum));
 
@@ -559,7 +553,7 @@ static int getDeviceData( unsigned short devNum, struct FAT_Dev *fatDev )
     return -1;
   }
 
-  memcpy( &fatDev->bpb, buffer, secsize );
+  memcpy( &fatDev->bpb, buffer, FAT_SECTOR_SIZE );
 
   // Using an unconventional sector size
 

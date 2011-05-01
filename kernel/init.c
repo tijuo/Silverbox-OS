@@ -31,7 +31,7 @@ static inline void contextSwitch( void *addrSpace, void *stack )
     "mov %0, %%ecx\n"
     "mov %%cr3, %%edx\n"
     "cmp %%edx, %%ecx\n"
-    "jz   __load_regs\n"
+    "je   __load_regs\n"
     "mov  %%ecx, %%cr3\n"
     "__load_regs: mov    %1, %%esp\n"
     "popa\n"
@@ -116,11 +116,7 @@ DISC_DATA(struct MemoryArea mem_area[20]);
 
 int clearPhysPage( void *phys )
 {
-//  pte_t *pte;
   assert( phys != (void *)NULL_PADDR );
-
-  if( phys == (void *)NULL_PADDR )
-    return -1;
 
   if( mapTemp( phys ) == -1 )
     return -1;
@@ -540,21 +536,17 @@ addr_t getModuleEndAddr( multiboot_info_t *info )
   if( info->mods_count == 0 )
     return (addr_t)( KERNEL_VSTART + calcKernelSize( info ) );
   else
-    return (addr_t)( PHYS_TO_VIRT(getModuleStart( info )) +
-  getTotalModuleSize( info ) );
+    return (addr_t)( PHYS_TO_VIRT(getModuleStart( info )) + getTotalModuleSize( info ) );
 }
 
 size_t getTotalModuleSize( multiboot_info_t *info )
 {
   module_t *kmod = (module_t *)info->mods_addr;
-  size_t size = 0;
 
   if( info->mods_count == 0 )
     return 0;
-
-  size = kmod[info->mods_count - 1].mod_end - kmod[0].mod_start;
-
-  return size;
+  else
+    return kmod[info->mods_count - 1].mod_end - kmod[0].mod_start;
 }
 
 addr_t getModuleStart( multiboot_info_t *info )
@@ -690,7 +682,7 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
     kprintf("load_elf_exec(): Couldn't create thread.\n");
     return -1;
   }
-       
+
   /* Program header information is loaded into memory */
 
   pheader = (elf_pheader_t *)(img + image->phoff);
@@ -772,7 +764,6 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
 
 void init2( void )
 {
-  kprintf("Init part 2\n");
   assert( tcbTable->state != DEAD );
   int i;
   char **argv;
@@ -785,15 +776,6 @@ void init2( void )
   struct MemoryArea *memory_area;
   struct BootModule *boot_mods;
   char *init_server_stack = (char *)(KERNEL_VSTART - PAGE_SIZE);
-
-  /* Each entry in a page directory and page table must be cleared
-     prior to using. */
-
-  clearPhysPage( (void *)INIT_SERVER_PDIR );
-  clearPhysPage( (void *)INIT_SERVER_PTAB );
-  clearPhysPage( (void *)INIT_FIRST_PAGE_TAB );
-  clearPhysPage( (void *)INIT_SERVER_USTACK_PTAB );
-//  clearPhysPage( (void *)INIT_SERVER_USTACK_PAGE ); This shouldn't need clearing
 
   ptr = (int *)(TEMP_PAGEADDR + PAGE_SIZE);
 
@@ -1104,11 +1086,11 @@ void init( multiboot_info_t *info )
     *tssEsp0 = (unsigned)(&currentThread->regs + 1);
   }
 
-  kprintf("Stack: 0x%x\n", stack);
-
   assert( tcbTable->state != DEAD );
 
   init_clock();
+
+  testMemset();
 
   contextSwitch( currentThread->addrSpace, (void *)stack );
   stopInit("Unable to start operating system");

@@ -24,7 +24,7 @@ static int get_boot_info( int argc, char **argv )
 {
   unsigned int bytes_to_allocate=0;
   unsigned int i, pages_needed=0, start_page_addr, max_mem_addr, max_mem_length;
-  unsigned temp;
+  unsigned temp, tables_needed, addr, vAddr;
   char *ptr;
 
   server_name = argv[0];
@@ -58,45 +58,37 @@ static int get_boot_info( int argc, char **argv )
      sizeof(struct MemoryArea) * boot_info->num_mem_areas +
      sizeof(struct BootModule) * boot_info->num_mods;
 
-  for(i=bytes_to_allocate; i > 0; )
-  {
-    pages_needed++;
+  pages_needed = bytes_to_allocate / PAGE_SIZE + bytes_to_allocate % PAGE_SIZE;
+  tables_needed = pages_needed / 1024;
 
-    if( i <= PAGE_SIZE )
-      break;
-
-    i -= PAGE_SIZE;
-  }
+  if( pages_needed % 1024 )
+    tables_needed++;
 
   for(i=0; i < boot_info->num_mem_areas; i++)
   {
-    if( memory_areas[i].base >= KPHYS_START && memory_areas[i].length >= pages_needed + 1 )
+    if( memory_areas[i].base >= KPHYS_START && memory_areas[i].length >= pages_needed + tables_needed )
     {
       start_page_addr = memory_areas[i].base;
       break;
     }
   }
 
-  unsigned tables_needed = pages_needed / 1024;
-  unsigned addr, vAddr;
-
-  if( pages_needed % 1024 )
-    tables_needed++;
-
-  for(i=0, addr=start_page_addr; i < tables_needed + pages_needed; i++,
+  for(i=0, addr=start_page_addr, vAddr=allocEnd; i < tables_needed; i++,
+      addr += PAGE_SIZE, vAddr += PTABLE_SIZE)
+  {
+    clearPage((void *)addr);
+    __map_page_table((void *)vAddr, (void *)addr, 0, NULL_PADDR);
+  }
+/*
+  for(i=0, addr=start_page_addr+tables_needed*PAGE_SIZE; i < pages_needed; i++,
       addr += PAGE_SIZE)
   {
     clearPage( (void *)addr );
   }
-
-  for(i=0, addr=start_page_addr, vAddr=allocEnd; i < tables_needed; i++, 
-      addr += PAGE_SIZE, vAddr +=  PTABLE_SIZE)
-  {
-    __map_page_table((void *)vAddr, (void *)addr, 0, NULL_PADDR);
-  }
-
+*/
   __map(allocEnd, (void *)(start_page_addr + tables_needed * PAGE_SIZE),
         pages_needed, 0, NULL_PADDR);
+
   pages_needed += tables_needed;
 
   /* Initialize the physical page lists. */
@@ -179,8 +171,6 @@ int loadElfFile( char *filename, char *args )
      be placed there. */
 
   phys = alloc_phys_page(NORMAL, addrSpace);
-
-  clearPage(phys);
 
   _mapMem( phys, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addrSpace );
   _mapMem( phys, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );
@@ -335,8 +325,6 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
      be placed there. */
 
   tempPage = alloc_phys_page(NORMAL, addrSpace);
-
-  clearPage(tempPage);
 
   _mapMem( tempPage, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addrSpace );
   _mapMem( tempPage, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );

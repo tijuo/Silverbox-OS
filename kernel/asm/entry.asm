@@ -203,16 +203,15 @@ wipePages:
   mov ebp, esp
 
   cld
-  cmp	eax, 0
-  je	.endWipe
 
   mov ecx, eax
 
   add	esp, 8
 
 .startWipe:
-  mov edi, [esp]
-  add esp, 4
+  pop edi
+;  mov edi, [esp]
+;  add esp, 4
 
   push ecx
 
@@ -223,8 +222,6 @@ wipePages:
 
   pop  ecx
   loop .startWipe
-
-  mov esp, ebp
 
 .endWipe:
   leave
@@ -238,7 +235,7 @@ printErrMsg:
 
 .cpyStr:
   cmp byte [esi], 0
-  jz stop
+  je stop
 
   movsb
   stosb

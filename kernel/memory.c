@@ -4,10 +4,10 @@ void *memcpy( void *dest, const void *src, size_t count );
 void *memset( void *buffer, int c, size_t num );
 
 /********************************************************************
- ** File:     memcpy.c
- **
  ** Copyright (C) 2005 Daniel Vik
  ** 
+ ** Apr. 2011 - Tiju Oliver: Simple memset() added
+ **
  ** This software is provided 'as-is', without any express or implied
  ** warranty. In no event will the authors be held liable for any
  ** damages arising from the use of this software.
@@ -417,7 +417,7 @@ void *memcpy(void *dest, const void *src, size_t count) {
     }
 }
 
-void *memset(void *buffer, int c, size_t num)
+void *_memset(void *buffer, int c, size_t num)
 {
   register size_t i = num;
   char *buff = (char *)buffer;
@@ -428,3 +428,12 @@ void *memset(void *buffer, int c, size_t num)
   return (void *)buffer;
 }
 
+void *memset(void *buffer, int c, size_t num)
+{
+  __asm__ (
+        "rep stosl\n" \
+	"movl %%edx, %%ecx\n" \
+	"rep stosb\n" :: "D"(buffer), "a"(c), "c"(num >> 2), "d"(num & 3));
+
+  return buffer;
+}

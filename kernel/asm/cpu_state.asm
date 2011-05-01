@@ -72,33 +72,18 @@ IMPORT tssEsp0
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 EXPORT setCR0
-    push    ebp
-    mov     ebp, esp
-
-    mov     eax, [esp + 8]
+    mov     eax, [esp+4]
     mov     cr0, eax
-
-    leave
     ret
 
 EXPORT setCR3
-    push    ebp
-    mov     ebp, esp
-
-    mov     eax, [esp + 8]
+    mov     eax, [esp+4]
     mov     cr3, eax
-
-    leave
     ret
 
 EXPORT setCR4
-    push    ebp
-    mov     ebp, esp
-
-    mov     eax, [esp + 8]
+    mov     eax, [esp+4]
     mov     cr4, eax
-
-    leave
     ret
 
 EXPORT getCR0
@@ -118,23 +103,13 @@ EXPORT getCR4
     ret
 
 EXPORT getEflags
-    push    ebp
-    mov     ebp, esp
-
     pushf
     pop     eax
-
-    leave
     ret
 
 EXPORT setEflags
-    push    ebp
-    mov     ebp, esp
-
-    push dword [ebp+8]
+    push dword [esp+4]
     popf
-
-    leave
     ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -142,15 +117,11 @@ EXPORT setEflags
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 EXPORT intIsEnabled
-    push    ebp
-    mov     ebp, esp
-
     call    getEflags
 
     shr     eax, 8
     and     eax, 1
 
-    leave
     ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -82,7 +82,7 @@ void handle_exception( tid_t tid, unsigned int cr2 )
          find_address(&pool->addrSpace, (void *)cr2))
     {
       addr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
-      clearPage(addr);
+
       _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
       __end_page_fault(thread_info.tid);
     }
@@ -91,7 +91,7 @@ void handle_exception( tid_t tid, unsigned int cr2 )
                                                                                        any pages in the stack page! */
     {
       addr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
-      clearPage(addr);
+
       _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
       __end_page_fault(thread_info.tid);
     }

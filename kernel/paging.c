@@ -64,13 +64,11 @@ bool is_writable( void *addr, void *addrSpace )
 
 static inline void reload_cr3(void)
 {
-  __asm__ volatile("push %eax\n"
-                   "movl %cr3, %eax\n"
-                   "movl %eax, %cr3\n"
-                   "pop %eax\n" );
+  __asm__("movl %cr3, %eax\n"
+          "movl %eax, %cr3\n" );
 }
 
-/** 
+/**
   Flushes a single page from the TLB.
 
   Instead of flushing the entire TLB, only a single page is flushed.
@@ -79,7 +77,7 @@ static inline void reload_cr3(void)
 
 static inline void invalidate_page( void *virt )
 {
-  __asm__ volatile( "invlpg %0\n" :: "m"( *(char *)virt ) );
+  __asm__( "invlpg %0\n" :: "m"( *(char *)virt ) );
 }
 
 /**
