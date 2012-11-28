@@ -70,7 +70,7 @@ void handle_exception( tid_t tid, unsigned int cr2 )
   struct ThreadInfo thread_info;
   void *addr;
 
-  __get_thread_info( tid, &thread_info );
+  sys_get_thread_info( tid, &thread_info );
   pool = lookup_tid(tid);
 
   if( thread_info.state.int_num == 14 )
@@ -84,7 +84,7 @@ void handle_exception( tid_t tid, unsigned int cr2 )
       addr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
 
       _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
-      __end_page_fault(thread_info.tid);
+      sys_end_page_fault(thread_info.tid);
     }
     else if( pool && (thread_info.state.error_code & 0x05) &&
              (cr2 & ~0x3FFFFF) == STACK_TABLE ) /* XXX: This can be done better. Will not work if there aren't
@@ -93,7 +93,7 @@ void handle_exception( tid_t tid, unsigned int cr2 )
       addr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
 
       _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
-      __end_page_fault(thread_info.tid);
+      sys_end_page_fault(thread_info.tid);
     }
     else
     {

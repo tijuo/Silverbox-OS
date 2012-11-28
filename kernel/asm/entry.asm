@@ -2,57 +2,32 @@
 %include "asm/grub.inc"
 %include "asm/kernel.inc"
 
-[section .header]
+%define PG_PRESENT	(1 << 0)
+%define PG_READ_WRITE	(1 << 1)
+%define PG_READ_ONLY	0
+%define PG_SUPERVISOR	0
+%define PG_USER		(1 << 2)
+%define PG_GLOBAL	(1 << 8)
+%define PG_CD 		(1 << 4)
+%define PG_PWT		(1 << 3)
+
+%define CR0_WP		(1 << 16)
+%define CR0_CD		(1 << 30)	; Global cache disable
+%define CR0_NW		(1 << 29)	; Disable write-back/write-through (depends on processor)
+%define CR0_PG		(1 << 31)
+
+%define CR4_PGE		(1 << 7)
+%define CR4_PSE		(1 << 4)
+
+[section .header progbits alloc noexec nowrite align=4]
 
 IMPORT init
 IMPORT commandLine
+IMPORT initKrnlPDir
+IMPORT kernelBootStack
+IMPORT lowMemPTab
+IMPORT kernelGDT
 
-; NOTE: Virtual addresses are used, but paging isn't enabled yet.
-; GRUB loads the kernel to it's physical address. Memory needs
-; to be accessed *extra* carefully here until paging is enabled.
-
-EXPORT start
-;  eax has the mulitboot magic value
-;  ebx has multiboot data address
-  lea   esp, [_kernelBootStack + 4096]
-  mov   ebp, esp
-
-  push  0
-  popf
-
-  lea ebx, [ebx+VPhysMemStart]
-
-  push ebx
-
-  cmp eax, mbootMagic
-  je  okMagic
-
-  mov eax, printErrMsg
-  add eax, kVirtToPhys
-  call eax
-
-okMagic:
-
-  mov   eax, initPaging
-  add   eax, kVirtToPhys
-  call  eax
-
-;  add	esp, VPhysMemStart
-
-;  mov eax, kPhysStart
-;  shr   eax, 22
-;  lea   ecx, [VPhysMemStart + _initKrnlPDIR + eax] ; Assumes that Kernel is at 0x1000000
-;  xor   edx, edx
-;  mov   dword [ecx], edx     ; Unmap the third page table
-
-  mov	eax, init
-  call   eax
-
-IMPORT kCode
-IMPORT kBss
-IMPORT kEnd
-
-ALIGN 4
 mboot:
         dd MULTIBOOT_HEADER_MAGIC
         dd MULTIBOOT_HEADER_FLAGS
@@ -64,172 +39,219 @@ mboot:
         dd kEnd
         dd start
 
-[section .dtext]
+; NOTE: Virtual addresses are used, but paging isn't enabled yet.
+; GRUB loads the kernel to it's physical address. Memory needs
+; to be accessed *extra* carefully here until paging is enabled.
 
-; Physical Memory Map
+[section .dtext progbits alloc exec nowrite align=16]
 
-; 0x0000  - 0x04FF : IVT
-; 0x88000 - 0x887FF : IDT
-; 0x88800 - 0x88F97 : GDT
-; 0x88F98 - 0x88FFF : TSS
-; 0x89000 - 0x8AFFF : TSS IO bitmap
-; 0x8B000 - 0x8BFFF : initial Page directory
-; 0x8C000 - 0x8CFFF : The kernel's page table
-; 0x8D000 - 0x8DFFF : Initial server page directory
-; 0x8E000 - 0x8EFFF : init server user stack's page table
-; 0x8F000 - 0x8FFFF : init server user stack's page
-; 0x90000 - 0x90FFF : init server user page table
-; 0x91000 - 0x91FFF : idle kernel stack
-; 0x92000 - 0x92FFF : kernel stack
-; 0x93000 - 0x93FFF : kernel variables
-; 0x94000 - 0x94FFF : the idle thread's first page table
-; 0x95000 - 0x95FFF : The second kernel page table
-; 0x96000 - 0x96FFF : The initial server's first page table
-; 0x97000 - 0x97FFF : Bootstrap stack
+IMPORT free_page_ptr
+
+EXPORT start
+;  eax has the mulitboot magic value
+;  ebx has multiboot data address
+  lea   esp, [kernelBootStack + KERNEL_BOOT_STACK_LEN]
+  add   esp, kVirtToPhys
+
+  cld
+
+  push ebx
+
+  lea ecx, [kernelGDT]
+  add ecx, kVirtToPhys
+
+  push ecx
+  push KERNEL_GDT_LEN << 16
+  lgdt [esp+2]
+  add  esp, 8
+
+  mov  cx, BOOT_DATA_SEL
+  mov  ds, cx
+  mov  es, cx
+  mov  ss, cx
+  mov  cx, KERNEL_DATA_SEL
+  mov  fs, cx
+  xor  cx, cx
+  mov  gs, cx
+
+  sub esp, kVirtToPhys
+  jmp BOOT_CODE_SEL:.reloadSel
+
+.reloadSel:
+  push kernelGDT
+  push KERNEL_GDT_LEN << 16
+  lgdt [esp+2]
+  add  esp, 8
+
+  cmp eax, mbootMagic
+  jne  .badMboot
+  jmp .okMboot
+
+.badMboot:
+  jmp printMultibootErrMsg
+
+.okMboot:
+  call initPaging
+
+  xor ebp, ebp
+  call   init
 
 initPaging:
-;  push  ebp
-;  mov   ebp, esp
-                        ; Set the initial page directory at 0x1000
-                        ; and clear any data left there
-
-  push _kernelIDT
-  push _initKrnlPDIR
-  push _firstKrnlPTAB
-  push _initServStackPTAB
-  push _initServPTAB
-  push _kernelVars
-  push _firstPTAB
-  push _secondKrnlPTAB
-  push _initFirstPTAB
-
-  mov eax, 9
-
-  mov ebx, wipePages
-  add ebx, kVirtToPhys
-  call ebx
-
-  add esp, 36
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-  lea	eax, [_initKrnlPDIR + 0xFF8]
-  mov	edx, _secondKrnlPTAB
-  or	edx, 3
-  mov	dword [eax], edx
+; Map the first page table
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  mov	ebp, [initKrnlPDir]
+  mov   edi, lowMemPTab
+  lea	edx, [edi+kVirtToPhys]
 
-  mov	ecx, _initKrnlPDIR
-  mov   edx, _firstPTAB
-  or	edx, 7
-  mov   dword [ecx], edx     ; 1:1 map the physical memory range (0x00-0xBFFFF)
+  or	edx, PG_USER | PG_READ_WRITE | PG_PRESENT
+  mov   dword [fs:ebp], edx
 
-  mov   edi, _firstPTAB
-  mov	eax, 0x03
-  mov	ecx, 160
+; 1:1 map the physical memory range (0x00-0xA00000)
 
-; Map conventional memory
+  mov	eax, 0x00 | PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov	ecx, 0xA0000 / 4096
 
 .mapFirstTable1:
   stosd
   add  eax, 0x1000
   loop .mapFirstTable1
 
-; Map video memory (no-cache, write-through, user)
+; Map video memory (no-cache, write-through, user, r/w)
 
-  mov	eax, 0xA001F
-  mov	ecx, 32
-  lea	edi, [_firstPTAB+160*4]
+  mov	eax, 0xA0000 | PG_CD | PG_PWT | PG_USER | PG_READ_WRITE | PG_PRESENT
+  mov	ecx, (128*1024) / 4096
+  lea	edi, [lowMemPTab+(0xA0000/4096)*4]
 
 .mapFirstTable2:
   stosd
   add	eax, 0x1000
   loop	.mapFirstTable2
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ; Set the unused entries as not-present
 
-  mov	eax, kPhysStart
-  shr	eax, 20		; page directory offset
-  lea   ecx, [_initKrnlPDIR + eax] ; Assumes that Kernel is at 0x1000000
-  mov   edx, _firstKrnlPTAB	; base address
-  or    edx, 3			; supervisor, rw, present
-  mov   dword [ecx], edx
+  lea  edi, [lowMemPTab+(0xC0000/4096)*4]
+  mov  ecx, (0x100000-0xC0000) / 4096
+  xor  eax, eax
 
-  mov   ecx, 1024
-  mov   eax, kPhysStart
-  or    eax, 0x03
-  mov   edi, _firstKrnlPTAB
-
-.mapPhysKernel:
-  stosd                    ; 1:1 map kernel memory
-  add  eax, 0x1000
-  loop .mapPhysKernel
+  rep stosd
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  mov   esi, kSize
+  cmp   esi, 256*1048576-KERNEL_RESD_TABLES*4096*1024
+  jg	printSizeErrMsg
 
-  mov	eax, kVirtStart
-  shr	eax, 20
-  lea   ecx, [_initKrnlPDIR + eax]
-  mov   edx, _firstKrnlPTAB
-  or    edx, 3
-  mov   dword [ecx], edx        ; Map the Kernel table
+  shr   esi, 12
+  xor	ebx, ebx
+  lea   edx, [free_page_ptr]
+  mov   edx, [edx]
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+.mapKernel:
+  lea	edi, [edx+kPhysToVirt]
 
-  lea   ecx, [_initKrnlPDIR + 4 * 1023]
-  mov   edx, _initKrnlPDIR
-  or    edx, 0x03
-  mov   dword [ecx], edx        ; Map the page directory into itself
+  cmp   esi, 1024
+  jge   .continueMapping
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-  mov   eax, _initKrnlPDIR   ; Load the page directory into the PDBR
-  mov   cr3, eax
-
-  mov   eax, cr0
-  or    eax, 0x80000000    ; Enable paging
-  mov   cr0, eax
-
-  add	esp, VPhysMemStart
-
-;  leave
-  ret
-
-; eax - the number of page directories to wipe (pages are on the stack)
-
-wipePages:
-  push ebp
-  mov ebp, esp
-
-  cld
-
-  mov ecx, eax
-
-  add	esp, 8
-
-.startWipe:
-  pop edi
-;  mov edi, [esp]
-;  add esp, 4
-
-  push ecx
-
+  lea   edi, [edi+4*esi]	; Clear unused PTEs
+  mov	ecx, 1024
+  sub	ecx, esi
   xor   eax, eax
-  mov   ecx, 1024
 
   rep   stosd
+  lea   edi, [edx+kPhysToVirt]
 
-  pop  ecx
-  loop .startWipe
+.continueMapping:
+  mov   eax, kPhysStart
+  or    eax, PG_SUPERVISOR | PG_GLOBAL | PG_READ_WRITE | PG_PRESENT
 
-.endWipe:
-  leave
+  cmp   esi, 1024
+  jge    .setCounters
+  mov	ecx, esi
+  xor	esi, esi
+  jmp   .mapKernelTable
+
+.setCounters:
+  mov   ecx, 1024
+  sub	esi, ecx
+
+.mapKernelTable:
+  stosd
+  add  eax, 0x1000
+  loop .mapKernelTable
+
+  ; Set the PDEs
+
+  lea	eax, [kVirtStart+ebx]
+  lea   ecx, [kPhysStart+ebx]
+  shr	eax, 20		; page directory offset
+  shr   ecx, 20
+
+  lea   eax, [ebp + eax]
+  lea   ecx, [ebp + ecx]
+  mov   edi, edx
+  or    edi, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov   [fs:eax], edi
+  mov   [fs:ecx], edi
+
+  add  ebx, 4096*1024
+  add  edx, 4096
+  test esi, esi
+  jnz .mapKernel
+
+  lea edi, [free_page_ptr]
+  mov [edi], edx
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  lea   ecx, [ebp + 4 * 1023]
+  mov   edx, ebp
+;  add	edx, kVirtToPhys
+  or    edx, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov   dword [fs:ecx], edx        ; Map the page directory into itself
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;  mov   eax, initKrnlPDir   ; Load the page directory into the PDBR
+;  add   eax, kVirtToPhys
+;  mov   cr3, eax
+  mov	cr3, ebp
+
+  mov	eax, cr4
+  or	eax, CR4_PGE
+  mov	cr4, eax
+
+  mov   eax, cr0
+  and	eax, ~(CR0_CD | CR0_NW)	; Enable normal caching
+  or    eax, CR0_PG | CR0_WP    ; Enable paging, write-protection
+  mov   cr0, eax
+
+  mov	ax, KERNEL_DATA_SEL
+  mov	ds, ax
+  mov	es, ax
+  mov	ss, ax
+
+  jmp   KERNEL_CODE_SEL:.reloadCS
+;  push kCodeSel
+;  push .reloadCS
+;  retf
+
+.reloadCS:
   ret
 
-printErrMsg:
-  mov esi, bstrapErrMsg
-  add esi, kVirtToPhys
+printMultibootErrMsg:
+  lea  eax, [bstrapErrMsg]
+  push eax
+  jmp  printBootMsg
+
+printSizeErrMsg:
+  lea  eax, [sizeErrMsg]
+  push eax
+  jmp printBootMsg
+
+printBootMsg:
+  pop esi
   mov edi, 0xB8000
   mov al, 0x07
 
@@ -245,9 +267,45 @@ stop:
   hlt
   jmp stop
 
-
-[section .ddata]
+[section .ddata progbits alloc noexec nowrite align=4]
 
 ;GRUBBootInfo: dd 0
 mbootMagic equ 0x2BADB002
+mbootMagic2 equ 0x1BADB002
 bstrapErrMsg: db 'Error: Only Multiboot-compliant loaders are supported.',0
+sizeErrMsg: db 'Error: Kernel size is too long!',0
+
+[section .data]
+
+EXPORT kCodeSel
+  dd KERNEL_CODE_SEL
+
+EXPORT kDataSel
+  dd KERNEL_DATA_SEL
+
+EXPORT uCodeSel
+  dd USER_CODE_SEL
+
+EXPORT uDataSel
+  dd USER_DATA_SEL
+
+EXPORT kTssSel
+  dd KERNEL_TSS_SEL
+
+EXPORT kResdTables
+  dd KERNEL_RESD_TABLES
+
+EXPORT idtLen
+  dd KERNEL_IDT_LEN
+
+EXPORT gdtLen
+  dd KERNEL_GDT_LEN
+
+EXPORT tssLen
+  dd KERNEL_TSS_LEN
+
+EXPORT kernelStackLen
+  dd KERNEL_STACK_LEN
+
+EXPORT idleStackLen
+  dd IDLE_STACK_LEN

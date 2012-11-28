@@ -1,4 +1,5 @@
 EXE     =$(SRC:.c=.exe)
+INSTALL_DIR=servers/
 
 all:    $(EXE)
 
@@ -9,7 +10,7 @@ all:    $(EXE)
 	$(PREFIX)/tools/makec.sh $< $@
 
 install:$(EXE)
-	$(PREFIX)/tools/copy_files.sh $(EXE)
+	$(PREFIX)/tools/copy_files.sh $(EXE) -d $(INSTALL_DIR)
 
 clean:
 	rm -f *.o

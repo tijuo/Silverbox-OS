@@ -2,59 +2,58 @@
 #define LOWLEVEL_H
 
 #include <types.h>
-#include <kernel/pit.h>
 #include <kernel/multiboot.h>
 
-#define KCODE           0x08
-#define KDATA           0x10
-#define UCODE           (0x18 | 0x03)
-#define UDATA           (0x20 | 0x03)
-#define TSS             0x28
-#define BKCODE		    0x30
-#define BKDATA		    0x38
+#define KCODE           0x08u
+#define KDATA           0x10u
+#define UCODE           (0x18u | 0x03u)
+#define UDATA           (0x20u | 0x03u)
+#define TSS             0x28u
+#define BKCODE		0x30u
+#define BKDATA		0x38u
 
 #define TRAP_GATE       (I_TRAP << 16)
 #define INT_GATE        (I_INT  << 16)
 #define TASK_GATE       (I_TASK << 16)
 
-#define I_TRAP          0x0F
-#define I_INT           0x0E
-#define I_TASK          0x05
+#define I_TRAP          0x0Fu
+#define I_INT           0x0Eu
+#define I_TASK          0x05u
 
-#define I_DPL0           0x00
-#define I_DPL1           ( 0x01 << 21 )
-#define I_DPL2           ( 0x02 << 21 )
-#define I_DPL3           ( 0x03 << 21 )
+#define I_DPL0           0x00u
+#define I_DPL1           ( 0x01u << 21 )
+#define I_DPL2           ( 0x02u << 21 )
+#define I_DPL3           ( 0x03u << 21 )
 
-#define G_DPL0          0x00
-#define G_DPL1          0x20
-#define G_DPL2          0x40
-#define G_DPL3          0x60
+#define G_DPL0          0x00u
+#define G_DPL1          0x20u
+#define G_DPL2          0x40u
+#define G_DPL3          0x60u
 
-#define G_GRANULARITY   0x800
-#define G_BIG           0x400
+#define G_GRANULARITY   0x800u
+#define G_BIG           0x400u
 
-#define G_CONFORMING    0x04
-#define G_EXPUP         0x00
-#define G_EXPDOWN       0x04
+#define G_CONFORMING    0x04u
+#define G_EXPUP         0x00u
+#define G_EXPDOWN       0x04u
 
-#define G_EXREAD        0x02
-#define G_EXONLY        0x00
+#define G_EXREAD        0x02u
+#define G_EXONLY        0x00u
 
-#define G_RDWR          0x02
-#define G_RDONLY        0x00
+#define G_RDWR          0x02u
+#define G_RDONLY        0x00u
 
-#define G_ACCESSED      0x01
+#define G_ACCESSED      0x01u
 
-#define G_CODESEG       0x18
-#define G_DATASEG       0x10
+#define G_CODESEG       0x18u
+#define G_DATASEG       0x10u
 
-#define G_PRESENT       0x80
+#define G_PRESENT       0x80u
 
-#define FP_SEG(addr)    (((addr_t)addr & 0xF0000) >> 4)
-#define FP_OFF(addr)    ((addr_t)addr & 0xFFFF)
+#define FP_SEG(addr)    (((addr_t)addr & 0xF0000u) >> 4)
+#define FP_OFF(addr)    ((addr_t)addr & 0xFFFFu)
 
-#define IRQ0            0x20
+#define IRQ0            0x20u
 #define IRQ1            (IRQ0 + 1)
 #define IRQ2            (IRQ0 + 2)
 #define IRQ3            (IRQ0 + 3)
@@ -62,7 +61,7 @@
 #define IRQ5            (IRQ0 + 5)
 #define IRQ6            (IRQ0 + 6)
 #define IRQ7            (IRQ0 + 7)
-#define IRQ8            0x28
+#define IRQ8            0x28u
 #define IRQ9            (IRQ8 + 1)
 #define IRQ10           (IRQ8 + 2)
 #define IRQ11           (IRQ8 + 3)
@@ -71,10 +70,10 @@
 #define IRQ14           (IRQ8 + 6)
 #define IRQ15           (IRQ8 + 7)
 
-#define enableInt()     asm __volatile__("sti\n")
-#define disableInt()    asm __volatile__("cli\n")
+#define enableInt()     __asm__ __volatile__("sti\n")
+#define disableInt()    __asm__ __volatile__("cli\n")
 
-#define IOMAP_LAZY_OFFSET	0xFFFF
+//#define IOMAP_LAZY_OFFSET	0xFFFF
 
 /** Represents an entire TSS */
 
@@ -121,6 +120,20 @@ struct TSS_Struct
 	word	ioMap;
 } __PACKED__;
 
+typedef union
+{
+  struct
+  {
+    dword edi, esi, ebp, esp, ebx, edx, ecx, eax;
+    dword es, ds;
+    dword intNum, errorCode, eip, cs, eflags, userEsp, userSS;
+  } user;
+  struct
+  {
+    dword stackTop; // points to saved edi and saved execution state
+  } kernel;
+} ExecutionState;
+
 /*
 // This is eight bytes long
 
@@ -132,12 +145,12 @@ struct IDT_Entry
 
 extern void atomicInc( volatile void * );
 extern void atomicDec( volatile void *);
-extern volatile int testAndSet( volatile void *, volatile int );
+extern int testAndSet( volatile void *, volatile int );
 
-extern void setCR0( volatile dword );
-extern void setCR3( volatile dword );
-extern void setCR4( volatile dword );
-extern void setEflags( volatile dword );
+extern void setCR0( dword );
+extern void setCR3( dword );
+extern void setCR4( dword );
+extern void setEflags( dword );
 extern dword getCR0( void );
 extern dword getCR2( void );
 extern dword getCR3( void ) __attribute__((fastcall));
@@ -145,11 +158,6 @@ extern dword getCR4( void ) ;
 extern dword getEflags( void );
 extern bool intIsEnabled( void );
 
-extern void enableIRQ( int irq );
-extern void disableIRQ( int irq );
-extern void enableAllIRQ( void );
-extern void disableAllIRQ( void );
-extern void sendEOI( void );
 extern void loadGDT( void );
 
 extern void intHandler0( void );
@@ -195,20 +203,45 @@ extern void timerHandler( void );
 
 extern void addIDTEntry( void *addr, uint32 num, uint32 flags);
 
-extern multiboot_info_t *getMultibootInfo( void );
+//extern multiboot_info_t *getMultibootInfo( void );
 
 #define EXT_PTR(var)    (void *)( &var )
 
-volatile addr_t tssIOBitmap;
-volatile unsigned *tssEsp0;
+extern const void * const kCode;
+extern const void * const kData;
+extern const void * const kBss;
+extern const void * const kEnd;
+extern const void * const kPhysStart;
+extern const void * const kVirtStart;
+extern const void * const kdCode;
+extern const void * const kdData;
+extern const void * const kPhysData;
+extern const void * const kVirtData;
+extern const void * const kPhysBss;
+extern const void * const kVirtBss;
+extern const void * const kSize;
 
-extern char *kCode, *kData, *kBss, *kEnd, *kPhysStart, *kVirtStart;
-extern char *kdCode, *kdData;
-extern char *kPhysData, *kVirtData, *kPhysBss, *kVirtBss, *kSize;
-extern char *_kernelGDT, *_kernelIDT, *_kernelTSS, *_initKrnlPDIR;
-extern char *_firstKrnlPTAB, *_initServPDIR, *_initServStackPTAB;
-extern char *_initServStack, *_initServPTAB, *_idleStack, *_kernelStack;
-extern char *_kernelVars, *_firstPTAB, *_secondKrnlPTAB, *_kernelBootStack;
-extern char *_kernelIOBitmap, *kVirtToPhys, *kPhysToVirt, *VPhysMemStart;
-extern char *_initFirstPTAB;
+extern const unsigned int kernelGDT;
+extern const unsigned int kernelIDT;
+extern const unsigned int kernelTSS;
+
+extern const unsigned int kCodeSel;
+extern const unsigned int kDataSel;
+extern const unsigned int uCodeSel;
+extern const unsigned int uDataSel;
+extern const unsigned int kTssSel;
+
+extern const unsigned int initKrnlPDir;
+extern const unsigned int initServStack;
+extern const unsigned int idleStack;
+extern const unsigned int kernelStack;
+extern const unsigned int kernelVars;
+extern const unsigned int tssEsp0;
+extern const unsigned int kVirtToPhys;
+extern const unsigned int kPhysToVirt;
+extern const unsigned int VPhysMemStart;
+extern const unsigned int ioPermBitmap;
+
+extern const size_t idleStackLen;
+extern const size_t kernelStackLen;
 #endif

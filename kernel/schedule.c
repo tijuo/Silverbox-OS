@@ -1,9 +1,10 @@
 #include <kernel/thread.h>
-#include <oslib.h>
 #include <kernel/debug.h>
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
 #include <kernel/signal.h>
+#include <kernel/pic.h>
+#include <kernel/paging.h>
 
 extern void init2( void );
 extern int numBootMods;
@@ -11,43 +12,36 @@ void systemThread( void );
 TCB *idleThread;
 
 int sysYield( TCB *thread );
-int setPriority( TCB *thread, int level );
-int attachRunQueue( TCB *thread );
-int detachRunQueue( TCB *thread );
-/*
-int attachPausedQueue( TCB *thread );
-int detachPausedQueue( TCB *thread );
-*/
+int setPriority( TCB *thread, unsigned int level );
+TCB *attachRunQueue( TCB *thread );
+TCB *detachRunQueue( TCB *thread );
 
-/** There is a specific reason why this isn't a regular C function. It has to do
-    with the way the compiler compiles C functions and stack memory. The idle thread
-    code has to be specifically like this. */
-
-__asm__(".globl idle\n" \
-        "idle: \n" \
-        "cli\n" \
-        "call init2\n" \
-        "sti\n" \
-        ".halt: hlt\n" \
-        "jmp .halt\n");
-/*
-void idle( void )
+void idle(void)
 {
+  addr_t addr;
+
   disableInt();
+  kprintf("\n0x%x bytes of discardable code.", (addr_t)EXT_PTR(kdData) - (addr_t)EXT_PTR(kdCode));
+  kprintf(" 0x%x bytes of discardable data.\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdData));
+  kprintf("Discarding %d bytes in total\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdCode));
 
-  / * Do the second part of initialization here * /
+  /* Get rid of the code and data that will never be used again. */
 
-  init2();
+  for( addr=(addr_t)EXT_PTR(kdCode); addr < (addr_t)EXT_PTR(kBss); addr += PAGE_SIZE )
+    kUnmapPage( (addr_t)addr );
+
+  kUnmapPage( (addr_t)EXT_PTR(ioPermBitmap) );
+  kUnmapPage( (addr_t)EXT_PTR(ioPermBitmap) + PAGE_SIZE );
 
   enableInt();
-  while ( true )
-    asm("hlt\n");
+
+  while(1)
+    __asm__("hlt\n");
 }
-*/
 
 /* TODO: There's probably a more efficient way of scheduling threads */
 
-/** 
+/**
   Picks the best thread to run next. Picks the idle thread, if none are available.
 
   This scheduler picks a thread according to priority. Higher priority threads
@@ -65,14 +59,13 @@ void idle( void )
   @return A pointer to the TCB of the newly scheduled thread on success. NULL on failure.
 */
 
-TCB *schedule( volatile TCB *thread )
+TCB *schedule( TCB *thread )
 {
-  int level;
-  tid_t newTID;
-  TCB *newThread;
-  dword oldCR3;
+  unsigned int priority, priorityLimit=LOWEST_PRIORITY;
+  TCB *newThread = NULL;
 
   assert( thread != NULL );
+  assert( GET_TID(thread) != NULL_TID );
 
   if( thread == NULL )
     return NULL;
@@ -83,89 +76,53 @@ TCB *schedule( volatile TCB *thread )
 
   assert( thread == currentThread );
 
-  oldCR3 = (dword)thread->addrSpace;
+  thread->reschedule = 0;
 
-  if( thread->state == RUNNING /*|| thread->state == READY*/ )
+  if( thread->threadState == RUNNING )
+    thread->threadState = READY;
+
+  if( thread->threadState == READY )
+    priorityLimit = thread->priority;
+
+  for( priority=HIGHEST_PRIORITY; priority <= priorityLimit; priority++ )
   {
-     if( thread != idleThread )
-     {
-        // Increase the priority number
-       if( thread->quantaLeft == 0 && thread->priority < NUM_PRIORITIES - 1 )
-         thread->priority++;
-     }
-
-    thread->state = READY;
-
-    if( thread == idleThread )
-      thread->quantaLeft = 1;
-    else
-    {
-      thread->quantaLeft = thread->priority + 1;
-    }
-  }
-
-//  if( thread != idleThread && thread->state != READY ) /* Why ? */
-//    assert(false);
-
-  for( level=HIGHEST_PRIORITY; level < NUM_PRIORITIES; level++ ) // Cycle through the queues to find a queue with ready threads
-  {
-    assert( (runQueues[level].head == NULL_TID && runQueues[level].tail == NULL_TID)
-          || (runQueues[level].head != NULL_TID && runQueues[level].tail != NULL_TID) );
-
-    if( runQueues[ level ].tail != NULL_TID || runQueues[ level ].head != NULL_TID ) // The || is used instead of && to do the assert checking
-    {
-      assert( !isInQueue( &runQueues[level], GET_TID(thread) ) ); /* The previously running thread should NOT be in the run(ready-to-run) queue */
+    if( (newThread=popQueue(&runQueues[priority])) != NULL )
       break;
-    }
   }
 
-  if( level >= NUM_PRIORITIES ) // If no other threads are found(the previously running thread is the only one that is ready)
+  if( !newThread ) // If no other threads are found (the previously running thread is the only one in its queue that's ready)
   {
-    if( thread->state == READY && thread != idleThread ) // and the current thread is ready to run, then run it
+    if( thread->threadState == READY ) // and the current thread is ready to run, then run it
     {
-      currentThread = thread;
-      newThread = (TCB *)currentThread;
-      assert( thread != idleThread );
+      currentThread = newThread = thread;
     }
     else
     {
-      currentThread = idleThread;
-      newThread = (TCB *)currentThread;        // otherwise run the idle thread
+      kprintf("Unable to schedule any threads! (including the idle thread)\n");
+      assert(false);
     }
   }
   else                      // If a thread was found, then run it(assumes that the thread is ready since it's in the ready queue)
   {
-    newTID = popQueue( &runQueues[ level ] );
+    assert( newThread->threadState == READY );
 
-    assert( newTID != NULL_TID );
+    currentThread = newThread;
 
-    currentThread = &tcbTable[newTID];
-    newThread = (TCB *)currentThread;
-
-    assert( newThread->state == READY );
-
-    if( thread->state == READY && thread != idleThread )
+    if( thread->threadState == READY )
     {
       #ifdef DEBUG
-        assert( attachRunQueue( (TCB *)thread ) == 0 );
+        assert( attachRunQueue( thread ) == thread );
       #else
-        attachRunQueue( (TCB *)thread );
+        attachRunQueue( thread );
       #endif
-      thread->quantaLeft = thread->priority + 1;
     }
   }
 
-  assert( newThread != NULL );
-
-  currentThread->state = newThread->state = RUNNING;
-
-  if( oldCR3 != (dword)thread->addrSpace )
-  {
-    struct TSS_Struct *tss = (struct TSS_Struct *)KERNEL_TSS;
-    tss->ioMap = IOMAP_LAZY_OFFSET;
-  }
-
   incSchedCount();
+
+  newThread->threadState = RUNNING;
+  newThread->quantaLeft = newThread->priority + 1;
+
   return newThread;
 }
 
@@ -174,20 +131,19 @@ TCB *schedule( volatile TCB *thread )
 int sysYield( TCB *thread )
 {
   assert( thread != NULL );
+  assert( GET_TID(thread) != NULL_TID );
 
   if( thread == NULL )
     return -1;
 
   assert(thread == currentThread);
 
-/* XXX: This wouldn't work, because it may lower
-   the priority level of the thread */
-
-  thread->state = READY; // Not sure if this actually works
+  thread->reschedule = 1;
+//  thread->threadState = READY; // Not sure if this actually works
   return 0;
 }
 
-/** 
+/**
     Adjusts the priority level of a thread.
 
     If the thread is already on a run queue, then it will
@@ -198,28 +154,33 @@ int sysYield( TCB *thread )
     @param level The new priority level.
     @return 0 on success. -1 on failure.
 */
-int setPriority( TCB *thread, int level )
+
+int setPriority( TCB *thread, unsigned int level )
 {
-  int oldLevel = currentThread->priority;
+  assert( thread != NULL );
+  assert( GET_TID(thread) != NULL_TID );
+  assert( level < NUM_PRIORITIES );
+  assert( thread != idleThread || level == LOWEST_PRIORITY );
 
-  if( thread == NULL || thread == idleThread )
+  if( thread == NULL )
     return -1;
 
-  if( level < 0 || level >= NUM_PRIORITIES )
+  if( level >= NUM_PRIORITIES )
     return -1;
 
-  assert(GET_TID(thread) != NULL_TID );
+  if( thread == idleThread && level != LOWEST_PRIORITY )
+    return -1;
 
-  if( thread->state == READY )
+  if( thread->threadState == READY )
     detachRunQueue( thread );
 
   thread->priority = level;
 
-  if( thread->state == READY )
+  if( thread->threadState == READY )
     attachRunQueue( thread );
 
-  if( level < currentThread->priority && currentThread->state == RUNNING )
-    currentThread->state = READY;
+  if( level < currentThread->priority && currentThread->threadState == RUNNING )
+    currentThread->threadState = READY;
 
   return 0;
 }
@@ -228,47 +189,56 @@ int setPriority( TCB *thread, int level )
     Adds a thread to the run queue.
 
     @param thread The TCB of the thread to attach.
-    @return 0 on success. -1 on failure.
+    @return The TCB of the attached thread. NULL on failure.
 */
 
 
-int attachRunQueue( TCB *thread )
+TCB *attachRunQueue( TCB *thread )
 {
   assert( thread != NULL );
+  assert( GET_TID(thread) != NULL_TID );
   assert( thread->priority < NUM_PRIORITIES && thread->priority >= 0 );
-  assert( thread->state == READY );
+  assert( thread->threadState == READY );
 
-  assert( thread != currentThread ); /* If the current thread is attached to its run queue, the scheduler will break! */
+  assert( thread != currentThread );
 
-  if( thread->state != READY )
-    return -1;
+  if( thread->threadState != READY )
+    return NULL;
 
-  return enqueue( &runQueues[thread->priority], GET_TID(thread) );
+  // If a higher priority thread than the currently running thread is added to the run queue,
+  // then indicate this to the scheduler
+
+  if( thread->priority < currentThread->priority )
+  {
+    kprintf("Preempting thread: %d with thread: %d\n", GET_TID(currentThread), GET_TID(thread));
+    currentThread->reschedule = 1;
+  }
+
+  return enqueue( &runQueues[thread->priority], thread );
 }
 
 /**
     Removes a thread from the run queue.
 
     @param thread The TCB of the thread to detach.
-    @return 0 on success. -1 on failure. 1 if the thread is running (and shouldn't be on a run queue).
+    @return The TCB of the detached thread. NULL on failure or if the thread isn't on a run queue
 */
 
-int detachRunQueue( TCB *thread )
+TCB *detachRunQueue( TCB *thread )
 {
   assert( thread != NULL );
   assert( thread->priority < NUM_PRIORITIES );
 
   if( thread == NULL )
-    return -1;
+    return NULL;
 
-  if( thread->state == RUNNING )
-    return 1;
+  if( thread->threadState == RUNNING )
+    return NULL;
 
+  assert( thread != NULL );
   assert( GET_TID(thread) != NULL_TID );
 
-  detachQueue( &runQueues[ thread->priority ], GET_TID(thread) );
-
-  return 0;
+  return detachQueue( &runQueues[ thread->priority ], thread );
 }
 
 /**
@@ -285,45 +255,52 @@ int detachRunQueue( TCB *thread )
   @param thread The TCB of the current thread.
 */
 
-void timerInt( volatile TCB *thread )
+void timerInt( TCB *thread )
 {
-    TCB *wokenThread;/*, *thread = (TCB *)(*tssEsp0 - sizeof(Registers) - sizeof(dword));*/
-    tid_t tid;
+    TCB *wokenThread;
 
     incTimerCount();
 
     assert( thread != NULL );
+    assert( GET_TID(thread) != NULL_TID );
+    assert( thread->threadState == RUNNING );
+    assert( thread->quantaLeft );
 
     thread->quantaLeft--;
 
-    if( timerQueue.head != NULL_TID )
-      timerNodes[timerQueue.head].delta--;
-
-    while( timerQueue.head != NULL_TID && timerNodes[timerQueue.head].delta == 0 )
+    if( thread->quantaLeft )
     {
-      tid = timerPop();
+      thread->quantaLeft--;
+    }
 
-      assert( tid != NULL_TID );
-      wokenThread = &tcbTable[tid];
-      assert( wokenThread->state != READY && wokenThread->state != RUNNING );
+    assert( timerQueue.head == NULL || timerQueue.head->timerDelta );
 
-      assert( !isInTimerQueue( tid ) );
+    if( timerQueue.head && timerQueue.head->timerDelta )
+      timerQueue.head->timerDelta--;
 
-      if( wokenThread->state == WAIT_FOR_SEND || wokenThread->state == WAIT_FOR_RECV )
+    while( timerQueue.head && timerQueue.head->timerDelta == 0 )
+    {
+      wokenThread = timerPop();
+
+      assert( wokenThread != NULL );
+      assert( wokenThread->threadState != READY && wokenThread->threadState != RUNNING );
+
+      assert( !isInTimerQueue( wokenThread ) );
+
+      if( wokenThread->threadState == WAIT_FOR_SEND || wokenThread->threadState == WAIT_FOR_RECV )
       {
         kprintf("SIGTMOUT to %d\n", GET_TID(wokenThread));
         sysRaise(wokenThread, SIGTMOUT, 0);
       }
       else
       {
-        wokenThread->state = READY;
+        wokenThread->threadState = READY;
 
         #ifndef DEBUG
           attachRunQueue( wokenThread );
         #else
-          assert( attachRunQueue( wokenThread ) == 0 );
+          assert( attachRunQueue( wokenThread ) != NULL );
         #endif
-        wokenThread->quantaLeft = wokenThread->priority + 1;
       }
 
       assert( wokenThread != currentThread );

@@ -23,55 +23,53 @@ int sysSetSigHandler( TCB *tcb, void *handler )
 int sysRaise( TCB *tcb, int signal, int arg )
 {
   dword stack[12];
-  tid_t t1, t2;
 
   if( tcb->sig_handler == NULL )
     return 1;
 
-  if( tcb->state == WAIT_FOR_SEND || tcb->state == WAIT_FOR_RECV )
-    timerDetach( GET_TID(tcb) );
+  if( tcb == currentThread )
+    return -2;
 
-  if( tcb->state == WAIT_FOR_SEND )
+  if( tcb->threadState == WAIT_FOR_SEND || tcb->threadState == WAIT_FOR_RECV )
+    timerDetach( tcb );
+
+  if( tcb->threadState == WAIT_FOR_SEND )
   {
-    tcb->wait_tid = NULL_TID;
-    tcb->state = PAUSED;
-    tcb->regs.eax = (signal == SIGTMOUT ? -3 : -2);
+    tcb->waitThread = NULL;
+    tcb->threadState = PAUSED;
+    tcb->execState.user.eax = (dword)(signal == SIGTMOUT ? -3 : -2);
     kprintf("receive interrupted\n");
   }
-  else if( tcb->state == WAIT_FOR_RECV )
+  else if( tcb->threadState == WAIT_FOR_RECV )
   {
-    tcb->regs.eax = (signal == SIGTMOUT ? -3 : -2);
+    tcb->execState.user.eax = (dword)(signal == SIGTMOUT ? -3 : -2);
 
     kprintf("send interrupted\n");
-    tcb->state = PAUSED;
+    tcb->threadState = PAUSED;
 
-    detachQueue( &tcbTable[tcb->wait_tid].threadQueue, GET_TID(tcb) );
-    tcb->wait_tid = NULL_TID;
+    detachQueue( &tcb->waitThread->threadQueue, tcb );
+    tcb->waitThread = NULL;
   }
 
-  stack[0] = signal;
-  stack[1] = arg;
-  memcpy( (void *)&stack[2], (void *)&tcb->regs.edi, 8 * sizeof(dword) );
-  stack[10] = tcb->regs.eflags;
-  stack[11] = tcb->regs.eip;
+  stack[0] = (dword)signal;
+  stack[1] = (dword)arg;
+  memcpy( &stack[2], &tcb->execState.user.edi, 8 * sizeof(dword) );
+  stack[5] = tcb->execState.user.userEsp - sizeof stack;
+  stack[10] = tcb->execState.user.eflags;
+  stack[11] = tcb->execState.user.eip;
 
-  if( pokeMem( (void *)(tcb->regs.userEsp - sizeof stack), sizeof stack,
-           stack, tcb->addrSpace ) != 0 )
+  if( pokeVirt( (addr_t)(tcb->execState.user.userEsp - sizeof stack), sizeof stack,
+           (addr_t)stack, (addr_t)(tcb->cr3.base << 12) ) != 0 )
   {
-    tcb->regs.eax = -1;
+    tcb->execState.user.eax = (dword)-1;
     return -1;
   }
 
-  tcb->regs.eip = (dword)tcb->sig_handler;
-  tcb->regs.userEsp -= sizeof stack;
+  tcb->execState.user.eip = (dword)tcb->sig_handler;
+  tcb->execState.user.userEsp -= sizeof stack;
 
-  if( tcb->state != RUNNING && tcb->state != READY )
+  if( tcb->threadState != RUNNING && tcb->threadState != READY )
     startThread( tcb );
 
-//  kprintf("eax: 0x%x 0x%x\n", tcb->regs.eax, tcbTable[GET_TID(tcb)].regs.eax);
-
-  if( tcb == currentThread )
-    return -2;
-  else
-    return 0;
+  return 0;
 }

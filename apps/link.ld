@@ -23,6 +23,7 @@ SECTIONS
     __bssStart = .;
     *(.bss)
     *(.common)
+    . = ALIGN(4096);
   }
     __end = .;
 }

@@ -1,9 +1,9 @@
-#include <os/io.h>
+#include <kernel/io.h>
 #include <kernel/pic.h>
 
 HOT(void sendEOI(void));
-COLD(void enableIRQ( int irq ));
-COLD(void disableIRQ( int irq ));
+COLD(void enableIRQ( unsigned int irq ));
+COLD(void disableIRQ( unsigned int irq ));
 COLD(void enableAllIRQ(void));
 COLD(void disableAllIRQ(void));
 
@@ -13,66 +13,66 @@ COLD(void disableAllIRQ(void));
 
 void sendEOI( void )
 {
-  outByte( (word)0x20, (byte)0x20 );
+  outByte( (word)0x20u, (byte)0x20u );
   ioWait();
-  outByte( (word)0xA0, (byte)0x20 );
+  outByte( (word)0xA0u, (byte)0x20u );
   ioWait();
 }
 
-/** 
+/**
     Unmasks an IRQ (enables an IRQ)
 
     @param irq An IRQ number from 0 to 15.
 */
 
-void enableIRQ( int irq )
+void enableIRQ( unsigned int irq )
 {
-  volatile byte data;
+  byte data;
 
-  if( irq < 0 || irq > 15 )
+  if( irq > 15 )
     return;
 
   if( irq < 8 )
   {
-    data = inByte( (word)0x21 );
+    data = inByte( (word)0x21u );
     ioWait();
-    outByte( (word)0x21, data & (byte)~(1 << (byte)irq));
+    outByte( (word)0x21u, data & (byte)~(1u << irq));
     ioWait();
   }
   else
   {
-    data = inByte( (word)0xA1 );
+    data = inByte( (word)0xA1u );
     ioWait();
-    outByte( (word)0xA1, data & (byte)~(1 << ((byte)irq-8)));
+    outByte( (word)0xA1u, data & (byte)~(1u << (irq-8)));
     ioWait();
   }
 }
 
-/** 
+/**
     Masks an IRQ (disables an IRQ)
 
     @param irq An IRQ number from 0 to 15.
 */
 
-void disableIRQ( int irq )
+void disableIRQ( unsigned int irq )
 {
-  volatile byte data;
+  byte data;
 
-  if( irq < 0 || irq > 15 )
+  if( irq > 15 )
     return;
 
   if( irq < 8 )
   {
     data = inByte( (word)0x21 );
     ioWait();
-    outByte( (word)0x21, data | (byte)(1 << (byte)irq));
+    outByte( (word)0x21, data | (byte)(1u << irq));
     ioWait();
   }
   else
   {
     data = inByte( (word)0xA1 );
     ioWait();
-    outByte( (word)0xA1, data | (byte)(1 << ((byte)irq-8)));
+    outByte( (word)0xA1, data | (byte)(1u << (irq-8)));
     ioWait();
   }
 }
@@ -81,9 +81,9 @@ void disableIRQ( int irq )
 
 void enableAllIRQ( void )
 {
-  outByte( (word)0x21, 0 );
+  outByte( (word)0x21u, 0 );
   ioWait();
-  outByte( (word)0xA1, 0 );
+  outByte( (word)0xA1u, 0 );
   ioWait();
 }
 
@@ -91,8 +91,8 @@ void enableAllIRQ( void )
 
 void disableAllIRQ( void )
 {
-  outByte( (word)0x21, 0xFF );
+  outByte( (word)0x21u, 0xFFu );
   ioWait();
-  outByte( (word)0xA1, 0xFF );
+  outByte( (word)0xA1u, 0xFFu );
   ioWait();
 }

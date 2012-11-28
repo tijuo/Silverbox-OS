@@ -14,7 +14,7 @@ int receiveMsg( tid_t sender, struct Message *msg, int timeout )
 
   do
   {
-    status = __receive( sender, msg, timeout );
+    status = sys_receive( sender, msg, timeout );
   } while( status == -2 );
 
   return status;
@@ -29,7 +29,7 @@ int sendMsg( tid_t recipient, struct Message *msg, int timeout )
 
   do
   {
-    status = __send(recipient, msg, timeout);
+    status = sys_send(recipient, msg, timeout);
   } while( status == -2 );
 
   return status;

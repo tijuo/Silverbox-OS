@@ -9,17 +9,78 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <os/multiboot.h>
 
 extern SBAssocArray mountTable;
 extern int _readFile(const char *, int, void *, size_t);
 
+// Extracts boot params passed by the kernel
+
+#if 0
 static int get_boot_info( int argc, char **argv );
-int init( int argc, char **argv );
+#endif /* 0 */
 void signal_handler(int signal, int arg);
 static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args );
 
 extern void handle_exception( tid_t tid, unsigned int cr2 );
+int init(multiboot_info_t *info, addr_t *resdStart, addr_t *resdLen,
+         addr_t *discStart, addr_t *discLen);
 
+
+mutex_t print_lock=0;
+
+void printC( char c )
+{
+  char volatile *vidmem = (char *)(0xB8000 + 160 * 4);
+  static int i=0;
+
+  while(mutex_lock(&print_lock))
+    __yield();
+
+  if( c == '\n' )
+    i += 160 - (i % 160);
+  else
+  {
+    vidmem[i++] = c;
+    vidmem[i++] = 7;
+  }
+
+  mutex_unlock(&print_lock);
+}
+
+void printN( char *str, int n )
+{
+  for( int i=0; i < n; i++, str++ )
+    printC(*str);
+}
+
+void print( char *str )
+{
+  for(; *str; str++ )
+    printC(*str);
+}
+
+void printInt( int n )
+{
+  print(toIntString(n));
+}
+
+void printHex( int n )
+{
+  print(toHexString(n));
+}
+
+static int get_boot_info(multiboot_info_t *info, addr_t *resdStart, addr_t *resdLen,
+         addr_t *discStart, addr_t *discLen)
+{
+  // map(info)
+
+  // for every page in the available region, if the address is not
+  // in the kernel, not in low memory, or if it is discarded then
+  // add it to the free page stack
+}
+
+#if 0
 static int get_boot_info( int argc, char **argv )
 {
   unsigned int bytes_to_allocate=0;
@@ -139,6 +200,7 @@ static int get_boot_info( int argc, char **argv )
 
   return 0;
 }
+#endif /* 0 */
 
 int loadElfFile( char *filename, char *args )
 {
@@ -185,7 +247,7 @@ int loadElfFile( char *filename, char *args )
 
   _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL );
 
-  tid = __create_thread( (addr_t)image.entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
+  tid = sys_create_thread( (addr_t)image.entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
 
   if( tid == NULL_TID )
   {
@@ -254,7 +316,7 @@ int loadElfFile( char *filename, char *args )
     }
   }
 
-  __start_thread( tid );
+  sys_start_thread( tid );
 
   return 0;
 }
@@ -308,7 +370,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
    return -1;
   }
 */
-
+#if 0
   if( !isValidElfExe( image ) )
   {
     for(i=0; i < (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1); i++)
@@ -318,6 +380,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
     print("Not a valid ELF executable.\n");
     return -1;
   }
+#endif /* 0 */
 
   phtab_count = image->phnum;
 
@@ -366,9 +429,9 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 
   _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL );
 
-  tid = __create_thread( (addr_t)image->entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
+  tid = sys_create_thread( (addr_t)image->entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
 
-  if( tid == -1 )
+  if( tid == NULL_TID )
     return -1; // XXX: But first, free physical memory before returning
 
   attach_tid(newPool, tid); //mappingTable.map( tid, addrSpace );
@@ -414,7 +477,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
     }
   }
 
-  __start_thread( tid );
+  sys_start_thread( tid );
 
   for(i=0; i < (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1); i++)
     _unmapMem( (void *)((unsigned)image + i * PAGE_SIZE), NULL); //__unmap((void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR);
@@ -442,13 +505,22 @@ void signal_handler(int signal, int arg)
   }
 }
 
-int init(int argc, char **argv)
+int init(multiboot_info_t *info, addr_t *resdStart, addr_t *resdLen,
+         addr_t *discStart, addr_t *discLen)
 {
   allocEnd = (void *)0x2000000;
   availBytes = 0;
   sysID = 0;
 
+  if( get_boot_info(info, resdStart, resdLen, discStart, discLen) )
+    return -1;
+
+#if 0
   get_boot_info(argc, argv);
+#endif /* 0 */
+  while(1)
+    __sleep(1000);
+
   sbAssocArrayCreate(&deviceTable, 256);
   sbAssocArrayCreate(&fsNames, 256);
   sbAssocArrayCreate(&fsTable, 256);

@@ -6,7 +6,9 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#if 0
 #define NULL_PADDR      (void *)0xFFFFFFFF
+#endif
 
 struct PageList
 {
@@ -19,16 +21,16 @@ struct PhysPage
   {
     struct
     {
-      unsigned long used : 1;
-      unsigned long rd_only : 1;
-      unsigned long copy_on_wr : 1;
-      unsigned long type : 2;
-      unsigned long no_swap : 1;
-      unsigned long shared : 1;
-      unsigned long rsvd : 5;
-      unsigned long pdir_page : 20; // This is the address space that the page is in
+      unsigned int used : 1;
+      unsigned int rd_only : 1;
+      unsigned int copy_on_wr : 1;
+      unsigned int type : 2;
+      unsigned int no_swap : 1;
+      unsigned int shared : 1;
+      unsigned int rsvd : 5;
+      unsigned int pdir_page : 20; // This is the address space that the page is in
     };
-    unsigned long info;
+    unsigned int info;
   };
   struct PhysPage *prev;
   struct PhysPage *next;

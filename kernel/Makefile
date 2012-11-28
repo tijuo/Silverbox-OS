@@ -7,8 +7,8 @@ include ../Makefile.inc
 include ../vars.mk
 
 SRC     =init.c paging.c thread.c schedule.c exceptions.c \
-        debug.c pic.c queue.c vmm.c message.c syscall.c \
-        signal.c memory.c test.c
+        debug.c pic.c queue.c message.c syscall.c \
+        signal.c test.c
 
 OBJ     =$(SRC:.c=.o)
 LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL
@@ -17,7 +17,7 @@ asm_objs:
 	make -C asm/ all
 
 kernel.dmp: kernel.tmp
-	objdump -Dx $< > $@
+	objdump -Dx -g $< > $@
 
 kernel.dbg: kernel.tmp
 	readelf -a $< > $@
@@ -33,11 +33,14 @@ kernel.gz: $(OBJ) asm_objs
 	rm -f $@
 	gzip `basename $@ .gz`
 
-memory.o: memory.c
-	$(CC) -O2 -c $(COPTFLAGS) -I$(INC_DIR) $< -o $@
+#memory.o: memory.c
+#	$(CC) -O2 -c $(CFLAGS) -I$(INC_DIR) $< -o $@
 
 install: kernel.gz
-	$(PREFIX)/tools/copy_files.sh kernel.gz
+	$(PREFIX)/tools/copy_files.sh -d /boot kernel.gz
+
+check:
+	splint +gnuextensions -nolib -standard  -I../include *.c
 
 clean:
 	make -C asm/ clean

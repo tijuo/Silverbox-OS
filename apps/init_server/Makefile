@@ -5,6 +5,7 @@ SRC     =addr_space.c phys_alloc.c initsrv.c name.c \
 	fs/vfs_ops.c
 
 OUTPUT	=pagersrv.exe
+INSTALL_DIR=programs/
 
 include apps.mk
 

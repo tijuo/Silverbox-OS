@@ -14,14 +14,13 @@ typedef signed char s8;
 typedef unsigned short u16;
 typedef signed short s16;
 
-typedef unsigned long u32;
-typedef signed long s32;
+typedef unsigned int u32;
+typedef signed int s32;
 
 typedef unsigned long long u64;
 typedef signed long long s64;
 
-typedef void * ptr_t;
-typedef unsigned char * addr_t;
+typedef u32 addr_t;
 
 typedef u8  byte;
 typedef u16 word;

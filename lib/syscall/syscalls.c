@@ -1,6 +1,6 @@
 #include <oslib.h>
 
-int __send( tid_t recipient, void *msg, int timeout )
+int sys_send( tid_t recipient, void *msg, int timeout )
 {
   int retval;
 
@@ -10,7 +10,7 @@ int __send( tid_t recipient, void *msg, int timeout )
   return retval;
 }
 
-int __receive( tid_t sender, void *buf, int timeout )
+int sys_receive( tid_t sender, void *buf, int timeout )
 {
   int retval;
 
@@ -22,19 +22,19 @@ int __receive( tid_t sender, void *buf, int timeout )
 
 int __pause( void )
 {
-  return __pause_thread( NULL_TID );
+  return sys_pause_thread( NULL_TID );
 }
 
-int __pause_thread( tid_t tid )
+int sys_pause_thread( tid_t tid )
 {
   int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_PAUSE), "b"(tid));
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_PAUSE_THREAD), "b"(tid));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
 }
 
-int __start_thread( tid_t tid )
+int sys_start_thread( tid_t tid )
 {
   int retval;
 
@@ -44,7 +44,7 @@ int __start_thread( tid_t tid )
   return retval;
 }
 
-int __destroy_thread( tid_t tid )
+int sys_destroy_thread( tid_t tid )
 {
   int retval;
 
@@ -54,7 +54,7 @@ int __destroy_thread( tid_t tid )
   return retval;
 }
 
-int __get_thread_info( tid_t tid, struct ThreadInfo *info )
+int sys_get_thread_info( tid_t tid, struct ThreadInfo *info )
 {
   int retval;
 
@@ -64,7 +64,7 @@ int __get_thread_info( tid_t tid, struct ThreadInfo *info )
   return retval;
 }
 
-int __register_int( int intNum )
+int sys_register_int( int intNum )
 {
   int retval;
 
@@ -74,7 +74,7 @@ int __register_int( int intNum )
   return retval;
 }
 
-int __unregister_int( int intNum )
+int sys_unregister_int( int intNum )
 {
   int retval;
 
@@ -84,10 +84,10 @@ int __unregister_int( int intNum )
   return retval;
 }
 
-tid_t __create_thread( void *entry, void *addr_space, void *stack,
+tid_t sys_create_thread( void *entry, void *addr_space, void *stack,
                        tid_t exhandler )
 {
-  int retval;
+  tid_t retval;
 
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_CREATE_THREAD),
                    "b"(entry), "c"(addr_space), "d"(stack),
@@ -96,52 +96,7 @@ tid_t __create_thread( void *entry, void *addr_space, void *stack,
   return retval;
 }
 
-int __map( void *virt, void *phys, size_t pages, int flags, void *addrSpace )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_MAP),
-                   "b"(virt), "c"(phys), "d"(pages), "S"(flags),
-		   "D"(addrSpace));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-int __map_page_table( void *virt, void *phys, int flags, void *addrSpace )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_MAP_PAGE_TABLE),
-                   "b"(virt), "c"(phys), "d"(flags), "S"(addrSpace));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-int __grant( void *srcAddr, void *destAddr, void *addrSpace, size_t pages )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_GRANT),
-                   "b"(srcAddr), "c"(destAddr), "d"(addrSpace),
-                   "S"(pages));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-int __grant_page_table( void *srcAddr, void *destAddr, void *addrSpace, 
-                        size_t pages )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_GRANT_PAGE_TABLE),
-                   "b"(srcAddr), "c"(destAddr), "d"(addrSpace),
-                   "S"(pages));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-
-void __exit( int status )
+void sys_exit( int status )
 {
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_EXIT),
                    "b"(status));
@@ -152,11 +107,11 @@ void __yield( void )
   __sleep( 0 );
 }
 
-int __sleep_thread( int msecs, tid_t tid )
+int sys_sleep_thread( int msecs, tid_t tid )
 {
   int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SLEEP),
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SLEEP_THREAD),
                    "b"(msecs));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
@@ -164,10 +119,10 @@ int __sleep_thread( int msecs, tid_t tid )
 
 int __sleep( int msecs )
 {
-  return __sleep_thread( msecs, NULL_TID );
+  return sys_sleep_thread( msecs, NULL_TID );
 }
 
-int __end_irq( int irqNum )
+int sys_end_irq( int irqNum )
 {
   int retval;
 
@@ -177,7 +132,7 @@ int __end_irq( int irqNum )
   return retval;
 }
 
-int __end_page_fault( tid_t tid )
+int sys_end_page_fault( tid_t tid )
 {
   int retval;
 
@@ -187,27 +142,7 @@ int __end_page_fault( tid_t tid )
   return retval;
 }
 
-void *__unmap( void *virt, void *addrSpace )
-{
-  void *retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_UNMAP),
-                   "b"(virt), "c"(addrSpace) );
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-void *__unmap_page_table( void *virt, void *addrSpace )
-{
-  void *retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_UNMAP_PAGE_TABLE),
-                   "b"(virt), "c"(addrSpace) );
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-int __raise( int signal, int arg )
+int sys_raise( int signal, int arg )
 {
   int retval;
 
@@ -217,7 +152,7 @@ int __raise( int signal, int arg )
   return retval;
 }
 
-int __set_sig_handler( void *handler )
+int sys_set_sig_handler( void *handler )
 {
   int retval;
 
@@ -227,13 +162,14 @@ int __set_sig_handler( void *handler )
   return retval;
 }
 
-int __set_io_perm( unsigned start, unsigned end, bool value, tid_t tid )
+void sys_invalidate_page( addr_t addr )
 {
-  int retval;
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_INVALIDATE_PAGE),
+                   "b"(addr) );
+}
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SET_IO_PERM),
-		   "b"(start), "c"(end), "d"(value),"S"(tid));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
+void sys_invalidate_tlb( void )
+{
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_INVALIDATE_TLB));
 }
 

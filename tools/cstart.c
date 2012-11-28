@@ -5,19 +5,19 @@
 extern int main(int, char **);
 
 void __dummy_sig_handler(int signal, int code);
-
+/*
 struct StartArgs
 {
   int argc;
   char **argv;
 };
-
+*/
 void printC( char c );
 void printN( char *str, int n );
 void print( char *str );
 void printInt( int n );
 void printHex( int n );
-void _start( struct StartArgs *start_args );
+void _start( /*struct StartArgs *start_args*/ );
 
 mutex_t print_lock=0;
 
@@ -66,7 +66,7 @@ void __dummy_sig_handler(int signal, int code)
 {
 }
 
-void _start( struct StartArgs *start_args )
+void _start( /*struct StartArgs *start_args*/ )
 {
   int retVal;
 
@@ -78,9 +78,9 @@ void _start( struct StartArgs *start_args )
   set_signal_handler( &__dummy_sig_handler );
   __set_sig_handler( _default_sig_handler );
 
-  if( start_args != NULL )
-    retVal = main(start_args->argc, start_args->argv);
-  else
+//  if( start_args != NULL )
+//    retVal = main(start_args->argc, start_args->argv);
+//  else
     retVal = main(0, NULL);
 
   /* Cleanup stuff here */

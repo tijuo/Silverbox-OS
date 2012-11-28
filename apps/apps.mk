@@ -1,4 +1,5 @@
 OBJ     =$(SRC:.c=.o)
+INSTALL_DIR=programs/
 
 all: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
@@ -11,7 +12,7 @@ $(OUTPUT): $(OBJ) $(PREFIX)/lib/libc.a $(PREFIX)/lib/libos.a
 	$(PREFIX)/tools/makec.sh $(SRC) $(OUTPUT)
 
 install: $(OUTPUT)
-	$(PREFIX)/tools/copy_files.sh $(OUTPUT)
+	$(PREFIX)/tools/copy_files.sh $(OUTPUT) -d $(INSTALL_DIR)
 
 clean:
 	for i in $(DIRS); do make -C $$i clean; done

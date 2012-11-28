@@ -4,24 +4,25 @@
 #include <kernel/memory.h>
 #include <kernel/mm.h>
 #include <kernel/thread.h>
-#include <os/io.h>
-#include <oslib.h>
+#include <kernel/io.h>
 #include <stdarg.h>
-
-#define abs(a)	(a < 0 ? -a : a)
 
 #define SCREEN_HEIGHT   25
 #define SCREEN_WIDTH    80
 
 void kprintAt( const char *str, int x, int y );
 void kprintf( const char *str, ... );
-//void resetScroll( void );
-//void scrollUp( void );
-//int scrollDown( void );
-//void doNewLine( int *x, int *y );
+void resetScroll( void );
+void scrollUp( void );
+int scrollDown( void );
+void doNewLine( int *x, int *y );
 char *kitoa(int value, char *str, int base);
+void _putChar( char c, int x, int y, unsigned char attrib );
+void putChar( char c, int x, int y );
 
-int sx=0, sy=1;
+static const char *_digits="0123456789abcdefghijklmnopqrstuvwxyz";
+
+unsigned int sx=0, sy=1;
 
 extern void dump_regs( TCB *thread );
 
@@ -36,24 +37,24 @@ extern void dump_regs( TCB *thread );
 
 void init_serial(void)
 {
-    outByte(combase + 3, inByte(combase + 3) | 0x80); // Set DLAB for
+    outByte(combase + 3, inByte(combase + 3) | 0x80u); // Set DLAB for
                                                       // DLLB access
-    outByte(combase, 0x03);                           /* 38400 baud */
-    outByte(combase + 1, 0); // Disable interrupts
-    outByte(combase + 3, inByte(combase + 3) & 0x7f); // Clear DLAB
-    outByte(combase + 3, 3); // 8-N-1
+    outByte(combase, 0x03u);                           /* 38400 baud */
+    outByte(combase + 1, 0u); // Disable interrupts
+    outByte(combase + 3, inByte(combase + 3) & 0x7fu); // Clear DLAB
+    outByte(combase + 3, 3u); // 8-N-1
 }
 
 int getDebugChar(void)
 {
-    while (!(inByte(combase + 5) & 0x01));
+    while (!(inByte(combase + 5) & 0x01u));
     return inByte(combase);
 }
 
 void putDebugChar(int ch)
 {
-    while (!(inByte(combase + 5) & 0x20));
-    outByte(combase, (char) ch);
+    while (!(inByte(combase + 5) & 0x20u));
+    outByte(combase, (byte) ch);
 /*
 if( ch == '\r' )
 {
@@ -84,41 +85,40 @@ if( sx >= SCREEN_WIDTH )
 
 char *kitoa(int value, char *str, int base)
 {
-  char _buf[33], *buf=_buf;
-  unsigned digit;
-  char *begin = str;
-  unsigned *_val = (unsigned *)&value;
+  unsigned int num = (unsigned int)value;
+  size_t str_end=0;
 
-  if( str == NULL || base > 36 || base < 2 )
+  if( !str )
     return NULL;
-  else if( value == 0 )
+  else if( base >= 2 && base <= 36 )
   {
-    *str = '0';
-    *(str+1) = '\0';
-    return str;
+    if( base == 10 && value < 0 )
+    {
+      str[str_end++] = '-';
+    }
+    do
+    {
+      unsigned int quot = base * (num / base);
+
+      str[str_end++] = _digits[num - quot];
+      num = quot / base;
+    } while( num );
   }
 
-  *buf++ = '\0';
+  str[str_end] = '\0';
 
-  if( base == 10 && value < 0)
-    *str++ = '-';
-
-  while( (base == 10 ? (unsigned)value : *_val) )
+  if( str_end )
   {
-    digit = (base == 10 ? (unsigned)abs(value) % base : *_val % base);
-    *buf++ = (digit >= 10 ? (digit - 10) + 'A' : digit + '0');
+    str_end--;
 
-    if( base == 10 )
-      value /= base;
-    else
-      *_val /= base;
+    for( size_t i=0; i < str_end; i++, str_end-- )
+    {
+      char tmp = str[i];
+      str[i] = str[str_end];
+      str[str_end] = tmp;
+    }
   }
-
-  while( *--buf != '\0' )
-    *str++ = *buf;
-
-  *str = '\0';
-  return begin;
+  return str;
 }
 
 void initVideo( void )
@@ -251,60 +251,60 @@ void setBadAssertHlt( bool value )
 
 void resetScroll( void )
 {
-  volatile word address=0;
+//  word address=0;
 
-  outByte( 0x3D4, 0x0C );
-  outByte( 0x3D5, address >> 8 );
-  outByte( 0x3D4, 0x0D );
-  outByte( 0x3D5, address & 0x0F );
+  outByte( 0x3D4u, 0x0Cu );
+  outByte( 0x3D5u, 0 );
+  outByte( 0x3D4u, 0x0Du );
+  outByte( 0x3D5u, 0 );
 }
 
 void scrollUp( void )
 {
-  volatile byte high, low;
-  volatile word address;
+  byte high, low;
+  word address;
 
-  outByte( 0x3D4, 0x0C );
-  high = inByte( 0x3D5 );
-  outByte( 0x3D4, 0x0D );
-  low = inByte( 0x3D5 );
+  outByte( 0x3D4u, 0x0Cu );
+  high = inByte( 0x3D5u );
+  outByte( 0x3D4u, 0x0Du );
+  low = inByte( 0x3D5u );
   address = (high << 8 | low );
 
   if( address == 0 )
-    address = 0x3fc0;
+    address = 0x3fc0u;
   else
-    address -= 0x50;
+    address -= 0x50u;
 
-  outByte( 0x3D4, 0x0C );
-  outByte( 0x3D5, address >> 8 );
-  outByte( 0x3D4, 0x0D );
-  outByte( 0x3D5, address & 0xFF );
+  outByte( 0x3D4u, 0x0Cu );
+  outByte( 0x3D5u, address >> 8 );
+  outByte( 0x3D4u, 0x0Du );
+  outByte( 0x3D5u, address & 0xFFu );
 }
 
 int scrollDown( void )
 {
-  volatile byte high, low;
-  volatile word address;
+  byte high, low;
+  word address;
   int ret = 0;
 
-  outByte( 0x3D4, 0x0C );
-  high = inByte( 0x3D5 );
-  outByte( 0x3D4, 0x0D );
-  low = inByte( 0x3D5 );
+  outByte( 0x3D4u, 0x0Cu );
+  high = inByte( 0x3D5u );
+  outByte( 0x3D4u, 0x0Du );
+  low = inByte( 0x3D5u );
 
   address = (high << 8 | low );
-  address += 0x50;
+  address += 0x50u;
 
-  if( address > 0x3e80 )
+  if( address > 0x3e80u )
   {
     address = 0;
     ret = 1;
   }
 
-  outByte( 0x3D4, 0x0C );
-  outByte( 0x3D5, address >> 8 );
-  outByte( 0x3D4, 0x0D );
-  outByte( 0x3D5, address );
+  outByte( 0x3D4u, 0x0Cu );
+  outByte( 0x3D5u, address >> 8 );
+  outByte( 0x3D4u, 0x0Du );
+  outByte( 0x3D5u, address & 0xFFu );
 
   return ret;
 }
@@ -312,13 +312,18 @@ int scrollDown( void )
 
 void kprintAt( const char *str, int x, int y )
 {
-  volatile char *vidmem = (volatile char *)( VIDMEM_START + 2 * (x + 80 * y));
+  volatile word *vidmem = (volatile word *)VIDMEM_START;
+  size_t offset = 80 * y + x, i=0;
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
-  while(*str)
-    *vidmem++ = *str++, vidmem++;
+  while(str[i])
+  {
+    vidmem[offset] = (vidmem[offset] & 0xFF00u) | (byte)str[i];
+    offset++;
+    i++;
+  }
 }
 
 
@@ -355,12 +360,14 @@ void incSchedCount( void )
 
   assert( currentThread != NULL );
 
-  if( currentThread != NULL )
+  if( currentThread )
   {
-    kprintAt("     ", 2, 0);
+    kprintAt("            ", 2, 0);
     kprintAt( kitoa((int)GET_TID(currentThread), digits, 10), 2, 0 );
+    kprintAt( kitoa((int)currentThread->priority, digits, 10), 5, 0 );
     kprintAt( "        ", 30, 0 );
-    kprintAt( kitoa((int)currentThread->addrSpace, digits, 16), 30, 0 );
+    kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10), 8, 0 );
+    kprintAt( kitoa(*(int *)&currentThread->cr3, digits, 16), 30, 0 );
   }
 }
 
@@ -371,12 +378,15 @@ void incSchedCount( void )
 void incTimerCount( void )
 {
   volatile char *vidmem = ( volatile char * ) ( VIDMEM_START );
+  char digits[12];
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
   vidmem[0]++;
   vidmem[1] = 0x72;
+
+  kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10), 8, 0 );
 }
 
 /// Blanks the screen
@@ -437,30 +447,29 @@ void putChar( char c, int x, int y )
 
 void kprintf( const char *str, ... )
 {
-//  unsigned i;
-  char percent = 0;
+  int percent = 0;
   va_list args;
- // int start = *y * SCREEN_WIDTH + *x;
   char digits[12];
+  size_t i;
 
   va_start(args, str);
 
-  for(; *str; str++ )
+  for(i=0; str[i]; i++ )
   {
     if( percent )
     {
-      switch( *str )
+      switch( str[i] )
       {
         case '%':
-          putDebugChar('%');//putChar('%', *x, *y);
+          putDebugChar('%');
           break;
         case 'c':
-          putDebugChar((char)va_arg(args,char));//putChar((char)va_arg(args, char));
+          putDebugChar((char)va_arg(args,char));
           break;
         case 'p':
         case 'x':
         case 'X':
-          kprintf(kitoa(va_arg(args, unsigned int), digits, 16));
+          kprintf(kitoa(va_arg(args, int), digits, 16));
           break;
         case 's':
           kprintf(va_arg(args, char *));
@@ -468,7 +477,7 @@ void kprintf( const char *str, ... )
         case 'u':
         case 'd':
         case 'i':
-           kprintf(kitoa(va_arg(args, unsigned int), digits, 10));
+           kprintf(kitoa(va_arg(args, int), digits, 10));
           break;
         default:
           break;
@@ -477,7 +486,7 @@ void kprintf( const char *str, ... )
     }
     else
     {
-      switch( *str )
+      switch( str[i] )
       {
         case '%':
           percent = 1;
@@ -494,7 +503,7 @@ void kprintf( const char *str, ... )
           break;
 */
         default:
-          putDebugChar( *str );
+          putDebugChar( str[i] );
 
         //  if( ++(*x) == SCREEN_WIDTH )
         //    doNewLine( x, y );

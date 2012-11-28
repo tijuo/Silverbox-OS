@@ -6,6 +6,7 @@
 #include <os/dev_interface.h>
 #include <os/device.h>
 #include <os/signal.h>
+#include <os/multiboot.h>
 
 #include "paging.h"
 #include "name.h"
@@ -16,7 +17,8 @@
 
 /* Malloc works here as long as 'pager_addr_space' exists and is correct*/
 
-extern int init( int argc, char **argv );
+extern int init(multiboot_info_t *info, addr_t resdStart, addr_t resdLen,
+         addr_t discStart, addr_t discLen);
 extern void print( char * );
 //extern void *list_malloc( size_t );
 //extern void list_free( void * );
@@ -296,9 +298,11 @@ static int handle_generic_request( tid_t sender, struct GenericMsgHeader *header
     }
     case DEV_UNREGISTER:
       break;
+/*
     case CHANGE_IO_PERM:
       result = __set_io_perm(req->arg[0], req->arg[1], req->arg[2], sender);
       break;
+*/
     default:
       print("Received bad generic request 0x");
       printHex(header->type);
@@ -537,9 +541,14 @@ static void handle_message( void )
 
 extern int registerFAT(void);
 
-int main( int argc, char **argv )
+int main( multiboot_info_t *info, addr_t resdStart, addr_t resdLen,
+          addr_t discStart, addr_t discLen )
 {
-  init(argc, argv);
+  print("Initial server started.\n");
+
+  if( init(info, &resdStart, &resdLen, &discStart, &discLen) )
+    return 1;
+
   registerFAT();
 
   while(1)

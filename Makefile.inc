@@ -1,6 +1,6 @@
 # Set PREFIX to the path of the source dir (this one)
 
-PREFIX	=/home/tiju/Silverbox-OS
+PREFIX	=$(HOME)/Silverbox-OS
 
 INC_DIR	=$(PREFIX)/include
 CC	=gcc
@@ -13,15 +13,17 @@ ASIFLAGS=-f elf -I$(INC_DIR)/
 DEPEND	=makedepend
 DD	=dd
 EN_DEBUG=-DDEBUG
-CFLAGS  =-m32 -std=gnu99 -fno-builtin -nostdlib \
+CFLAGS  =-m32 -std=gnu99 -static -nostdlib \
         -fno-leading-underscore -nostartfiles \
-        -ffreestanding -falign-functions \
-        -fno-optimize-sibling-calls -fno-stack-protector \
-        -I$(INC_DIR) $(CMOREFLG) $(EN_DEBUG)
-CMOREFLG=-Wshadow -Wpointer-arith -Wsign-compare \
+        -ffreestanding -fno-exceptions -nodefaultlibs \
+        -fno-stack-protector -fno-unwind-tables \
+	-fno-non-call-exceptions -fno-stack-check \
+	-fno-asynchronous-unwind-tables \
+	-I$(INC_DIR) $(CMOREFLG) $(EN_DEBUG)
+CMOREFLG=-Wall -Wextra -Wshadow -Wpointer-arith -Wsign-compare \
 	-Wsystem-headers -Wstrict-prototypes \
 	-Wunused-function -Wmissing-prototypes \
-	-Wmissing-declarations
+	-Wmissing-declarations -Wimplicit -Wimplicit-int
 
 DEF_PHONY=all clean depend dep install
 

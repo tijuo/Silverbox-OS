@@ -2,98 +2,78 @@
 #define THREAD_H
 
 #include <types.h>
-#include <oslib.h>
 #include <kernel/mm.h>
+#include <kernel/lowlevel.h>
 
-#define DEAD			0
-#define PAUSED			1  // Infinite blocking state
-#define SLEEPING		2  // Blocks until timer runs out
-#define READY			3  // <-- Do not touch(or the context switch code will break)
-#define RUNNING			4  // <-- Do not touch(or the context switch code will break)
-#define WAIT_FOR_SEND		5
-#define WAIT_FOR_RECV		6
-#define ZOMBIE			7  // Thread is waiting to be released
+#define DEAD			0u
+#define PAUSED			1u  // Infinite blocking state
+#define SLEEPING		2u  // Blocks until timer runs out
+#define READY			3u  // <-- Do not touch(or the context switch code will break)
+				   // Thread is ready to be scheduled to a processor
+#define RUNNING			4u  // <-- Do not touch(or the context switch code will break)
+				   // Thread is already scheduled to a processor
+#define WAIT_FOR_SEND		5u
+#define WAIT_FOR_RECV		6u
+#define ZOMBIE			7u  // Thread is waiting to be released
 
-#define NUM_PROCESSORS   1
+#define NUM_PROCESSORS   	1u
 
-#define TID_MAX		(tid_t)32767
+#define NULL_TID	 	0
+#define TID_MAX		 	0xFFFFu
 
-typedef struct RegisterState Registers;
+#define	INITIAL_TID		1u
+#define IDLE_TID		INITIAL_TID
 
-#define	INITIAL_TID	(tid_t)0
-#define IDLE_TID	INITIAL_TID
+#define GET_TID(t)		(tid_t)(t - tcbTable)
 
-#define GET_TID(t)	(tid_t)(t - tcbTable)
+#define MAX_THREADS		1024u
 
-/// Represents a node link in a queue
-
-struct NodePointer
-{
-  tid_t prev;
-  tid_t next;
-};
-
-struct TimerNode
-{
-  unsigned short delta;
-  tid_t next;
-};
-
-/// Represents a queue of threads
-
-struct Queue
-{
-  tid_t head;
-  tid_t tail;
-};
-
-/* This assumes only *single* processors */
+/* This assumes a uniprocessor system */
 
 /* Touching the data types of this struct may break the context switcher! */
-
 /// Contains the necessary data for a thread
 
-struct ThreadCtrlBlk
+struct ThreadControlBlock
 {
-  volatile addr_t addrSpace;
-  volatile unsigned char quantaLeft;
-  volatile unsigned char state : 4;
-  volatile unsigned char priority : 3;
-  volatile unsigned char resd : 1;
-  struct Queue threadQueue;	// the queue of waiting senders
-  tid_t exHandler;
-  tid_t wait_tid;		// wait to receive from/send to this thread
+  cr3_t cr3;
+  unsigned char quantaLeft;
+  unsigned char threadState : 4;
+  unsigned char priority : 3;
+  unsigned char reschedule : 1;
+  unsigned short int __packing;
+  struct Queue
+  {
+    struct ThreadControlBlock *head;
+    struct ThreadControlBlock *tail;
+  } threadQueue;	// the queue of waiting senders
+  struct ThreadControlBlock *exHandler;		// Send interrupts and exceptions to this thread
+  struct ThreadControlBlock *waitThread;		// wait to receive from/send to this thread
   void *sig_handler;
-  unsigned short __packing;
-  volatile Registers regs;
+  struct ThreadControlBlock *queueNext;
+  struct ThreadControlBlock *queuePrev;
+  struct ThreadControlBlock *timerNext;
+  unsigned int timerDelta;
+  ExecutionState execState;
+  unsigned int __packing2[4];
 } __PACKED__;
 
-typedef struct ThreadCtrlBlk TCB;
+typedef struct ThreadControlBlock TCB;
 
-tid_t init_server_tid;
-TCB *tcbTable;
-struct NodePointer *tcbNodes;
-struct TimerNode *timerNodes;
-struct Queue *runQueues;
-//struct Queue pausedQueue;
-struct Queue timerQueue;
+struct Queue freeThreadQueue;
 
-int maxThreads;
+TCB *init_server;
+TCB *currentThread;
+TCB *idleThread;
+TCB tcbTable[MAX_THREADS];
 
-addr_t createAddrSpace( void );
-
-TCB  volatile * volatile currentThread;
-
-tid_t getFreeTID(void);
-
-TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exHandler/*, byte *io_bitmap*/ );
+TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, TCB *exHandler );
 int releaseThread( TCB *thread );
 
-int sleepThread( TCB *thread, int msecs );
+int sleepThread( TCB *thread, unsigned int msecs );
 int startThread( TCB *thread );
 int pauseThread( TCB *thread );
 int sysYield( TCB *thread );
 
-//int switchToThread( volatile TCB *oldThread, volatile TCB *newThread );
+//int switchToThread(  TCB *oldThread,  TCB *newThread );
 
 #endif /* THREAD_H */

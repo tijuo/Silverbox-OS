@@ -3,93 +3,84 @@
 #include <kernel/thread.h>
 #include <kernel/schedule.h>
 
-int timerDetach( tid_t tid );
-int timerEnqueue( tid_t tid, unsigned short time );
-tid_t timerPop( void );
-int enqueue( struct Queue *queue, tid_t tid );
-tid_t detachQueue( struct Queue *queue, tid_t tid );
-tid_t popQueue( struct Queue *queue );
-bool isInQueue( struct Queue *queue, tid_t tid );
-bool isInTimerQueue( tid_t tid );
+TCB *timerDetach( TCB *thread );
+TCB *timerEnqueue( TCB *thread, unsigned int time );
+TCB *timerPop( void );
+TCB *enqueue( struct Queue *queue, TCB *thread );
+TCB *detachQueue( struct Queue *queue, TCB *thread );
+TCB *popQueue( struct Queue *queue );
+bool isInQueue( const struct Queue *queue, const TCB *thread );
+bool isInTimerQueue( const TCB *thread );
 
 #if DEBUG
-int totalTimerTime(void);
+unsigned int totalTimerTime(void);
 #endif
 
-bool isInQueue( struct Queue *queue, tid_t tid )
+bool isInQueue( const struct Queue *queue, const TCB *thread )
 {
-  if( !queue || tid == NULL_TID )
+  const TCB *ptr;
+
+  if( !queue || !thread )
     return false;
 
-  for( tid_t ptr=queue->head; ptr != NULL_TID; ptr = tcbNodes[ptr].next )
-  {
-    if( tid == ptr )
-      return true;
-  }
+  for( ptr=queue->head; ptr != NULL && ptr != thread; ptr = ptr->queueNext );
 
-  return false;
+  if( ptr == thread )
+    return true;
+  else
+    return false;
 }
 
-bool isInTimerQueue( tid_t tid )
+bool isInTimerQueue( const TCB *thread )
 {
-  if( tid == NULL_TID )
-    return false;
-
-  for( tid_t ptr=timerQueue.head; ptr != NULL_TID; ptr = timerNodes[ptr].next )
-  {
-    if( tid == ptr )
-      return true;
-  }
-
-  return false;
+  return isInQueue( &timerQueue, thread );
 }
 
 /**
   Adds a thread to the timer queue with an associated time.
 
-  @param tid The TID of the thread to enqueue.
+  @param thread The thread to enqueue.
   @param time The delta time in ticks. Must be non-zero.
-  @return 0 on success. -1 on failure.
+  @return The enqueued thread on success. NULL on failure.
 */
 
-int timerEnqueue( tid_t tid, unsigned short time )
+TCB *timerEnqueue( TCB *thread, unsigned int time )
 {
-  tid_t node, prevNode = NULL_TID;
-  struct TimerNode ptr;
+  TCB *prev;
+  TCB *ptr;
 
-  if( time < 1 || tid == NULL_TID )
-    RET_MSG(-1, "Invalid time or NULL pointer")
+  if( time == 0 || !thread )
+    RET_MSG(NULL, "Invalid time or NULL pointer")
 
-  assert( !isInTimerQueue( tid ) );
+  assert( !isInTimerQueue( thread ) );
 
   #if DEBUG
-    for( int level=0; level < maxRunQueues; level++ )
-      assert( !isInQueue( &runQueues[level], tid ) );
+    unsigned int level;
+
+    for( level=0; level < NUM_RUN_QUEUES; level++ )
+      assert( !isInQueue( &runQueues[level], thread ) );
   #endif
 
-  if( timerQueue.head == NULL_TID )
+  if( timerQueue.head == NULL )
   {
-    timerQueue.head = tid; // No need for using a tail
-    timerNodes[tid].delta = time;
-    timerNodes[tid].next = NULL_TID;
+    timerQueue.head = timerQueue.tail = thread;
+    thread->timerDelta = time;
+    thread->timerNext = NULL;
 
-    return 0;
+    return thread;
   }
 
-  for( node = timerQueue.head; node != NULL_TID; prevNode=node,node = ptr.next )
+  for( prev=NULL, ptr=timerQueue.head; ptr != NULL; prev=ptr, ptr=ptr->timerNext )
   {
-    ptr = timerNodes[node];
-
-    if( time > ptr.delta )
+    if( time > ptr->timerDelta )
     {
-      time -= ptr.delta;
+      time -= ptr->timerDelta;
 
-      if( ptr.next == NULL_TID )
+      if( ptr->timerNext == NULL )
       {
-        timerNodes[tid].delta = time;
-        timerNodes[tid].next = NULL_TID;
-        timerNodes[node].next = tid;
-
+        thread->timerDelta = time;
+        thread->timerNext = NULL;
+        ptr->timerNext = timerQueue.tail = thread;
         break;
       }
       else
@@ -97,47 +88,42 @@ int timerEnqueue( tid_t tid, unsigned short time )
     }
     else
     {
-      if( prevNode == NULL_TID )
-        timerQueue.head = tid;
+      if( prev == NULL )
+        timerQueue.head = thread;
       else
-        timerNodes[prevNode].next = tid;
+        prev->timerNext = thread;
 
-
-      timerNodes[tid].next = node;
-      timerNodes[tid].delta = time;
-      timerNodes[node].delta -= time;
+      thread->timerNext = ptr;
+      thread->timerDelta = time;
+      ptr->timerDelta -= time;
 
       break;
     }
   }
 
-  return 0;
+  return thread;
 }
 
 /**
   Removes the first thread from the timer queue if that thread has no time left.
 
-  @return The TID of the dequeued thread. NULL_TID on failure.
+  @return The dequeued thread. NULL on failure.
 */
 
-tid_t timerPop( void )
+TCB *timerPop( void )
 {
-  tid_t node = timerQueue.head;
-
-  if( timerDetach( node ) == 0 )
-    return node;
-  else
-    return NULL_TID;
+  return timerDetach(timerQueue.head);
 }
 
 #if DEBUG
 
-int totalTimerTime(void)
+unsigned int totalTimerTime(void)
 {
-  int total = 0;
+  unsigned int total = 0;
+  const TCB *ptr;
 
-  for(tid_t ptr=timerQueue.head; ptr != NULL_TID; ptr = timerNodes[ptr].next)
-    total += timerNodes[ptr].delta;
+  for(ptr=timerQueue.head; ptr != NULL; ptr = ptr->timerNext)
+    total += ptr->timerDelta;
 
   return total;
 }
@@ -148,173 +134,174 @@ int totalTimerTime(void)
 /**
   Removes a thread from the timer queue.
 
-  @param tid The TID of the thread to detach.
-  @return 0 on success. -1 on failure.
+  @param thread The thread to detach.
+  @return The detached thread if successful. NULL if unsuccessful.
 */
 
-int timerDetach( tid_t tid )
+TCB *timerDetach( TCB *thread )
 {
-  if( tid == NULL_TID )
-    RET_MSG(-1, "NULL ptr/tid");
+  if( !thread )
+    RET_MSG(NULL, "NULL thread");
 
   #if DEBUG
-//    for( int level=0; level < maxRunQueues; level++ )
-//      assert( !isInQueue( &runQueues[level], tid ) );
-
-    int total_bef=totalTimerTime();
+    unsigned int total_bef=totalTimerTime();
   #endif
 
-  if( tid == timerQueue.head )
+  if( thread == timerQueue.head )
   {
-    if( timerNodes[tid].next != NULL_TID )
-      timerNodes[timerNodes[tid].next].delta += timerNodes[tid].delta;
+    timerQueue.head = thread->timerNext;
 
-    timerQueue.head = timerNodes[tid].next;
+    if( thread != timerQueue.tail )
+    {
+      assert( thread->timerNext != NULL );
+      thread->timerNext->timerDelta += thread->timerDelta;
+    }
+    else
+    {
+      timerQueue.tail = NULL;
+    }
 
     #if DEBUG
-      if( timerNodes[tid].next == NULL_TID )
-        assert( totalTimerTime() + timerNodes[tid].delta == total_bef );
+      if( thread->timerNext == NULL )
+        assert( totalTimerTime() + thread->timerDelta == total_bef );
       else
         assert( totalTimerTime() == total_bef );
     #endif
-
-    timerNodes[tid].delta = 0;
-    timerNodes[tid].next = NULL_TID;
-
-    return 0;
   }
-
-  for( tid_t ptr=timerQueue.head; ptr != NULL_TID; ptr = timerNodes[ptr].next )
+  else
   {
-    if( timerNodes[ptr].next == tid )
+    TCB *ptr;
+
+    for( ptr=timerQueue.head; ptr != NULL; ptr = ptr->timerNext )
     {
-      timerNodes[ptr].next = timerNodes[tid].next;
-      timerNodes[timerNodes[tid].next].delta += timerNodes[tid].delta;
+      if( ptr->timerNext == thread )
+      {
+        ptr->timerNext = thread->timerNext;
+        assert( thread->timerNext != NULL );
+        thread->timerNext->timerDelta += thread->timerDelta;
 
-      #if DEBUG
-        if( timerNodes[tid].next == NULL_TID )
-          assert( totalTimerTime() + timerNodes[tid].delta == total_bef );
-        else
-          assert( totalTimerTime() == total_bef );
-      #endif
+        #if DEBUG
+          if( thread->timerNext == NULL )
+            assert( totalTimerTime() + thread->timerDelta == total_bef );
+          else
+            assert( totalTimerTime() == total_bef );
+        #endif
 
-      timerNodes[tid].delta = 0;
-      timerNodes[tid].next = NULL_TID;
-
-      return 0;
+        if( thread == timerQueue.tail )
+          timerQueue.tail = ptr;
+      }
     }
+
+    if( ptr == NULL )
+      return NULL;
   }
 
-  return -1;
+  thread->timerNext = NULL;
+  thread->timerDelta = 0;
+
+  return thread;
 }
 
 /**
   Adds a thread to the end of a thread queue.
 
-  @param tid The TID of the thread to enqueue.
-  @return 0 on success. -1 on failure.
+  @param queue The queue to which a thread will be attached.
+  @param thread The thread to enqueue.
+  @return The enqueued thread on success. NULL on failure.
 */
 
-int enqueue( struct Queue *queue, tid_t tid )
+TCB *enqueue( struct Queue *queue, TCB *thread )
 {
-  if( queue == NULL || tid == NULL_TID )
-    RET_MSG(-1, "NULL ptr/tid")//return -1;
+  if( !queue || !thread )
+    RET_MSG(NULL, "NULL pointer")//return -1;
 
-  assert( (queue->head == NULL_TID && queue->tail == NULL_TID)
-          || (queue->head != NULL_TID && queue->tail != NULL_TID) );
+  assert( thread->threadState != RUNNING );
 
-  assert( !isInQueue( queue, tid ) );
-  assert( !isInTimerQueue( tid ) || (tcbTable[tid].wait_tid != NULL_TID && (queue == &tcbTable[tcbTable[tid].wait_tid].threadQueue)) );
+  assert( (queue->head == NULL && queue->tail == NULL) ||
+          (queue->head == queue->tail &&
+             queue->head->queuePrev == queue->head->queueNext
+             && queue->head->queueNext == NULL ) ||
+          (queue->head != NULL && queue->tail != NULL) );
 
-  for( int level=0; level < maxRunQueues; level++ )
-    assert( !isInQueue( &runQueues[level], tid ) );
+  assert( !isInQueue( queue, thread ) );
+  assert( !isInTimerQueue( thread ) || (thread->waitThread != NULL &&
+    (queue == &thread->waitThread->threadQueue)) );
 
-  tcbNodes[tid].prev = queue->tail;
-  tcbNodes[tid].next = NULL_TID;
+  for( unsigned int level=0; level < NUM_RUN_QUEUES; level++ )
+    assert( !isInQueue( &runQueues[level], thread ) );
 
-  if( queue->tail != NULL_TID )
-    tcbNodes[queue->tail].next = tid;
+  thread->queuePrev = queue->tail;
+  thread->queueNext = NULL;
 
-  queue->tail = tid;
+  if( queue->tail )
+    queue->tail->queueNext = thread;
 
-  if( queue->head == NULL_TID )
+  queue->tail = thread;
+
+  if( !queue->head )
     queue->head = queue->tail;
 
-  assert( isInQueue( queue, tid ) );
+  assert( isInQueue( queue, thread ) );
 
-  assert( queue->head != NULL_TID && queue->tail != NULL_TID );
-
-  return 0;
+  return thread;
 }
 
 /**
   Removes a thread from a thread queue.
 
-  @param queue A thread queue.
-  @param tid The TID of the thread to dequeue.
-  @return The TID of the thread, if found. NULL_TID if the thread is not on the queue or on failure.
+  @param queue The thread queue from which to detach.
+  @param thread The thread to detach.
+  @return The detached thread, if found. NULL if not found or failure.
 */
 
-tid_t detachQueue( struct Queue *queue, tid_t tid )
+TCB *detachQueue( struct Queue *queue, TCB *thread )
 {
-  tid_t nodeTID;
-  struct NodePointer *ptr;
+  assert( queue );
+  assert( (queue->head == NULL && queue->tail == NULL) ||
+          (queue->head == queue->tail &&
+             queue->head->queuePrev == queue->head->queueNext
+             && queue->head->queueNext == NULL ) ||
+          (queue->head != NULL && queue->tail != NULL) );
 
-  assert( (queue->head != NULL_TID && queue->tail != NULL_TID) ||
-          (queue->head == NULL_TID && queue->tail == NULL_TID) );
+  if( !queue || !queue->head || !thread )
+    return NULL;
 
-  if( queue == NULL || queue->head == NULL_TID || tid == NULL_TID )
-    return NULL_TID;
+  assert( thread->threadState != RUNNING );
 
-  assert( !isInTimerQueue( tid ) || (tcbTable[tid].wait_tid != NULL_TID && (queue == &tcbTable[tcbTable[tid].wait_tid].threadQueue)) );
+  assert( !isInTimerQueue( thread ) || (thread->waitThread != NULL &&
+          (queue == &thread->waitThread->threadQueue)) );
 
-/*
-  for( int level=0; level < maxRunQueues; level++ )
+  for( TCB *ptr=queue->head; ptr; ptr=ptr->queueNext )
   {
-    if( queue == &runQueues[level] )
-      continue;
-
-    assert( !isInQueue( &runQueues[level], tid ) );
-  }
-*/
-
-  for( nodeTID = queue->head; nodeTID != NULL_TID; nodeTID = ptr->next )
-  {
-    ptr = &tcbNodes[nodeTID];
-
-    if( nodeTID == tid )
+    if( ptr == thread )
     {
-      if( ptr->prev != NULL_TID )
-        tcbNodes[ptr->prev].next = ptr->next;
-      if( ptr->next != NULL_TID )
-        tcbNodes[ptr->next].prev = ptr->prev;
+      if( ptr->queuePrev )
+        ptr->queuePrev->queueNext = ptr->queueNext;
+      if( ptr->queueNext )
+        ptr->queueNext->queuePrev = ptr->queuePrev;
 
-      if( queue->head == nodeTID )
-        queue->head = ptr->next;
-      if( queue->tail == nodeTID )
-        queue->tail = ptr->prev;
+      if( queue->head == thread )
+        queue->head = ptr->queueNext;
+      if( queue->tail == thread )
+        queue->tail = ptr->queuePrev;
 
-      tcbNodes[nodeTID].next = tcbNodes[nodeTID].prev = NULL_TID;
-
-      return nodeTID;
+      ptr->queueNext = ptr->queuePrev = NULL;
+      return ptr;
     }
   }
 
-return NULL_TID;//  RET_MSG(NULL_TID, "NULL tid")//return NULL_TID;
+  return NULL;
 }
 
 /**
   Removes the first thread from a thread queue.
 
   @param queue A thread queue.
-  @return The TID of the first thread on the thread queue. NULL_TID if the
+  @return The first thread on the thread queue. NULL if the
           thread queue is empty or on failure.
 */
 
-tid_t popQueue( struct Queue *queue )
+TCB *popQueue( struct Queue *queue )
 {
-  if( queue == NULL )
-    return NULL_TID;
-
   return detachQueue( queue, queue->head );
 }

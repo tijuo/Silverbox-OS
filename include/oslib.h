@@ -18,7 +18,7 @@ extern "C" {
 #define DIE_MSG		    	0xF1FE
 #define ALIVE_MSG	    	0xA1B2
 
-#define NULL_PADDR          	(void *)0xFFFFFFFF
+#define NULL_PADDR          	0xFFFFFFFFu
 
 #define KERNEL_MBOX_ID 		0
 
@@ -43,7 +43,7 @@ extern "C" {
 #define KERNEL_TID		(tid_t)0
 #define NULL_RSPID		(rspid_t)0
 #define NULL_SHMID		(shmid_t)-1
-#define NULL_TID		(tid_t)0xFFFF
+#define NULL_TID		0
 
 typedef unsigned long shmid_t;
 typedef unsigned long rspid_t;
@@ -52,6 +52,26 @@ typedef unsigned long rspid_t;
 #define MSG_LEN         1024
 
 #define RAW_PROTOCOL		0
+
+#define PM_PRESENT		0x01
+#define PM_NOT_PRESENT		0
+#define PM_READ_ONLY		0
+#define PM_READ_WRITE		0x02
+#define PM_NOT_CACHED		0x10
+#define PM_WRITE_THROUGH	0x08
+#define PM_NOT_ACCESSED		0
+#define PM_ACCESSED		0x20
+#define PM_NOT_DIRTY		0
+#define PM_DIRTY		0x40
+#define PM_LARGE_PAGE		0x80
+#define PM_INVALIDATE		0x80000000
+
+struct PageMapping
+{
+  addr_t virt;
+  addr_t frame;
+  unsigned int flags;
+};
 
 struct MemInfo
 {

@@ -8,186 +8,183 @@
 #include <kernel/paging.h>
 #include <kernel/memory.h>
 #include <kernel/rtc.h>
-
+#include <kernel/pit.h>
+#include <kernel/pic.h>
 #include <oslib.h>
-#include <os/io.h>
+
+#include <kernel/io.h>
 #include <os/variables.h>
 
-#define MAX_MODULES 50
+#define FREE_PAGE_PTR_START     0x100000u
 
 #define DISC_CODE(X) \
-  X __attribute__((section(".dtext")));
+  X __attribute__((section(".dtext")))
 
 #define  DISC_DATA(X)  \
-  extern X __attribute__((section(".ddata")));  X
+  X __attribute__((section(".ddata")))
 
 #define INIT_SRV_FLAG	"initsrv="
 
-static inline void contextSwitch( void *addrSpace, void *stack ) __attribute( (section(".dtext")) );
+static inline void contextSwitch( cr3_t addrSpace, addr_t stack ) __attribute__((section(".dtext")));
 
-static inline void contextSwitch( void *addrSpace, void *stack )
+static inline void contextSwitch( cr3_t addrSpace, addr_t stack )
 {
    __asm__ __volatile__(
-    "mov %0, %%ecx\n"
-    "mov %%cr3, %%edx\n"
-    "cmp %%edx, %%ecx\n"
+    "mov %%edx, %%esp\n"
+    "mov %%cr3, %%eax\n"
+    "cmp %%eax, %%ecx\n"
     "je   __load_regs\n"
     "mov  %%ecx, %%cr3\n"
-    "__load_regs: mov    %1, %%esp\n"
+    "__load_regs:\n"
     "popa\n"
-    "popw  %%es\n"
-    "popw  %%ds\n"
+    "pop  %%es\n"
+    "pop  %%ds\n"
     "add   $8, %%esp\n"
-    "iret\n" :: "m"(addrSpace),
-    "m"(stack) : "edx", "ecx", "esp");
+    "iret\n" :: "ecx"(*(dword *)&addrSpace),
+    "edx"((dword)stack) : "%eax");
 }
 
 extern TCB *idleThread;
 
-DISC_DATA( u32 kernelEnd );
-DISC_CODE(int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack ));
-DISC_CODE(bool isValidElfExe( addr_t img ));
-DISC_CODE(size_t calcKernelSize( multiboot_info_t *info ));
-DISC_CODE(addr_t getModuleStart( multiboot_info_t *info ));
-DISC_CODE(size_t getTotalModuleSize( multiboot_info_t *info ));
-DISC_CODE(addr_t getModuleEndAddr( multiboot_info_t *info ));
-DISC_CODE(void initInterrupts( void ));
-DISC_CODE(void initScheduler( addr_t addrSpace ));
-DISC_CODE(void initTimer( void ));
-DISC_CODE(int initMemory( multiboot_info_t *info ));
-DISC_CODE(void initGDT( void ));
-DISC_CODE(int add_gdt_entry(int sel, dword base, dword limit, int flags));
-DISC_CODE(int initTables( addr_t start, int numThreads, int numRunQueues ));
-DISC_CODE(void initTSS(void));
-DISC_CODE(void stopInit(char *msg));
-DISC_CODE(int initMsgSystem(void));
-DISC_CODE(void init2(void));
-DISC_CODE(void init(multiboot_info_t *info));
-DISC_CODE(void initPIC( void ));
-DISC_CODE(int memcmp(const char *s1, const char *s2, register size_t n));
-DISC_CODE(int strncmp(const char *str1, const char *str2, size_t num));
-DISC_CODE(char *strstr(const char *str, const char *substr));
-DISC_CODE(int clearPhysPage(void *phys));
-DISC_CODE(void showCPU_Features(void));
-DISC_CODE(void showGrubSupport(multiboot_info_t *));
-DISC_CODE(void init_clock(void));
-DISC_CODE(unsigned bcd2bin(unsigned short num));
-DISC_CODE(unsigned long long mktime(int year, int month, int day, int hour,
-                          int minute, int second));
-DISC_DATA( addr_t init_server_img );
-DISC_DATA( int numBootMods );
-DISC_DATA( module_t kBootModules[MAX_MODULES] );
-DISC_DATA(size_t totalPhysMem);
-DISC_DATA(addr_t startPhysPages);
-DISC_DATA(uint32 totalPages);
-DISC_DATA(uint32 totalKSize);
-DISC_DATA(multiboot_info_t *grubBootInfo);
-DISC_DATA(addr_t modulesStart);
-DISC_DATA(size_t totalModulesSize);
+static TCB *DISC_CODE(load_elf_exec( addr_t, TCB *, addr_t, addr_t ));
+static bool DISC_CODE(isValidElfExe( addr_t img ));
+static void DISC_CODE(initInterrupts( void ));
+static void DISC_CODE(initScheduler( addr_t ));
+static void DISC_CODE(initTimer( void ));
+static int DISC_CODE(initMemory( multiboot_info_t *info ));
+//int DISC_CODE(add_gdt_entry(int sel, dword base, dword limit, int flags));
+static void DISC_CODE(setupGDT(void));
+static void DISC_CODE(stopInit(const char *));
+static void DISC_CODE(init2(multiboot_info_t * restrict));
+void DISC_CODE(init(multiboot_info_t * restrict));
+static void DISC_CODE(initPIC( void ));
+static int DISC_CODE(memcmp(const char *s1, const char *s2, register size_t n));
+static int DISC_CODE(strncmp(const char * restrict, const char * restrict, size_t num));
+//static size_t DISC_CODE(strlen(const char *s));
+static char *DISC_CODE(strstr(const char * restrict, const char * restrict));
+static char *DISC_CODE(strchr(const char * restrict, int));
+static int DISC_CODE(clearPhysPage(addr_t phys));
+static void DISC_CODE(showCPU_Features(void));
+static void DISC_CODE(showGrubSupport(multiboot_info_t *));
+static void DISC_CODE(init_clock(void));
+static void DISC_CODE(initStructures(void));
+static unsigned DISC_CODE(bcd2bin(unsigned num));
+static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month, unsigned int day, unsigned int hour,
+                          unsigned int minute, unsigned int second));
+static addr_t DISC_DATA(init_server_img);
+static addr_t DISC_CODE(alloc_page(void));
 
-struct SectionInfo
+addr_t DISC_DATA(free_page_ptr) = (addr_t)FREE_PAGE_PTR_START;
+//static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
+
+extern void invalidate_page( addr_t );
+/*
+void readPhysMem(addr_t address, addr_t buffer, size_t len)
 {
-  unsigned textStart, textLength;
-  unsigned dataStart, dataLength;
-  unsigned bssStart, bssLength;
-};
+  unsigned offset, bytes, i=0;
 
-struct BootInfo
+  while( len )
+  {
+    offset = (unsigned)address & (PAGE_SIZE - 1);
+    bytes = (len > PAGE_SIZE - offset) ? PAGE_SIZE - offset : len;
+
+    mapTemp( address & ~0xFFFu );
+
+    memcpy( (void *)(buffer + i), (void *)(TEMP_PAGEADDR + offset), bytes);
+
+    unmapTemp();
+
+    address += bytes;
+    i += bytes;
+    len -= bytes;
+  }
+}
+*/
+int clearPhysPage( addr_t phys )
 {
-  unsigned short num_mods;
-  unsigned short num_mem_areas;
-} __PACKED__;
-
-struct MemoryArea
-{
-  unsigned long base;
-  unsigned long length;
-} __PACKED__;
-
-struct BootModule
-{
-  unsigned long mod_start;
-  unsigned long mod_end;
-// Name goes here
-} __PACKED__;
-
-DISC_DATA(struct BootInfo boot_info);
-DISC_DATA(struct MemoryArea mem_area[20]);
-
-int clearPhysPage( void *phys )
-{
-  assert( phys != (void *)NULL_PADDR );
+  assert( phys != NULL_PADDR );
 
   if( mapTemp( phys ) == -1 )
     return -1;
 
-  memset( (void *)(TEMP_PAGEADDR), 0, PAGE_SIZE );
+  memset( (void *)TEMP_PAGEADDR, 0, PAGE_SIZE );
 
   unmapTemp();
-/*
-  *(unsigned *)pte = 0;
-*/
   return 0;
 }
 
 int memcmp(const char *s1, const char *s2, register size_t n)
 {
-  if( n == 0 || s1 && !s2 )
-    return 0;
-
-  if( !s1 )
-    return -*s2;
-
-  if( !s2 )
-    return *s1;
-
-  for(; n && *s1 == *s2; n--, s1++, s2++);
+  for( ; n && *s1 == *s2; n--, s1++, s2++);
 
   if( !n )
     return 0;
   else
-    return *s1 - *s2;
+    return (*s1 > *s2 ? 1 : -1);
 }
 
-int strncmp( const char *str1, const char *str2, size_t num )
+int strncmp( const char * restrict str1, const char * restrict str2, size_t num )
 {
-  while( num && *str1 == *str2 && *str1 != '\0' )
-  {
-    str1++;
-    str2++;
-    num--;
-  }
+  register size_t i;
 
-  if( !num )
+  if( !str1 && !str2 )
+    return 0;
+  else if( !str1 )
+    return -1;
+  else if( !str2 )
+    return 1;
+
+  for( i=0; i < num && str1[i] == str2[i] && str1[i]; i++ );
+
+  if( i == num )
     return 0;
   else
-    return *str1 - *str2;
+    return (str1[i] > str2[i] ? 1 : -1);
 }
 
-char *strstr( const char *str, const char *substr )
+char *strstr( const char * restrict str, const char * restrict substr )
 {
-  register int i;
+  register size_t i;
+  register size_t off;
 
-  while( *str )
+  if( !str )
+    return NULL;
+  else if( !substr || !substr[0] )
+    return (char *)str;
+
+  for( off=0; str[off]; off++ )
   {
-    i = 0;
+    for( i=0; str[off+i] == substr[i] && substr[i]; i++ );
 
-    while( str[i] == substr[i] )
-      i++;
-
-    if( substr[i] == '\0' )
+    if( !substr[i] )
       return (char *)str;
-
-    str++;
   }
 
-  if( *substr == *str )
-    return (char *)str;
+  return NULL;
+}
+/*
+size_t strlen(const char *s)
+{
+  if( !s )
+    return 0;
+
+  return (size_t)(strchr(s, '\0') - s);
+}
+*/
+char *strchr(const char * restrict s, int c)
+{
+  register size_t i;
+
+  if( !s )
+    return NULL;
+
+  for( i=0; s[i] != c && s[i]; i++ );
+
+  if( s[i] == c )
+    return (char *)s;
   else
     return NULL;
 }
-
-
 
 void initPIC( void )
 {
@@ -230,158 +227,131 @@ struct gdt_entry {
   byte  base3;
 } __PACKED__;
 
-int add_gdt_entry(int sel, dword base, dword limit, int flags)
+struct gdt_pointer
 {
-  int rsel = sel;
+  word limit;
+  dword base;
+} __PACKED__;
+
+/*
+int add_gdt_entry(unsigned int sel, dword base, dword limit, int flags)
+{
+  unsigned int rsel = sel;
 
   kprintf("GDT: Sel- 0x%x Base: 0x%x Limit: 0x%x Flags: 0x%x\n", sel, base, limit, flags);
 
-  struct gdt_entry *entry = (struct gdt_entry *)KERNEL_GDT;
+  struct gdt_entry * const entry = (struct gdt_entry * const)&kernelGDT;
 
   if((sel < 0))
     return 0;
 
   entry += (sel / 8);
 
-  entry->limit1 = (word)(limit & 0xFFFF);
-  entry->limit2 = (byte)((limit >> 16) & 0x0F);
-  entry->base1 = (word)(base & 0xFFFF);
-  entry->base2 = (byte)((base >> 16) & 0xFF);
-  entry->base3 = (byte)((base >> 24) & 0xFF);
-  entry->flags1 = (byte)(flags & 0xFF);
-  entry->flags2 = (byte)((flags >> 8) & 0x0F);
+  entry->limit1 = (word)(limit & 0xFFFFu);
+  entry->limit2 = (byte)((limit >> 16) & 0xFu);
+  entry->base1 = (word)(base & 0xFFFFu);
+  entry->base2 = (byte)((base >> 16) & 0xFFu);
+  entry->base3 = (byte)((base >> 24) & 0xFFu);
+  entry->flags1 = (byte)(flags & 0xFFu);
+  entry->flags2 = (byte)((flags >> 8) & 0x0Fu);
 
   return rsel;
 }
+*/
 
-void initTSS(void)
+void setupGDT(void)
 {
-  struct TSS_Struct *tss = (struct TSS_Struct *)(PHYSMEM_START + KERNEL_TSS);
+  volatile struct TSS_Struct *tss = (volatile struct TSS_Struct *)EXT_PTR(kernelTSS);
+  struct gdt_entry *entry = (struct gdt_entry *)((unsigned int)EXT_PTR(kernelGDT) + TSS);
+  struct gdt_pointer gdt_pointer;
 
-  tss->ioMap = IOMAP_LAZY_OFFSET;
+  entry->base1 = (dword)tss & 0xFFFFu;
+  entry->base2 = (byte)(((dword)tss >> 16) & 0xFFu);
+  entry->base3 = (byte)(((dword)tss >> 24) & 0xFFu);
+  entry->limit1 = sizeof(struct TSS_Struct) + 2 * PAGE_SIZE; // Size of TSS structure and IO Bitmap
+  entry->limit2 = 0;
+
   tss->ss0 = KDATA;
-  tssEsp0 = (unsigned *)&tss->esp0;
-  tssIOBitmap = (void *)TSS_IO_PERM_BMP;
 
-//  kprintf("TSS: IO Map: 0x%x SS: 0x%x Esp0: 0x%x\n", tss->ioMap, tss->ss0, tssEsp0);
-//  memset( (void *)(TSS_IO_PERM_BMP + PHYSMEM_START), 0xFF, 8192 );
+  __asm__("ltr %%ax" :: "ax"(TSS) );
+  __asm__("sgdt %0" : "=m"(gdt_pointer));
+  gdt_pointer.limit -= 0x10u;
+  __asm__("lgdt %0" :: "m"(gdt_pointer));
 }
 
-void initGDT(void)
+void stopInit(const char *msg)
 {
-  initTSS();
-
-  add_gdt_entry( 0, 0, 0, 0 );
-  add_gdt_entry( KCODE, 0, 0xFFFFF, G_GRANULARITY |
-      G_BIG | G_RDONLY | G_CODESEG | G_DPL0
-    | G_PRESENT );
-  add_gdt_entry( KDATA, 0, 0xFFFFF, G_GRANULARITY | G_BIG |
-      G_RDWR | G_DATASEG | G_DPL0 | G_PRESENT );
-
-  add_gdt_entry( UCODE, 0, 0xFFFFF, G_PRESENT | G_GRANULARITY |
-      G_BIG | /*G_RDONLY*/G_RDWR | G_CODESEG | G_DPL3 );
-  add_gdt_entry( UDATA, 0, 0xFFFFF, G_PRESENT | G_GRANULARITY |
-      G_BIG | G_RDWR | G_DATASEG | G_DPL3 );
-  add_gdt_entry( TSS, (dword)&_kernelTSS, 0x2068, 0x89 );
-}
-
-void stopInit(char *msg)
-{
-  kprintf("Init failed: %s\nSystem halted.", msg);
   disableInt();
-  asm("hlt\n");
-  while(1);
+  kprintf("Init failed: %s\nSystem halted.", msg);
+
+  while(1)
+    __asm__("hlt\n");
 }
 
 /* Warning: This is fragile code! Any changes to this function or to the
    functions that are called by this function may break the entire
    kernel. */
 
-int initMemory( multiboot_info_t *info )
+int initMemory( multiboot_info_t * restrict info )
 {
-  int bitmapSize;
-  int numEntries;
-  u32 addr;
-  int size;
-  pde_t *pde;
-
-  totalPhysMem = ( info->mem_upper + info->mem_lower ) << 10;
+  unsigned int totalPhysMem = (info->mem_upper + 1024) * 1024;
+  pte_t *ptePtr;
+  size_t len;
+  pde_t *pdePtr;
+  addr_t addr;
 
   kprintf("Total Memory: 0x%x. %d pages. ", totalPhysMem, totalPhysMem / PAGE_SIZE );
 
   if( totalPhysMem < (8 << 20) )
     stopInit("Not enough memory!");
 
-  totalPages = totalPhysMem / PAGE_SIZE;
+  kprintf("Kernel AddrSpace: 0x%x\n", (unsigned)initKrnlPDir);
 
-  kernelAddrSpace = ( pdir_t * )INIT_PDIR;
+  for( addr=(addr_t)EXT_PTR(kCode); addr < (addr_t)EXT_PTR(kData); addr += PAGE_SIZE )
+  {
+    ptePtr = ADDR_TO_PTE( addr );
 
-  kprintf("Kernel AddrSpace: 0x%x\n", (unsigned)kernelAddrSpace); 
+    ptePtr->rwPriv = 0;
+    invalidate_page( addr );
+  }
 
-  if( calcKernelSize( info ) > PAGETAB )
-    stopInit("Kernel is too large!(> 4194304 bytes)");
+  addr = (addr_t)EXT_PTR(kPhysStart);
+  len = (size_t)EXT_PTR(kSize);
 
-  totalKSize = (u32)PAGE_ALIGN(getModuleEndAddr(info)) - (u32)&kCode;
-  kernelEnd = (u32)PAGE_ALIGN(getModuleEndAddr(info));
+  do
+  {
+    pdePtr = ADDR_TO_PDE(addr);
+    pdePtr->present = 0;
+    addr += TABLE_SIZE;
+    len -= (len > TABLE_SIZE ? TABLE_SIZE : len);
+  } while(len);
 
-  kprintf("Total Kernel Size: 0x%x\n", totalKSize);
-
-  size = initTables( (void *)kernelEnd, maxThreads, maxRunQueues );
-
-  if( size == -1 )
-    stopInit("Unable to initialize kernel data structure tables.\n");
-
-  totalKSize += size;
-  kernelEnd += size;
-
-  totalKSize = (u32)PAGE_ALIGN((addr_t)totalKSize);
-  kernelEnd = (u32)PAGE_ALIGN((addr_t)kernelEnd);
-
-  kprintf("Kernel End: 0x%x\n", kernelEnd);
-
-  initGDT();
-
-  asm __volatile__( "mov  %cr4, %eax\n" \
-      "or   $0x80, %eax\n" \
-      "mov  %eax, %cr4\n" );
-
-  asm __volatile__( "mov  %cr0, %eax\n" \
-      "or   $0x00010000, %eax\n" \
-      "mov  %eax, %cr0\n" );
-
-  loadGDT();
-
-//  kprintf("Unmapping first page table\n");
-
-  /* Unmap the first page table */
-
-//  pde = ADDR_TO_PDE((addr_t)0x00);
-//  memset( pde, 0, sizeof(*pde) );
+  setupGDT();
 
   return 0;
 }
 
+#define UNIX_EPOCH          1970u
+#define CENTURY_START       2000u
 
-#define UNIX_EPOCH          1970
-#define CENTURY_START       2000
-
-static int is_leap( int year )
+static int is_leap( unsigned int year )
 {
-  return ( ((year % 4) == 0 && (year % 100) != 0) ||
-      (year % 400) == 0 );
+  return ( ((year % 4u) == 0 && (year % 100u) != 0) ||
+      (year % 400u) == 0 );
 }
 
-unsigned bcd2bin(unsigned short num)
+unsigned int bcd2bin(unsigned int num)
 {
-  return (num & 0x0F) + 10 * ((num & 0xF0) >> 4) + 100 * ((num & 0xF00) >> 8)
-    + 1000 * ((num & 0xF000) >> 12);
+  return (num & 0x0Fu) + 10 * ((num & 0xF0u) >> 4) + 100 * ((num & 0xF00u) >> 8)
+    + 1000 * ((num & 0xF000u) >> 12);
 }
 
-unsigned long long mktime(int year, int month, int day, int hour,
-                          int minute, int second)
+unsigned long long mktime(unsigned int year, unsigned int month,
+    unsigned int day, unsigned int hour, unsigned int minute, unsigned int second)
 {
   unsigned long long elapsed = 0ull;
-  int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  unsigned int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+  unsigned int i;
 
   kprintf("mktime: %d %d %d %d %d %d\n", year, month, day, hour, minute, second);
 
@@ -390,13 +360,13 @@ unsigned long long mktime(int year, int month, int day, int hour,
   elapsed += hour * 1024ull * 60ull * 60ull;
   elapsed += day * 1024ull * 60ull * 60ull * 24ull;
 
-  for(int i=0; i < month; i++)
+  for(i=0; i < month; i++)
     elapsed += month_days[i] * 1024ull * 60ull * 60ull * 24ull;
 
-  if( is_leap(CENTURY_START+year) && month > 1 )
+  if( is_leap(CENTURY_START+year) && month > 1u )
     elapsed += 1024ull * 60ull * 60ull * 24ull;
 
-  for(int i=UNIX_EPOCH; i < CENTURY_START + year; i++)
+  for(i=UNIX_EPOCH; i < CENTURY_START + year; i++)
     elapsed += (is_leap(i) ? 366ull : 365ull) * 60ull * 60ull * 24ull * 1024ull;
 
   return elapsed;
@@ -404,15 +374,16 @@ unsigned long long mktime(int year, int month, int day, int hour,
 
 void init_clock()
 {
-  int year, month, day, hour, minute, second;
-  unsigned long long *time = (unsigned long long *)KERNEL_VAR_PAGE;
-  int bcd, _24hr, status_b;
-  
+  unsigned int year, month, day, hour, minute, second;
+  unsigned long long *time = (unsigned long long *)KERNEL_CLOCK;
+  unsigned int bcd, _24hr;
+  unsigned char status_b;
+
   addIDTEntry( irq8Handler, IRQ8, INT_GATE | KCODE );
-  
+
   outByte( RTC_INDEX, RTC_STATUS_B );
   status_b = inByte( RTC_DATA );
-  
+
   if( status_b & RTC_BINARY )
     bcd = 0;
   else
@@ -449,10 +420,10 @@ void init_clock()
   }
 
   outByte( RTC_INDEX, RTC_DAY ); // day
-  day = -1 + (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
+  day = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA )) - 1;
 
   outByte( RTC_INDEX, RTC_MONTH ); // month
-  month = -1 + (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
+  month = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA )) - 1;
 
   outByte( RTC_INDEX, RTC_YEAR ); // century year (00-99)
   year = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
@@ -474,13 +445,19 @@ void initTimer( void )
 
 void initScheduler( addr_t addrSpace )
 {
-  currentThread = idleThread = createThread( (addr_t)idle, addrSpace, NULL, 0 );
+  currentThread = idleThread = createThread( (addr_t)idle, addrSpace,
+    (addr_t)EXT_PTR(idleStack) + idleStackLen, NULL_TID );
+
+  idleThread->priority = LOWEST_PRIORITY;
+  idleThread->quantaLeft = LOWEST_PRIORITY + 1;
+  idleThread->threadState = RUNNING;
+
   initTimer();
 }
 
 void initInterrupts( void )
 {
-  int i;
+  unsigned int i;
 
   addIDTEntry( ( void * ) intHandler0, 0, INT_GATE | KCODE );
   addIDTEntry( ( void * ) intHandler1, 1, INT_GATE | KCODE );
@@ -510,6 +487,7 @@ void initInterrupts( void )
   addIDTEntry( ( void * ) irq5Handler, 0x25, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq6Handler, 0x26, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq7Handler, 0x27, INT_GATE | KCODE ) ;
+  addIDTEntry( ( void * ) invalidIntHandler, 0x28, INT_GATE | KCODE ) ;
   //addIDTEntry( ( void * ) irq8Handler, 0x28, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq9Handler, 0x29, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq10Handler, 0x2A, INT_GATE | KCODE ) ;
@@ -522,105 +500,13 @@ void initInterrupts( void )
   for ( i = 20; i < 32; i++ )
     addIDTEntry( ( void * ) invalidIntHandler, i, INT_GATE | KCODE );
 
-  for( i = 0x2F; i <= 0xFF; i++ )
+  for( i = 0x30; i <= 0xFF; i++ )
     addIDTEntry( ( void *) invalidIntHandler, i, INT_GATE | KCODE );
 
   addIDTEntry( ( void * ) syscallHandler, 0x40, INT_GATE | KCODE | I_DPL3 );
 
   initPIC();
   loadIDT();
-}
-
-addr_t getModuleEndAddr( multiboot_info_t *info )
-{
-  if( info->mods_count == 0 )
-    return (addr_t)( KERNEL_VSTART + calcKernelSize( info ) );
-  else
-    return (addr_t)( PHYS_TO_VIRT(getModuleStart( info )) + getTotalModuleSize( info ) );
-}
-
-size_t getTotalModuleSize( multiboot_info_t *info )
-{
-  module_t *kmod = (module_t *)info->mods_addr;
-
-  if( info->mods_count == 0 )
-    return 0;
-  else
-    return kmod[info->mods_count - 1].mod_end - kmod[0].mod_start;
-}
-
-addr_t getModuleStart( multiboot_info_t *info )
-{
-  module_t *kmod = (module_t *)info->mods_addr;
-
-  if( info->mods_count == 0 )
-    return NULL;
-  else
-    return (addr_t)kmod[0].mod_start;
-}
-
-size_t calcKernelSize( multiboot_info_t *info )
-{
-  elf_section_header_table_t table = info->u.elf_sec;
-  int numSections = table.num;
-
-  elf_sheader_t *sheader = (elf_sheader_t *)PHYS_TO_VIRT(table.addr);
-
-  return (sheader[numSections - 1].addr + sheader[numSections - 1].size) -
-      (unsigned)KERNEL_START;
-}
-
-/* Returns the total size of the tables. */
-
-// TODO: This needs to be cleaned up
-
-int initTables( addr_t start, int numThreads, int numRunQueues )
-{
-  unsigned char *ptr = (unsigned char *)start;
-  int i;
-
-  kprintf("Kernel Tables: Start - 0x%x ", start);
-
-  if( numThreads < 1 || numRunQueues < 1 || numRunQueues > 15 )
-    return -1;
-
-  tcbTable = (TCB *)ptr;
-  memset( tcbTable, 0, numThreads * sizeof( TCB ) );
-  ptr += numThreads * sizeof( TCB );
-
-  kprintf("TCB Table: 0x%x\n", tcbTable);
-
-  runQueues = (struct Queue *)ptr;
-
-  kprintf("Run Queues: 0x%x\n", runQueues);
-
-  for(i=0; i < numRunQueues; i++)
-    runQueues[i].head = runQueues[i].tail = NULL_TID;
-
-  ptr += numRunQueues * sizeof( struct Queue );
-
-  tcbNodes = (struct NodePointer *)ptr;
-
-  kprintf("TCB Nodes: 0x%x ", tcbNodes);
-
-  for(i=0; i < numThreads; i++)
-    tcbNodes[i].next = tcbNodes[i].prev = NULL_TID;
-
-  ptr += sizeof( struct NodePointer ) * numThreads;
-
-  timerNodes = (struct TimerNode *)ptr;
-
-  for(i=0; i < numThreads; i++)
-  {
-    timerNodes[i].next = NULL_TID;
-    timerNodes[i].delta = 0;
-  }
-
-  ptr += sizeof( struct TimerNode ) * numThreads;
-
-  timerQueue.head = NULL_TID;
-
-  return (unsigned)ptr - (unsigned)start;
 }
 
 bool isValidElfExe( addr_t img )
@@ -630,7 +516,7 @@ bool isValidElfExe( addr_t img )
   if( img == NULL )
     return false;
 
-  if ( memcmp( "\x7F""ELF", image->identifier, 4 ) != 0 )
+  if ( memcmp( "\x7f""ELF", image->identifier, 4 ) != 0 )
     return false;
 
   else
@@ -650,110 +536,126 @@ bool isValidElfExe( addr_t img )
   return true;
 
 }
-/* Requires physical pages for BSS */
 
-int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack )
+addr_t alloc_page(void)
 {
-  unsigned phtab_entsize, phtab_count, shtab_count, i, j;
-  elf_header_t *image = (elf_header_t *)img;
-  elf_pheader_t *pheader;
-  elf_sheader_t *sheader;
-  addr_t tempAddr;
-  TCB *thread;
-  void *phys;
-  dword priv;
-  pde_t pde;
-  struct MemoryArea *m_area=NULL;
+  free_page_ptr += PAGE_SIZE;
+  return free_page_ptr - PAGE_SIZE;
+}
 
-  if( !isValidElfExe( img ) )
+TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr_t uStack )
+{
+  elf_header_t image;
+  elf_sheader_t sheader;
+  TCB *thread;
+  addr_t page;
+  pde_t pde;
+  pte_t pte;
+  size_t i, offset;
+
+  peek( img, (addr_t)&image, sizeof image );
+  pte.present = 0;
+
+  #if DEBUG
+    int result;
+  #endif /* DEBUG */
+
+  if( !isValidElfExe( (addr_t)&image ) )
   {
     kprintf("Not a valid ELF executable.\n");
-    return -1;
+    return NULL;
   }
 
-  phtab_entsize = image->phentsize;
-  phtab_count = image->phnum;
-  shtab_count = image->shnum;
-
-  thread = createThread( (addr_t)image->entry, addrSpace, uStack, exHandler );
+  thread = createThread( (addr_t)image.entry, addrSpace, uStack, exHandler );
 
   if( thread == NULL )
   {
     kprintf("load_elf_exec(): Couldn't create thread.\n");
-    return -1;
+    return NULL;
   }
-
-  /* Program header information is loaded into memory */
-
-  pheader = (elf_pheader_t *)(img + image->phoff);
-  sheader = (elf_sheader_t *)(img + image->shoff);
 
   /* Create the page table before mapping memory */
 
-  *(u32 *)&pde = INIT_SERVER_PTAB | PAGING_RW | PAGING_USER | PAGING_PRES;
-  writePDE( (void *)pheader->vaddr, &pde, addrSpace );
-
-  for ( i = 0; i < phtab_count; i++, pheader++ )
+  for( i=0; i < image.shnum; i++ )
   {
-    if ( pheader->type == PT_LOAD )
+    peek( (img + image.shoff + i * image.shentsize), (addr_t)&sheader, sizeof sheader );
+
+    if( !(sheader.flags & SHF_ALLOC) )
+      continue;
+
+    for( offset=0; offset < sheader.size; offset += PAGE_SIZE )
     {
-      unsigned memSize = pheader->memsz;
-      unsigned fileSize = pheader->filesz;
+      #if DEBUG
+        result =
+      #endif /* DEBUG */
 
-      kprintf("Vaddr: 0x%x Offset: 0x%x MemSize: 0x%x\n", pheader->vaddr, pheader->offset, memSize);
+      readPDE(sheader.addr + offset, &pde, addrSpace);
 
-      for( j=0; j < boot_info.num_mem_areas; j++)
+      assert( result == 0 );
+
+      if( !pde.present )
       {
-      //  kprintf("Base: 0x%x Length: %d\n", mem_area[j].base, mem_area[j].length);
-        if( memSize <= mem_area[j].length * PAGE_SIZE )
-        {
-          m_area = &mem_area[j];
-          kprintf("Base: 0x%x Length: %d pages\n", mem_area[j].base, mem_area[j].length);
-//          kprintf("Found!\n");
-          break;
-        } 
+        page = alloc_page();
+        clearPhysPage(page);
+
+        *(u32 *)&pde = (u32)page | PAGING_RW | PAGING_USER | PAGING_PRES;
+
+        #if DEBUG
+          result =
+        #endif /* DEBUG */
+
+        writePDE((addr_t)sheader.addr + offset, &pde, addrSpace);
+
+        assert( result == 0 );
+      }
+      else
+      {
+        readPTE(sheader.addr + offset, &pte, addrSpace);
       }
 
-      if( j == boot_info.num_mem_areas || m_area == NULL )
-        stopInit("Not enough memory for BSS allocation");
-
-      for ( j = 0; memSize > 0; j++ )
+      if( sheader.type == SHT_PROGBITS )
       {
-        if ( fileSize == 0 )
+        kprintf("mapping PROGBITS 0x%x->0x%x\n", (sheader.addr + offset), ((addr_t)img + sheader.offset + offset));
+
+        if( !pte.present )
         {
-          /* Picks a physical address for BSS */
-          phys = (void *)m_area->base; // This can be done better
-          priv = PAGING_RW;
-          clearPhysPage( phys );
-          m_area->base += PAGE_SIZE;
-          m_area->length--;
+          *(u32 *)&pte = ((u32)img + sheader.offset + offset) | PAGING_USER |
+              (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO) | PAGING_PRES;
+
+          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
+            return NULL;
+/*
+	  mapPage((addr_t)sheader.addr + offset, (addr_t)img + sheader.offset + offset,
+            PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO), addrSpace); */
+        }
+      }
+      else if( sheader.type == SHT_NOBITS )
+      {
+        if( !pte.present )
+        {
+          page = alloc_page();
+          clearPhysPage( page );
+          kprintf("mapping NOBITS 0x%x->0x%x\n", (sheader.addr + offset), page);
+
+          *(u32 *)&pte = page | PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW
+              : PAGING_RO) | PAGING_PRES;
+
+          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
+            return NULL;
+
+/*
+          mapPage((addr_t)sheader.addr + offset, (addr_t)page,
+                  PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO), addrSpace); */
         }
         else
         {
-          phys = (void *)VIRT_TO_PHYS((pheader->offset + (int)image + j * PAGE_SIZE));
-          priv = (pheader->flags & PF_W) ? PAGING_RW : PAGING_RO;
+          memset((void *)(sheader.addr + offset), 0, PAGE_SIZE - (offset % PAGE_SIZE));
         }
-
-        //kprintf("mapping page: vaddr-0x%x phys-0x%x addrSpace-0x%x\n", pheader->vaddr+j*PAGE_SIZE, phys, addrSpace);
-
-        mapPage( (void *)( pheader->vaddr + j * PAGE_SIZE ), phys, priv | PAGING_USER, addrSpace );
-
-        if( memSize < PAGE_SIZE )
-          memSize = 0;
-        else
-          memSize -= PAGE_SIZE;
-
-        if( fileSize < PAGE_SIZE )
-          fileSize = 0;
-        else
-          fileSize -= PAGE_SIZE;
       }
     }
   }
 
-  startThread( thread );
-
-  return 0;
+  return thread;
 }
 
 // TODO: This *really* needs to be cleaned up
@@ -762,139 +664,105 @@ int load_elf_exec( addr_t img, tid_t exHandler, addr_t addrSpace, addr_t uStack 
     Bootstraps the initial server and passes necessary boot data to it.
 */
 
-void init2( void )
+void init2( multiboot_info_t * restrict mb_boot_info )
 {
-  assert( tcbTable->state != DEAD );
-  int i;
-  char **argv;
-  int size = (unsigned)&kBss - (unsigned)&kdCode;
-  pte_t pte;
-  pde_t pde;
-  char *string;
-  int *ptr;
-  struct BootInfo *b_info;
-  struct MemoryArea *memory_area;
-  struct BootModule *boot_mods;
-  char *init_server_stack = (char *)(KERNEL_VSTART - PAGE_SIZE);
+  pmap_t pmap;
+  addr_t page;
+  unsigned int *ptr = (unsigned int *)(TEMP_PAGEADDR + PAGE_SIZE);
+  addr_t init_server_stack = KERNEL_VSTART - PAGE_SIZE;
+  addr_t uStackPage, initServerPDir;
+  elf_header_t elf_header;
 
-  ptr = (int *)(TEMP_PAGEADDR + PAGE_SIZE);
+  peek( init_server_img, (addr_t)&elf_header, sizeof elf_header );
 
-  kprintf("\n0x%x bytes of discardable code.", (unsigned)&kdData - (unsigned)&kdCode);
-  kprintf(" 0x%x bytes of discardable data.\n", (unsigned)&kBss - (unsigned)&kdData);
-
-  if(boot_info.num_mods == 0)
+  if( isValidElfExe( (addr_t)&elf_header ) )
   {
-    kprintf("No boot modules found.\nNo initial server to start.\n");
-    return;
-  }
+    /* Allocate memory for the page directory and stack including any necessary page tables and
+       start the initial server. */
 
-  /* Add the discarded kernel pages to the available physical memory table for the pager
-     to use.  */
+    initServerPDir = alloc_page();
 
-  mem_area[boot_info.num_mem_areas].base = (unsigned long)VIRT_TO_PHYS(&kdCode);
-  mem_area[boot_info.num_mem_areas].length = (unsigned long)PAGE_ALIGN((addr_t)size) / PAGE_SIZE;
+    clearPhysPage(initServerPDir);
 
-  boot_info.num_mem_areas++;
-
-  kprintf("Discarding: %d bytes of kernel code/data\n", size);
-
-  if( isValidElfExe( (addr_t)init_server_img ) )
-  {
-    *(u32 *)&pde = INIT_SERVER_USTACK_PTAB | PAGING_RW | PAGING_USER | PAGING_PRES;
-    writePDE(init_server_stack, &pde, (void *)INIT_SERVER_PDIR);
-    *(u32 *)&pte = INIT_SERVER_USTACK_PAGE | PAGING_RW | PAGING_USER | PAGING_PRES;
-    writePTE(init_server_stack, &pte, (void *)INIT_SERVER_PDIR);
-
-    string = (char *)TEMP_PAGEADDR;//(PHYSMEM_START + INIT_SERVER_USTACK_PAGE /*- PAGE_SIZE*/);
-    b_info = (struct BootInfo *)(string + 8);
-    memory_area = (struct MemoryArea *)(b_info + 1);
-    boot_mods = (struct BootModule *)(memory_area + boot_info.num_mem_areas);
-    argv = (char **)(boot_mods + boot_info.num_mods);
-
-    /* This is placed here because load_elf_exec() modifies the
-       memory_area struct. The modified memory_area struct would
-       need to be written to the root server's stack. */
-
-    mapTemp((addr_t)INIT_SERVER_USTACK_PAGE);
-
-    for(i=0; i < boot_info.num_mods; i++)
-    {
-      boot_mods[i].mod_start = kBootModules[i].mod_start;
-      boot_mods[i].mod_end = kBootModules[i].mod_end;
-      //kprintHex(kBootModules[i].mod_start);
-      //kprintf(" ");
-    }
-
-//    mapTemp(INIT_SERVER_USTACK_PAGE);
-
-    *(char **)&argv[6] = (init_server_stack + ((unsigned)argv & 0xFFF));
-    *(int *)&argv[5] = 5;
-    argv[4] = (char *)INIT_SERVER_PDIR;
-    argv[3] = (init_server_stack + ((unsigned)boot_mods & 0xFFF));
-    argv[2] = (init_server_stack + ((unsigned)memory_area & 0xFFF));
-    argv[1] = (init_server_stack + ((unsigned)b_info & 0xFFF));
-    argv[0] = (init_server_stack + ((unsigned)string & 0xFFF));
-
-    /* I don't know why the third '--ptr' needs to be done..., but without it, argc and argv don't work. */
-
-    //kprintf("0x ");kprintHex(init_server_stack);
-
-    *--ptr = (int)(init_server_stack + ((unsigned)&argv[5] & 0xFFF));  // ebp + 8 <- First argument
-    --ptr; // ebp + 4 <- The return address
-
-  /* Put the stack at the top of the physical memory area. */
-    unmapTemp();
-
-    if ( (init_server_tid=load_elf_exec( init_server_img, 1,
-         (addr_t)INIT_SERVER_PDIR, (init_server_stack +
-         ((unsigned)ptr & 0xFFF)) )) != 0 )
+    if( (init_server=load_elf_exec(init_server_img, NULL,
+         initServerPDir, init_server_stack + (((addr_t)ptr - 3) & 0xFFFu)) ) == NULL )
     {
       kprintf("Failed to initialize initial server.\n");
+      return;
     }
 
-    mapTemp((addr_t)INIT_SERVER_USTACK_PAGE);
+    page = alloc_page();
+    clearPhysPage(page);
 
-    memcpy(string, "initsrv", 8);
-    memcpy(b_info, &boot_info, sizeof boot_info);
-    memcpy(memory_area, mem_area, sizeof(struct MemoryArea) * boot_info.num_mem_areas);
+    *(u32 *)&pmap = (u32)page | PAGING_RW | PAGING_USER | PAGING_PRES;
+    writePDE(init_server_stack, &pmap, initServerPDir);
 
-    *(u32 *)&pte = 0; // What does this do???
+    uStackPage = alloc_page();
+    clearPhysPage(uStackPage);
+
+    *(u32 *)&pmap = (u32)uStackPage | PAGING_RW | PAGING_USER | PAGING_PRES;
+    writePTE(init_server_stack, &pmap, initServerPDir);
+
+    /* Push the bootstrap arguments onto the stack. */
+
+    mapTemp(uStackPage);
+
+    *--ptr = (unsigned int)&kBss - (unsigned int)&kdCode; // Arg 5
+    *--ptr = (unsigned int)&kdCode; // Arg 4
+    *--ptr = (unsigned int)free_page_ptr - FREE_PAGE_PTR_START; // Arg 3
+    *--ptr = FREE_PAGE_PTR_START; // Arg 2
+    *--ptr = (unsigned int)mb_boot_info; // Arg 1
 
     unmapTemp();
+    startThread(init_server);
   }
   else
+  {
     kprintf("Unable to load initial server.\n");
-}
+  }
 
-void showGrubSupport( multiboot_info_t *info )
+ // kprintf("\n0x%x bytes of discardable code.", (unsigned)&kdData - (unsigned)&kdCode);
+ // kprintf(" 0x%x bytes of discardable data.\n", (unsigned)&kBss - (unsigned)&kdData);
+
+ // kprintf("Discarding %d bytes of kernel code/data\n", (unsigned)&kBss - (unsigned)&kdCode);
+
+  /* Get rid of the code and data that will never be used again. */
+
+//  for( addr_t addr=(addr_t)&kdCode; addr < (addr_t)&kBss; addr += PAGE_SIZE )
+//    kUnmapPage( addr );
+}
+#if DEBUG
+void showGrubSupport( multiboot_info_t * restrict info )
 {
-  if( info->flags & (1 <<0) )
-    kprintf("Mem upper/lower supported.\n");
-  if( info->flags & (1 <<1) )
-    kprintf("Boot device supported.\n");
-  if( info->flags & (1 <<2) )
-    kprintf("Command line supported.\n");
-  if( info->flags & (1 <<3) )
-    kprintf("Modules supported.\n");
-  if( (info->flags & (1 <<4)) || (info->flags & (1 << 5)) )
-    kprintf("Symbol table supported.\n");
-  if( info->flags & (1 <<6) )
-    kprintf("Memory map supported.\n");
-  if( info->flags & (1 <<7) )
-    kprintf("Drive info supported.\n");
-  if( info->flags & (1 <<8) )
-    kprintf("Config table supported.\n");
-  if( info->flags & (1 <<9) )
-    kprintf("Boot loader name supported.\n");
-  if( info->flags & (1 <<10) )
-    kprintf("APM table supported.\n");
-  if( info->flags & (1 << 11) )
-    kprintf("VBE supported.\n");
+  if( info->flags & (1u << 0) )
+    kprintf("MEM\n");
+  if( info->flags & (1u << 1) )
+    kprintf("BOOT_DRV\n");
+  if( info->flags & (1u << 2) )
+    kprintf("CMD_LINE\n");
+  if( info->flags & (1u << 3) )
+    kprintf("MOD\n");
+  if( (info->flags & (1u << 4)) || (info->flags & (1u << 5)) )
+    kprintf("SYMTAB\n");
+  if( info->flags & (1u << 6) )
+    kprintf("MMAP\n");
+  if( info->flags & (1u << 7) )
+    kprintf("DRV_INFO\n");
+  if( info->flags & (1u << 8) )
+    kprintf("CONFIG\n");
+  if( info->flags & (1u << 9) )
+    kprintf("BTLDR_NAME\n");
+  if( info->flags & (1u << 10) )
+    kprintf("APM\n");
+  if( info->flags & (1u << 11) )
+    kprintf("VBE\n");
 }
 
 void showCPU_Features(void)
 {
-  asm __volatile__("cpuid\n" : "=d"(cpuFeatures) : "a"(0x01));
+  unsigned int features;
+
+  __asm__ __volatile__("cpuid\n" : "=edx"(features) : "eax"(0x01) : "%ebx", "%ecx");
 
   if( cpuFeatures.ia64 )
     kprintf("IA-64\n");
@@ -915,8 +783,21 @@ void showCPU_Features(void)
   if( cpuFeatures.pse )
     kprintf("PSE\n");
 }
+#endif /* DEBUG */
 
-// TODO: This could be more organized and cleaner
+void initStructures(void)
+{
+  size_t i=0;
+
+  for(i=INITIAL_TID+1; i < MAX_THREADS; i++)
+  {
+    tcbTable[i].queuePrev = &tcbTable[i-1];
+    tcbTable[i-1].queueNext = &tcbTable[i];
+  }
+
+  freeThreadQueue.head = &tcbTable[INITIAL_TID];
+  freeThreadQueue.tail = &tcbTable[MAX_THREADS-1];
+}
 
 /**
     Bootstraps the kernel.
@@ -924,12 +805,12 @@ void showCPU_Features(void)
     @param info The multiboot structure passed by the bootloader.
 */
 
-void init( multiboot_info_t *info )
+void init( multiboot_info_t * restrict info )
 {
-  memory_map_t *mmap;
+//  memory_map_t *mmap;
   module_t *module;
-  unsigned stack;
-  int i=0;
+  addr_t stack;
+  unsigned int i=0;
   bool init_srv_found=false;
   char *srv_str_ptr = NULL, *srv_str_end=NULL;
 
@@ -942,156 +823,93 @@ void init( multiboot_info_t *info )
   showCPU_Features();
 #endif
 
-  srv_str_ptr = strstr( (char *)(PHYSMEM_START + info->cmdline), INIT_SRV_FLAG );
+  srv_str_ptr = strstr( (char *)info->cmdline, INIT_SRV_FLAG );
+
+  /* Locate the initial server string (if it exists) */
 
   if( srv_str_ptr )
   {
     srv_str_ptr += (sizeof( INIT_SRV_FLAG ) - 1);
-    srv_str_end = srv_str_ptr;
+    srv_str_end = strchr(srv_str_ptr, ' ');
 
-    while( *srv_str_end != ' ' && *srv_str_end != '\0' )
-      srv_str_end++;
+    if( !srv_str_end )
+      srv_str_end = strchr(srv_str_ptr, '\0');
+  }
+  else
+  {
+    kprintf("Initial server not specified.\n");
+
+   if( !info->mods_count )
+     stopInit("No boot modules found.\nNo initial servers to start.");
   }
 
-  /* Prepare the modules for use later. */
+  if( info->flags & 1 )
+  {
+    kprintf("Lower Memory: %d B Upper Memory: %d B\n", info->mem_lower << 10, info->mem_upper << 10);
+  }
 
-  info->mods_addr += PHYSMEM_START;
-  kprintf("Boot info struct: 0x%x\nModules located at 0x%x. %d modules\n", info, info->mods_addr, info->mods_count);
+  kprintf("Boot info struct: 0x%x\nModules located at 0x%x. %d modules\n",
+    info, info->mods_addr, info->mods_count);
   module = (module_t *)info->mods_addr;
-  numBootMods = info->mods_count;
 
-  boot_info.num_mem_areas = boot_info.num_mods = 0;
+  /* Copy the boot modules and locate the initial server. */
 
-  info->mmap_addr += PHYSMEM_START;
-  mmap = (memory_map_t *)info->mmap_addr;
-
-  if( numBootMods > MAX_MODULES )
-    stopInit("Too many modules.\n");
+  if( !srv_str_ptr ) // If no initial server was specified, assume that the first module is the initial server
+    init_server_img = (addr_t)module->mod_start;
   else
-  {    
-    for(i=0; i < numBootMods; i++, module++)
+  {
+    for(i=info->mods_count; i; i--, module++)
     {
-      boot_info.num_mods++;
-
-      if( srv_str_ptr && !init_srv_found )
+      if( strncmp((char *)module->string, srv_str_ptr,
+                      srv_str_end-srv_str_ptr) == 0 )
       {
-        if( strncmp((char *)(PHYSMEM_START+module->string), srv_str_ptr, 
-                    srv_str_end-srv_str_ptr) == 0 )
-        {
-          init_server_img = PHYS_TO_VIRT(module->mod_start);
-        }
-
+        init_server_img = (addr_t)module->mod_start;
         init_srv_found = true;
+        break;
       }
-      else if( i == 0 )
-        init_server_img = PHYS_TO_VIRT(module->mod_start);
-
-      kBootModules[i] = *module;
     }
   }
 
-  maxThreads = 1024;
-  maxRunQueues = NUM_PRIORITIES;
+  if( !init_srv_found )
+    stopInit("Can't find initial server.");
 
-  kprintf("Max values: %d threads. %d run queues.\n", maxThreads, maxRunQueues);
+  kprintf("%d threads. %d run queues.\n", MAX_THREADS, NUM_RUN_QUEUES);
+
+  /* Initialize memory */
 
   if( initMemory( info ) < 0 )
-    stopInit("Not enough memory! At least 8 MiB is needed");
+    stopInit("Not enough memory! At least 8 MiB is needed.");
 
+  initStructures();
 
-  kMapMem( (void *)CLOCK_TICKS, (void *)KERNEL_VAR_PAGE, PAGING_RO | PAGING_USER );
+  // Map the kernel variable page (there should be a rw/supervisor page and a r/o user page that points to kernelVars)
+  // That way, the user can read the kernel variables page while the kernel can write to it while in kernel mode
 
-  size_t len;
-
-  /* Determine which portions of memory are free & usable.*/
-
-  if( info->flags & (1 << 6) ) // Is mmap valid?
-  {
-    addr_t start_addr;
-
-    /* Do memory checks here. */
-    for( ; (unsigned)mmap < info->mmap_length+info->mmap_addr; mmap=(memory_map_t *)((unsigned)mmap + mmap->size + sizeof(mmap->size)))
-    {
-      start_addr = NULL;
-
-      /* Don't touch this. */
-
-      if( mmap->type != 1 )
-        continue;
-
-      if( mmap->base_addr_low == 0x00 && (BOOTSTRAP_STACK_TOP) < mmap->base_addr_low + 
-          mmap->length_low )
-      {
-        mmap->base_addr_low = (BOOTSTRAP_STACK_TOP);
-        mmap->length_low -= (BOOTSTRAP_STACK_TOP);
-        mmap->length_low &= ~(PAGE_SIZE - 1);
-      }
-
-      /* Split if the region includes the kernel */
-
-      if( mmap->base_addr_low <= KERNEL_START && 
-          mmap->length_low > KERNEL_START - mmap->base_addr_low )
-      {
-        len = mmap->length_low - totalKSize - (KERNEL_START - mmap->base_addr_low);
-        mmap->length_low = (KERNEL_START - mmap->base_addr_low);
-        start_addr = (addr_t)(KERNEL_START + totalKSize);
-
-        //kprintHex( (unsigned)start_addr + len );
-      }
-
-      if( mmap->length_low != 0)
-      {
-        mem_area[boot_info.num_mem_areas].base = mmap->base_addr_low;
-        mem_area[boot_info.num_mem_areas].length = (u32)PAGE_ALIGN((addr_t)mmap->length_low) / PAGE_SIZE;
-        kprintf("Base low: 0x%x. Length: %d pages\n", mem_area[boot_info.num_mem_areas].base, mem_area[boot_info.num_mem_areas].length);
-        boot_info.num_mem_areas++;
-      }
-
-//      kprintf("Base low: 0x%x. Length: 0x%x\n", mem_area[boot_info.num_mem_areas].base, mem_area[boot_info.num_mem_areas].length);
-//      boot_info.num_mem_areas++;
-
-      if( start_addr != NULL && len / PAGE_SIZE > 0 )
-      {
-        mem_area[boot_info.num_mem_areas].base = (unsigned long)start_addr;
-        mem_area[boot_info.num_mem_areas].length = len / PAGE_SIZE;
-        kprintf("Base low: 0x%x. Length: %d pages\n", mem_area[boot_info.num_mem_areas].base, mem_area[boot_info.num_mem_areas].length);
-        boot_info.num_mem_areas++;
-      }
-    }
-  }
+  kMapPage( (addr_t)KERNEL_VARIABLES, (addr_t)kernelVars,
+    PAGING_RW | PAGING_USER ); // this should be mapped as read-only
 
   initInterrupts();
 //  enable_apic();
 //  init_apic_timer();
-  initScheduler( (addr_t)kernelAddrSpace );
-  currentThread->state = RUNNING;
-
-  /* !!! 1st thread doesn't have a valid tss IO bitmap !!! */
+  initScheduler( (addr_t)initKrnlPDir );
 
   if( currentThread == NULL )
-    stopInit("Failed to initialize the idle thread");
+    stopInit("Unable to initialize the idle thread.");
 
-//  *tssEsp0 = (unsigned)(&currentThread->regs + 1);
-
-//  __asm__ volatile("wbinvd\n");
-
-  if( GET_TID(currentThread) == 0 )
-  {
-    stack = V_IDLE_STACK_TOP - sizeof(Registers);
-    *tssEsp0 = (unsigned)V_IDLE_STACK_TOP;
-  }
+  if( GET_TID(currentThread) == IDLE_TID )
+    stack = (addr_t)EXT_PTR(idleStack) + idleStackLen - (sizeof(ExecutionState) - 8);
   else
-  {
-    stack = (unsigned)&currentThread->regs;
-    *tssEsp0 = (unsigned)(&currentThread->regs + 1);
-  }
+    stack = (addr_t)&currentThread->execState;
 
-  assert( tcbTable->state != DEAD );
+  assert( currentThread->threadState != DEAD );
 
   init_clock();
+#if DEBUG
+  testATA();
+#endif /* DEBUG */
+  init2(info);
 
-  testMemset();
-
-  contextSwitch( currentThread->addrSpace, (void *)stack );
-  stopInit("Unable to start operating system");
+  contextSwitch( currentThread->cr3, stack );
+  stopInit("Unable to start operating system.");
 }
+

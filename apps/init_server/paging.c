@@ -14,7 +14,7 @@ int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSp
   unsigned char *addr = (unsigned char *)virt;
   void *table_phys;
 
-  if( (unsigned)virt == 0xF0000000 )
+  if( (unsigned)virt == 0xF0000000u )
   {
     print("virt = 0xF0000000\n");
     printInt(pages);
@@ -100,6 +100,8 @@ int peekPage(void *phys, void *data)
 
   memcpy( data, (void *)TEMP_PAGE, PAGE_SIZE);
   __unmap((void *)TEMP_PAGE, NULL_PADDR);
+
+  return 0;
 }
 
 int pokePage(void *phys, void *data)

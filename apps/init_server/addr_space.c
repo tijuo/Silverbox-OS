@@ -26,13 +26,14 @@ void init_addr_space(struct AddrSpace *addr_space, void *phys_addr)
   set_ptable_status(addr_space, (void *)0xFF400000, true);
   set_ptable_status(addr_space, (void *)0xFF800000, true);
   set_ptable_status(addr_space, (void *)0xFFC00000, true);
-
+#if 0
   if( phys_addr != page_dir )
   {
     void *addr=alloc_phys_page(NORMAL, page_dir);
     clearPage(addr);
     __map_page_table( (void *)0x0, addr, 0, phys_addr );
   }
+#endif /* 0 */
 }
 
 void delete_addr_space(struct AddrSpace *addr_space)

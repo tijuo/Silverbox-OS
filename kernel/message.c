@@ -6,11 +6,12 @@
 #include <kernel/memory.h>
 #include <os/message.h>
 #include <os/signal.h>
+#include <kernel/pit.h>
 
 #define NULL_MSG_INDEX -1
 
-int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout );
-int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout );
+int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, unsigned int timeout );
+int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, unsigned int timeout );
 
 /**
   Synchronously sends a message from the current thread to the recipient thread.
@@ -27,10 +28,14 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout );
           -3 if interrupted by a SIGTMOUT.
 */
 
-int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
+/* XXX: sendMessage() and receiveMessage() won't work for kernel threads. */
+
+int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, unsigned int timeout )
 {
+  TCB *rec_thread;
+
   assert( tcb != NULL );
-  assert( tcb->state == RUNNING );
+  assert( tcb->threadState == RUNNING );
   assert( recipient != NULL_TID );
   assert( GET_TID(tcb) != NULL_TID );
 
@@ -48,53 +53,57 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
 
   msg->sender = GET_TID(tcb);
 
+  rec_thread = &tcbTable[recipient];
+
   /* This may cause problems if the receiver is receiving into a NULL
      or non-mapped buffer */
 
-  if( tcbTable[recipient].state == WAIT_FOR_SEND &&
-      (tcbTable[recipient].wait_tid == NULL_TID ||
-      tcbTable[recipient].wait_tid == GET_TID(tcb)) )
+  // If the recipient is waiting for a message from this sender or any sender
+
+  if( rec_thread->threadState == WAIT_FOR_SEND && (rec_thread->waitThread == NULL ||
+      rec_thread->waitThread == tcb) )
   {
 //    kprintf("%d is sending to %d\n", GET_TID(tcb), recipient);
 
-    /* edx is the register for the receiver's buffer */
-    if( pokeMem((void *)tcbTable[recipient].regs.ecx, MSG_LEN, msg, tcbTable[recipient].addrSpace) != 0 )
+    /* ecx is the register for the receiver's buffer */
+    if( pokeVirt((addr_t)rec_thread->execState.user.ecx, MSG_LEN, (addr_t)msg,
+        rec_thread->cr3.base << 12) != 0 )
     {
-      kprintf("Failed to poke. 0x%x -> 0x%x(%d bytes)\n", msg, tcbTable[recipient].regs.ecx, MSG_LEN);
+      kprintf("Failed to poke. 0x%x -> 0x%x(%d bytes)\n", msg, rec_thread->execState.user.ecx, MSG_LEN);
       return -1;
     }
     else
     {
-      timerDetach( recipient );
-      tcbTable[recipient].state = READY;
-      attachRunQueue( &tcbTable[recipient] );
+      timerDetach( rec_thread );
+      rec_thread->threadState = READY;
+      attachRunQueue( rec_thread );
 
-      if( tcbTable[recipient].priority > 2 )
-        setPriority( &tcbTable[recipient], tcbTable[recipient].priority - 1 );
+//      if( rec_thread->priority > 2 )
+//        setPriority( rec_thread, rec_thread->priority - 1 );
 
-      tcbTable[recipient].wait_tid = NULL_TID;
-      tcbTable[recipient].regs.eax = 0;
+      rec_thread->waitThread = NULL;
+      rec_thread->execState.user.eax = 0;
       return 0;
     }
   }
-  else if( timeout == 0 )
+  else if( timeout == 0 )	// A timeout of 0 is indicates not to block
   {
-    kprintf("send: Timeout == 0. TID: %d\tEIP: 0x%x\n", GET_TID(tcb), tcb->regs.eip);
-    kprintf("EIP: 0x%x\n", *(dword *)(tcb->regs.ebp + 4));
+    kprintf("send: Timeout == 0. TID: %d\tEIP: 0x%x\n", GET_TID(tcb), tcb->execState.user.eip);
+    kprintf("EIP: 0x%x\n", *(dword *)(tcb->execState.user.ebp + 4));
     return -1;
   }
-  else
+  else	// Wait until the recipient is ready to receive the message
   {
-    if( tcb->state == READY )
+    if( tcb->threadState == READY )
       detachRunQueue( tcb );
 
-    tcb->state = WAIT_FOR_RECV;
-    tcb->wait_tid = recipient;
+    tcb->threadState = WAIT_FOR_RECV;
+    tcb->waitThread = rec_thread;
   //  kprintf("%d is waiting to send to %d\n", GET_TID(tcb), recipient);
-    enqueue( &tcbTable[recipient].threadQueue, GET_TID(tcb) );
+    enqueue( &rec_thread->threadQueue, tcb );
 
     if( timeout > 0 )
-      timerEnqueue( GET_TID(tcb), (timeout * HZ) / 1000 );
+      timerEnqueue( tcb, (timeout * HZ) / 1000 );
   }
 
   return -1;
@@ -106,20 +115,21 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, int timeout )
   If no message can be received, then wait for a message from sender.
 
   @param tcb The TCB of the recipient.
-  @param sender The TID of the message's sender. May be NULL_TID
-         (which represents anyone).
+  @param sender The TID from which to receive a message. If
+         sender is NULL_TID then receive a message from anyone
+         that sends.
   @param buf A buffer to hold the incoming message.
   @param timeout Aborts the operation after timeout, if non-negative.
   @return 0 on success. -1 on failure. -2 if interrupted by a signal.
           -3 if receiving from self.
 */
 
-int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout )
+int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, unsigned int timeout )
 {
-  tid_t send_tid;
+  TCB *send_thread;
 
   assert( tcb != NULL );
-  assert( tcb->state == RUNNING );
+  assert( tcb->threadState == RUNNING );
   assert( GET_TID(tcb) != NULL_TID );
 
   if( GET_TID(tcb) == sender )
@@ -135,57 +145,55 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, int timeout )
      or non-mapped buffer */
 
   if( sender == NULL_TID )
-    send_tid = popQueue( &tcbTable[GET_TID(tcb)].threadQueue );
+    send_thread = popQueue( &tcb->threadQueue );
   else
-    send_tid = detachQueue( &tcbTable[GET_TID(tcb)].threadQueue, sender );
+    send_thread = detachQueue( &tcb->threadQueue, &tcbTable[sender] );
 
-  if( send_tid != NULL_TID )
+  if( send_thread != NULL )
   {
   //  kprintf("%d is receiving a message from %d\n", GET_TID(tcb), send_tid);
-    /* edx is the register for the receiver's buffer */
-    if( peekMem((void *)tcbTable[send_tid].regs.ecx, MSG_LEN, buf, tcbTable[send_tid].addrSpace) != 0 )
+    /* ecx is the register for the receiver's buffer */
+    if( peekVirt((addr_t)send_thread->execState.user.ecx,
+        MSG_LEN, (addr_t)buf, send_thread->cr3.base << 12) != 0 )
     {
-      enqueue( &tcbTable[GET_TID(tcb)].threadQueue, send_tid );
+      enqueue( &tcb->threadQueue, send_thread );
       kprintf("Failed to peek\n");
       return -1;
     }
     else
     {
-      if( tcbTable[send_tid].state == WAIT_FOR_RECV )
+      if( send_thread->threadState == WAIT_FOR_RECV )
       {
-        timerDetach( send_tid );
-        tcbTable[send_tid].state = READY;
-        attachRunQueue( &tcbTable[send_tid] );
-        tcbTable[send_tid].quantaLeft = tcbTable[send_tid].priority + 1;
-        tcbTable[send_tid].regs.eax = 0;
+        timerDetach( send_thread );
+        send_thread->threadState = READY;
+        attachRunQueue( send_thread );
+        send_thread->quantaLeft = send_thread->priority + 1;
+        send_thread->execState.user.eax = 0;
       }
       else
+      {
         kprintf("Something went wrong\n");
+      }
 
       return 0;
     }
   }
   else if( timeout == 0 )
   {
-    kprintf("receive: Timeout == 0. TID: %d\tEIP: 0x%x\n", GET_TID(tcb), tcb->regs.eip);
-    kprintf("EIP: 0x%x\n", *(dword *)(tcb->regs.ebp + 4));
+    kprintf("receive: Timeout == 0. TID: %d\tEIP: 0x%x\n", GET_TID(tcb), tcb->execState.user.eip);
+    kprintf("EIP: 0x%x\n", *(dword *)(tcb->execState.user.ebp + 4));
     return -1;
   }
   else
   {
-    if( tcb->state == READY )
+    if( tcb->threadState == READY )
       detachRunQueue( tcb );
-/*
-    if( sender == NULL_TID )
-      kprintf("%d is waiting for a message from anyone\n", GET_TID(tcb));
-    else
-      kprintf("%d is waiting for a message from %d\n", GET_TID(tcb), sender);
-*/
-    tcb->state = WAIT_FOR_SEND;
-    tcb->wait_tid = sender;
+
+    tcb->threadState = WAIT_FOR_SEND;
+    tcb->waitThread = &tcbTable[sender];
 
     if( timeout > 0 )
-      timerEnqueue( GET_TID(tcb), (timeout * HZ) / 1000 );
+      timerEnqueue( tcb, (timeout * HZ) / 1000 );
   }
 
   return -1;

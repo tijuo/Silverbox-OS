@@ -1,6 +1,8 @@
 [BITS 32]
 %include "asm/kernel.inc"
 
+IMPORT kernelIDT
+
 [section .text]
 ; void loadIDT()
 ; void addIDTEntry( addr, entryNum, attrib )
@@ -12,7 +14,7 @@ EXPORT addIDTEntry
     mov	    ebp, esp
 
     mov     eax, [ebp + 12]
-    lea     edx, [eax*8 + _kernelIDT]
+    lea     edx, [eax*8 + kernelIDT]
 
     mov     eax, [ebp + 8]
     mov     [edx], ax
@@ -32,14 +34,14 @@ EXPORT addIDTEntry
     leave
     ret
 
-[section .dtext]
+[section .dtext progbits alloc exec nowrite align=16]
 
 EXPORT loadIDT
 	lidt	[idtPointer]
 	ret
 
-[section .ddata]
+[section .ddata progbits alloc noexec nowrite align=4]
 
 idtPointer:
-    dw    0x800
-    dd    _kernelIDT
+    dw    KERNEL_IDT_LEN
+    dd    kernelIDT

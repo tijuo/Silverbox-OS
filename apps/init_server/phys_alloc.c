@@ -161,7 +161,7 @@ void *alloc_phys_page(enum PageType type, void *addr_space)
 {
   int page_num;
 
-  if( type >= 4 || type < 0 || (unsigned)addr_space == (unsigned)NULL_PADDR )
+  if( type >= 4 || (unsigned)addr_space == (unsigned)NULL_PADDR )
   {
 //    print("Bad ADDR space\n");
     return (void *)NULL_PADDR;

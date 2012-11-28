@@ -3,6 +3,27 @@
 
 %include "asm/asm.inc"
 
+%define KERNEL_VIRT_START       0xF0000000
+%define KERNEL_PHYS_START       0x00400000
+%define KERNEL_CODE_SEL		0x08
+%define KERNEL_DATA_SEL		0x10
+%define USER_CODE_SEL		(0x18 | 0x03)
+%define USER_DATA_SEL		(0x20 | 0x03)
+%define KERNEL_TSS_SEL		0x28
+%define BOOT_CODE_SEL		0x30
+%define BOOT_DATA_SEL		0x38
+%define KERNEL_RESD_TABLES	4
+
+%define KERNEL_IDT_LEN		0x800
+%define KERNEL_GDT_LEN		0x40
+%define KERNEL_VARS_LEN		4096
+%define KERNEL_STACK_LEN	4096
+%define KERNEL_STACK		4096
+%define IDLE_STACK_LEN		4096
+%define KERNEL_BOOT_STACK_LEN	4096
+%define KERNEL_TSS_LEN		0x68
+%define TSS_IO_PERM_BMP_LEN	2*4096
+
 [section .data]
 IMPORT kCode
 IMPORT kData
@@ -20,27 +41,21 @@ IMPORT kSize
 IMPORT kPhysToVirt
 IMPORT kVirtToPhys
 IMPORT VPhysMemStart
-IMPORT _kernelGDT
-IMPORT _kernelIDT
-IMPORT _kernelTSS
-IMPORT _initKrnlPDIR
-IMPORT _firstKrnlPTAB
-IMPORT _initServPDIR
-IMPORT _initServStackPTAB
-IMPORT _initServStack
-IMPORT _initServPTAB
-IMPORT _idleStack
-IMPORT _kernelStack
-IMPORT _kernelVars
-IMPORT _firstPTAB
-IMPORT _secondKrnlPTAB
-IMPORT _kernelBootStack
-IMPORT _initFirstPTAB
 
-kCodeSel  equ 0x08
-kDataSel  equ 0x10
-uCodeSel  equ 0x1B
-uDataSel  equ 0x23
-tssSel    equ 0x28
+;kCodeSel  equ 0x08
+;kDataSel  equ 0x10
+;uCodeSel  equ 0x1B
+;uDataSel  equ 0x23
+;tssSel    equ 0x28
+;bootCodeSel equ 0x30
+;bootDataSel equ 0x38
+;kResdTables equ 4
 
+;_kernelIDTLen equ 0x800
+;_kernelGDTLen equ 0x40
+;_kernelTSSLen equ 0x068
+;_kernelBootStackLen equ 1024
+;_idleStackLen equ 4096
+;_kernelStackLen equ 4096
+;_kernelVarsLen equ 4096
 %endif

@@ -1,56 +1,59 @@
 #include <kernel/thread.h>
 #include <kernel/mm.h>
 #include <kernel/debug.h>
-#include <oslib.h>
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
 #include <os/signal.h>
+#include <kernel/lowlevel.h>
+#include <kernel/pic.h>
+#include <kernel/paging.h>
 
-int sysEndIRQ( TCB *thread, int irqNum );
-int sysRegisterInt( TCB *thread, int intNum );
-int sysUnregisterInt( TCB *thread, int intNum );
-int sysEndPageFault( TCB *thread, tid_t tid );
-void handleIRQ(volatile TCB *thread  );
-void handleCPUException(volatile TCB *thread );
+#define NUM_IRQS	16
+
+int sysEndIRQ( const TCB *thread, unsigned int irqNum );
+int sysRegisterInt( TCB *thread, unsigned int intNum );
+int sysUnregisterInt( TCB *thread, unsigned int intNum );
+int sysEndPageFault( const TCB *thread, tid_t tid );
+void handleIRQ( TCB *thread, ExecutionState );
+void handleCPUException( TCB *thread, ExecutionState );
 
 extern int sysRaise( TCB *tcb, int signal, int arg );
 
-static bool registerIRQ( int irq );
-static bool releaseIRQ( int irq );
-void dump_regs( TCB *thread );
+static bool registerIRQ( unsigned int irq );
+static bool releaseIRQ( unsigned int irq );
+void dump_regs( const TCB *thread );
+void dump_state( const ExecutionState *state );
+static void dump_stack( addr_t, addr_t );
 
 /// Indicates whether an IRQ is allocated
 /** true = no handler set
    false = handler has been set */
 
-bool IRQState[ 16 ] =
+static bool IRQState[ NUM_IRQS ] =
 {
   true, true, false, true, true, true, true, true,
   true, false, true, true, true, true, true, true
 };
 
-/// The TIDs that are responsible for handling an IRQ
+/// The threads that are responsible for handling an IRQ
 
-tid_t IRQHandlers[ 16 ] = { NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID,
-			       NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID,
-			       NULL_TID, NULL_TID, NULL_TID, NULL_TID, NULL_TID,
-                               NULL_TID };
+static TCB *IRQHandlers[ NUM_IRQS ];
 
 /* sysEndIRQ() should be called to complete the handling of
-   an IRQ. */
+   an IRQ.
 
-int sysEndIRQ( TCB *thread, int irqNum )
+   XXX: This doesn't need to be implemented in kernel mode.
+*/
+
+int sysEndIRQ( const TCB *thread, unsigned int irqNum )
 {
-  tid_t tid;
   kprintf("sysEndIRQ(): %d\n", irqNum);
 
   assert( irqNum >= IRQ0 && irqNum <= IRQ15 );
 
   if( irqNum >= IRQ0 && irqNum <= IRQ15 )
   {
-    tid = IRQHandlers[ irqNum - IRQ0 ];
-
-    if( tid != GET_TID(thread) )
+    if( IRQHandlers[irqNum - IRQ0] != thread )
       return -1;
 
     enableIRQ( irqNum - IRQ0 );
@@ -62,30 +65,33 @@ int sysEndIRQ( TCB *thread, int irqNum )
 }
 
 /** This allows a thread to register an interrupt handler. All
-   interrupts will be sent to the registered thread . */
+   interrupts will be sent to the registered thread .
+*/
 
-int sysRegisterInt( TCB *thread, int intNum )
+int sysRegisterInt( TCB *thread, unsigned int intNum )
 {
-  if( intNum - 0x20 >= 16 || intNum < 0x20 )
+  if( intNum < IRQ0 || intNum - IRQ0 >= NUM_IRQS )
     return -1;
 
   if( registerIRQ( intNum ) == true )
   {
     kprintf("Thread %d registered IRQ: 0x%x\n", GET_TID(thread), intNum - IRQ0);
 
+    IRQHandlers[intNum - IRQ0] = thread;
     enableIRQ(intNum - IRQ0);
-    IRQHandlers[intNum - IRQ0] = GET_TID(thread);
     return 0;
   }
 
   return -1;
 }
 
-int sysUnregisterInt( TCB *thread, int intNum )
+int sysUnregisterInt( TCB *thread, unsigned int intNum )
 {
-  if( intNum - 0x20 >= 16 || intNum < 0x20 )
+  assert( intNum >= IRQ0 && intNum - IRQ0 < NUM_IRQS );
+
+  if( intNum < IRQ0 || intNum - IRQ0 >= NUM_IRQS )
     return -1;
-  else if( IRQHandlers[intNum - IRQ0] != GET_TID(thread) )
+  else if( IRQHandlers[intNum - IRQ0] != thread )
     return -1;
   else if( releaseIRQ( intNum ) == false )
     return -1;
@@ -94,7 +100,7 @@ int sysUnregisterInt( TCB *thread, int intNum )
     kprintf("IRQ 0x%x unregistered\n", intNum - IRQ0);
 
     disableIRQ(intNum - IRQ0);
-    IRQHandlers[intNum - IRQ0] = NULL_TID;
+    IRQHandlers[intNum - IRQ0] = NULL;
   }
 
   return 0;
@@ -104,17 +110,19 @@ int sysUnregisterInt( TCB *thread, int intNum )
    page fault, and it should resume execution.
 
    Warning: This assumes that the page fault wasn't fatal.
+
+   XXX: this doesn't need to be implemented in kernel mode.
 */
 
-int sysEndPageFault( TCB *currThread, tid_t tid )
+int sysEndPageFault( const TCB *currThread, tid_t tid )
 {
   assert( tid != NULL_TID );
-  assert( tcbTable[tid].exHandler != NULL_TID );
+  assert( tcbTable[tid].exHandler != NULL );
 
-  if( tid == NULL_TID || tcbTable[tid].exHandler == NULL_TID )
+  if( tid == NULL_TID || tcbTable[tid].exHandler == NULL )
     return -1;
 
-  if( tcbTable[tid].exHandler != GET_TID(currThread) ) // Only a thread's exception handler should make this call
+  if( tcbTable[tid].exHandler != currThread ) // Only a thread's exception handler should make this call
     return -1;
 
   // XXX: How do you tell the kernel that a fatal exception has occurred?
@@ -124,43 +132,43 @@ int sysEndPageFault( TCB *currThread, tid_t tid )
     kprintf("sysEndPageFault: currThread == &tcbTable[tid]\n");
   }
 
-  startThread( &tcbTable[tid] );
-  return 0;
+  if( startThread( &tcbTable[tid] ) != 0 )
+    return -1;
+  else
+    return 0;
 }
 
 /// Handles an IRQ (from 0 to 15).
 /** If an IRQ occurs, the kernel will send a message to the
     thread that registered to handle the IRQ (if it exists). */
 
-void handleIRQ( volatile TCB *thread )
+void handleIRQ( TCB *thread, ExecutionState state )
 {
-  Registers *regs = (Registers *)&thread->regs;
+  ExecutionState *execState;
 
-  if( GET_TID(thread) == IDLE_TID )
+  if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
   {
-    regs = (Registers *)(V_IDLE_STACK_TOP);
-    regs--;
+    execState = (ExecutionState *)&thread->execState;
   }
-
-  if( regs->int_num == 0 )
-  {
-    dump_regs((TCB *)thread);
-    return;
-  }
-
-  if( thread->regs.int_num == 39 && IRQState[39 - IRQ0] == true )
-    sendEOI(); // Stops the spurious IRQ7
   else
   {
-    disableIRQ( regs->int_num - IRQ0 );
+    execState = (ExecutionState *)&state;
+  }
+
+  if( execState->user.intNum == 39 && IRQState[39 - IRQ0] == true )
+  {
+    sendEOI(); // Stops the spurious IRQ7
+  }
+  else
+  {
+    disableIRQ( execState->user.intNum - IRQ0 );
     sendEOI();
 
-    if( IRQHandlers[regs->int_num - IRQ0] == NULL_TID )
+    if( IRQHandlers[execState->user.intNum - IRQ0] == NULL )
       return;
 
-    setPriority(&tcbTable[IRQHandlers[regs->int_num - IRQ0]], HIGHEST_PRIORITY);
-
-    sysRaise( &tcbTable[IRQHandlers[regs->int_num - IRQ0]], ((byte)regs->int_num << 8) | SIGINT, 0 );
+    setPriority(IRQHandlers[execState->user.intNum - IRQ0], HIGHEST_PRIORITY);
+    sysRaise( IRQHandlers[execState->user.intNum - IRQ0], ((byte)execState->user.intNum << 8) | SIGINT, 0 );
 
     return;
   }
@@ -168,7 +176,7 @@ void handleIRQ( volatile TCB *thread )
 
 /// Allocates an IRQ (so it cannot be reused)
 
-static bool registerIRQ( int irq )
+static bool registerIRQ( unsigned int irq )
 {
   assert( irq >= IRQ0 && irq <= IRQ15 );
 
@@ -183,7 +191,7 @@ static bool registerIRQ( int irq )
 
 /// Deallocates an IRQ (so it can be reused)
 
-static bool releaseIRQ( int irq )
+static bool releaseIRQ( unsigned int irq )
 {
   assert( irq >= IRQ0 && irq <= IRQ15 );
 
@@ -196,110 +204,158 @@ static bool releaseIRQ( int irq )
   }
 }
 
-/// Prints useful debugging information about the current thread
-
-void dump_regs( TCB *thread )
+void dump_state( const ExecutionState *execState )
 {
-  Registers *regs = (Registers *)&thread->regs;
-  dword stack;
-
-  if( GET_TID(thread) == NULL_TID )
+  if( execState == NULL )
   {
-    regs = (Registers *)V_IDLE_STACK_TOP;
-    regs--;
+    kprintf("Unable to show execution state.\n");
+    return;
   }
 
-  if( regs->int_num == 0x40 )
-    kprintf("\nSyscall @ EIP: 0x%x", regs->eip);
-  else
-    kprintf( "\nException: 0x%x @ EIP: 0x%x", regs->int_num, regs->eip );
-
-  kprintf( " TID: %d", GET_TID(thread));
-
-  kprintf( "\nEAX: 0x%x EBX: 0x%x ECX: 0x%x EDX: 0x%x", regs->eax, regs->ebx, regs->ecx, regs->edx );
-  kprintf( "\nESI: 0x%x EDI: 0x%x ESP: 0x%x EBP: 0x%x", regs->esi, regs->edi, regs->esp, regs->ebp );
-  kprintf( "\nCS: 0x%x DS: 0x%x ES: 0x%x", regs->cs, regs->ds, regs->es );
-
-  if( regs->int_num == 14 )
-    kprintf(" CR2: 0x%x", getCR2());
-
-  kprintf( " error code: 0x%x\n", regs->error_code );
-
-  kprintf( "Address Space: 0x%x Actual CR3: 0x%x\n", (unsigned)thread->addrSpace, getCR3() );
-
-  kprintf("EFLAGS: 0x%x ", regs->eflags);
-
-  if( (addr_t)thread->addrSpace != (addr_t)kernelAddrSpace )
-    kprintf("User ESP: 0x%x User SS: 0x%x", regs->userEsp, regs->userSs);
-
-  kprintf("\n\nStack Trace:\n<Stack Frame>: Return-EIP args*\n");
-
-  stack = regs->ebp;
-
-  while( is_readable((void *)stack, thread->addrSpace) && is_readable((void *)(stack+4), thread->addrSpace))
+  if( execState->user.intNum == 0x40 )
   {
-    if( *(dword *)stack < 0x100000 )
-      break;
+    kprintf("Syscall");
+  }
+  else if( execState->user.intNum < 32 )
+  {
+    kprintf("Exception %d", execState->user.intNum);
+  }
+  else if( execState->user.intNum >= IRQ0 && execState->user.intNum <= IRQ15 )
+  {
+    kprintf("IRQ%d", execState->user.intNum - IRQ0);
+  }
+  else
+  {
+    kprintf("Software Interrupt %d", execState->user.intNum);
+  }
 
-    kprintf("<0x%x>: 0x%x", *(dword *)stack, *(dword *)(stack + 4));
+  kprintf(" @ EIP: 0x%x", execState->user.eip);
 
-    for( int i=0; i < 6; i++ )
+  kprintf( "\nEAX: 0x%x EBX: 0x%x ECX: 0x%x EDX: 0x%x", execState->user.eax, execState->user.ebx, execState->user.ecx, execState->user.edx );
+  kprintf( "\nESI: 0x%x EDI: 0x%x ESP: 0x%x EBP: 0x%x", execState->user.esi, execState->user.edi, execState->user.esp, execState->user.ebp );
+  kprintf( "\nCS: 0x%x DS: 0x%x ES: 0x%x", execState->user.cs, execState->user.ds, execState->user.es );
+
+  if( execState->user.intNum == 14 )
+  {
+    kprintf(" CR2: 0x%x", getCR2());
+  }
+
+  kprintf( " error code: 0x%x\n", execState->user.errorCode );
+
+  kprintf("EFLAGS: 0x%x ", execState->user.eflags);
+
+  if( execState->user.cs == UCODE )
+  {
+    kprintf("User ESP: 0x%x User SS: 0x%x\n", execState->user.userEsp, execState->user.userSS);
+  }
+}
+
+void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
+{
+  kprintf("\n\nStack Trace:\n<Stack Frame>: [Return-EIP] args*\n");
+
+  while( stackFramePtr )
+  {
+    kprintf("<0x%x>:", stackFramePtr);
+
+    if( is_readable( stackFramePtr + 4, addrSpace ) )
     {
-      if( is_readable( (void *)(stack + 4 * (i+2)), thread->addrSpace) )
-        kprintf(" 0x%x", *(dword *)(stack + 4 * (i+2)));
+      kprintf(" [0x%x]", *(dword *)(stackFramePtr + 4));
+    }
+    else
+    {
+      kprintf(" [???]");
+    }
+
+    for( unsigned int i=2; i < 8; i++ )
+    {
+      if( is_readable( stackFramePtr + 4 * i, addrSpace) )
+      {
+        kprintf(" 0x%x", *(dword *)(stackFramePtr + 4 * i));
+      }
       else
+      {
         break;
+      }
     }
 
     kprintf("\n");
 
-    if( !is_readable((void *)(*(dword *)stack), thread->addrSpace) )
+    if( !is_readable(*(dword *)stackFramePtr, addrSpace) )
+    {
+      kprintf("<0x%x (invalid)>:\n", *(dword *)stackFramePtr);
       break;
+    }
     else
-      stack = *(dword *)stack;
+    {
+      stackFramePtr = *(dword *)stackFramePtr;
+    }
   }
+}
+
+/// Prints useful debugging information about the current thread
+
+void dump_regs( const TCB *thread )
+{
+  ExecutionState *execState=NULL;
+  addr_t stackFramePtr;
+
+  kprintf( "Thread: 0x%x ", thread, GET_TID(thread));
+
+  if( ((addr_t)thread - (addr_t)tcbTable) % sizeof *thread == 0 &&
+      GET_TID(thread) >= INITIAL_TID && GET_TID(thread) < MAX_THREADS )
+  {
+    kprintf("TID: %d ", GET_TID(thread));
+  }
+  else
+  {
+    kprintf("(invalid thread address) ");
+  }
+
+  if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
+  {
+    execState = (ExecutionState *)&thread->execState;
+  }
+
+  dump_state(execState);
+
+  if( !execState )
+  {
+    kprintf("\n");
+  }
+
+  kprintf( "Thread CR3: 0x%x Current CR3: 0x%x\n", *(unsigned *)&thread->cr3, getCR3() );
+
+  if( !execState )
+  {
+    __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
+
+    if( !is_readable(*(dword *)stackFramePtr, thread->cr3.base << 12) )
+    {
+      kprintf("Unable to dump the stack\n");
+      return;
+    }
+
+    stackFramePtr = *(addr_t *)stackFramePtr;
+  }
+  else
+  {
+    stackFramePtr = (addr_t)execState->user.ebp;
+  }
+
+  dump_stack(stackFramePtr, thread->cr3.base << 12);
 }
 
 /// Handles the CPU exceptions
 
-void handleCPUException(volatile TCB *thread)
+void handleCPUException( TCB *thread, ExecutionState state)
 {
-/*  TCB *thread = (TCB *)(*tssEsp0 - sizeof(Registers) - sizeof(dword));*/
-//  struct ExceptionInfo *exInfo = (struct ExceptionInfo *)(header + 1);
-  Registers *regs;
-
   if( thread == NULL )
   {
     kprintf("NULL thread. Unable to handle exception. System halted.\n");
-    asm("hlt\n");
-  }
-
-  if( GET_TID(thread) == NULL_TID )
-  {
-    regs = (Registers *)V_IDLE_STACK_TOP;
-    regs--;
-  }
-  else
-    regs = (Registers *)&thread->regs;
-
-  if( regs->int_num == 13 ) // check for an io operation
-  {
-    struct TSS_Struct *tss = (struct TSS_Struct *)KERNEL_TSS;
-    pte_t pte;
-
-    if( tss->ioMap == IOMAP_LAZY_OFFSET )
-    {
-      if( readPTE( (void *)TSS_IO_PERM_BMP, &pte, (void *)getCR3() ) == 0 &&
-          pte.present &&
-          pokeMem((void *)KERNEL_IO_BITMAP, 2 * PAGE_SIZE, (void *)TSS_IO_PERM_BMP, (void *)getCR3()) == 0 )
-      {
-        kprintf("Mapped IO Permission Bitmap\n");
-        tss->ioMap = 0x68;
-        return;
-      }
-    }
-    kprintf("Unknown GPF\n");
-    dump_regs( (TCB *)thread );
+    dump_state(&state);
+    __asm__("hlt\n");
+    return;
   }
 
   #if DEBUG
@@ -307,35 +363,44 @@ void handleCPUException(volatile TCB *thread)
   if( GET_TID(thread) == IDLE_TID )
   {
     kprintf("Idle thread died. System halted.\n");
-    dump_regs( (TCB *)thread );
-    asm("hlt\n");
+    dump_regs( thread );
+    dump_state(&state);
+    __asm__("hlt\n");
+    return;
   }
-  else if( GET_TID(thread) == init_server_tid )
+  else if( thread == init_server )
   {
     kprintf("Exception for initial server. System Halted.\n");
-    dump_regs( (TCB *)thread );
-    asm("hlt\n");
+    dump_regs( thread );
+    __asm__("hlt\n");
+    return;
+  }
+  else
+  {
+    dump_regs( thread );
   }
   #endif
 
-  pauseThread( (TCB *)thread );
+  pauseThread( thread );
 
-  if( thread->exHandler < 0 || thread->exHandler >= maxThreads || thread->exHandler == NULL_TID )
+  if( thread->exHandler == NULL || GET_TID(thread->exHandler) >= MAX_THREADS )
   {
     kprintf("Invalid exception handler\n");
+    dump_regs( thread );
     return;
   }
 
-  if( thread->exHandler == GET_TID(thread) )
+  if( thread->exHandler == thread )
   {
     kprintf("Oops! The thread is its own exception handler!\n");
-    dump_regs( (TCB *)thread );
+    dump_regs( thread );
     return;
   }
 
-  if( sysRaise( &tcbTable[thread->exHandler], (GET_TID(thread) << 8) | SIGEXP, getCR2() ) < 0 )
+  if( sysRaise( thread->exHandler, (GET_TID(thread) << 8) | SIGEXP, getCR2() ) < 0 )
   {
     kprintf("Exception handler not accepting exception\n");
+    dump_regs( thread );
     return;
   }
 }

@@ -4,13 +4,13 @@
 #include <types.h>
 #include <kernel/thread.h>
 
-tid_t detachQueue( struct Queue *queue, tid_t thread );
-int enqueue( struct Queue *queue, tid_t thread );
-tid_t popQueue( struct Queue *queue );
-bool isInQueue( struct Queue *queue, tid_t tid );
-bool isInTimerQueue( tid_t tid );
-int timerDetach( tid_t tid );
-int timerEnqueue( tid_t tid, unsigned short time );
-tid_t timerPop( void );
+TCB *timerDetach( TCB *thread );
+TCB *timerEnqueue( TCB *thread, unsigned int time );
+TCB *timerPop( void );
+TCB *enqueue( struct Queue *queue, TCB *thread );
+TCB *detachQueue( struct Queue *queue, TCB *thread );
+TCB *popQueue( struct Queue *queue );
+bool isInQueue( const struct Queue *queue, const TCB *thread );
+bool isInTimerQueue( const TCB *thread );
 
 #endif /* QUEUE_H */

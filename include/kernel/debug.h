@@ -4,8 +4,7 @@
 #ifdef DEBUG
 
 #include <kernel/mm.h>
-#include <oslib.h>
-#define  VIDMEM_START   0xB8000
+#define  VIDMEM_START   0xB8000u
 
 #define RET_MSG(ret, msg)	{ kprintf("<'%s' %s: %d> Ret: %d. %s\n", \
 				__FILE__, __func__, __LINE__, ret, msg); \
@@ -64,9 +63,9 @@ static inline unsigned getTimeDifference(void)
   else if( upper2 == upper1 + 1 )
   {
     if( lower2 < lower1 )
-        return (0xFFFFFFFF - lower1) + lower2;
+        return (0xFFFFFFFFu - lower1) + lower2;
   }
-  return 0xFFFFFFFF;
+  return 0xFFFFFFFFu;
 }
 
 #define calcTime(function, ret) \
@@ -80,22 +79,22 @@ static inline unsigned getTimeDifference(void)
 
 #else
 
-#define assert(exp) 
-#define incSchedCount()	
-#define incTimerCount()	
-#define clearScreen()	
-#define kprintf( x, ... )	
-#define printAssertMsg( w, x, y, z )	
-#define setBadAssertHlt( val )	
-#define setVideoLowMem( val )	
-//#define kprintInt( num )	
-//#define kprintHex( num )	
+#define assert(exp)
+#define incSchedCount()
+#define incTimerCount()
+#define clearScreen()
+#define kprintf( x, ... )
+#define printAssertMsg( w, x, y, z )
+#define setBadAssertHlt( val )
+#define setVideoLowMem( val )
+//#define kprintInt( num )
+//#define kprintHex( num )
 #define calcTime(func, ret) func
 //#define kprint3Nums( str, ... )
-//#define putChar(c, i, j)	
-//#define _putChar(c, i, j, attr) 
-//#define printString(str, x, y) 
-//#define _printString(str, x, y, ...) 
+//#define putChar(c, i, j)
+//#define _putChar(c, i, j, attr)
+//#define printString(str, x, y)
+//#define _printString(str, x, y, ...)
 #define initVideo() 
 #define RET_MSG(x,y)	return x;
 #define CALL_COUNTER(ret_type, fname, arg)	ret_type fname(arg);

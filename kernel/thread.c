@@ -1,37 +1,13 @@
 #include <kernel/debug.h>
-#include <oslib.h>
 #include <string.h>
 #include <kernel/thread.h>
 #include <kernel/schedule.h>
 #include <kernel/mm.h>
+#include <kernel/pit.h>
 
-#define DEFAULT_USTACK 0xCAFED00D
+#include <oslib.h>
 
-//extern TCB *idleThread;
-
-//extern void saveAndSwitchContext( volatile TCB * volatile, volatile TCB * volatile );
-
-/** Returns an unused TID
-
-    @return A free, unused TID.
-*/
-
-tid_t getFreeTID(void)
-{
-  static tid_t lastTID = INITIAL_TID;
-  int count = 0;
-
-  while( tcbTable[lastTID].state != DEAD && count < maxThreads )
-  {
-    lastTID = (lastTID == maxThreads - 1 ? INITIAL_TID + 1 : lastTID + 1);
-    count++;
-  }
-
-  if( tcbTable[lastTID].state == DEAD )
-    return lastTID;
-  else
-    RET_MSG(NULL_TID, "Exhausted all TIDs!");
-}
+//extern void saveAndSwitchContext( TCB *, TCB * );
 
 /** Starts a non-running thread
 
@@ -42,30 +18,36 @@ tid_t getFreeTID(void)
 */
 int startThread( TCB *thread )
 {
-  if( isInTimerQueue(GET_TID(thread)) )
+  #if DEBUG
+  if( isInTimerQueue(thread) )
     kprintf("Thread is in timer queue!\n");
+  #endif /* DEBUG */
 
-  assert( !isInTimerQueue(GET_TID(thread)) );
+  assert( !isInTimerQueue(thread) );
 
-  if( thread->state == PAUSED ) /* A paused queue really isn't necessary. */
+  if( thread->threadState == PAUSED ) /* A paused queue really isn't necessary. */
   {
-    for( int level=0; level < maxRunQueues; level++ )
-    {
-      if( isInQueue( &runQueues[level], GET_TID(thread) ) )
-        kprintf("Thread is in run queue, but it's paused?\n");
-      assert( !isInQueue( &runQueues[level], GET_TID(thread) ) );
-    }
+    #if DEBUG
+      unsigned int level;
 
-    assert( thread != currentThread ); // A paused thread should NEVER be running
+      for( level=0; level < NUM_RUN_QUEUES; level++ )
+      {
+        if( isInQueue( &runQueues[level], thread ) )
+          kprintf("Thread is in run queue, but it's paused?\n");
+        assert( !isInQueue( &runQueues[level], thread ) );
+      }
+    #endif /* DEBUG */
 
-    thread->state = READY;
-    thread->quantaLeft = thread->priority + 1;
+    thread->threadState = READY;
 
     attachRunQueue( thread );
     return 0;
   }
   else
+  {
+    kprintf("Can't start a thread unless it's paused!\n");
     return 1;
+  }
 }
 
 
@@ -75,39 +57,36 @@ int startThread( TCB *thread )
     @param thread The TCB of the thread to put to sleep.
     @param msecs The amount of time to pause the thread in milliseconds.
     @return 0 on success. -1 on failure. -2 if the thread cannot be switched
-            to the sleeping state from its current state. 1 if the thread is 
+            to the sleeping state from its current state. 1 if the thread is
             already sleeping.
 */
 
-int sleepThread( TCB *thread, int msecs )
+int sleepThread( TCB *thread, unsigned int msecs )
 {
-  assert( msecs > 0 );
-
-  if( thread->state == SLEEPING )
+  if( thread->threadState == SLEEPING )
     RET_MSG(1, "Already sleeping!")//return -1;
-  else if( msecs <= 0 )
+  else if( msecs >= (1u << 16) )
     RET_MSG(1, "Invalid sleep interval");
 
-  if( thread->state != READY && thread->state != RUNNING )
+  if( thread->threadState != READY && thread->threadState != RUNNING )
   {
     kprintf("sleepThread() failed!\n");
     assert(false);
     return -2;
   }
 
-  if( thread->state == READY && GET_TID(thread) != IDLE_TID )
+  if( thread->threadState == READY && thread != idleThread )
     detachRunQueue( thread );
 
-  if( timerEnqueue( GET_TID(thread), (msecs * HZ) / 1000 ) != 0 )
+  if( !timerEnqueue( thread, (msecs * HZ) / 1000 ) )
   {
     assert( false );
     return -1;
   }
   else
   {
-    assert( thread == &tcbTable[GET_TID(thread)] );
-    thread->quantaLeft = 0;
-    thread->state = SLEEPING;
+    thread->reschedule = 1;
+    thread->threadState = SLEEPING;
     return 0;
   }
 }
@@ -116,19 +95,19 @@ int sleepThread( TCB *thread, int msecs )
 
 int pauseThread( TCB *thread )
 {
-  switch( thread->state )
+  switch( thread->threadState )
   {
     case READY:
       detachRunQueue( thread );
     case RUNNING:
-      //attachPausedQueue( thread ); /* A paused queue isn't necessary */
-      thread->state = PAUSED;
-      thread->quantaLeft = 0;
+      thread->threadState = PAUSED;
+      thread->reschedule = 1;
       return 0;
     case PAUSED:
-      RET_MSG(1, "Already Paused")//return 1;
+      RET_MSG(1, "Thread is already paused.")//return 1;
     default:
-      RET_MSG(-1, "Paused from other state")//return -1;
+      kprintf("Thread state: %d\n", thread->threadState);
+      RET_MSG(-1, "Thread is neither ready, running, nor paused.")//return -1;
   }
 }
 
@@ -137,110 +116,88 @@ int pauseThread( TCB *thread )
 
     @param threadAddr The start address of the thread.
     @param addrSpace The physical address of the thread's page directory.
-    @param uStack The address of the top of the thread's user stack.
+    @param -tack The address of the top of the thread's stack.
     @param exHandler The TID of the thread's exception handler.
     @return The TCB of the newly created thread. NULL on failure.
 */
 
-TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exHandler )
+TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, TCB *exHandler )
 {
-   TCB * thread;
-   tid_t tid = NULL_TID;
-   pde_t pde;
-   pte_t pte;
+  TCB * thread = NULL;
+  pde_t pde;
 
-   if( threadAddr == NULL )
-     RET_MSG(NULL, "NULL thread addr")
-   else if( exHandler == NULL_TID )
-     RET_MSG(NULL, "NULL exHandler")
-   else if( addrSpace == NULL_PADDR )
-     RET_MSG(NULL, "NULL addrSpace")
+  #if DEBUG
+    if( exHandler == NULL )
+      kprintf("createThread(): NULL exception handler.\n");
+  #endif /* DEBUG */
 
-   tid = getFreeTID();
+  if( threadAddr == NULL )
+    RET_MSG(NULL, "NULL thread addr")
+  else if( addrSpace == NULL_PADDR )
+    RET_MSG(NULL, "NULL addrSpace")
 
-   if( tid == NULL_TID )
-     RET_MSG(NULL, "NULL tid")
+  assert( (addrSpace & 0xFFFu) == 0u );
 
-    thread = &tcbTable[tid];
+  thread = popQueue(&freeThreadQueue);
 
-    thread->priority = NORMAL_PRIORITY;
-    thread->state = PAUSED;
-    thread->addrSpace = addrSpace;
-    thread->exHandler = exHandler;
-    thread->wait_tid = NULL_TID;
-    thread->threadQueue.tail = thread->threadQueue.head = NULL_TID;
-    thread->sig_handler = NULL;
+  if( thread == NULL )
+    RET_MSG(NULL, "Couldn't get a free thread.")
 
-    assert( thread->addrSpace == tcbTable[tid].addrSpace );
-    assert( (u32)addrSpace == ((u32)addrSpace & ~0xFFF) );
+  assert( thread->threadState == DEAD );
 
-    *(u32 *)&pde = (u32)addrSpace | PAGING_RW | PAGING_PRES;
-    writePDE( (void *)PAGETAB, &pde, addrSpace );
+  thread->priority = NORMAL_PRIORITY;
+  thread->cr3.base = (addrSpace >> 12);
+  thread->cr3.pwt = 1;
+  thread->exHandler = exHandler;
+  thread->waitThread = NULL;
+  thread->threadQueue.tail = thread->threadQueue.head = NULL;
+  thread->queueNext = thread->queuePrev = thread->timerNext = NULL;
+  thread->timerDelta = 0u;
+  thread->sig_handler = NULL;
 
-    readPDE( (void *)KERNEL_VSTART, &pde, (void *)getCR3() );
-    writePDE( (void *)KERNEL_VSTART, &pde, addrSpace );
+  assert( (u32)addrSpace == ((u32)addrSpace & ~0xFFFu) );
 
-    readPDE( (void *)(KERNEL_VSTART + TABLE_SIZE), &pde, (void *)getCR3() );
-    writePDE( (void *)(KERNEL_VSTART + TABLE_SIZE), &pde, addrSpace );
+   // Map the page directory into the address space
 
-    if( tid == 0 )
-    {
-      *(u32 *)&pde = (u32)FIRST_PAGE_TAB | PAGING_RW | PAGING_PRES;
-      writePDE( (void *)0, &pde, addrSpace );
-    }
-    else if( tid == 1 )
-    {
-      *(u32 *)&pde = (u32)INIT_FIRST_PAGE_TAB | PAGING_RW | PAGING_PRES | PAGING_USER;
-      writePDE( (void *)0, &pde, addrSpace );
-    }
+  *(u32 *)&pde = (u32)addrSpace | PAGING_PWT | PAGING_RW | PAGING_PRES;
+  writePDE( PAGETAB, &pde, addrSpace );
 
-    // Assume that the first page table is already mapped
+  // Map the kernel into the address space
 
-    #if DEBUG
-      pde.present = 0;
-      readPDE((void *)0x0, &pde, addrSpace);
-      assert(pde.present);
-    #endif
+  readPDE( KERNEL_VSTART, &pde, (getCR3() & ~0xFFFu) );
+  writePDE( KERNEL_VSTART, &pde, addrSpace );
 
-    for( unsigned addr=0; addr <= 0xc5000; addr += 0x1000 )
-    {
-      // Skip the io perm bitmap
-      if( addr >= 0xC0000 && addr < 0xC2000 )
-        continue;
+#if DEBUG
+  readPDE( 0x00, &pde, (getCR3() & ~0xFFFu) );
+  writePDE( 0x00, &pde, addrSpace );
+#endif /* DEBUG */
 
-      readPTE( (void *)addr, &pte, (void *)getCR3() );
-      writePTE( (void *)addr, &pte, addrSpace );
-    }
+  memset(&thread->execState.user, 0, sizeof thread->execState.user);
 
-/*
-    readPDE( (void *)PHYSMEM_START, &pde, (void *)getCR3() );
-    writePDE( (void *)PHYSMEM_START, &pde, addrSpace );
-*/
+  thread->execState.user.eflags = 0x0201u; //0x3201u; // XXX: Warning: Magic Number
+  thread->execState.user.eip = ( dword ) threadAddr;
 
-    if( ((int)threadAddr & KERNEL_VSTART) != KERNEL_VSTART )
-    {
-      thread->regs.cs = UCODE;
-      thread->regs.ds = thread->regs.es = thread->regs.userSs = UDATA;
-      thread->regs.ebp = (unsigned)uStack;
-    }
-    else if( tid == 0 )
-    {
-      thread->regs.cs = KCODE;
-      thread->regs.ds = thread->regs.es = KDATA;
-      thread->regs.esp = thread->regs.ebp = (unsigned)V_IDLE_STACK_TOP;
-    }
-    else
-      assert(false);
+  /* XXX: This doesn't yet initialize a kernel thread other than the idle thread. */
 
-    thread->regs.userEsp = (unsigned)uStack;
+  if( GET_TID(thread) == IDLE_TID )
+  {
+    thread->execState.user.cs = KCODE;
+    thread->execState.user.ds = thread->execState.user.es = KDATA;
+    thread->execState.user.esp = stack - (sizeof(ExecutionState)-8);
 
-    thread->regs.eflags = 0x0201;//0x3201; // XXX: Warning: Magic Number
-    thread->regs.eip = ( dword ) threadAddr;
+    memcpy( (void *)thread->execState.user.esp,
+            (void *)&thread->execState, sizeof(ExecutionState) - 8);
+  }
+  else if( ((unsigned int)threadAddr & KERNEL_VSTART) != KERNEL_VSTART )
+  {
+    thread->execState.user.cs = UCODE;
+    thread->execState.user.ds = thread->execState.user.es = thread->execState.user.userSS = UDATA;
+    thread->execState.user.userEsp = stack;
+  }
 
-    if( tid == 0 )
-      memcpy( (void *)(/*PHYSMEM_START + */V_IDLE_STACK_TOP - sizeof(Registers)), (void *)&thread->regs, sizeof(Registers) );
+  thread->threadState = PAUSED;
 
-    return thread;
+  return thread;
 }
 
 /**
@@ -252,7 +209,13 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, tid_t exH
 
 int releaseThread( TCB *thread )
 {
-  if( thread->state == DEAD )
+  #if DEBUG
+    TCB *retThread;
+  #endif
+
+  assert(thread->threadState != DEAD);
+
+  if( thread->threadState == DEAD )
     return -1;
 
   /* If the thread is a sender waiting for a recipient, remove the
@@ -260,48 +223,54 @@ int releaseThread( TCB *thread )
      receiver, clear its wait queue after
      waking all of the waiting threads. */
 
-  switch( thread->state )
+  switch( thread->threadState )
   {
     /* Assumes that a ready/running thread can't be on the timer queue. */
 
     case READY:
-      for( int i=0; i < maxRunQueues; i++ )
-      {
-        if( isInQueue( &runQueues[i], GET_TID(thread) ) == true )
-        {
-          detachQueue( &runQueues[i], GET_TID(thread) );
-          break;
-        }
-      }
+      #if DEBUG
+        retThread =
+      #endif /* DEBUG */
+
+      detachQueue( &runQueues[thread->priority], thread );
+
+      assert( retThread == thread );
       break;
     case WAIT_FOR_RECV:
     case WAIT_FOR_SEND:
     case SLEEPING:
-      timerDetach( GET_TID(thread) );
+      #if DEBUG
+       retThread =
+      #endif /* DEBUG */
+
+      timerDetach( thread );
+
+      assert( retThread == thread );
       break;
   }
 
-  if( thread->state == WAIT_FOR_SEND )
-  {
-    tid_t tid;
+  /* XXX: Are these implemented properly? */
 
-    while( (tid=popQueue( &thread->threadQueue )) != NULL_TID )
+  if( thread->threadState == WAIT_FOR_SEND )
+  {
+    TCB *waitingThread;
+
+    while( (waitingThread=popQueue( &thread->threadQueue )) != NULL )
     {
-      tcbTable[tid].quantaLeft = tcbTable[tid].priority + 1;
-      tcbTable[tid].state = READY;
-      attachRunQueue(&tcbTable[tid]);
+      waitingThread->threadState = READY;
+      attachRunQueue(waitingThread);
     }
   }
-  else if( thread->state == WAIT_FOR_RECV )
+  else if( thread->threadState == WAIT_FOR_RECV )
   {
-    assert( thread->wait_tid != NULL_TID );
+    assert( thread->waitThread != NULL ); // XXX: Why?
 
-    detachQueue( &tcbTable[thread->wait_tid].threadQueue, GET_TID(thread) );
+    detachQueue( &thread->waitThread->threadQueue, thread );
   }
 
-  thread->state = DEAD;
-  thread->quantaLeft = 0;
-  thread->wait_tid = NULL_TID;
-  thread->sig_handler = NULL;
+  memset(thread, 0, sizeof *thread);
+  thread->threadState = DEAD;
+
+  enqueue(&freeThreadQueue, thread);
   return 0;
 }
