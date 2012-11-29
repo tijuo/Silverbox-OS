@@ -40,7 +40,9 @@ struct ThreadControlBlock
   unsigned char threadState : 4;
   unsigned char priority : 3;
   unsigned char reschedule : 1;
-  unsigned short int __packing;
+  unsigned short int privileged : 1;
+  unsigned short int pager : 1;
+  unsigned short int __packing : 14;
   struct Queue
   {
     struct ThreadControlBlock *head;
