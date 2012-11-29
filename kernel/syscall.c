@@ -8,7 +8,7 @@
 #include <kernel/signal.h>
 #include <os/signal.h>
 
-void _syscall( TCB *_thread );
+void _syscall( TCB *thread );
 
 static int sysGetThreadInfo( TCB *thread, tid_t tid, struct ThreadInfo *info );
 static void sysExit( TCB *thread, int code );
@@ -18,7 +18,9 @@ extern int sysRegisterInt( TCB *thread, int intNum );
 extern int sysUnregisterInt( TCB *thread, int intNum );
 extern int sysEndPageFault( TCB *thread, tid_t tid );
 
-unsigned int privSyscalls[] = { SYS_GET_PAGE_MAPPING, SYS_SET_PAGE_MAPPING, SYS_INVALIDATE_TLB, SYS_REGISTER_INT, SYS_UNREGISTER_INT };
+unsigned int privSyscalls[] = { SYS_REGISTER_INT, SYS_UNREGISTER_INT, SYS_SET_THREAD_STATE, SYS_SET_THREAD_PRIORITY, SYS_EOI,
+                                SYS_END_PAGE_FAULT };
+unsigned int pagerSyscalls[] = { SYS_GET_PAGE_MAPPING, SYS_SET_PAGE_MAPPING, SYS_INVALIDATE_TLB };
 
 static void sysExit( TCB *thread, int code )
 {
@@ -62,29 +64,44 @@ static int sysGetThreadInfo( TCB *thread, tid_t tid, struct ThreadInfo *info )
 
 void _syscall( TCB *thread )
 {
-  TCB *_thread = thread;
-  ExecutionState *execState = (ExecutionState *)&_thread->execState;
+  ExecutionState *execState = (ExecutionState *)&thread->execState;
   int *result = (int *)&execState->user.eax;
 
-  for( unsigned i=0; i < sizeof privSyscalls / sizeof(unsigned int); i++ )
+  if( !thread->privileged )
   {
-    if( (unsigned int)execState->user.eax == privSyscalls[i] )
+    for( unsigned i=0; i < sizeof privSyscalls / sizeof(unsigned); i++ )
     {
-      *result = -2;
-      break;
+      if( (unsigned int)execState->user.eax == privSyscalls[i] )
+      {
+        *result = -2;
+        break;
+      }
+    }
+  }
+
+  if( !thread->pager )
+  {
+    for( unsigned i=0; i < sizeof pagerSyscalls / sizeof(unsigned); i++ )
+    {
+      if( (unsigned int)execState->user.eax == pagerSyscalls[i] )
+      {
+        *result = -2;
+        break;
+      }
     }
   }
 
   switch ( execState->user.eax )
   {
     case SYS_SEND:
-      *result = sendMessage( _thread, (tid_t)execState->user.ebx, (void *)execState->user.ecx, (int)execState->user.edx );
+      *result = sendMessage( thread, (tid_t)execState->user.ebx, (void *)execState->user.ecx, (int)execState->user.edx );
       break;
     case SYS_RECEIVE:
-      *result = receiveMessage( _thread, (tid_t)execState->user.ebx, (void *)execState->user.ecx, (int)execState->user.edx );
+      *result = receiveMessage( thread, (tid_t)execState->user.ebx, (void *)execState->user.ecx, (int)execState->user.edx );
       break;
+    // XXX: Is this system call necessary?
     case SYS_EXIT:
-      sysExit( _thread, (int)execState->user.ebx );
+      sysExit( thread, (int)execState->user.ebx );
       *result = -1; // sys_exit() should never return
       break;
     case SYS_CREATE_THREAD:
@@ -92,7 +109,7 @@ void _syscall( TCB *thread )
       TCB *new_thread;
 
       new_thread = createThread( (addr_t)execState->user.ebx, (execState->user.ecx == NULL_PADDR ?
-                                 (addr_t)(_thread->cr3.base << 12) : (addr_t)execState->user.ecx),
+                                 (addr_t)(thread->cr3.base << 12) : (addr_t)execState->user.ecx),
                                  (addr_t)execState->user.edx, ((tid_t)execState->user.esi == NULL_TID ?
                                                                NULL : &tcbTable[(tid_t)execState->user.esi]) );
       *result = GET_TID(new_thread);
@@ -112,44 +129,44 @@ void _syscall( TCB *thread )
       break;
     case SYS_SLEEP:
       if( execState->user.ebx == 0 )
-        sysYield( _thread );
+        sysYield( thread );
       else
-        *result = sleepThread( _thread, (int)execState->user.ebx );
+        *result = sleepThread( thread, (int)execState->user.ebx );
       break;
+    // XXX: Is this needed?
     case SYS_END_PAGE_FAULT:
-      *result = sysEndPageFault( _thread, (tid_t)execState->user.ebx );
+      *result = sysEndPageFault( thread, (tid_t)execState->user.ebx );
       break;
+    // XXX: Is this needed?
     case SYS_EOI:
-      *result = sysEndIRQ( _thread, (int)execState->user.ebx );
+      *result = sysEndIRQ( thread, (int)execState->user.ebx );
       break;
     case SYS_REGISTER_INT:
-      *result = sysRegisterInt( _thread, (int)execState->user.ebx );
+      *result = sysRegisterInt( thread, (int)execState->user.ebx );
       break;
     case SYS_GET_THREAD_INFO:
-      *result = sysGetThreadInfo( _thread, (tid_t)execState->user.ebx, (struct ThreadInfo *)execState->user.ecx );
+      *result = sysGetThreadInfo( thread, (tid_t)execState->user.ebx, (struct ThreadInfo *)execState->user.ecx );
       break;
     case SYS_INVALIDATE_TLB:
       *result = -1;
       break;
     case SYS_RAISE:
-      *result = sysRaise( _thread, (int)execState->user.ebx, (int)execState->user.ecx );
+      *result = sysRaise( thread, (int)execState->user.ebx, (int)execState->user.ecx );
       break;
     case SYS_SET_SIG_HANDLER:
-      *result = sysSetSigHandler( _thread, (void *)execState->user.ebx );
+      *result = sysSetSigHandler( thread, (void *)execState->user.ebx );
       break;
     case SYS_UNREGISTER_INT:
-      *result = sysUnregisterInt( _thread, (int)execState->user.ebx );
+      *result = sysUnregisterInt( thread, (int)execState->user.ebx );
       break;
     case SYS_DESTROY_THREAD:
-      *result = releaseThread( _thread );
+      *result = releaseThread( thread );
        break;
     default:
       kprintf("Invalid system call: 0x%x %d 0x%x\n", execState->user.eax,
-		GET_TID(_thread), _thread->execState.user.eip);
+		GET_TID(thread), thread->execState.user.eip);
       assert(false);
       *result = -1;
       break;
   }
-
-  //kprintf("execState->user.eax: 0x%x result: 0x%x\n", _thread->execState.eax, *result);
 }
