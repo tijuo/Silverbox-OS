@@ -19,7 +19,7 @@ extern int sysUnregisterInt( TCB *thread, int intNum );
 extern int sysEndPageFault( TCB *thread, tid_t tid );
 
 unsigned int privSyscalls[] = { SYS_REGISTER_INT, SYS_UNREGISTER_INT, SYS_SET_THREAD_STATE, SYS_SET_THREAD_PRIORITY, SYS_EOI,
-                                SYS_END_PAGE_FAULT };
+                                SYS_END_PAGE_FAULT, SYS_GRANT_PRIVILEGE };
 unsigned int pagerSyscalls[] = { SYS_GET_PAGE_MAPPING, SYS_SET_PAGE_MAPPING, SYS_INVALIDATE_TLB };
 
 static void sysExit( TCB *thread, int code )
@@ -162,6 +162,9 @@ void _syscall( TCB *thread )
     case SYS_DESTROY_THREAD:
       *result = releaseThread( thread );
        break;
+    case SYS_GRANT_PRIVILEGE:
+      *result = -1;
+      break;
     default:
       kprintf("Invalid system call: 0x%x %d 0x%x\n", execState->user.eax,
 		GET_TID(thread), thread->execState.user.eip);

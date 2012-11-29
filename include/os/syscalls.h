@@ -23,6 +23,30 @@
 #define SYS_INVALIDATE_TLB	0x0F
 #define SYS_SET_PAGE_MAPPING	0x10
 #define SYS_GET_PAGE_MAPPING	0x11
+#define SYS_GRANT_PRIVILEGE	0x12
+
+#define PM_PRESENT              0x01
+#define PM_NOT_PRESENT          0
+#define PM_READ_ONLY            0
+#define PM_READ_WRITE           0x02
+#define PM_NOT_CACHED           0x10
+#define PM_WRITE_THROUGH        0x08
+#define PM_NOT_ACCESSED         0
+#define PM_ACCESSED             0x20
+#define PM_NOT_DIRTY            0
+#define PM_DIRTY                0x40
+#define PM_LARGE_PAGE           0x80
+#define PM_INVALIDATE           0x80000000
+
+struct PageMapping
+{
+  addr_t virt;
+  int level;
+  addr_t frame;
+  unsigned int flags;
+  int status;
+};
+
 
 struct RegisterState
 {
@@ -68,8 +92,8 @@ int sys_register_int( int int_num );
 int sys_unregister_int( int int_num );
 tid_t sys_create_thread( void *entry, void *addr_space,
                        void *user_stack, tid_t exhandler );
-int sys_set_page_mapping( tid_t tid, addr_t virt, unsigned int mapping );
-int sys_get_page_mapping( tid_t tid, addr_t virt, unsigned int *mapping );
+int sys_set_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid);
+int sys_get_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid);
 void sys_exit( int status );
 int __sleep( int msecs );
 int sys_sleep( int msecs, tid_t tid );
@@ -79,5 +103,6 @@ int sys_raise( int signal, int arg );
 int sys_set_sig_handler( void *handler );
 int sys_destroy_thread( tid_t tid );
 void sys_invalidate_tlb( void );
+int sys_grant_privilege( int privilege, tid_t tid );
 
 #endif /* OS_SYSCALLS */

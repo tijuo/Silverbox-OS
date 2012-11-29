@@ -569,9 +569,6 @@ int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
   struct PageMapping *ptr=mappings;
   int errors=0;
 
-  // XXX: Check whether the caller is a pager If it's not,
-  // return an error\
-
   if( tid >= MAX_THREADS )
     return -1;
   else if( tid != NULL_TID )
@@ -654,9 +651,6 @@ int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
   int errors=0;
   int pmap_flags;
 
-  // XXX: Check whether the caller is a pager. If it's not,
-  // return an error
-
   if( tid >= MAX_THREADS )
     return -1;
   else if( tid != NULL_TID )
@@ -677,6 +671,8 @@ int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
       ptr->status = -1;
       continue;
     }
+
+    // XXX: Make sure supervisor status is given to protected kernel pages
 
     pmap_flags = PAGING_USER | (ptr->flags & PM_PRESENT ? PAGING_PRES : 0) |
                  (ptr->flags & PM_READ_WRITE ? PAGING_RW : PAGING_RO) |

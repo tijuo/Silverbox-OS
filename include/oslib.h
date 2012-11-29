@@ -53,28 +53,6 @@ typedef unsigned long rspid_t;
 
 #define RAW_PROTOCOL		0
 
-#define PM_PRESENT		0x01
-#define PM_NOT_PRESENT		0
-#define PM_READ_ONLY		0
-#define PM_READ_WRITE		0x02
-#define PM_NOT_CACHED		0x10
-#define PM_WRITE_THROUGH	0x08
-#define PM_NOT_ACCESSED		0
-#define PM_ACCESSED		0x20
-#define PM_NOT_DIRTY		0
-#define PM_DIRTY		0x40
-#define PM_LARGE_PAGE		0x80
-#define PM_INVALIDATE		0x80000000
-
-struct PageMapping
-{
-  addr_t virt;
-  int level;
-  addr_t frame;
-  unsigned int flags;
-  int status;
-};
-
 struct MemInfo
 {
   addr_t virtCodeArea, physCodeArea;

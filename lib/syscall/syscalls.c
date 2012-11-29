@@ -19,7 +19,7 @@ int sys_receive( tid_t sender, void *buf, int timeout )
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
 }
-
+#if 0
 int __pause( void )
 {
   return sys_pause_thread( NULL_TID );
@@ -43,6 +43,7 @@ int sys_start_thread( tid_t tid )
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
 }
+#endif /* 0 */
 
 int sys_destroy_thread( tid_t tid )
 {
@@ -107,11 +108,11 @@ void __yield( void )
   __sleep( 0 );
 }
 
-int sys_sleep_thread( int msecs, tid_t tid )
+int sys_sleep( int msecs, tid_t tid )
 {
   int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SLEEP_THREAD),
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SLEEP),
                    "b"(msecs));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
@@ -119,14 +120,14 @@ int sys_sleep_thread( int msecs, tid_t tid )
 
 int __sleep( int msecs )
 {
-  return sys_sleep_thread( msecs, NULL_TID );
+  return sys_sleep( msecs, NULL_TID );
 }
 
-int sys_end_irq( int irqNum )
+int sys_eoi( int irqNum )
 {
   int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_END_IRQ),
+  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_EOI),
                    "b"(irqNum));
   asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
   return retval;
@@ -162,11 +163,13 @@ int sys_set_sig_handler( void *handler )
   return retval;
 }
 
+#if 0
 void sys_invalidate_page( addr_t addr )
 {
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_INVALIDATE_PAGE),
                    "b"(addr) );
 }
+#endif /* 0 */
 
 void sys_invalidate_tlb( void )
 {
