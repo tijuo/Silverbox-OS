@@ -904,7 +904,7 @@ void init( multiboot_info_t * restrict info )
   assert( currentThread->threadState != DEAD );
 
   init_clock();
-#if DEBUG
+#if 0
   testATA();
 #endif /* DEBUG */
   init2(info);

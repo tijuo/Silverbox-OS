@@ -2,6 +2,7 @@
 #include <kernel/debug.h>
 #include <kernel/thread.h>
 #include <kernel/memory.h>
+#include <kernel/paging.h>
 #include <oslib.h>
 
 int _writePDE( unsigned entryNum, pde_t *pde, addr_t pdir );
@@ -16,11 +17,6 @@ static int accessMem( addr_t address, size_t len, addr_t buffer, addr_t pdir,
 int pokeVirt( addr_t address, size_t len, addr_t buffer, addr_t pdir );
 int peekVirt( addr_t address, size_t len, addr_t buffer, addr_t pdir );
 
-/*
-int mapPage( addr_t phys, addr_t virt, u32 flags, addr_t pdir );
-addr_t unmapPage( addr_t virt, addr_t pdir );
-*/
-
 static int accessPhys( addr_t phys, addr_t buffer, size_t bytes, bool readPhys );
 int poke( addr_t phys, addr_t buffer, size_t bytes );
 int peek( addr_t phys, addr_t buffer, size_t bytes );
@@ -31,8 +27,8 @@ void invalidate_page( addr_t virt );
 bool is_readable( addr_t addr, addr_t pdir );
 bool is_writable( addr_t addr, addr_t pdir );
 
-int sysSetPageMapping(int level, addr_t virt, addr_t frame, unsigned int flags);
-int sysGetPageMapping(int level, addr_t virt, struct PageMapping *map);
+int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid);
+int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid);
 void sysInvalidateTlb(void);
 
 bool is_readable( addr_t addr, addr_t pdir )
@@ -566,69 +562,173 @@ addr_t kUnmapPage( addr_t virt )
   return returnAddr;
 }
 
-int sysGetPageMapping(int level, addr_t virt, struct PageMapping *map)
+int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid)
 {
-  pde_t *pde;
-  pte_t *pte;
+  pde_t pde;
+  pte_t pte;
+  struct PageMapping *ptr=mappings;
+  int errors=0;
 
-  if( level < 0 || level >= 2 || !map )
+  // XXX: Check whether the caller is a pager If it's not,
+  // return an error\
+
+  if( tid >= MAX_THREADS )
+    return -1;
+  else if( tid != NULL_TID )
+  {
+    if( tcbTable[tid].threadState == DEAD )
+      return -1;
+    else if( tcbTable[tid].exHandler != thread )
+      return -2; // Caller is not the thread's exception handler
+  }
+  else if( !mappings )
     return -1;
 
-  if( virt & 0xFFFu )
-    return -2;
-
-  pde = ADDR_TO_PDE(virt);
-  map->virt = virt;
-
-  if(level == 0)
+  for(size_t offset=0; offset < len; offset += sizeof *mappings, ptr++)
   {
-    map->frame = (addr_t)(pde->base << 12);
-    map->flags = *(unsigned int *)&pde & 0xFFFu;
-  }
-  else if(level == 1)
-  {
-    pte = ADDR_TO_PTE(virt);
-    map->frame = (addr_t)(pte->base << 12);
-    map->flags = *(unsigned int *)&pte & 0xFFFu;
+    if( ptr->level < 0 || ptr->level >= 2 || (ptr->virt & 0xFFFu) || (ptr->frame & 0xFFFu) )
+    {
+      errors = 1;
+      ptr->status = -1;
+      continue;
+    }
+
+    if( ptr->level == 0 )
+    {
+      if( readPDE( ptr->virt, &pde, (tid == NULL_TID ? getCR3() & ~0xFFFu : (addr_t)(tcbTable[tid].cr3.base << 12)) ) != 0 )
+      {
+        errors = 1;
+        ptr->status = -1;
+        continue;
+      }
+
+      ptr->frame = pde.base << 12;
+      ptr->flags = (pde.rwPriv ? PM_READ_WRITE : PM_READ_ONLY) |
+                   (pde.present ? PM_PRESENT : PM_NOT_PRESENT) |
+                   (pde.accessed ? PM_ACCESSED : PM_NOT_ACCESSED) |
+                   (pde.dirty ? PM_DIRTY : PM_NOT_DIRTY) |
+                   (pde.pcd ? PM_NOT_CACHED : 0) |
+                   (pde.pwt ? PM_WRITE_THROUGH : 0) |
+                   (pde.pageSize ? PM_LARGE_PAGE : 0);
+    }
+    else if( ptr->level == 1 )
+    {
+      if( readPDE( ptr->virt, &pde, (addr_t)(tcbTable[tid].cr3.base << 12) ) != 0 || !pde.present )
+      {
+        errors = 1;
+        ptr->status = -1;
+        continue;
+      }
+
+      if( readPTE( ptr->virt, &pte, (tid == NULL_TID ? getCR3() & ~0xFFFu : (addr_t)(tcbTable[tid].cr3.base << 12)) ) != 0 )
+      {
+        errors = 1;
+        ptr->status = -1;
+        continue;
+      }
+
+      ptr->frame = pde.base << 12;
+      ptr->flags = (pde.rwPriv ? PM_READ_WRITE : PM_READ_ONLY) |
+                   (pde.present ? PM_PRESENT : PM_NOT_PRESENT) |
+                   (pde.accessed ? PM_ACCESSED : PM_NOT_ACCESSED) |
+                   (pde.dirty ? PM_DIRTY : PM_NOT_DIRTY) |
+                   (pde.pcd ? PM_NOT_CACHED : 0) |
+                   (pde.pwt ? PM_WRITE_THROUGH : 0) |
+                   (pde.pageSize ? PM_LARGE_PAGE : 0);
+    }
+
+    ptr->status = 0;
   }
 
-  return 0;
+  if( errors )
+    return 1;
+  else
+    return 0;
 }
 
-int sysSetPageMapping(int level, addr_t virt, addr_t frame, unsigned int flags)
+int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid)
 {
-  pde_t *pde;
-  pte_t *pte;
+  pde_t pde;
+  pte_t pte;
+  struct PageMapping *ptr=mappings;
+  int errors=0;
+  int pmap_flags;
 
-  if( level < 0 || level >= 2 )
+  // XXX: Check whether the caller is a pager. If it's not,
+  // return an error
+
+  if( tid >= MAX_THREADS )
+    return -1;
+  else if( tid != NULL_TID )
+  {
+    if( tcbTable[tid].threadState == DEAD )
+      return -1;
+    else if( tcbTable[tid].exHandler != thread )
+      return -2; // Caller is not the thread's exception handler
+  }
+  else if( !mappings )
     return -1;
 
-  if( (virt & 0xFFFu) || (frame & 0xFFFu) )
-    return -2;
-
-  pde = ADDR_TO_PDE(virt);
-
-  if( level == 0 )
+  for(size_t offset=0; offset < len; offset += sizeof *mappings, ptr++)
   {
-    *(unsigned int *)&pde = frame | (flags & ~(PM_INVALIDATE)) | PAGING_USER;
+    if( ptr->level < 0 || ptr->level >= 2 || (ptr->virt & 0xFFFu) || (ptr->frame & 0xFFFu) )
+    {
+      errors = 1;
+      ptr->status = -1;
+      continue;
+    }
 
-    if( flags & PM_INVALIDATE )
-      invalidate_tlb();
+    pmap_flags = PAGING_USER | (ptr->flags & PM_PRESENT ? PAGING_PRES : 0) |
+                 (ptr->flags & PM_READ_WRITE ? PAGING_RW : PAGING_RO) |
+                 (ptr->flags & PM_NOT_CACHED ? PAGING_PCD : 0) |
+                 (ptr->flags & PM_WRITE_THROUGH ? PAGING_PWT : 0) |
+                 (ptr->flags & PM_ACCESSED ? PAGING_ACCESSED : 0) |
+                 (ptr->flags & PM_DIRTY ? PAGING_DIRTY : 0) |
+                 (ptr->flags & PM_LARGE_PAGE ? PAGING_4MB_PAGE : PAGING_4KB_PAGE);
+
+    if( ptr->level == 0 )
+    {
+      *(unsigned int *)&pde = ptr->frame | pmap_flags;
+
+      if( writePDE( ptr->virt, &pde, (tid == NULL_TID ? getCR3() & ~0xFFFu : (addr_t)(tcbTable[tid].cr3.base << 12)) ) != 0 )
+      {
+        errors = 1;
+        ptr->status = -1;
+        continue;
+      }
+
+      if( ptr->flags & PM_INVALIDATE )
+        invalidate_tlb();
+    }
+    else if( ptr->level == 1 )
+    {
+      if( readPDE( ptr->virt, &pde, tcbTable[tid].cr3.base << 12 ) != 0 || !pde.present )
+      {
+        errors = 1;
+        ptr->status = -1;
+        continue;
+      }
+
+      *(unsigned int *)&pte = ptr->frame | pmap_flags;
+
+      if( writePTE( ptr->virt, &pte, (tid == NULL_TID ? getCR3() & ~0xFFFu : (addr_t)(tcbTable[tid].cr3.base << 12)) ) != 0 )
+      {
+        errors = 1;
+        ptr->status = -1;
+        continue;
+      }
+
+      if( ptr->flags & PM_INVALIDATE )
+        invalidate_page(ptr->virt);
+    }
+
+    ptr->status = 0;
   }
-  else if( level == 1 )
-  {
-    if( !pde->present )
-      return -3;
 
-    pte = ADDR_TO_PTE(virt);
-
-    *(dword *)&pte = frame | (flags & ~(PM_INVALIDATE)) | PAGING_USER;
-
-    if( flags & PM_INVALIDATE )
-      invalidate_page(virt);
-  }
-
-  return 0;
+  if( !errors )
+    return 0;
+  else
+    return 1;
 }
 
 void sysInvalidateTlb(void)

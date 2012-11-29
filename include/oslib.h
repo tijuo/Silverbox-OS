@@ -69,8 +69,10 @@ typedef unsigned long rspid_t;
 struct PageMapping
 {
   addr_t virt;
+  int level;
   addr_t frame;
   unsigned int flags;
+  int status;
 };
 
 struct MemInfo
