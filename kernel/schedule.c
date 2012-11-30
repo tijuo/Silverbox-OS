@@ -2,9 +2,9 @@
 #include <kernel/debug.h>
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
-#include <kernel/signal.h>
 #include <kernel/pic.h>
 #include <kernel/paging.h>
+#include <os/signal.h>
 
 extern void init2( void );
 extern int numBootMods;
@@ -15,6 +15,8 @@ int sysYield( TCB *thread );
 int setPriority( TCB *thread, unsigned int level );
 TCB *attachRunQueue( TCB *thread );
 TCB *detachRunQueue( TCB *thread );
+
+extern int sysRaise( TCB *tcb, int signal, int arg );
 
 void idle(void)
 {

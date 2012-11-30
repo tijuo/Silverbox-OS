@@ -176,3 +176,32 @@ void sys_invalidate_tlb( void )
   asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_INVALIDATE_TLB));
 }
 
+int sys_set_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid)
+{
+  int retval;
+
+  asm __volatile__("int %1\n" : "=a"(retval) : "i"(SYSCALL_INT), "a"(SYS_SET_PAGE_MAPPING),
+                   "b"(mappings), "c"(len), "d"(tid));
+
+  return retval;
+}
+
+int sys_get_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid)
+{
+  int retval;
+
+  asm __volatile__("int %1\n" : "=a"(retval) : "i"(SYSCALL_INT), "a"(SYS_GET_PAGE_MAPPING),
+                   "b"(mappings), "c"(len), "d"(tid));
+
+  return retval;
+}
+
+int sys_grant_privilege( int privilege, tid_t tid )
+{
+  int retval;
+
+  asm __volatile__("int %1\n" : "=a"(retval) : "i"(SYSCALL_INT), "a"(SYS_GRANT_PRIVILEGE),
+                   "b"(privilege), "c"(tid));
+
+  return retval;
+}

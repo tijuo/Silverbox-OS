@@ -1,8 +1,12 @@
-#include <kernel/signal.h>
 #include <string.h>
 #include <kernel/queue.h>
 #include <kernel/thread.h>
 #include <kernel/debug.h>
+#include <os/signal.h>
+
+int sysSetSigHandler( TCB *tcb, void *handler );
+int sysRaise( TCB *tcb, int signal, int arg );
+
 
 int sysSetSigHandler( TCB *tcb, void *handler )
 {

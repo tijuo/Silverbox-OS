@@ -5,7 +5,6 @@
 #include <kernel/schedule.h>
 #include <kernel/error.h>
 #include <kernel/message.h>
-#include <kernel/signal.h>
 #include <os/signal.h>
 
 void _syscall( TCB *thread );
@@ -17,6 +16,15 @@ extern int sysEndIRQ( TCB *thread, int irqNum );
 extern int sysRegisterInt( TCB *thread, int intNum );
 extern int sysUnregisterInt( TCB *thread, int intNum );
 extern int sysEndPageFault( TCB *thread, tid_t tid );
+
+extern int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid);
+extern int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid);
+extern void sysInvalidateTlb(void);
+extern int sysYield( TCB *thread );
+
+extern int sysRaise( TCB *tcb, int signal, int arg );
+extern int sysSetSigHandler( TCB *tcb, void *handler );
+static int sysGrantPrivilege( TCB *thread, int privilege, tid_t tid );
 
 unsigned int privSyscalls[] = { SYS_REGISTER_INT, SYS_UNREGISTER_INT, SYS_SET_THREAD_STATE, SYS_SET_THREAD_PRIORITY, SYS_EOI,
                                 SYS_END_PAGE_FAULT, SYS_GRANT_PRIVILEGE };
@@ -56,6 +64,30 @@ static int sysGetThreadInfo( TCB *thread, tid_t tid, struct ThreadInfo *info )
   info->priority = other_thread->priority;
   info->addr_space = (addr_t)(other_thread->cr3.base << 12);
   memcpy(&info->state, &other_thread->execState, sizeof other_thread->execState);
+
+  return 0;
+}
+
+static int sysGrantPrivilege( TCB *thread, int privilege, tid_t tid )
+{
+  if( !thread->privileged )
+    return -2;
+  else if( tid >= MAX_THREADS )
+      return -1;
+  else
+  {
+    switch( privilege )
+    {
+      case PRIV_SUPER:
+        tcbTable[tid].privileged = 1;
+        break;
+      case PRIV_PAGER:
+        tcbTable[tid].pager = 1;
+        break;
+      default:
+        return -1;
+    }
+  }
 
   return 0;
 }
@@ -122,14 +154,14 @@ void _syscall( TCB *thread )
       *result = -1;
       break;
     case SYS_SET_PAGE_MAPPING:
-      *result = -1;
+      *result = sysSetPageMapping( thread, (struct PageMapping *)execState->user.ebx, (size_t)execState->user.ecx, (tid_t)execState->user.edx);
       break;
     case SYS_GET_PAGE_MAPPING:
-      *result = -1;
+      *result = sysGetPageMapping( thread, (struct PageMapping *)execState->user.ebx, (size_t)execState->user.ecx, (tid_t)execState->user.edx);
       break;
     case SYS_SLEEP:
       if( execState->user.ebx == 0 )
-        sysYield( thread );
+        *result = sysYield( thread );
       else
         *result = sleepThread( thread, (int)execState->user.ebx );
       break;
@@ -148,7 +180,7 @@ void _syscall( TCB *thread )
       *result = sysGetThreadInfo( thread, (tid_t)execState->user.ebx, (struct ThreadInfo *)execState->user.ecx );
       break;
     case SYS_INVALIDATE_TLB:
-      *result = -1;
+      sysInvalidateTlb();
       break;
     case SYS_RAISE:
       *result = sysRaise( thread, (int)execState->user.ebx, (int)execState->user.ecx );
@@ -163,7 +195,7 @@ void _syscall( TCB *thread )
       *result = releaseThread( thread );
        break;
     case SYS_GRANT_PRIVILEGE:
-      *result = -1;
+      *result = sysGrantPrivilege( thread, (int)execState->user.ebx, (tid_t)execState->user.ecx );
       break;
     default:
       kprintf("Invalid system call: 0x%x %d 0x%x\n", execState->user.eax,

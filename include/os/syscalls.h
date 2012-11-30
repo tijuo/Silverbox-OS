@@ -38,6 +38,9 @@
 #define PM_LARGE_PAGE           0x80
 #define PM_INVALIDATE           0x80000000
 
+#define PRIV_SUPER		0
+#define PRIV_PAGER		1
+
 struct PageMapping
 {
   addr_t virt;
