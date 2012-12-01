@@ -3,6 +3,7 @@
 #include <kernel/thread.h>
 #include <kernel/debug.h>
 #include <os/signal.h>
+#include <os/syscalls.h>
 
 int sysSetSigHandler( TCB *tcb, void *handler );
 int sysRaise( TCB *tcb, int signal, int arg );
@@ -11,7 +12,7 @@ int sysRaise( TCB *tcb, int signal, int arg );
 int sysSetSigHandler( TCB *tcb, void *handler )
 {
   tcb->sig_handler = handler;
-  return 0;
+  return ESYS_OK;
 }
 
 /* Raising a signal when a thread does a __send() or __receive()
@@ -35,7 +36,10 @@ int sysRaise( TCB *tcb, int signal, int arg )
     return -2;
 
   if( tcb->threadState == WAIT_FOR_SEND || tcb->threadState == WAIT_FOR_RECV )
-    timerDetach( tcb );
+  {
+    if( timerDetach( tcb ) == NULL )
+      return ESYS_FAIL;
+  }
 
   if( tcb->threadState == WAIT_FOR_SEND )
   {
@@ -66,7 +70,7 @@ int sysRaise( TCB *tcb, int signal, int arg )
            (addr_t)stack, (addr_t)(tcb->cr3.base << 12) ) != 0 )
   {
     tcb->execState.user.eax = (dword)-1;
-    return -1;
+    return ESYS_FAIL;
   }
 
   tcb->execState.user.eip = (dword)tcb->sig_handler;
@@ -75,5 +79,5 @@ int sysRaise( TCB *tcb, int signal, int arg )
   if( tcb->threadState != RUNNING && tcb->threadState != READY )
     startThread( tcb );
 
-  return 0;
+  return ESYS_OK;
 }

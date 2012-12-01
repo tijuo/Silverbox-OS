@@ -5,6 +5,7 @@
 #include <kernel/pic.h>
 #include <kernel/paging.h>
 #include <os/signal.h>
+#include <os/syscalls.h>
 
 extern void init2( void );
 extern int numBootMods;
@@ -136,13 +137,13 @@ int sysYield( TCB *thread )
   assert( GET_TID(thread) != NULL_TID );
 
   if( thread == NULL )
-    return -1;
+    return ESYS_ARG;
 
   assert(thread == currentThread);
 
   thread->reschedule = 1;
 //  thread->threadState = READY; // Not sure if this actually works
-  return 0;
+  return ESYS_OK;
 }
 
 /**

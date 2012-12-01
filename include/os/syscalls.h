@@ -41,6 +41,13 @@
 #define PRIV_SUPER		0
 #define PRIV_PAGER		1
 
+#define ESYS_OK			0
+#define ESYS_ARG		-1
+#define ESYS_FAIL		-2
+#define ESYS_PERM		-3
+#define ESYS_BADCALL		-4
+#define ESYS_NOTIMPL		-5
+
 struct PageMapping
 {
   addr_t virt;
@@ -105,7 +112,7 @@ int sys_end_page_fault( tid_t tid );
 int sys_raise( int signal, int arg );
 int sys_set_sig_handler( void *handler );
 int sys_destroy_thread( tid_t tid );
-void sys_invalidate_tlb( void );
+int sys_invalidate_tlb( void );
 int sys_grant_privilege( int privilege, tid_t tid );
 
 #endif /* OS_SYSCALLS */

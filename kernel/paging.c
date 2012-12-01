@@ -29,7 +29,7 @@ bool is_writable( addr_t addr, addr_t pdir );
 
 int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid);
 int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid);
-void sysInvalidateTlb(void);
+int sysInvalidateTlb(void);
 
 bool is_readable( addr_t addr, addr_t pdir )
 {
@@ -570,23 +570,23 @@ int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
   int errors=0;
 
   if( tid >= MAX_THREADS )
-    return -1;
+    return ESYS_ARG;
   else if( tid != NULL_TID )
   {
     if( tcbTable[tid].threadState == DEAD )
-      return -1;
+      return ESYS_FAIL;
     else if( tcbTable[tid].exHandler != thread )
-      return -2; // Caller is not the thread's exception handler
+      return ESYS_PERM; // Caller is not the thread's exception handler
   }
   else if( !mappings )
-    return -1;
+    return ESYS_ARG;
 
   for(size_t offset=0; offset < len; offset += sizeof *mappings, ptr++)
   {
     if( ptr->level < 0 || ptr->level >= 2 || (ptr->virt & 0xFFFu) || (ptr->frame & 0xFFFu) )
     {
       errors = 1;
-      ptr->status = -1;
+      ptr->status = ESYS_ARG;
       continue;
     }
 
@@ -595,7 +595,7 @@ int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
       if( readPDE( ptr->virt, &pde, (tid == NULL_TID ? getCR3() & ~0xFFFu : (addr_t)(tcbTable[tid].cr3.base << 12)) ) != 0 )
       {
         errors = 1;
-        ptr->status = -1;
+        ptr->status = ESYS_FAIL;
         continue;
       }
 
@@ -613,14 +613,14 @@ int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
       if( readPDE( ptr->virt, &pde, (addr_t)(tcbTable[tid].cr3.base << 12) ) != 0 || !pde.present )
       {
         errors = 1;
-        ptr->status = -1;
+        ptr->status = ESYS_FAIL;
         continue;
       }
 
       if( readPTE( ptr->virt, &pte, (tid == NULL_TID ? getCR3() & ~0xFFFu : (addr_t)(tcbTable[tid].cr3.base << 12)) ) != 0 )
       {
         errors = 1;
-        ptr->status = -1;
+        ptr->status = ESYS_FAIL;
         continue;
       }
 
@@ -634,13 +634,13 @@ int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
                    (pde.pageSize ? PM_LARGE_PAGE : 0);
     }
 
-    ptr->status = 0;
+    ptr->status = ESYS_OK;
   }
 
   if( errors )
-    return 1;
+    return ESYS_FAIL;
   else
-    return 0;
+    return ESYS_OK;
 }
 
 int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid)
@@ -652,23 +652,23 @@ int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
   int pmap_flags;
 
   if( tid >= MAX_THREADS )
-    return -1;
+    return ESYS_ARG;
   else if( tid != NULL_TID )
   {
     if( tcbTable[tid].threadState == DEAD )
-      return -1;
+      return ESYS_FAIL;
     else if( tcbTable[tid].exHandler != thread )
-      return -2; // Caller is not the thread's exception handler
+      return ESYS_PERM; // Caller is not the thread's exception handler
   }
   else if( !mappings )
-    return -1;
+    return ESYS_ARG;
 
   for(size_t offset=0; offset < len; offset += sizeof *mappings, ptr++)
   {
     if( ptr->level < 0 || ptr->level >= 2 || (ptr->virt & 0xFFFu) || (ptr->frame & 0xFFFu) )
     {
       errors = 1;
-      ptr->status = -1;
+      ptr->status = ESYS_ARG;
       continue;
     }
 
@@ -689,7 +689,7 @@ int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
       if( writePDE( ptr->virt, &pde, (tid == NULL_TID ? getCR3() & ~0xFFFu : (addr_t)(tcbTable[tid].cr3.base << 12)) ) != 0 )
       {
         errors = 1;
-        ptr->status = -1;
+        ptr->status = ESYS_FAIL;
         continue;
       }
 
@@ -701,7 +701,7 @@ int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
       if( readPDE( ptr->virt, &pde, tcbTable[tid].cr3.base << 12 ) != 0 || !pde.present )
       {
         errors = 1;
-        ptr->status = -1;
+        ptr->status = ESYS_FAIL;
         continue;
       }
 
@@ -710,7 +710,7 @@ int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
       if( writePTE( ptr->virt, &pte, (tid == NULL_TID ? getCR3() & ~0xFFFu : (addr_t)(tcbTable[tid].cr3.base << 12)) ) != 0 )
       {
         errors = 1;
-        ptr->status = -1;
+        ptr->status = ESYS_FAIL;
         continue;
       }
 
@@ -718,16 +718,18 @@ int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid
         invalidate_page(ptr->virt);
     }
 
-    ptr->status = 0;
+    ptr->status = ESYS_OK;
   }
 
   if( !errors )
-    return 0;
+    return ESYS_OK;
   else
-    return 1;
+    return ESYS_FAIL;
 }
 
-void sysInvalidateTlb(void)
+int sysInvalidateTlb(void)
 {
   invalidate_tlb();
+
+  return ESYS_OK;
 }

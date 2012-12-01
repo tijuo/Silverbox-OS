@@ -19,7 +19,7 @@ extern int sysEndPageFault( TCB *thread, tid_t tid );
 
 extern int sysSetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid);
 extern int sysGetPageMapping(TCB *thread, struct PageMapping *mappings, size_t len, tid_t tid);
-extern void sysInvalidateTlb(void);
+extern int sysInvalidateTlb(void);
 extern int sysYield( TCB *thread );
 
 extern int sysRaise( TCB *tcb, int signal, int arg );
@@ -46,10 +46,9 @@ static int sysGetThreadInfo( TCB *thread, tid_t tid, struct ThreadInfo *info )
   assert(info != NULL);
 
   if( info == NULL )
-    return -ENULL;
-
-  if( tid >= MAX_THREADS )
-    return -1;
+    return ESYS_ARG;
+  else if( tid >= MAX_THREADS )
+    return ESYS_ARG;
 
   if( tid == NULL_TID )
     other_thread = thread;
@@ -57,23 +56,25 @@ static int sysGetThreadInfo( TCB *thread, tid_t tid, struct ThreadInfo *info )
     other_thread = &tcbTable[tid];
 
   if( other_thread != thread && other_thread->exHandler != thread )
-    return -1;
+    return ESYS_FAIL;
+  else
+  {
+    info->tid = GET_TID(other_thread);
+    info->exHandler = GET_TID(other_thread->exHandler);
+    info->priority = other_thread->priority;
+    info->addr_space = (addr_t)(other_thread->cr3.base << 12);
+    memcpy(&info->state, &other_thread->execState, sizeof other_thread->execState);
 
-  info->tid = GET_TID(other_thread);
-  info->exHandler = GET_TID(other_thread->exHandler);
-  info->priority = other_thread->priority;
-  info->addr_space = (addr_t)(other_thread->cr3.base << 12);
-  memcpy(&info->state, &other_thread->execState, sizeof other_thread->execState);
-
-  return 0;
+    return ESYS_OK;
+  }
 }
 
 static int sysGrantPrivilege( TCB *thread, int privilege, tid_t tid )
 {
   if( !thread->privileged )
-    return -2;
+    return ESYS_PERM;
   else if( tid >= MAX_THREADS )
-      return -1;
+    return ESYS_ARG;
   else
   {
     switch( privilege )
@@ -85,11 +86,11 @@ static int sysGrantPrivilege( TCB *thread, int privilege, tid_t tid )
         tcbTable[tid].pager = 1;
         break;
       default:
-        return -1;
+        return ESYS_ARG;
     }
   }
 
-  return 0;
+  return ESYS_OK;
 }
 
 /// Handles a system call
@@ -105,8 +106,8 @@ void _syscall( TCB *thread )
     {
       if( (unsigned int)execState->user.eax == privSyscalls[i] )
       {
-        *result = -2;
-        break;
+        *result = ESYS_PERM;
+        return;
       }
     }
   }
@@ -117,8 +118,8 @@ void _syscall( TCB *thread )
     {
       if( (unsigned int)execState->user.eax == pagerSyscalls[i] )
       {
-        *result = -2;
-        break;
+        *result = ESYS_PERM;
+        return;
       }
     }
   }
@@ -134,7 +135,7 @@ void _syscall( TCB *thread )
     // XXX: Is this system call necessary?
     case SYS_EXIT:
       sysExit( thread, (int)execState->user.ebx );
-      *result = -1; // sys_exit() should never return
+      *result = ESYS_FAIL; // sys_exit() should never return
       break;
     case SYS_CREATE_THREAD:
     {
@@ -148,10 +149,10 @@ void _syscall( TCB *thread )
       break;
     }
     case SYS_SET_THREAD_STATE:
-      *result = -1;
+      *result = ESYS_NOTIMPL;
       break;
     case SYS_SET_THREAD_PRIORITY:
-      *result = -1;
+      *result = ESYS_NOTIMPL;
       break;
     case SYS_SET_PAGE_MAPPING:
       *result = sysSetPageMapping( thread, (struct PageMapping *)execState->user.ebx, (size_t)execState->user.ecx, (tid_t)execState->user.edx);
@@ -180,7 +181,7 @@ void _syscall( TCB *thread )
       *result = sysGetThreadInfo( thread, (tid_t)execState->user.ebx, (struct ThreadInfo *)execState->user.ecx );
       break;
     case SYS_INVALIDATE_TLB:
-      sysInvalidateTlb();
+      *result = sysInvalidateTlb();
       break;
     case SYS_RAISE:
       *result = sysRaise( thread, (int)execState->user.ebx, (int)execState->user.ecx );
@@ -201,7 +202,7 @@ void _syscall( TCB *thread )
       kprintf("Invalid system call: 0x%x %d 0x%x\n", execState->user.eax,
 		GET_TID(thread), thread->execState.user.eip);
       assert(false);
-      *result = -1;
+      *result = ESYS_BADCALL;
       break;
   }
 }

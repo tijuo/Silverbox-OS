@@ -171,9 +171,12 @@ void sys_invalidate_page( addr_t addr )
 }
 #endif /* 0 */
 
-void sys_invalidate_tlb( void )
+int sys_invalidate_tlb( void )
 {
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_INVALIDATE_TLB));
+  int retval;
+
+  asm __volatile__("int %1\n" : "=a"(retval) : "i"(SYSCALL_INT), "a"(SYS_INVALIDATE_TLB));
+  return retval;
 }
 
 int sys_set_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid)

@@ -7,6 +7,7 @@
 #include <kernel/lowlevel.h>
 #include <kernel/pic.h>
 #include <kernel/paging.h>
+#include <os/syscalls.h>
 
 #define NUM_IRQS	16
 
@@ -54,14 +55,14 @@ int sysEndIRQ( const TCB *thread, unsigned int irqNum )
   if( irqNum >= IRQ0 && irqNum <= IRQ15 )
   {
     if( IRQHandlers[irqNum - IRQ0] != thread )
-      return -1;
+      return ESYS_PERM;
 
     enableIRQ( irqNum - IRQ0 );
 //    sendEOI();
-    return 0;
+    return ESYS_OK;
   }
   else
-    return -1;
+    return ESYS_ARG;
 }
 
 /** This allows a thread to register an interrupt handler. All
@@ -71,7 +72,7 @@ int sysEndIRQ( const TCB *thread, unsigned int irqNum )
 int sysRegisterInt( TCB *thread, unsigned int intNum )
 {
   if( intNum < IRQ0 || intNum - IRQ0 >= NUM_IRQS )
-    return -1;
+    return ESYS_ARG;
 
   if( registerIRQ( intNum ) == true )
   {
@@ -79,10 +80,10 @@ int sysRegisterInt( TCB *thread, unsigned int intNum )
 
     IRQHandlers[intNum - IRQ0] = thread;
     enableIRQ(intNum - IRQ0);
-    return 0;
+    return ESYS_OK;
   }
-
-  return -1;
+  else
+    return ESYS_FAIL;
 }
 
 int sysUnregisterInt( TCB *thread, unsigned int intNum )
@@ -90,20 +91,19 @@ int sysUnregisterInt( TCB *thread, unsigned int intNum )
   assert( intNum >= IRQ0 && intNum - IRQ0 < NUM_IRQS );
 
   if( intNum < IRQ0 || intNum - IRQ0 >= NUM_IRQS )
-    return -1;
+    return ESYS_ARG;
   else if( IRQHandlers[intNum - IRQ0] != thread )
-    return -1;
+    return ESYS_PERM;
   else if( releaseIRQ( intNum ) == false )
-    return -1;
+    return ESYS_FAIL;
   else
   {
     kprintf("IRQ 0x%x unregistered\n", intNum - IRQ0);
 
     disableIRQ(intNum - IRQ0);
     IRQHandlers[intNum - IRQ0] = NULL;
+    return ESYS_OK;
   }
-
-  return 0;
 }
 
 /** Notifies the kernel that a pager is finished handling a
@@ -119,11 +119,11 @@ int sysEndPageFault( const TCB *currThread, tid_t tid )
   assert( tid != NULL_TID );
   assert( tcbTable[tid].exHandler != NULL );
 
-  if( tid == NULL_TID || tcbTable[tid].exHandler == NULL )
-    return -1;
+  if( tid == NULL_TID )
+    return ESYS_ARG;
 
-  if( tcbTable[tid].exHandler != currThread ) // Only a thread's exception handler should make this call
-    return -1;
+  if( tcbTable[tid].exHandler == NULL || tcbTable[tid].exHandler != currThread ) // Only a thread's exception handler should make this call
+    return ESYS_PERM;
 
   // XXX: How do you tell the kernel that a fatal exception has occurred?
 
@@ -133,9 +133,9 @@ int sysEndPageFault( const TCB *currThread, tid_t tid )
   }
 
   if( startThread( &tcbTable[tid] ) != 0 )
-    return -1;
+    return ESYS_FAIL;
   else
-    return 0;
+    return ESYS_OK;
 }
 
 /// Handles an IRQ (from 0 to 15).
