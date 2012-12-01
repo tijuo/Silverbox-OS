@@ -65,7 +65,7 @@ static char *DISC_CODE(strstr(const char * restrict, const char * restrict));
 static char *DISC_CODE(strchr(const char * restrict, int));
 static int DISC_CODE(clearPhysPage(addr_t phys));
 static void DISC_CODE(showCPU_Features(void));
-static void DISC_CODE(showGrubSupport(multiboot_info_t *));
+static void DISC_CODE(showMBInfoFlags(multiboot_info_t * restrict));
 static void DISC_CODE(init_clock(void));
 static void DISC_CODE(initStructures(void));
 static unsigned DISC_CODE(bcd2bin(unsigned num));
@@ -714,6 +714,8 @@ void init2( multiboot_info_t * restrict mb_boot_info )
     *--ptr = (unsigned int)mb_boot_info; // Arg 1
 
     unmapTemp();
+    init_server->privileged = 1;
+    init_server->pager = 1;
     startThread(init_server);
   }
   else
@@ -732,30 +734,33 @@ void init2( multiboot_info_t * restrict mb_boot_info )
 //    kUnmapPage( addr );
 }
 #if DEBUG
-void showGrubSupport( multiboot_info_t * restrict info )
+#if 0
+#define MBI_FLAGS_MEM		(1u << 0)  /* 'mem_*' fields are valid */
+#define MBI_FLAGS_BOOT_DEV	(1u << 1)  /* 'boot_device' field is valid */
+#define MBI_FLAGS_CMDLINE	(1u << 2)  /* 'cmdline' field is valid */
+#define MBI_FLAGS_MODS		(1u << 3)  /* 'mods' fields are valid */
+#define MBI_FLAGS_SYMTAB		(1u << 4)
+#define MBI_FLAGS_SHDR		(1u << 5)  /* 'shdr_*' fields are valid */
+#define MBI_FLAGS_MMAP		(1u << 6)  /* 'mmap_*' fields are valid. */
+#define MBI_FLAGS_DRIVES		(1u << 7)  /* 'drives_*' fields are valid */
+#define MBI_FLAGS_CONFIG		(1u << 8)  /* 'config_table' field is valid */
+#define MBI_FLAGS_BOOTLDR	(1u << 9)  /* 'boot_loader_name' field is valid */
+#define MBI_FLAGS_APM_TAB	(1u << 10) /* 'apm_table' field is valid */
+#define MBI_FLAGS_GFX_TAB	(1u << 11) /* Grahphics table is available */
+#endif /* 0 */
+
+void showMBInfoFlags( multiboot_info_t * restrict info )
 {
-  if( info->flags & (1u << 0) )
-    kprintf("MEM\n");
-  if( info->flags & (1u << 1) )
-    kprintf("BOOT_DRV\n");
-  if( info->flags & (1u << 2) )
-    kprintf("CMD_LINE\n");
-  if( info->flags & (1u << 3) )
-    kprintf("MOD\n");
-  if( (info->flags & (1u << 4)) || (info->flags & (1u << 5)) )
-    kprintf("SYMTAB\n");
-  if( info->flags & (1u << 6) )
-    kprintf("MMAP\n");
-  if( info->flags & (1u << 7) )
-    kprintf("DRV_INFO\n");
-  if( info->flags & (1u << 8) )
-    kprintf("CONFIG\n");
-  if( info->flags & (1u << 9) )
-    kprintf("BTLDR_NAME\n");
-  if( info->flags & (1u << 10) )
-    kprintf("APM\n");
-  if( info->flags & (1u << 11) )
-    kprintf("VBE\n");
+  const char *names[] = { "MEM", "BOOT_DEV", "CMDLINE", "MODS", "SYMTAB", "SHDR",
+                          "MMAP", "DRIVES", "CONFIG", "BOOTLDR", "APM_TAB", "GFX_TAB" };
+
+  kprintf("Mulitboot Information Flags:\n");
+
+  for(size_t i=0; i < 12; i++)
+  {
+    if( info->flags & (1u << i) )
+      kprintf("%s\n", names[i]);
+  }
 }
 
 void showCPU_Features(void)
@@ -819,7 +824,7 @@ void init( multiboot_info_t * restrict info )
   initVideo();
   setVideoLowMem( true );
   clearScreen();
-  showGrubSupport(info);
+  showMBInfoFlags(info);
   showCPU_Features();
 #endif
 

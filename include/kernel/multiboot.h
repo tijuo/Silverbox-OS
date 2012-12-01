@@ -58,6 +58,19 @@ typedef struct elf_section_header_table
   unsigned long shndx;
 } elf_section_header_table_t;
 
+#define MBI_FLAGS_MEM            (1u << 0)  /* 'mem_*' fields are valid */
+#define MBI_FLAGS_BOOT_DEV       (1u << 1)  /* 'boot_device' field is valid */
+#define MBI_FLAGS_CMDLINE        (1u << 2)  /* 'cmdline' field is valid */
+#define MBI_FLAGS_MODS           (1u << 3)  /* 'mods' fields are valid */
+#define MBI_FLAGS_SYMTAB         (1u << 4)  /* 'syms.symtab' field is valid */
+#define MBI_FLAGS_SHDR           (1u << 5)  /* 'syms.shdr' field is valid */
+#define MBI_FLAGS_MMAP           (1u << 6)  /* 'mmap_*' fields are valid. */
+#define MBI_FLAGS_DRIVES         (1u << 7)  /* 'drives_*' fields are valid */
+#define MBI_FLAGS_CONFIG         (1u << 8)  /* 'config_table' field is valid */
+#define MBI_FLAGS_BOOTLDR        (1u << 9)  /* 'boot_loader_name' field is valid */
+#define MBI_FLAGS_APM_TAB        (1u << 10) /* 'apm_table' field is valid */
+#define MBI_FLAGS_GFX_TAB        (1u << 11) /* Grahphics table is available */
+
 /* The Multiboot information.  */
 typedef struct multiboot_info
 {
@@ -68,11 +81,11 @@ typedef struct multiboot_info
   unsigned long cmdline;
   unsigned long mods_count;
   unsigned long mods_addr;
-  union
+  union Tables
   {
-    aout_symbol_table_t aout_sym;
-    elf_section_header_table_t elf_sec;
-  } u;
+    aout_symbol_table_t symtab;
+    elf_section_header_table_t shdr;
+  } syms;
   unsigned long mmap_length;
   unsigned long mmap_addr;
   unsigned long drives_length;
