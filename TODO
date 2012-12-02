@@ -1,11 +1,6 @@
 Kernel:
 
-DONE: Set thread's IO permissions based on TSS instead of the EFLAGS IOPL
-DONE: Allow lazy TSS IO bitmap switching
-
 Implement APIC timer
-Pass GRUB information to initial server
-DONE: Only allow the initial server to perform privileged system calls
 Check system call input addresses for mapping/granting
 
 Initial Server:

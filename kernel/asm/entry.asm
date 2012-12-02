@@ -22,7 +22,6 @@
 [section .header progbits alloc noexec nowrite align=4]
 
 IMPORT init
-IMPORT commandLine
 IMPORT initKrnlPDir
 IMPORT kernelBootStack
 IMPORT lowMemPTab
