@@ -6,6 +6,7 @@
 #include <kernel/thread.h>
 #include <kernel/io.h>
 #include <stdarg.h>
+#include <kernel/lowlevel.h>
 
 #define SCREEN_HEIGHT   25
 #define SCREEN_WIDTH    80
@@ -19,6 +20,9 @@ void doNewLine( int *x, int *y );
 char *kitoa(int value, char *str, int base);
 void _putChar( char c, int x, int y, unsigned char attrib );
 void putChar( char c, int x, int y );
+void dump_regs( const TCB *thread );
+void dump_state( const ExecutionState *state );
+void dump_stack( addr_t, addr_t );
 
 static const char *_digits="0123456789abcdefghijklmnopqrstuvwxyz";
 
@@ -512,5 +516,147 @@ void kprintf( const char *str, ... )
     }
   }
   va_end(args);
+}
+
+void dump_state( const ExecutionState *execState )
+{
+  if( execState == NULL )
+  {
+    kprintf("Unable to show execution state.\n");
+    return;
+  }
+
+  if( execState->user.intNum == 0x40 )
+  {
+    kprintf("Syscall");
+  }
+  else if( execState->user.intNum < IRQ0 )
+  {
+    kprintf("Exception %d", execState->user.intNum);
+  }
+  else if( execState->user.intNum >= IRQ0 && execState->user.intNum <= IRQ15 )
+  {
+    kprintf("IRQ%d", execState->user.intNum - IRQ0);
+  }
+  else
+  {
+    kprintf("Software Interrupt %d", execState->user.intNum);
+  }
+
+  kprintf(" @ EIP: 0x%x", execState->user.eip);
+
+  kprintf( "\nEAX: 0x%x EBX: 0x%x ECX: 0x%x EDX: 0x%x", execState->user.eax, execState->user.ebx, execState->user.ecx, execState->user.edx );
+  kprintf( "\nESI: 0x%x EDI: 0x%x ESP: 0x%x EBP: 0x%x", execState->user.esi, execState->user.edi, execState->user.esp, execState->user.ebp );
+  kprintf( "\nCS: 0x%x DS: 0x%x ES: 0x%x", execState->user.cs, execState->user.ds, execState->user.es );
+
+  if( execState->user.intNum == 14 )
+  {
+    kprintf(" CR2: 0x%x", getCR2());
+  }
+
+  kprintf( " error code: 0x%x\n", execState->user.errorCode );
+
+  kprintf("EFLAGS: 0x%x ", execState->user.eflags);
+
+  if( execState->user.cs == UCODE )
+  {
+    kprintf("User ESP: 0x%x User SS: 0x%x\n", execState->user.userEsp, execState->user.userSS);
+  }
+}
+
+void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
+{
+  kprintf("\n\nStack Trace:\n<Stack Frame>: [Return-EIP] args*\n");
+
+  while( stackFramePtr )
+  {
+    kprintf("<0x%x>:", stackFramePtr);
+
+    if( is_readable( stackFramePtr + 4, addrSpace ) )
+    {
+      kprintf(" [0x%x]", *(dword *)(stackFramePtr + 4));
+    }
+    else
+    {
+      kprintf(" [???]");
+    }
+
+    for( int i=2; i < 8; i++ )
+    {
+      if( is_readable( stackFramePtr + 4 * i, addrSpace) )
+      {
+        kprintf(" 0x%x", *(dword *)(stackFramePtr + 4 * i));
+      }
+      else
+      {
+        break;
+      }
+    }
+
+    kprintf("\n");
+
+    if( !is_readable(*(dword *)stackFramePtr, addrSpace) )
+    {
+      kprintf("<0x%x (invalid)>:\n", *(dword *)stackFramePtr);
+      break;
+    }
+    else
+    {
+      stackFramePtr = *(dword *)stackFramePtr;
+    }
+  }
+}
+
+/// Prints useful debugging information about the current thread
+
+void dump_regs( const TCB *thread )
+{
+  ExecutionState *execState=NULL;
+  addr_t stackFramePtr;
+
+  kprintf( "Thread: 0x%x ", thread, GET_TID(thread));
+
+  if( ((addr_t)thread - (addr_t)tcbTable) % sizeof *thread == 0 &&
+      GET_TID(thread) >= INITIAL_TID && GET_TID(thread) < MAX_THREADS )
+  {
+    kprintf("TID: %d ", GET_TID(thread));
+  }
+  else
+  {
+    kprintf("(invalid thread address) ");
+  }
+
+  if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
+  {
+    execState = (ExecutionState *)&thread->execState;
+  }
+
+  dump_state(execState);
+
+  if( !execState )
+  {
+    kprintf("\n");
+  }
+
+  kprintf( "Thread CR3: 0x%x Current CR3: 0x%x\n", *(unsigned *)&thread->cr3, getCR3() );
+
+  if( !execState )
+  {
+    __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
+
+    if( !is_readable(*(dword *)stackFramePtr, thread->cr3.base << 12) )
+    {
+      kprintf("Unable to dump the stack\n");
+      return;
+    }
+
+    stackFramePtr = *(addr_t *)stackFramePtr;
+  }
+  else
+  {
+    stackFramePtr = (addr_t)execState->user.ebp;
+  }
+
+  dump_stack(stackFramePtr, thread->cr3.base << 12);
 }
 #endif /* DEBUG */

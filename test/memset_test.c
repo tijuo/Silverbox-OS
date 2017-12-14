@@ -1,11 +1,8 @@
-#if DEBUG
 #include <kernel/debug.h>
 #include <kernel/memory.h>
 
 void testMemset(void);
-void testATA(void);
 
-#if 0
 extern void *_memset(void *, int, size_t);
 
 void testMemset(void)
@@ -33,11 +30,3 @@ void testMemset(void)
   kprintf("memcpy() - %d ticks. %d ticks avg\n", diff1, diff1 / 100);
   kprintf("_memcpy() - %d ticks. %d ticks avg\n", diff2, diff2 / 100);
 }
-#endif
-
-void testATA(void)
-{
-
-}
-
-#endif /* DEBUG */

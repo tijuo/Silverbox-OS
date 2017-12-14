@@ -6,9 +6,8 @@ all:    kernel.gz kernel.dmp kernel.dbg kernel.sym
 include ../Makefile.inc
 include ../vars.mk
 
-SRC     =init.c paging.c thread.c schedule.c exceptions.c \
-        debug.c pic.c queue.c message.c syscall.c \
-        signal.c test.c
+SRC     =init.c paging.c thread.c schedule.c interrupt.c \
+        debug.c pic.c queue.c message.c syscall.c
 
 OBJ     =$(SRC:.c=.o)
 LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL
