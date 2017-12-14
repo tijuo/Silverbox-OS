@@ -4,7 +4,6 @@
 #include <kernel/schedule.h>
 #include <kernel/pic.h>
 #include <kernel/paging.h>
-#include <os/signal.h>
 #include <os/syscalls.h>
 
 extern void init2( void );
@@ -16,8 +15,6 @@ int sysYield( TCB *thread );
 int setPriority( TCB *thread, unsigned int level );
 TCB *attachRunQueue( TCB *thread );
 TCB *detachRunQueue( TCB *thread );
-
-extern int sysRaise( TCB *tcb, int signal, int arg );
 
 void idle(void)
 {
@@ -293,7 +290,7 @@ void timerInt( TCB *thread )
       if( wokenThread->threadState == WAIT_FOR_SEND || wokenThread->threadState == WAIT_FOR_RECV )
       {
         kprintf("SIGTMOUT to %d\n", GET_TID(wokenThread));
-        sysRaise(wokenThread, SIGTMOUT, 0);
+        //sysRaise(wokenThread, SIGTMOUT, 0);
       }
       else
       {

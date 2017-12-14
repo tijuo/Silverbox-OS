@@ -3,7 +3,6 @@
 #include <kernel/debug.h>
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
-#include <os/signal.h>
 #include <kernel/lowlevel.h>
 #include <kernel/pic.h>
 #include <kernel/paging.h>
@@ -17,8 +16,6 @@ int sysUnregisterInt( TCB *thread, unsigned int intNum );
 int sysEndPageFault( const TCB *thread, tid_t tid );
 void handleIRQ( TCB *thread, ExecutionState );
 void handleCPUException( TCB *thread, ExecutionState );
-
-extern int sysRaise( TCB *tcb, int signal, int arg );
 
 static bool registerIRQ( unsigned int irq );
 static bool releaseIRQ( unsigned int irq );
@@ -168,7 +165,8 @@ void handleIRQ( TCB *thread, ExecutionState state )
       return;
 
     setPriority(IRQHandlers[execState->user.intNum - IRQ0], HIGHEST_PRIORITY);
-    sysRaise( IRQHandlers[execState->user.intNum - IRQ0], ((byte)execState->user.intNum << 8) | SIGINT, 0 );
+
+    // XXX: Send a message to the handler
 
     return;
   }

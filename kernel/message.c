@@ -5,7 +5,6 @@
 #include <kernel/syscall.h>
 #include <kernel/memory.h>
 #include <os/message.h>
-#include <os/signal.h>
 #include <kernel/pit.h>
 
 #define NULL_MSG_INDEX -1
@@ -24,7 +23,7 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, unsigned int ti
   @param recipient The TID of the message's recipient.
   @param msg The message to be sent.
   @param timeout Aborts the operation after timeout, if non-negative.
-  @return 0 on success. -1 on failure. -2 if interrupted by a signal (other than SIGTMOUT).
+  @return 0 on success. -1 on failure.
           -3 if interrupted by a SIGTMOUT.
 */
 
