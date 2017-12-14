@@ -6,8 +6,17 @@
 #define SYSCALL_INT             0x40
 
 #define SYS_SEND                0x00
-#define SYS_RECEIVE             0x01
+#define SYS_WAIT                0x01
+//#define SYS_RECEIVE             0x01
 #define SYS_EXIT                0x02
+#define SYS_ACQUIRE             0x03
+#define SYS_RELEASE             0x04
+#define SYS_READ                0x05
+#define SYS_MODIFY              0x06
+#define SYS_GRANT               0x07
+#define SYS_REVOKE              0x08
+
+/*
 #define SYS_GET_THREAD_INFO     0x03
 #define SYS_CREATE_THREAD       0x04
 #define SYS_SET_THREAD_STATE    0x05
@@ -24,6 +33,7 @@
 #define SYS_SET_PAGE_MAPPING	0x10
 #define SYS_GET_PAGE_MAPPING	0x11
 #define SYS_GRANT_PRIVILEGE	0x12
+*/
 
 #define PM_PRESENT              0x01
 #define PM_NOT_PRESENT          0

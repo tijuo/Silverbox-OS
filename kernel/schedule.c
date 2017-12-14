@@ -4,14 +4,12 @@
 #include <kernel/schedule.h>
 #include <kernel/pic.h>
 #include <kernel/paging.h>
-#include <os/syscalls.h>
 
 extern void init2( void );
 extern int numBootMods;
 void systemThread( void );
 TCB *idleThread;
 
-int sysYield( TCB *thread );
 int setPriority( TCB *thread, unsigned int level );
 TCB *attachRunQueue( TCB *thread );
 TCB *detachRunQueue( TCB *thread );
@@ -124,23 +122,6 @@ TCB *schedule( TCB *thread )
   newThread->quantaLeft = newThread->priority + 1;
 
   return newThread;
-}
-
-/// Voluntarily gives up control of the current thread
-
-int sysYield( TCB *thread )
-{
-  assert( thread != NULL );
-  assert( GET_TID(thread) != NULL_TID );
-
-  if( thread == NULL )
-    return ESYS_ARG;
-
-  assert(thread == currentThread);
-
-  thread->reschedule = 1;
-//  thread->threadState = READY; // Not sure if this actually works
-  return ESYS_OK;
 }
 
 /**

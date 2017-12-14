@@ -6,19 +6,18 @@
 #include <kernel/lowlevel.h>
 #include <kernel/pic.h>
 #include <kernel/paging.h>
-#include <os/syscalls.h>
 
 #define NUM_IRQS	16
 
-int sysEndIRQ( const TCB *thread, unsigned int irqNum );
-int sysRegisterInt( TCB *thread, unsigned int intNum );
-int sysUnregisterInt( TCB *thread, unsigned int intNum );
-int sysEndPageFault( const TCB *thread, tid_t tid );
+#define IRQ(x)    ((x)-IRQ0)
+#define INT(x)    ((x)+IRQ0)
+
+void endIRQ( int irqNum );
+int registerInt( TCB *thread, int intNum );
+void unregisterInt( int intNum );
 void handleIRQ( TCB *thread, ExecutionState );
 void handleCPUException( TCB *thread, ExecutionState );
 
-static bool registerIRQ( unsigned int irq );
-static bool releaseIRQ( unsigned int irq );
 void dump_regs( const TCB *thread );
 void dump_state( const ExecutionState *state );
 static void dump_stack( addr_t, addr_t );
@@ -27,80 +26,36 @@ static void dump_stack( addr_t, addr_t );
 /** true = no handler set
    false = handler has been set */
 
-static bool IRQState[ NUM_IRQS ] =
-{
-  true, true, false, true, true, true, true, true,
-  true, false, true, true, true, true, true, true
-};
-
 /// The threads that are responsible for handling an IRQ
 
 static TCB *IRQHandlers[ NUM_IRQS ];
 
-/* sysEndIRQ() should be called to complete the handling of
-   an IRQ.
-
-   XXX: This doesn't need to be implemented in kernel mode.
-*/
-
-int sysEndIRQ( const TCB *thread, unsigned int irqNum )
+void endIRQ( int irqNum )
 {
-  kprintf("sysEndIRQ(): %d\n", irqNum);
-
-  assert( irqNum >= IRQ0 && irqNum <= IRQ15 );
-
-  if( irqNum >= IRQ0 && irqNum <= IRQ15 )
-  {
-    if( IRQHandlers[irqNum - IRQ0] != thread )
-      return ESYS_PERM;
-
-    enableIRQ( irqNum - IRQ0 );
-//    sendEOI();
-    return ESYS_OK;
-  }
-  else
-    return ESYS_ARG;
+  enableIRQ(IRQ(irqNum);
+  sendEOI();
 }
 
 /** This allows a thread to register an interrupt handler. All
    interrupts will be sent to the registered thread .
 */
 
-int sysRegisterInt( TCB *thread, unsigned int intNum )
+int registerInt( TCB *thread, int intNum )
 {
-  if( intNum < IRQ0 || intNum - IRQ0 >= NUM_IRQS )
-    return ESYS_ARG;
-
-  if( registerIRQ( intNum ) == true )
+  if(!IRQHandlers[IRQ(intNum)] )
   {
-    kprintf("Thread %d registered IRQ: 0x%x\n", GET_TID(thread), intNum - IRQ0);
+    kprintf("Thread %d registered IRQ: 0x%x\n", GET_TID(thread), IRQ(intNum));
 
-    IRQHandlers[intNum - IRQ0] = thread;
-    enableIRQ(intNum - IRQ0);
-    return ESYS_OK;
+    IRQHandlers[IRQ(intNum)] = thread;
+    return 0;
   }
   else
-    return ESYS_FAIL;
+    return -1;
 }
 
-int sysUnregisterInt( TCB *thread, unsigned int intNum )
+void unregisterInt( int intNum )
 {
-  assert( intNum >= IRQ0 && intNum - IRQ0 < NUM_IRQS );
-
-  if( intNum < IRQ0 || intNum - IRQ0 >= NUM_IRQS )
-    return ESYS_ARG;
-  else if( IRQHandlers[intNum - IRQ0] != thread )
-    return ESYS_PERM;
-  else if( releaseIRQ( intNum ) == false )
-    return ESYS_FAIL;
-  else
-  {
-    kprintf("IRQ 0x%x unregistered\n", intNum - IRQ0);
-
-    disableIRQ(intNum - IRQ0);
-    IRQHandlers[intNum - IRQ0] = NULL;
-    return ESYS_OK;
-  }
+  IRQHandlers[IRQ(intNum)] = NULL;
 }
 
 /** Notifies the kernel that a pager is finished handling a
@@ -111,30 +66,6 @@ int sysUnregisterInt( TCB *thread, unsigned int intNum )
    XXX: this doesn't need to be implemented in kernel mode.
 */
 
-int sysEndPageFault( const TCB *currThread, tid_t tid )
-{
-  assert( tid != NULL_TID );
-  assert( tcbTable[tid].exHandler != NULL );
-
-  if( tid == NULL_TID )
-    return ESYS_ARG;
-
-  if( tcbTable[tid].exHandler == NULL || tcbTable[tid].exHandler != currThread ) // Only a thread's exception handler should make this call
-    return ESYS_PERM;
-
-  // XXX: How do you tell the kernel that a fatal exception has occurred?
-
-  if( currThread == &tcbTable[tid] )
-  {
-    kprintf("sysEndPageFault: currThread == &tcbTable[tid]\n");
-  }
-
-  if( startThread( &tcbTable[tid] ) != 0 )
-    return ESYS_FAIL;
-  else
-    return ESYS_OK;
-}
-
 /// Handles an IRQ (from 0 to 15).
 /** If an IRQ occurs, the kernel will send a message to the
     thread that registered to handle the IRQ (if it exists). */
@@ -144,61 +75,25 @@ void handleIRQ( TCB *thread, ExecutionState state )
   ExecutionState *execState;
 
   if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
-  {
     execState = (ExecutionState *)&thread->execState;
-  }
   else
-  {
     execState = (ExecutionState *)&state;
-  }
 
-  if( execState->user.intNum == 39 && IRQState[39 - IRQ0] == true )
-  {
+  if( execState->user.intNum == INT(7) && !IRQHandler[7] )
     sendEOI(); // Stops the spurious IRQ7
-  }
   else
   {
-    disableIRQ( execState->user.intNum - IRQ0 );
+    disableIRQ(IRQ(execState->user.intNum));
     sendEOI();
 
-    if( IRQHandlers[execState->user.intNum - IRQ0] == NULL )
+    if( IRQHandlers[IRQ(execState->user.intNum)] == NULL )
       return;
 
-    setPriority(IRQHandlers[execState->user.intNum - IRQ0], HIGHEST_PRIORITY);
+    setPriority(IRQHandlers[IRQ(execState->user.intNum)], HIGHEST_PRIORITY);
 
     // XXX: Send a message to the handler
 
     return;
-  }
-}
-
-/// Allocates an IRQ (so it cannot be reused)
-
-static bool registerIRQ( unsigned int irq )
-{
-  assert( irq >= IRQ0 && irq <= IRQ15 );
-
-  if ( irq < IRQ0 || irq > IRQ15 || IRQState[irq - IRQ0] == false )
-    RET_MSG(false, "Invalid IRQ")//return false;
-  else
-  {
-    IRQState[ irq - IRQ0 ] = false;
-    return true;
-  }
-}
-
-/// Deallocates an IRQ (so it can be reused)
-
-static bool releaseIRQ( unsigned int irq )
-{
-  assert( irq >= IRQ0 && irq <= IRQ15 );
-
-  if ( irq < IRQ0 || irq > IRQ15 )
-    RET_MSG(false, "Invalid IRQ")//return false;
-  else
-  {
-    IRQState[ irq - IRQ0 ] = true;
-    return true;
   }
 }
 
@@ -214,7 +109,7 @@ void dump_state( const ExecutionState *execState )
   {
     kprintf("Syscall");
   }
-  else if( execState->user.intNum < 32 )
+  else if( execState->user.intNum < IRQ0 )
   {
     kprintf("Exception %d", execState->user.intNum);
   }
@@ -265,7 +160,7 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
       kprintf(" [???]");
     }
 
-    for( unsigned int i=2; i < 8; i++ )
+    for( int i=2; i < 8; i++ )
     {
       if( is_readable( stackFramePtr + 4 * i, addrSpace) )
       {
@@ -391,13 +286,6 @@ void handleCPUException( TCB *thread, ExecutionState state)
   if( thread->exHandler == thread )
   {
     kprintf("Oops! The thread is its own exception handler!\n");
-    dump_regs( thread );
-    return;
-  }
-
-  if( sysRaise( thread->exHandler, (GET_TID(thread) << 8) | SIGEXP, getCR2() ) < 0 )
-  {
-    kprintf("Exception handler not accepting exception\n");
     dump_regs( thread );
     return;
   }
