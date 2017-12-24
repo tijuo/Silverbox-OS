@@ -28,6 +28,9 @@ void kprintf( const char *str, ... );
 void printAssertMsg(const char *exp, const char *file, const char *func, int line);
 void setBadAssertHlt( bool value );
 void setVideoLowMem( bool value );
+void dump_regs( const TCB *thread );
+void dump_state( const ExecutionState *state );
+
 /*
 char *_toHexString(unsigned int num);
 char *__toHexString(unsigned int, int);
@@ -87,6 +90,9 @@ static inline unsigned getTimeDifference(void)
 #define printAssertMsg( w, x, y, z )
 #define setBadAssertHlt( val )
 #define setVideoLowMem( val )
+#defin dump_regs( t );
+#define dump_state( s );
+
 //#define kprintInt( num )
 //#define kprintHex( num )
 #define calcTime(func, ret) func

@@ -6,15 +6,13 @@
 #include <kernel/lowlevel.h>
 #include <kernel/pic.h>
 #include <kernel/paging.h>
+#include <kernel/interrupt.h>
 
 #define NUM_IRQS	16
 
 #define IRQ(x)    ((x)-IRQ0)
 #define INT(x)    ((x)+IRQ0)
 
-void endIRQ( int irqNum );
-int registerInt( TCB *thread, int intNum );
-void unregisterInt( int intNum );
 void handleIRQ( TCB *thread, ExecutionState );
 void handleCPUException( TCB *thread, ExecutionState );
 
@@ -24,7 +22,7 @@ static TCB *IRQHandlers[ NUM_IRQS ];
 
 void endIRQ( int irqNum )
 {
-  enableIRQ(IRQ(irqNum);
+  enableIRQ(IRQ(irqNum));
   sendEOI();
 }
 
@@ -71,7 +69,7 @@ void handleIRQ( TCB *thread, ExecutionState state )
   else
     execState = (ExecutionState *)&state;
 
-  if( execState->user.intNum == INT(7) && !IRQHandler[7] )
+  if( execState->user.intNum == INT(7) && !IRQHandlers[7] )
     sendEOI(); // Stops the spurious IRQ7
   else
   {

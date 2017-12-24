@@ -1,36 +1,40 @@
 #ifndef PAGING_H
 #define PAGING_H
 
-#define PAGE_SIZE           0x1000u
-#define TABLE_SIZE          0x400000u
+#define PAGE_SIZE		0x1000u
+#define TABLE_SIZE		0x400000u
 
-#define PAGETAB     	    0xFFC00000u
-#define PAGEDIR     	    0xFFFFF000u
+#define PAGETAB			0xFFC00000u
+#define PAGEDIR			0xFFFFF000u
 
-#define ADDR_TO_PTE( addr )     (pte_t *)( PAGETAB + ( ((u32)(addr) & PAGEDIR) >> 10 ))
-#define ADDR_TO_PDE( addr )     (pde_t *)( PAGEDIR + ( ((u32)(addr) & PAGETAB) >> 20 ))
+#define ADDR_TO_PTE( addr )	(pte_t *)( PAGETAB + ( ((u32)(addr) & PAGEDIR) >> 10 ))
+#define ADDR_TO_PDE( addr )	(pde_t *)( PAGEDIR + ( ((u32)(addr) & PAGETAB) >> 20 ))
 
-#define VIRT_TO_PHYS( addr )    (addr_t)( (u32)(addr) + (u32)&kVirtToPhys )
-#define PHYS_TO_VIRT( addr )    (addr_t)( (u32)(addr) + (u32)&kPhysToVirt )
+#define VIRT_TO_PHYS( addr )	(addr_t)( (u32)(addr) + (u32)&kVirtToPhys )
+#define PHYS_TO_VIRT( addr )	(addr_t)( (u32)(addr) + (u32)&kPhysToVirt )
 
-#define TEMP_PTAB   0xFF400000u
-#define TEMP_PDIR   0xFFBFF000u
+#define TEMP_PTAB		0xFF400000u
+#define TEMP_PDIR		0xFFBFF000u
 
 #define ADDR_TO_TEMP_PTE( addr ) (pte_t *)( TEMP_PTAB + ( ((u32)(addr) & PAGEDIR) >> 10 ))
 #define ADDR_TO_TEMP_PDE( addr ) (pde_t *)( TEMP_PDIR + ( ((u32)(addr) & PAGETAB) >> 20 ))
 
-#define PAGING_PRES 		(1u << 0)
-#define PAGING_RW               (1u << 1)
-#define PAGING_RO               0u
+#define PDE_INDEX(a)		(((u32)(a) >> 22))
+#define PTE_INDEX(a)		(((u32)(a) >> 12) & 0x3FF)
+#define PAGE_OFFSET(a)		((u32)(a) & 0xFFF)
+
+#define PAGING_PRES		(1u << 0)
+#define PAGING_RW		(1u << 1)
+#define PAGING_RO		0u
 #define PAGING_SUPERVISOR	0u
 #define PAGING_USER		(1u << 2)
-#define PAGING_PWT              (1u << 3)
-#define PAGING_PCD              (1u << 4)
+#define PAGING_PWT		(1u << 3)
+#define PAGING_PCD		(1u << 4)
 #define PAGING_ACCESSED		(1u << 5)
-#define PAGING_DIRTY            (1u << 6)
-#define PAGING_4KB_PAGE         0u
-#define PAGING_4MB_PAGE         (1u << 7)
-#define PAGING_GLOBAL           (1u << 8)
+#define PAGING_DIRTY		(1u << 6)
+#define PAGING_4KB_PAGE		0u
+#define PAGING_4MB_PAGE		(1u << 7)
+#define PAGING_GLOBAL		(1u << 8)
 
 struct CR3_Struct
 {

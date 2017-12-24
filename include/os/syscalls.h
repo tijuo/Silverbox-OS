@@ -5,16 +5,25 @@
 
 #define SYSCALL_INT             0x40
 
-#define SYS_SEND                0x00
-#define SYS_WAIT                0x01
-//#define SYS_RECEIVE             0x01
-#define SYS_EXIT                0x02
-#define SYS_ACQUIRE             0x03
-#define SYS_RELEASE             0x04
-#define SYS_READ                0x05
-#define SYS_MODIFY              0x06
-#define SYS_GRANT               0x07
-#define SYS_REVOKE              0x08
+#define SYS_EXIT                0x00
+#define SYS_SEND                0x01
+#define SYS_WAIT                0x02
+#define SYS_CREATE              0x03
+#define SYS_READ                0x04
+#define SYS_UPDATE              0x05
+#define SYS_DESTROY             0x06
+
+#define RES_MAPPING     0
+#define RES_IHANDLER    1
+#define RES_TCB         2
+
+struct SyscallCreateTcbArgs
+{
+  addr_t address;
+  addr_t addr_space;
+  addr_t stack;
+  tid_t ex_handler;
+};
 
 /*
 #define SYS_GET_THREAD_INFO     0x03
@@ -51,12 +60,13 @@
 #define PRIV_SUPER		0
 #define PRIV_PAGER		1
 
-#define ESYS_OK			0
-#define ESYS_ARG		-1
-#define ESYS_FAIL		-2
-#define ESYS_PERM		-3
+#define ESYS_OK			     0
+#define ESYS_ARG		    -1
+#define ESYS_FAIL		    -2
+#define ESYS_PERM		    -3
 #define ESYS_BADCALL		-4
 #define ESYS_NOTIMPL		-5
+#define ESYS_NOTREADY   -6
 
 struct PageMapping
 {
@@ -66,7 +76,6 @@ struct PageMapping
   unsigned int flags;
   int status;
 };
-
 
 struct RegisterState
 {

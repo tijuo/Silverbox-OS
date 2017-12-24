@@ -4,7 +4,7 @@
 #include <kernel/schedule.h>
 #include <kernel/mm.h>
 #include <kernel/pit.h>
-
+#include <util.h>
 #include <oslib.h>
 
 //extern void saveAndSwitchContext( TCB *, TCB * );
@@ -50,23 +50,27 @@ int startThread( TCB *thread )
   }
 }
 
+TCB *getTcb(tid_t tid)
+{
+  return &tcbTable[tid];
+}
 
 /**
     Temporarily pauses a thread for an amount of time.
 
     @param thread The TCB of the thread to put to sleep.
     @param msecs The amount of time to pause the thread in milliseconds.
-    @return 0 on success. -1 on failure. -2 if the thread cannot be switched
-            to the sleeping state from its current state. 1 if the thread is
-            already sleeping.
+    @return 0 on success. -1 on invalid arguments. -2 if the thread
+            cannot be switched to the sleeping state from its current
+            state. 1 if the thread is already sleeping.
 */
 
-int sleepThread( TCB *thread, unsigned int msecs )
+int sleepThread( TCB *thread, int msecs )
 {
   if( thread->threadState == SLEEPING )
     RET_MSG(1, "Already sleeping!")//return -1;
-  else if( msecs >= (1u << 16) )
-    RET_MSG(1, "Invalid sleep interval");
+  else if( msecs >= (1 << 16) || msecs < 1)
+    RET_MSG(-1, "Invalid sleep interval");
 
   if( thread->threadState != READY && thread->threadState != RUNNING )
   {
@@ -124,7 +128,7 @@ int pauseThread( TCB *thread )
 TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, TCB *exHandler )
 {
   TCB * thread = NULL;
-  pde_t pde;
+  u32 pentry;
 
   #if DEBUG
     if( exHandler == NULL )
@@ -133,10 +137,25 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, TCB *exHan
 
   if( threadAddr == NULL )
     RET_MSG(NULL, "NULL thread addr")
-  else if( addrSpace == NULL_PADDR )
-    RET_MSG(NULL, "NULL addrSpace")
+  else if((addrSpace & 0xFFFu) != 0)
+    RET_MSG(NULL, "Invalid address space address.")
 
-  assert( (addrSpace & 0xFFFu) == 0u );
+  if(addrSpace == NULL_PADDR)
+    addrSpace = getCR3() & 0x3FF;
+
+   // Map the page directory and kernel space into the new address space
+
+  pentry = (u32)addrSpace | PAGING_RW | PAGING_PRES;
+
+  if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(PAGETAB), &pentry) != 0))
+    return NULL;
+  else if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(KERNEL_VSTART), &(((u32 *)PAGEDIR))[PDE_INDEX(KERNEL_VSTART)]) != 0))
+    return NULL;
+
+#if DEBUG
+  if(unlikely(writePmapEntry(addrSpace, 0, (void *)PAGEDIR) != 0))
+    return NULL;
+#endif /* DEBUG */
 
   thread = popQueue(&freeThreadQueue);
 
@@ -145,32 +164,15 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, TCB *exHan
 
   assert( thread->threadState == DEAD );
 
+  memset(thread, 0, sizeof thread);
+
   thread->priority = NORMAL_PRIORITY;
   thread->cr3.base = (addrSpace >> 12);
-  thread->cr3.pwt = 1;
   thread->exHandler = exHandler;
   thread->waitThread = NULL;
   thread->threadQueue.tail = thread->threadQueue.head = NULL;
   thread->queueNext = thread->queuePrev = thread->timerNext = NULL;
   thread->timerDelta = 0u;
-  thread->sig_handler = NULL;
-
-  assert( (u32)addrSpace == ((u32)addrSpace & ~0xFFFu) );
-
-   // Map the page directory into the address space
-
-  *(u32 *)&pde = (u32)addrSpace | PAGING_PWT | PAGING_RW | PAGING_PRES;
-  writePDE( PAGETAB, &pde, addrSpace );
-
-  // Map the kernel into the address space
-
-  readPDE( KERNEL_VSTART, &pde, (getCR3() & ~0xFFFu) );
-  writePDE( KERNEL_VSTART, &pde, addrSpace );
-
-#if DEBUG
-  readPDE( 0x00, &pde, (getCR3() & ~0xFFFu) );
-  writePDE( 0x00, &pde, addrSpace );
-#endif /* DEBUG */
 
   memset(&thread->execState.user, 0, sizeof thread->execState.user);
 

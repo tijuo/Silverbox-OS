@@ -50,7 +50,6 @@ struct ThreadControlBlock
   } threadQueue;	// the queue of waiting senders
   struct ThreadControlBlock *exHandler;		// Send interrupts and exceptions to this thread
   struct ThreadControlBlock *waitThread;		// wait to receive from/send to this thread
-  void *sig_handler;
   struct ThreadControlBlock *queueNext;
   struct ThreadControlBlock *queuePrev;
   struct ThreadControlBlock *timerNext;
@@ -71,10 +70,12 @@ TCB tcbTable[MAX_THREADS];
 TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, TCB *exHandler );
 int releaseThread( TCB *thread );
 
-int sleepThread( TCB *thread, unsigned int msecs );
+int sleepThread( TCB *thread, int msecs );
 int startThread( TCB *thread );
 int pauseThread( TCB *thread );
 int sysYield( TCB *thread );
+
+TCB *getTcb(tid_t tid);
 
 //int switchToThread(  TCB *oldThread,  TCB *newThread );
 

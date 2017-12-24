@@ -23,8 +23,7 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, unsigned int ti
   @param recipient The TID of the message's recipient.
   @param msg The message to be sent.
   @param timeout Aborts the operation after timeout, if non-negative.
-  @return 0 on success. -1 on failure.
-          -3 if interrupted by a SIGTMOUT.
+  @return 0 on success. -1 on failure. -2 on bad argument. -3 if no recipient is ready to receive (and timeout is 0).
 */
 
 /* XXX: sendMessage() and receiveMessage() won't work for kernel threads. */
@@ -35,19 +34,23 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, unsigned int ti
 
   assert( tcb != NULL );
   assert( tcb->threadState == RUNNING );
-  assert( recipient != NULL_TID );
-  assert( GET_TID(tcb) != NULL_TID );
 
   if( GET_TID(tcb) == recipient )
   {
     kprintf("Sending to self\n");
-    return -1;
+    return -2;
   }
 
-  if( recipient == NULL_TID || msg == NULL )
+  if( recipient == NULL_TID )
   {
-    kprintf("NULL recipient of message\n");
-    return -1;
+    kprintf("NULL recipient of message.\n");
+    return -2;
+  }
+
+  if( msg == NULL )
+  {
+    kprintf("NULL message.\n");
+    return -2;
   }
 
   msg->sender = GET_TID(tcb);
@@ -65,7 +68,7 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, unsigned int ti
 //    kprintf("%d is sending to %d\n", GET_TID(tcb), recipient);
 
     /* ecx is the register for the receiver's buffer */
-    if( pokeVirt((addr_t)rec_thread->execState.user.ecx, MSG_LEN, (addr_t)msg,
+    if( pokeVirt((addr_t)rec_thread->execState.user.ecx, MSG_LEN, msg,
         rec_thread->cr3.base << 12) != 0 )
     {
       kprintf("Failed to poke. 0x%x -> 0x%x(%d bytes)\n", msg, rec_thread->execState.user.ecx, MSG_LEN);
@@ -89,7 +92,7 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, unsigned int ti
   {
     kprintf("send: Timeout == 0. TID: %d\tEIP: 0x%x\n", GET_TID(tcb), tcb->execState.user.eip);
     kprintf("EIP: 0x%x\n", *(dword *)(tcb->execState.user.ebp + 4));
-    return -1;
+    return -3;
   }
   else	// Wait until the recipient is ready to receive the message
   {
@@ -119,8 +122,7 @@ int sendMessage( TCB *tcb, tid_t recipient, struct Message *msg, unsigned int ti
          that sends.
   @param buf A buffer to hold the incoming message.
   @param timeout Aborts the operation after timeout, if non-negative.
-  @return 0 on success. -1 on failure. -2 if interrupted by a signal.
-          -3 if receiving from self.
+  @return 0 on success. -1 on failure. -2 on bad argument. -3 if no messages are pending to be received (and timeout is 0).
 */
 
 int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, unsigned int timeout )
@@ -134,11 +136,11 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, unsigned int ti
   if( GET_TID(tcb) == sender )
   {
     kprintf("Receiving from self\n");
-    return -1;
+    return -2;
   }
 
   if( buf == NULL )
-    return -1;
+    return -2;
 
   /* This may cause problems if the receiver is receiving into a NULL
      or non-mapped buffer */
@@ -153,7 +155,7 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, unsigned int ti
   //  kprintf("%d is receiving a message from %d\n", GET_TID(tcb), send_tid);
     /* ecx is the register for the receiver's buffer */
     if( peekVirt((addr_t)send_thread->execState.user.ecx,
-        MSG_LEN, (addr_t)buf, send_thread->cr3.base << 12) != 0 )
+        MSG_LEN, buf, send_thread->cr3.base << 12) != 0 )
     {
       enqueue( &tcb->threadQueue, send_thread );
       kprintf("Failed to peek\n");
@@ -181,7 +183,7 @@ int receiveMessage( TCB *tcb, tid_t sender, struct Message *buf, unsigned int ti
   {
     kprintf("receive: Timeout == 0. TID: %d\tEIP: 0x%x\n", GET_TID(tcb), tcb->execState.user.eip);
     kprintf("EIP: 0x%x\n", *(dword *)(tcb->execState.user.ebp + 4));
-    return -1;
+    return -3;
   }
   else
   {

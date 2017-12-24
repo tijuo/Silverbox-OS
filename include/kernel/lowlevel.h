@@ -244,4 +244,4 @@ extern const unsigned int ioPermBitmap;
 
 extern const size_t idleStackLen;
 extern const size_t kernelStackLen;
-#endif
+#endif /* LOWLEVEL_H */

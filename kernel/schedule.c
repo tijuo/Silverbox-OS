@@ -26,10 +26,10 @@ void idle(void)
   /* Get rid of the code and data that will never be used again. */
 
   for( addr=(addr_t)EXT_PTR(kdCode); addr < (addr_t)EXT_PTR(kBss); addr += PAGE_SIZE )
-    kUnmapPage( (addr_t)addr );
+    kUnmapPage( (addr_t)addr, NULL );
 
-  kUnmapPage( (addr_t)EXT_PTR(ioPermBitmap) );
-  kUnmapPage( (addr_t)EXT_PTR(ioPermBitmap) + PAGE_SIZE );
+  kUnmapPage( (addr_t)EXT_PTR(ioPermBitmap), NULL );
+  kUnmapPage( (addr_t)EXT_PTR(ioPermBitmap) + PAGE_SIZE, NULL );
 
   enableInt();
 

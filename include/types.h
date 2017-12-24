@@ -8,6 +8,8 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
+#include <util.h>
+
 typedef unsigned char u8;
 typedef signed char s8;
 
@@ -50,18 +52,6 @@ typedef unsigned short int tid_t;
 /* typedef char _Bool; */
 
 #endif /* __cplusplus */
-
-#ifdef __GNUC__
-  #define __PACKED__	__attribute__((packed))
-  #define HOT(x)	x __attribute__((hot))
-  #define COLD(x)	x __attribute__((cold))
-  #define PURE(x)	x __attribute__((pure))
-#else
-  #define __PACKED__
-  #define HOT(x)	x
-  #define COLD(x)	x
-  #define PURE(x)	x
-#endif
 
 #ifndef NULL
   #define NULL 0

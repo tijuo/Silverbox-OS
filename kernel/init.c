@@ -7,6 +7,7 @@
 #include <kernel/cpuid.h>
 #include <kernel/paging.h>
 #include <kernel/memory.h>
+#include <kernel/mm.h>
 #include <kernel/rtc.h>
 #include <kernel/pit.h>
 #include <kernel/pic.h>
@@ -589,7 +590,8 @@ TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr
         result =
       #endif /* DEBUG */
 
-      readPDE(sheader.addr + offset, &pde, addrSpace);
+      readPmapEntry(addrSpace, PDE_INDEX(sheader.addr+offset), &pde);
+      //readPDE(sheader.addr + offset, &pde, addrSpace);
 
       assert( result == 0 );
 
@@ -604,13 +606,15 @@ TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr
           result =
         #endif /* DEBUG */
 
-        writePDE((addr_t)sheader.addr + offset, &pde, addrSpace);
+        writePmapEntry(addrSpace, PDE_INDEX(sheader.addr+offset), &pde);
+        //writePDE((addr_t)sheader.addr + offset, &pde, addrSpace);
 
         assert( result == 0 );
       }
       else
       {
-        readPTE(sheader.addr + offset, &pte, addrSpace);
+        readPmapEntry(pde.base << 12, PTE_INDEX(sheader.addr+offset), &pte);
+        //readPTE(sheader.addr + offset, &pte, addrSpace);
       }
 
       if( sheader.type == SHT_PROGBITS )
@@ -622,8 +626,11 @@ TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr
           *(u32 *)&pte = ((u32)img + sheader.offset + offset) | PAGING_USER |
               (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO) | PAGING_PRES;
 
-          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
+          if(writePmapEntry((pde.base << 12), PTE_INDEX(sheader.addr+offset), &pte) !=0)
             return NULL;
+
+/*          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
+            return NULL; */
 /*
 	  mapPage((addr_t)sheader.addr + offset, (addr_t)img + sheader.offset + offset,
             PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO), addrSpace); */
@@ -640,9 +647,12 @@ TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr
           *(u32 *)&pte = page | PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW
               : PAGING_RO) | PAGING_PRES;
 
-          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
+          if(writePmapEntry((pde.base << 12), PTE_INDEX(sheader.addr+offset), &pte) !=0)
             return NULL;
 
+/*          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
+            return NULL;
+*/
 /*
           mapPage((addr_t)sheader.addr + offset, (addr_t)page,
                   PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO), addrSpace); */
@@ -666,7 +676,7 @@ TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr
 
 void init2( multiboot_info_t * restrict mb_boot_info )
 {
-  pmap_t pmap;
+  pmap_t pmap, pmap2;
   addr_t page;
   unsigned int *ptr = (unsigned int *)(TEMP_PAGEADDR + PAGE_SIZE);
   addr_t init_server_stack = KERNEL_VSTART - PAGE_SIZE;
@@ -695,13 +705,17 @@ void init2( multiboot_info_t * restrict mb_boot_info )
     clearPhysPage(page);
 
     *(u32 *)&pmap = (u32)page | PAGING_RW | PAGING_USER | PAGING_PRES;
-    writePDE(init_server_stack, &pmap, initServerPDir);
+    //writePDE(init_server_stack, &pmap, initServerPDir);
+
+    writePmapEntry(initServerPDir, PDE_INDEX(init_server_stack), &pmap);
 
     uStackPage = alloc_page();
     clearPhysPage(uStackPage);
 
-    *(u32 *)&pmap = (u32)uStackPage | PAGING_RW | PAGING_USER | PAGING_PRES;
-    writePTE(init_server_stack, &pmap, initServerPDir);
+    *(u32 *)&pmap2 = (u32)uStackPage | PAGING_RW | PAGING_USER | PAGING_PRES;
+    writePmapEntry((pmap.base << 12), PTE_INDEX(init_server_stack), &pmap2);
+
+    //writePTE(init_server_stack, &pmap, initServerPDir);
 
     /* Push the bootstrap arguments onto the stack. */
 

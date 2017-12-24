@@ -28,8 +28,6 @@ static const char *_digits="0123456789abcdefghijklmnopqrstuvwxyz";
 
 unsigned int sx=0, sy=1;
 
-extern void dump_regs( TCB *thread );
-
 #define com1 0x3f8
 #define com2 0x2f8
 
