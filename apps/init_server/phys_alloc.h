@@ -46,8 +46,8 @@ extern struct MemoryArea *memory_areas;
 extern unsigned int *page_dir;
 extern struct BootInfo *boot_info;
 
-void free_phys_page(void *address);
-void *alloc_phys_page(enum PageType type, void *addr_space);
+void free_phys_page(addr_t address);
+addr_t alloc_phys_page(enum PageType type, addr_t addr_space);
 int init_page_lists(void *table_address, unsigned num_pages, void *start_used_addr, unsigned pages_used);
 
 #endif /* PHYS_ALLOC_H */

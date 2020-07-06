@@ -1,6 +1,6 @@
 # Set PREFIX to the path of the source dir (this one)
 
-PREFIX	=$(HOME)/Silverbox-OS
+PREFIX	=/media/sf_Programming/Silverbox-OS
 
 INC_DIR	=$(PREFIX)/include
 CC	=gcc
@@ -8,8 +8,8 @@ AS	=as
 AS_I	=nasm
 LD	=ld
 AR	=ar
-AFLAGS	=
-ASIFLAGS=-f elf -I$(INC_DIR)/
+AFLAGS	=--32
+ASIFLAGS=-f elf32 -I$(INC_DIR)/
 DEPEND	=makedepend
 DD	=dd
 EN_DEBUG=-DDEBUG

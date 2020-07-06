@@ -29,9 +29,8 @@ struct NameRecord
 
 SBAssocArray threadNames, deviceNames, fsNames, deviceTable, fsTable;
 
-struct Device *lookupDeviceMajor(unsigned char major);
-int _registerName(char *name, size_t len, enum _NameType type, void *data);
-struct NameRecord *_lookupName(char *name, size_t len, enum _NameType type);
-int _unregisterName(char *name, size_t len, enum _NameType type);
+int _registerDevice(int major, struct Device *device);
+struct Device * _unregisterDevice(unsigned char major);
+struct Device *lookupDeviceMajor(int major);
 
 #endif /* NAME_H */

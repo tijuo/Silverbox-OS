@@ -1,5 +1,7 @@
 #include <elf.h>
 
+#include <kernel/message.h>
+#include <kernel/interrupt.h>
 #include <kernel/thread.h>
 #include <kernel/debug.h>
 #include <kernel/mm.h>
@@ -16,7 +18,7 @@
 #include <kernel/io.h>
 #include <os/variables.h>
 
-#define FREE_PAGE_PTR_START     0x100000u
+#define FREE_PAGE_PTR_START     0x100000
 
 #define DISC_CODE(X) \
   X __attribute__((section(".dtext")))
@@ -37,17 +39,20 @@ static inline void contextSwitch( cr3_t addrSpace, addr_t stack )
     "je   __load_regs\n"
     "mov  %%ecx, %%cr3\n"
     "__load_regs:\n"
-    "popa\n"
-    "pop  %%es\n"
-    "pop  %%ds\n"
-    "add   $8, %%esp\n"
+    "pop %%edi\n"
+    "pop %%esi\n"
+    "pop %%ebp\n"
+    "pop %%ebx\n"
+    "pop %%edx\n"
+    "pop %%ecx\n"
+    "pop %%eax\n"
     "iret\n" :: "ecx"(*(dword *)&addrSpace),
     "edx"((dword)stack) : "%eax");
 }
 
 extern TCB *idleThread;
 
-static TCB *DISC_CODE(load_elf_exec( addr_t, TCB *, addr_t, addr_t ));
+static TCB *DISC_CODE(load_elf_exec( addr_t, pid_t, addr_t, addr_t ));
 static bool DISC_CODE(isValidElfExe( addr_t img ));
 static void DISC_CODE(initInterrupts( void ));
 static void DISC_CODE(initScheduler( addr_t ));
@@ -79,6 +84,7 @@ addr_t DISC_DATA(free_page_ptr) = (addr_t)FREE_PAGE_PTR_START;
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
 
 extern void invalidate_page( addr_t );
+
 /*
 void readPhysMem(addr_t address, addr_t buffer, size_t len)
 {
@@ -447,7 +453,7 @@ void initTimer( void )
 void initScheduler( addr_t addrSpace )
 {
   currentThread = idleThread = createThread( (addr_t)idle, addrSpace,
-    (addr_t)EXT_PTR(idleStack) + idleStackLen, NULL_TID );
+    (addr_t)EXT_PTR(idleStack) + idleStackLen, NULL_PID );
 
   idleThread->priority = LOWEST_PRIORITY;
   idleThread->quantaLeft = LOWEST_PRIORITY + 1;
@@ -544,7 +550,7 @@ addr_t alloc_page(void)
   return free_page_ptr - PAGE_SIZE;
 }
 
-TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr_t uStack )
+TCB *load_elf_exec( addr_t img, pid_t exHandler, addr_t addrSpace, addr_t uStack )
 {
   elf_header_t image;
   elf_sheader_t sheader;
@@ -554,7 +560,7 @@ TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr
   pte_t pte;
   size_t i, offset;
 
-  peek( img, (addr_t)&image, sizeof image );
+  peek( img, &image, sizeof image );
   pte.present = 0;
 
   #if DEBUG
@@ -579,7 +585,7 @@ TCB *load_elf_exec( addr_t img, TCB * restrict exHandler, addr_t addrSpace, addr
 
   for( i=0; i < image.shnum; i++ )
   {
-    peek( (img + image.shoff + i * image.shentsize), (addr_t)&sheader, sizeof sheader );
+    peek( (img + image.shoff + i * image.shentsize), &sheader, sizeof sheader );
 
     if( !(sheader.flags & SHF_ALLOC) )
       continue;
@@ -683,7 +689,7 @@ void init2( multiboot_info_t * restrict mb_boot_info )
   addr_t uStackPage, initServerPDir;
   elf_header_t elf_header;
 
-  peek( init_server_img, (addr_t)&elf_header, sizeof elf_header );
+  peek( init_server_img, &elf_header, sizeof elf_header );
 
   if( isValidElfExe( (addr_t)&elf_header ) )
   {
@@ -694,7 +700,7 @@ void init2( multiboot_info_t * restrict mb_boot_info )
 
     clearPhysPage(initServerPDir);
 
-    if( (init_server=load_elf_exec(init_server_img, NULL,
+    if( (init_server=load_elf_exec(init_server_img, NULL_PID,
          initServerPDir, init_server_stack + (((addr_t)ptr - 3) & 0xFFFu)) ) == NULL )
     {
       kprintf("Failed to initialize initial server.\n");
@@ -729,7 +735,6 @@ void init2( multiboot_info_t * restrict mb_boot_info )
 
     unmapTemp();
     init_server->privileged = 1;
-    init_server->pager = 1;
     startThread(init_server);
   }
   else
@@ -806,16 +811,21 @@ void showCPU_Features(void)
 
 void initStructures(void)
 {
-  size_t i=0;
+  tid_t tid=0;
 
-  for(i=INITIAL_TID+1; i < MAX_THREADS; i++)
+  for(tid=INITIAL_TID; tid + 1 < (tid_t)MAX_THREADS; tid++)
   {
-    tcbTable[i].queuePrev = &tcbTable[i-1];
-    tcbTable[i-1].queueNext = &tcbTable[i];
+    getTcb(tid)->queue.next = tid+1;
+    getTcb(tid+1)->queue.prev = tid;
   }
 
-  freeThreadQueue.head = &tcbTable[INITIAL_TID];
-  freeThreadQueue.tail = &tcbTable[MAX_THREADS-1];
+  for(pid_t pid=0; pid < MAX_PORTS; pid++)
+    getPort(pid)->owner = getPort(pid)->sendWaitTail = NULL_PID;
+
+  freeThreadQueue.head = getTcb(INITIAL_TID);
+  freeThreadQueue.tail = getTcb(MAX_THREADS-1);
+
+  freeThreadQueue.head->queue.prev = freeThreadQueue.tail->queue.next = NULL_TID;
 }
 
 /**

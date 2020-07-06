@@ -308,3 +308,6 @@ EXPORT kernelStackLen
 
 EXPORT idleStackLen
   dd IDLE_STACK_LEN
+
+EXPORT irqStackLen
+  dd IRQ_STACK_LEN

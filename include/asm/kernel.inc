@@ -3,7 +3,7 @@
 
 %include "asm/asm.inc"
 
-%define KERNEL_VIRT_START       0xF0000000
+%define KERNEL_VIRT_START       0x80000000
 %define KERNEL_PHYS_START       0x00400000
 %define KERNEL_CODE_SEL		0x08
 %define KERNEL_DATA_SEL		0x10
@@ -20,6 +20,7 @@
 %define KERNEL_STACK_LEN	4096
 %define KERNEL_STACK		4096
 %define IDLE_STACK_LEN		4096
+%define IRQ_STACK_LEN     8192
 %define KERNEL_BOOT_STACK_LEN	4096
 %define KERNEL_TSS_LEN		0x68
 %define TSS_IO_PERM_BMP_LEN	2*4096

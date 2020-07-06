@@ -8,7 +8,7 @@
 # SB_MNT_PT is the mount point associated with the drive (loopback
 #  device or physical device)
 
-export SB_PREFIX="/home/tiju/Silverbox-OS"
+export SB_PREFIX="/home/tijuo/Silverbox-OS"
 export SB_DISK_DIR="sbos"
-export SB_MNT_PT="/home/tiju/os_disk"
+export SB_MNT_PT="/home/tijuo/os_disk"
 

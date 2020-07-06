@@ -1,27 +1,27 @@
 #ifndef PAGING_H
 #define PAGING_H
 
-#define PAGE_SIZE		0x1000u
-#define TABLE_SIZE		0x400000u
+#define PAGE_SIZE		0x1000
+#define TABLE_SIZE		0x400000
 
-#define PAGETAB			0xFFC00000u
-#define PAGEDIR			0xFFFFF000u
+#define PAGETAB			0xFFC00000
+#define PAGEDIR			0xFFFFF000
 
-#define ADDR_TO_PTE( addr )	(pte_t *)( PAGETAB + ( ((u32)(addr) & PAGEDIR) >> 10 ))
-#define ADDR_TO_PDE( addr )	(pde_t *)( PAGEDIR + ( ((u32)(addr) & PAGETAB) >> 20 ))
+#define ADDR_TO_PTE( addr )	(pte_t *)( PAGETAB + ( ((addr) & PAGEDIR) >> 10 ))
+#define ADDR_TO_PDE( addr )	(pde_t *)( PAGEDIR + ( ((addr) & PAGETAB) >> 20 ))
 
-#define VIRT_TO_PHYS( addr )	(addr_t)( (u32)(addr) + (u32)&kVirtToPhys )
-#define PHYS_TO_VIRT( addr )	(addr_t)( (u32)(addr) + (u32)&kPhysToVirt )
+#define VIRT_TO_PHYS( addr )	(addr_t)( (addr) + &kVirtToPhys )
+#define PHYS_TO_VIRT( addr )	(addr_t)( (addr) + &kPhysToVirt )
 
-#define TEMP_PTAB		0xFF400000u
-#define TEMP_PDIR		0xFFBFF000u
+#define TEMP_PTAB		0xFF800000
+#define TEMP_PDIR		0xFFBFF000
 
-#define ADDR_TO_TEMP_PTE( addr ) (pte_t *)( TEMP_PTAB + ( ((u32)(addr) & PAGEDIR) >> 10 ))
-#define ADDR_TO_TEMP_PDE( addr ) (pde_t *)( TEMP_PDIR + ( ((u32)(addr) & PAGETAB) >> 20 ))
+#define ADDR_TO_TEMP_PTE( addr ) (pte_t *)( TEMP_PTAB + ( ((addr) & PAGEDIR) >> 10 ))
+#define ADDR_TO_TEMP_PDE( addr ) (pde_t *)( TEMP_PDIR + ( ((addr) & PAGETAB) >> 20 ))
 
-#define PDE_INDEX(a)		(((u32)(a) >> 22))
-#define PTE_INDEX(a)		(((u32)(a) >> 12) & 0x3FF)
-#define PAGE_OFFSET(a)		((u32)(a) & 0xFFF)
+#define PDE_INDEX(a)		(((a) >> 22))
+#define PTE_INDEX(a)		(((a) >> 12) & 0x3FF)
+#define PAGE_OFFSET(a)		((a) & 0xFFF)
 
 #define PAGING_PRES		(1u << 0)
 #define PAGING_RW		(1u << 1)

@@ -8,8 +8,6 @@
 #include <os/dev_interface.h>
 #include <os/device.h>
 
-#define MSG_TIMEOUT	3000
-
 // Maps a physical address range to a virtual address range
 int mapMem( void *phys, void *virt, int numPages, int flags );
 
@@ -33,10 +31,12 @@ int registerName( const char *name, size_t len );
 tid_t lookupName( const char *name, size_t len );
 
 // Associates a name with a device
-int registerDevice( const char *name, size_t name_len, struct Device *deviceInfo );
+int registerDevice(pid_t pid, int major, int numDevices,
+  unsigned long blockLen, int flags);
 
 // Returns a device associated with a device major number
-int lookupDevMajor( unsigned char major, struct Device *device );
+int lookupDevMajor(unsigned char major, struct DeviceRecord *record,
+                    pid_t *pid);
 
 int exec( char *filename, char *args );
 
@@ -67,74 +67,30 @@ void handleConnection( struct Message *msg )
 
 int mapMem( void *phys, void *virt, int numPages, int flags )
 {
-  volatile struct GenericReq *req;
-  volatile struct GenericMsgHeader *header;
-  volatile struct Message msg;
-  int status;
+  int retval;
+  int in_args[5] = { MAP_MEM, (int)phys, (int)virt,
+                     numPages, flags };
+  int out_args[5];
 
-  header = (volatile struct GenericMsgHeader *)msg.data;
-  req = (volatile struct GenericReq *)header->data;
-
-  header->type = MAP_MEM;
-  header->seq = 0;
-  header->status = GEN_STAT_OK;
-
-  req->arg[0] = (int)phys;
-  req->arg[1] = (int)virt;
-  req->arg[2] = (int)numPages;
-  req->arg[3] = flags;
-
-  msg.length = sizeof *req + sizeof *header;
-  msg.protocol = MSG_PROTO_GENERIC;
-
-  if( sendMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return -1;
-
-  if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return -1;
-
-  if( header->status == GEN_STAT_OK )
-    return 0;
-  else
-    return -1;
+  retval = sys_rpc(NULL_PID, INIT_SERVER, in_args, out_args, 1);
+  return retval < 0 ? retval : out_args[0];
 }
 
 int allocatePages( void *address, int numPages )
 {
-  return mapMem( NULL_PADDR, address, numPages, MEM_FLG_LAZY | MEM_FLG_ALLOC );
+  return mapMem((void *)NULL_PADDR, address, numPages, MEM_FLG_LAZY | MEM_FLG_ALLOC);
 }
 
 int mapTid( tid_t tid, rspid_t pool_id )
 {
-  volatile struct GenericReq *req;
-  volatile struct GenericMsgHeader *header;
-  volatile struct Message msg;
+  int in_args[5] = { MAP_TID, (int)tid, (int)pool_id, 0, 0 };
+  int out_args[5];
 
-  header = (volatile struct GenericMsgHeader *)msg.data;
-  req = (volatile struct GenericReq *)header->data;
-
-  header->type = MAP_TID;
-  header->seq = 0;
-  header->status = GEN_STAT_OK;
-
-  req->arg[0] = (int)tid;
-  req->arg[1] = (int)pool_id;
-
-  msg.length = sizeof *req + sizeof *header;
-  msg.protocol = MSG_PROTO_GENERIC;
-
-  if( sendMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return NULL_TID;
-
-  if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return NULL_TID;
-
-  if( header->status == GEN_STAT_OK )
-    return *(tid_t *)header->data;
-  else
-    return NULL_TID;
+  int retval = sys_rpc(NULL_PID, INIT_SERVER, in_args, out_args, 1);
+  return retval < 0 ? NULL_TID : (tid_t)out_args[0];
 }
 
+/*
 int createShmem( shmid_t shmid, unsigned pages, struct MemRegion *region,
                 bool ro_perm )
 {
@@ -208,145 +164,73 @@ int attachShmemReg( shmid_t shmid, struct MemRegion *region )
     return -1;
 }
 
-int registerName( const char *name, size_t len )
+int registerName(const char *name, size_t len)
 {
-  volatile struct GenericReq *req;
-  volatile struct Message msg;
-  volatile struct GenericMsgHeader *header;
-
-  header = (volatile struct GenericMsgHeader *)msg.data;
-  req = (volatile struct GenericReq *)header->data;
-
-  if( name == NULL || len > sizeof(req->arg) - 2 * sizeof(int))
+  if(name == NULL || len > 16)
     return -1;
+  
+  int in_args[5] = { REGISTER_NAME, 0, 0, 0, 0 };
+  int out_args[5];
 
-  header->type = REGISTER_NAME;
-  header->seq = 0;
-  header->status = GEN_STAT_OK;
+  strncpy((char *)&in_args[1], name, len);
 
-  req->arg[0] = (int)len;
-  memcpy((void *)&req->arg[1], name, len);
-
-  msg.length = sizeof *req + sizeof *header;
-  msg.protocol = MSG_PROTO_GENERIC;
-
-  if( sendMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return -1;
-
-  if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return -1;
-
-  if( header->status == GEN_STAT_OK )
-    return 0;
-  else
-    return -1;
+  int result = sys_rpc(NULL_PID, INIT_SERVER, in_args, out_args, 1);
+  return result < 0 ? result : out_args[0];
 }
 
 tid_t lookupName( const char *name, size_t len )
 {
-  volatile struct GenericReq *req;
-  volatile struct Message msg;
-  volatile struct GenericMsgHeader *header;
-
-  header = (struct GenericMsgHeader *)msg.data;
-  req = (struct GenericReq *)header->data;
-
-  if( name == NULL || len > sizeof(req->arg) - sizeof(int))
+  if(name == NULL || len > 16)
     return -1;
 
-  header->type = LOOKUP_NAME;
-  header->seq = 0;
-  header->status = GEN_STAT_OK;
+  int in_args[5] = { LOOKUP_NAME, 0, 0, 0 };
+  int  out_args[5];
 
-  req->arg[0] = (int)len;
-  memcpy((void *)&req->arg[1], name, len);
+  strncpy((char *)&in_args[1], name, len);
 
-  msg.length = sizeof *req + sizeof *header;
-  msg.protocol = MSG_PROTO_GENERIC;
+  int result = sys_rpc(NULL_PID, INIT_SERVER, in_args, out_args, 1);
+  return result < 0 ? NULL_TID : (pid_t)out_args[0];
+}
+*/
 
-  if( sendMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return NULL_TID;
+int registerDevice(pid_t pid, int major, int numDevices,
+  unsigned long blockLen, int flags)
+{
+  int in_args[5] = { DEV_REGISTER, major, numDevices, blockLen, flags };
+  int out_args[5];
 
-  if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return NULL_TID;
-
-  if( header->status == GEN_STAT_OK )
-    return *(tid_t *)header->data;
-  else
-    return NULL_TID;
+  int result = sys_rpc(pid, INIT_SERVER, in_args, out_args, 1);
+  return result < 0 ? -1 : out_args[0];
 }
 
-int registerDevice( const char *name, size_t name_len, struct Device *deviceInfo )
+int lookupDevMajor(unsigned char major, struct DeviceRecord *record,
+                    pid_t *pid)
 {
-  volatile struct RegisterNameReq *devReq;
-  volatile struct GenericMsgHeader *header;
-  volatile struct Message msg;
-
-  header = (struct GenericMsgHeader *)msg.data;
-  devReq = (struct RegisterNameReq *)header->data;
-
-  if( name == NULL || name_len > N_MAX_NAME_LEN || deviceInfo == NULL)
+  if(record == NULL && pid == NULL)
     return -1;
 
-  header->type = DEV_REGISTER;
-  header->seq = 0;
-  header->status = GEN_STAT_OK;
+  int in_args[5] = { DEV_LOOKUP_MAJOR, major, 0, 0, 0 };
+  int out_args[5];
 
-  devReq->name_len = name_len;
-  strncpy((char *)devReq->name, name, name_len);
-  devReq->entry.device = *deviceInfo;
+  int result = sys_rpc(*pid, INIT_SERVER, in_args, out_args, 1);
 
-  msg.length = sizeof *devReq + sizeof *header;
-  msg.protocol = MSG_PROTO_GENERIC;
-
-  if( sendMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return -1;
-
-  if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return -1;
-
-  if( header->status == GEN_STAT_OK )
-    return 0;
-  else
-    return -1;
-}
-
-int lookupDevMajor( unsigned char major, struct Device *device )
-{
-  volatile struct NameLookupReq *devReq;
-  volatile struct GenericMsgHeader *header;
-  volatile struct Message msg;
-
-  header = (struct GenericMsgHeader *)msg.data;
-  devReq = (struct NameLookupReq *)header->data;
-
-  if( device == NULL )
-    return -1;
-
-  header->type = DEV_LOOKUP_MAJOR;
-  header->seq = 0;
-  header->status = GEN_STAT_OK;
-
-  devReq->major = major;
-
-  msg.length = sizeof *devReq + sizeof *header;
-  msg.protocol = MSG_PROTO_GENERIC;
-
-  if( sendMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return -1;
-
-  if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
-    return -1;
-
-  if( header->status == GEN_STAT_OK )
+  if(result == 0)
   {
-    *device = *(struct Device *)header->data;
-    return 0;
+    if(record)
+    {
+      record->numDevices = in_args[1];
+      record->blockLen = (unsigned long)in_args[2];
+      record->flags = in_args[3];
+    }
+
+    if(pid)
+      *pid = (pid_t)in_args[0];
   }
-  else
-    return -1;
+
+  return result < 0 ? -1 : (result == NULL_PID ? -1 : 0);
 }
 
+/*
 int lookupDevName( const char *name, size_t name_len, struct Device *device )
 {
   volatile struct NameLookupReq *devReq;
@@ -384,7 +268,6 @@ int lookupDevName( const char *name, size_t name_len, struct Device *device )
     return -1;
 }
 
-/*
 int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo )
 {
   struct RegisterNameReq *devReq;
@@ -445,7 +328,7 @@ int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs )
 
   return reply->reply_status;
 }
-*/
+
 
 // XXX: Will break if filename or args is too long for a message
 
@@ -760,3 +643,4 @@ int changeIoPerm( unsigned start, unsigned stop, int set )
   else
     return -1;
 }
+*/

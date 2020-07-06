@@ -9,29 +9,23 @@ TCB *timerPop( void );
 TCB *enqueue( struct Queue *queue, TCB *thread );
 TCB *detachQueue( struct Queue *queue, TCB *thread );
 TCB *popQueue( struct Queue *queue );
-bool isInQueue( const struct Queue *queue, const TCB *thread );
-bool isInTimerQueue( const TCB *thread );
+int isInQueue( const struct Queue *queue, const TCB *thread );
+int isInTimerQueue( const TCB *thread );
 
 #if DEBUG
 unsigned int totalTimerTime(void);
 #endif
 
-bool isInQueue( const struct Queue *queue, const TCB *thread )
+int isInQueue(const struct Queue *queue, const TCB *thread)
 {
   const TCB *ptr;
 
-  if( !queue || !thread )
-    return false;
+  for(ptr=queue->head; ptr != thread && ptr != NULL; ptr=getTcb(ptr->queue.next));
 
-  for( ptr=queue->head; ptr != NULL && ptr != thread; ptr = ptr->queueNext );
-
-  if( ptr == thread )
-    return true;
-  else
-    return false;
+  return (ptr == thread);
 }
 
-bool isInTimerQueue( const TCB *thread )
+int isInTimerQueue( const TCB *thread )
 {
   return isInQueue( &timerQueue, thread );
 }
@@ -46,8 +40,7 @@ bool isInTimerQueue( const TCB *thread )
 
 TCB *timerEnqueue( TCB *thread, unsigned int time )
 {
-  TCB *prev;
-  TCB *ptr;
+  TCB *prev, *ptr;
 
   if( time == 0 || !thread )
     RET_MSG(NULL, "Invalid time or NULL pointer")
@@ -64,23 +57,24 @@ TCB *timerEnqueue( TCB *thread, unsigned int time )
   if( timerQueue.head == NULL )
   {
     timerQueue.head = timerQueue.tail = thread;
-    thread->timerDelta = time;
-    thread->timerNext = NULL;
+    thread->queue.delta = time;
+    thread->queue.next = NULL_TID;
 
     return thread;
   }
 
-  for( prev=NULL, ptr=timerQueue.head; ptr != NULL; prev=ptr, ptr=ptr->timerNext )
+  for( prev=NULL, ptr=timerQueue.head; ptr != NULL; prev=ptr, ptr=getTcb(ptr->queue.next) )
   {
-    if( time > ptr->timerDelta )
+    if( time > ptr->queue.delta )
     {
-      time -= ptr->timerDelta;
+      time -= ptr->queue.delta;
 
-      if( ptr->timerNext == NULL )
+      if( ptr->queue.next == NULL_TID )
       {
-        thread->timerDelta = time;
-        thread->timerNext = NULL;
-        ptr->timerNext = timerQueue.tail = thread;
+        thread->queue.delta = time;
+        thread->queue.next = NULL_TID;
+        ptr->queue.next = GET_TID(thread);
+        timerQueue.tail = thread;
         break;
       }
       else
@@ -91,11 +85,11 @@ TCB *timerEnqueue( TCB *thread, unsigned int time )
       if( prev == NULL )
         timerQueue.head = thread;
       else
-        prev->timerNext = thread;
+        prev->queue.next = GET_TID(thread);
 
-      thread->timerNext = ptr;
-      thread->timerDelta = time;
-      ptr->timerDelta -= time;
+      thread->queue.next = GET_TID(ptr);
+      thread->queue.delta = time;
+      ptr->queue.delta -= time;
 
       break;
     }
@@ -119,11 +113,10 @@ TCB *timerPop( void )
 
 unsigned int totalTimerTime(void)
 {
-  unsigned int total = 0;
-  const TCB *ptr;
+  unsigned int total=0;
 
-  for(ptr=timerQueue.head; ptr != NULL; ptr = ptr->timerNext)
-    total += ptr->timerDelta;
+  for(const TCB *ptr=timerQueue.head; ptr != NULL; ptr=getTcb(ptr->queue.next))
+    total += ptr->queue.delta;
 
   return total;
 }
@@ -149,21 +142,19 @@ TCB *timerDetach( TCB *thread )
 
   if( thread == timerQueue.head )
   {
-    timerQueue.head = thread->timerNext;
+    timerQueue.head = getTcb(thread->queue.next);
 
     if( thread != timerQueue.tail )
     {
-      assert( thread->timerNext != NULL );
-      thread->timerNext->timerDelta += thread->timerDelta;
+      assert( thread->queue.next != NULL_TID );
+      getTcb(thread->queue.next)->queue.delta += thread->queue.delta;
     }
     else
-    {
       timerQueue.tail = NULL;
-    }
 
     #if DEBUG
-      if( thread->timerNext == NULL )
-        assert( totalTimerTime() + thread->timerDelta == total_bef );
+      if( thread->queue.next == NULL_TID )
+        assert( totalTimerTime() + thread->queue.delta == total_bef );
       else
         assert( totalTimerTime() == total_bef );
     #endif
@@ -172,17 +163,17 @@ TCB *timerDetach( TCB *thread )
   {
     TCB *ptr;
 
-    for( ptr=timerQueue.head; ptr != NULL; ptr = ptr->timerNext )
+    for(ptr=timerQueue.head; ptr != NULL; ptr=getTcb(ptr->queue.next))
     {
-      if( ptr->timerNext == thread )
+      if(ptr->queue.next == GET_TID(thread))
       {
-        ptr->timerNext = thread->timerNext;
-        assert( thread->timerNext != NULL );
-        thread->timerNext->timerDelta += thread->timerDelta;
+        ptr->queue.next = thread->queue.next;
+        assert( thread->queue.next != NULL_TID );
+        getTcb(thread->queue.next)->queue.delta += thread->queue.delta;
 
         #if DEBUG
-          if( thread->timerNext == NULL )
-            assert( totalTimerTime() + thread->timerDelta == total_bef );
+          if( thread->queue.next == NULL_TID )
+            assert( totalTimerTime() + thread->queue.delta == total_bef );
           else
             assert( totalTimerTime() == total_bef );
         #endif
@@ -196,8 +187,8 @@ TCB *timerDetach( TCB *thread )
       return NULL;
   }
 
-  thread->timerNext = NULL;
-  thread->timerDelta = 0;
+  thread->queue.next = NULL_TID;
+  thread->queue.delta = 0;
 
   return thread;
 }
@@ -219,22 +210,21 @@ TCB *enqueue( struct Queue *queue, TCB *thread )
 
   assert( (queue->head == NULL && queue->tail == NULL) ||
           (queue->head == queue->tail &&
-             queue->head->queuePrev == queue->head->queueNext
-             && queue->head->queueNext == NULL ) ||
+             queue->head->queue.prev == queue->head->queue.next
+             && queue->head->queue.next == NULL_TID ) ||
           (queue->head != NULL && queue->tail != NULL) );
 
   assert( !isInQueue( queue, thread ) );
-  assert( !isInTimerQueue( thread ) || (thread->waitThread != NULL &&
-    (queue == &thread->waitThread->threadQueue)) );
+  assert( !isInTimerQueue( thread ) );
 
   for( unsigned int level=0; level < NUM_RUN_QUEUES; level++ )
     assert( !isInQueue( &runQueues[level], thread ) );
 
-  thread->queuePrev = queue->tail;
-  thread->queueNext = NULL;
+  thread->queue.prev = GET_TID(queue->tail);
+  thread->queue.next = NULL_TID;
 
   if( queue->tail )
-    queue->tail->queueNext = thread;
+    queue->tail->queue.next = GET_TID(thread);
 
   queue->tail = thread;
 
@@ -259,8 +249,8 @@ TCB *detachQueue( struct Queue *queue, TCB *thread )
   assert( queue );
   assert( (queue->head == NULL && queue->tail == NULL) ||
           (queue->head == queue->tail &&
-             queue->head->queuePrev == queue->head->queueNext
-             && queue->head->queueNext == NULL ) ||
+             queue->head->queue.prev == queue->head->queue.next
+             && queue->head->queue.next == NULL_TID ) ||
           (queue->head != NULL && queue->tail != NULL) );
 
   if( !queue || !queue->head || !thread )
@@ -268,24 +258,23 @@ TCB *detachQueue( struct Queue *queue, TCB *thread )
 
   assert( thread->threadState != RUNNING );
 
-  assert( !isInTimerQueue( thread ) || (thread->waitThread != NULL &&
-          (queue == &thread->waitThread->threadQueue)) );
+  assert( !isInTimerQueue( thread ) );
 
-  for( TCB *ptr=queue->head; ptr; ptr=ptr->queueNext )
+  for( TCB *ptr=queue->head; ptr; ptr=getTcb(ptr->queue.next) )
   {
     if( ptr == thread )
     {
-      if( ptr->queuePrev )
-        ptr->queuePrev->queueNext = ptr->queueNext;
-      if( ptr->queueNext )
-        ptr->queueNext->queuePrev = ptr->queuePrev;
+      if( ptr->queue.prev )
+        getTcb(ptr->queue.prev)->queue.next = ptr->queue.next;
+      if( ptr->queue.next )
+        getTcb(ptr->queue.next)->queue.prev = ptr->queue.prev;
 
       if( queue->head == thread )
-        queue->head = ptr->queueNext;
+        queue->head = getTcb(ptr->queue.next);
       if( queue->tail == thread )
-        queue->tail = ptr->queuePrev;
+        queue->tail = getTcb(ptr->queue.prev);
 
-      ptr->queueNext = ptr->queuePrev = NULL;
+      ptr->queue.next = ptr->queue.prev = NULL_TID;
       return ptr;
     }
   }

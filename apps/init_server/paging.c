@@ -12,7 +12,7 @@ extern void print( char * );
 int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSpace )
 {
   unsigned char *addr = (unsigned char *)virt;
-  void *table_phys;
+  addr_t table_phys;
 
   if( (unsigned)virt == 0xF0000000u )
   {
@@ -20,25 +20,43 @@ int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSp
     printInt(pages);
   }
 
-  if( pages < 1 || !aSpace )
+  if( pages < 1 )
     return -1;
+
+  struct SyscallUpdateMappingArgs mappingArgs;
 
   while(pages--)
   {
     if( get_ptable_status(aSpace, addr) == false )
     {
-      table_phys = alloc_phys_page(NORMAL, aSpace->phys_addr);
+      table_phys = alloc_phys_page(NORMAL, !aSpace ? NULL_PADDR : aSpace->phys_addr);
 
       clearPage( table_phys );
+      dword data = ((dword)table_phys & ~0xFFFu) | flags;
 
-      __map_page_table( addr, table_phys, 0, aSpace->phys_addr );
+      mappingArgs.level = 0;
+      mappingArgs.buffer = &data;
+      mappingArgs.entry = (int)virt >> 12;
+      mappingArgs.addrSpace = !aSpace ? NULL_PADDR : aSpace->phys_addr;
+
+      sys_update(RES_MAPPING, &mappingArgs);
+
+//      __map_page_table( addr, table_phys, 0, aSpace->phys_addr );
 
       set_ptable_status(aSpace, addr, true);
     }
 
     // XXX: modify phys page attributes
+    dword data = ((dword)phys & ~0xFFFu) | flags;
 
-    __map( addr, phys, 1, 0, aSpace->phys_addr );
+    mappingArgs.level = 1;
+    mappingArgs.buffer = &data;
+    mappingArgs.entry = (int)virt >> 12;
+    mappingArgs.addrSpace = !aSpace ? NULL_PADDR : aSpace->phys_addr;
+
+    sys_update(RES_MAPPING, &mappingArgs);
+
+    //__map( addr, phys, 1, 0, aSpace->phys_addr );
 
     addr = (void *)((unsigned)addr + PAGE_SIZE);
     phys = (void *)((unsigned)phys + PAGE_SIZE);
@@ -49,9 +67,17 @@ int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSp
 
 void *_unmapMem( void *virt, struct AddrSpace *aSpace )
 {
+  struct SyscallDestroyMappingArgs mappingArgs;
+
   // XXX: Need to clear the page table if it is empty!
 
-  return __unmap( virt, aSpace ? aSpace->phys_addr : NULL_PADDR );
+  mappingArgs.level = 1;
+  mappingArgs.entry = (int)virt >> 12;
+  mappingArgs.addrSpace = aSpace ? aSpace->phys_addr : NULL_PADDR;
+
+  sys_destroy(RES_MAPPING, &mappingArgs);
+  return NULL;
+//  return __unmap( virt, aSpace ? aSpace->phys_addr : NULL_PADDR );
 }
 
 // Maps a virtual address to a physical address (in this address space)
@@ -77,15 +103,12 @@ int mapMemRange( void *virt, int pages )
 
 void setPage( void *page, char data )
 {
-  if( __map((void *)TEMP_PAGE, page, 1, 0, NULL_PADDR) < 1 )
-  {
-    print("Map failed.");
+  if( _mapMem(page, (void*)TEMP_PAGE, 1, 0, NULL) )
     return;
-  }
 
   memset((void *)TEMP_PAGE, data, PAGE_SIZE);
-  __unmap((void *)TEMP_PAGE, NULL_PADDR);
 
+  _unmapMem((void *)TEMP_PAGE, NULL);
 }
 
 void clearPage( void *page )
@@ -95,22 +118,22 @@ void clearPage( void *page )
 
 int peekPage(void *phys, void *data)
 {
-  if( __map((void *)TEMP_PAGE, phys, 1, 0, NULL_PADDR) < 1 )
+  if( _mapMem(phys, (void*)TEMP_PAGE, 1, 0, NULL) )
     return -1;
 
   memcpy( data, (void *)TEMP_PAGE, PAGE_SIZE);
-  __unmap((void *)TEMP_PAGE, NULL_PADDR);
+  _unmapMem((void *)TEMP_PAGE, NULL);
 
   return 0;
 }
 
 int pokePage(void *phys, void *data)
 {
-  if( __map((void *)TEMP_PAGE, phys, 1, 0, NULL_PADDR) < 1 )
+  if( _mapMem(phys, (void*)TEMP_PAGE, 1, 0, NULL) )
     return -1;
 
   memcpy( (void *)TEMP_PAGE, data, PAGE_SIZE);
-  __unmap((void *)TEMP_PAGE, NULL_PADDR);
+  _unmapMem((void *)TEMP_PAGE, NULL);
 
   return 0;
 }

@@ -14,11 +14,14 @@ extern "C" {
 #define INIT_SERVER		1
 #define	SYSCALL_INT		0x40
 
+#define EXCEPTION_MSG		0xFF00
+#define IRQ_MSG			0xFF01
+
 #define PAGE_FAULT_MSG      	0x0E
 #define DIE_MSG		    	0xF1FE
 #define ALIVE_MSG	    	0xA1B2
 
-#define NULL_PADDR          	0xFFFFFFFFu
+#define NULL_PADDR          	((addr_t)0xFFFFFFFF)
 
 #define KERNEL_MBOX_ID 		0
 
@@ -43,7 +46,8 @@ extern "C" {
 #define KERNEL_TID		(tid_t)0
 #define NULL_RSPID		(rspid_t)0
 #define NULL_SHMID		(shmid_t)-1
-#define NULL_TID		0
+
+#define TIMEOUT_INF		((1u << 24) - 1)
 
 typedef unsigned long shmid_t;
 typedef unsigned long rspid_t;
@@ -52,6 +56,17 @@ typedef unsigned long rspid_t;
 #define MSG_LEN         1024
 
 #define RAW_PROTOCOL		0
+
+#define TCB_STATUS_DEAD                    0u
+#define TCB_STATUS_PAUSED                  1u  // Infinite blocking state
+#define TCB_STATUS_SLEEPING                2u  // Blocks until timer runs out
+#define TCB_STATUS_READY                   3u  // <-- Do not touch(or the context switc$
+                                   // Thread is ready to be scheduled to a p$
+#define TCB_STATUS_RUNNING                 4u  // <-- Do not touch(or the context switc$
+                                   // Thread is already scheduled to a proce$
+#define TCB_STATUS_WAIT_SEND           5u
+#define TCB_STATUS_WAIT_RECV           6u
+#define TCB_STATUS_ZOMBIE                  7u  // Thread is waiting to be released
 
 struct MemInfo
 {
@@ -80,6 +95,20 @@ struct ExceptionInfo
   unsigned int_num, error_code;
   struct RegisterState state;
   dword cr0, cr2, cr3, cr4;
+};
+
+struct Tcb
+{
+  int priority;
+  int status;
+  addr_t addrSpace;
+  pid_t exHandler;
+
+  struct State
+  {
+    dword eax, ebx, ecx, edx, ebp, esp, edi, esi;
+    dword eip, eflags;
+  } state;
 };
 
 struct ExitMsg

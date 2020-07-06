@@ -9,7 +9,3 @@ include ../../vars.mk
 
 clean:
 	rm -f *.o
-
-# DO NOT DELETE
-
-ctype.o: /home/tiju/Silverbox-OS/include/ctype.h

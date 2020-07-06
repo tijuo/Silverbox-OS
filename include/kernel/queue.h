@@ -10,7 +10,7 @@ TCB *timerPop( void );
 TCB *enqueue( struct Queue *queue, TCB *thread );
 TCB *detachQueue( struct Queue *queue, TCB *thread );
 TCB *popQueue( struct Queue *queue );
-bool isInQueue( const struct Queue *queue, const TCB *thread );
-bool isInTimerQueue( const TCB *thread );
+int isInQueue( const struct Queue *queue, const TCB *thread );
+int isInTimerQueue( const TCB *thread );
 
 #endif /* QUEUE_H */

@@ -2,7 +2,6 @@
 #include "name.h"
 #include <oslib.h>
 #include <os/elf.h>
-#include <os/signal.h>
 #include "paging.h"
 #include "phys_alloc.h"
 #include "shmem.h"
@@ -10,8 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <os/multiboot.h>
+#include <os/syscalls.h>
 
-extern SBAssocArray mountTable;
+//extern SBAssocArray mountTable;
 extern int _readFile(const char *, int, void *, size_t);
 
 // Extracts boot params passed by the kernel
@@ -19,7 +19,6 @@ extern int _readFile(const char *, int, void *, size_t);
 #if 0
 static int get_boot_info( int argc, char **argv );
 #endif /* 0 */
-void signal_handler(int signal, int arg);
 static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args );
 
 extern void handle_exception( tid_t tid, unsigned int cr2 );
@@ -35,7 +34,7 @@ void printC( char c )
   static int i=0;
 
   while(mutex_lock(&print_lock))
-    __yield();
+    sys_wait(0);
 
   if( c == '\n' )
     i += 160 - (i % 160);
@@ -134,11 +133,21 @@ static int get_boot_info( int argc, char **argv )
     }
   }
 
+  struct SysUpdateMapping args;
+
   for(i=0, addr=start_page_addr, vAddr=allocEnd; i < tables_needed; i++,
       addr += PAGE_SIZE, vAddr += PTABLE_SIZE)
   {
     clearPage((void *)addr);
-    __map_page_table((void *)vAddr, (void *)addr, 0, NULL_PADDR);
+    args.vaddr = (void *)vAddr;
+    args.paddr = (void *)addr;
+    args.level = 0;
+    args.addrSpace = (void *)NULL_PADDR;
+    args.flags = 0;
+
+    sys_update(RES_MAPPING, &args);
+
+//    __map_page_table((void *)vAddr, (void *)addr, 0, NULL_PADDR);
   }
 /*
   for(i=0, addr=start_page_addr+tables_needed*PAGE_SIZE; i < pages_needed; i++,
@@ -200,7 +209,6 @@ static int get_boot_info( int argc, char **argv )
 
   return 0;
 }
-#endif /* 0 */
 
 int loadElfFile( char *filename, char *args )
 {
@@ -316,10 +324,15 @@ int loadElfFile( char *filename, char *args )
     }
   }
 
-  sys_start_thread( tid );
+  struct SyscallReadTcbArgs args;
+
+  sys_read(RES_TCB, &args);
+  args.tcb->status = TCB_STATUS_READY;
+  sys_update(RES_TCB, &args);
 
   return 0;
 }
+#endif /* 0 */
 
 static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 {
@@ -429,7 +442,14 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 
   _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL );
 
-  tid = sys_create_thread( (addr_t)image->entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
+  struct SyscallCreateTcbArgs createArgs;
+
+  createArgs.entry = (addr_t)image->entry;
+  createArgs.addrSpace = addrSpace;
+  createArgs.stack = (STACK_TABLE + PTABLE_SIZE - arg_len);
+  createArgs.exHandler = INIT_SERVER;
+
+  tid = (tid_t)sys_create(RES_TCB, &createArgs);
 
   if( tid == NULL_TID )
     return -1; // XXX: But first, free physical memory before returning
@@ -477,7 +497,11 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
     }
   }
 
-  sys_start_thread( tid );
+  struct SyscallReadTcbArgs tcbArgs;
+
+  sys_read(RES_TCB, &tcbArgs);
+  tcbArgs.tcb->status = TCB_STATUS_READY;
+  sys_update(RES_TCB, &tcbArgs);
 
   for(i=0; i < (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1); i++)
     _unmapMem( (void *)((unsigned)image + i * PAGE_SIZE), NULL); //__unmap((void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR);
@@ -486,23 +510,6 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 //  free_phys_page(tempPage);
 
   return 0;
-}
-
-void signal_handler(int signal, int arg)
-{
-  if( (signal & 0xFF) == SIGEXP )
-  {
-    tid_t tid = (signal >> 8) & 0xFFFF;
-    handle_exception(tid, arg);
-  }
-  else if( (signal & 0xFF) == SIGEXIT )
-  {
-    tid_t tid = (signal >> 8) & 0xFFFF;
-
-//    print("TID: "), printInt(tid), print(" exited\n");
-    detach_tid(tid);
-    // XXX: Unregister any associated names or devices
-  }
 }
 
 int init(multiboot_info_t *info, addr_t *resdStart, addr_t *resdLen,
@@ -518,19 +525,17 @@ int init(multiboot_info_t *info, addr_t *resdStart, addr_t *resdLen,
 #if 0
   get_boot_info(argc, argv);
 #endif /* 0 */
-  while(1)
-    __sleep(1000);
+//  while(1)
+//    sys_wait(1000);
 
   sbAssocArrayCreate(&deviceTable, 256);
   sbAssocArrayCreate(&fsNames, 256);
   sbAssocArrayCreate(&fsTable, 256);
   sbAssocArrayCreate(&deviceNames, 256);
   sbAssocArrayCreate(&threadNames, 256);  // XXX: May need to do an update operation on full
-  sbAssocArrayCreate(&mountTable, 256);
+//  sbAssocArrayCreate(&mountTable, 256);
 
   //list_init(&shmem_list, list_malloc, list_free);
-
-  set_signal_handler( &signal_handler );
 
   for(int i=1; i < boot_info->num_mods; i++)
     load_elf_exec(&boot_modules[i], NULL);

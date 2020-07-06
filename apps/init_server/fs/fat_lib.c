@@ -414,11 +414,11 @@ static int readCluster( struct FAT_Dev *fatDev, unsigned cluster, void *buffer )
   else
     return -1; // XXX: FAT32 unsupported
 
-  blocksPerSector = secsize / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
+  blocksPerSector = secsize / fatDev->device.blockLen; // FIXME: FAT sector size might be less than block length
 
   blockStart = (fatDev->cache.firstDataSec + (cluster-2) * sectorsPerCluster) * blocksPerSector;
 
-  if( deviceRead( fatDev->device.ownerTID, MINOR(fatDev->deviceNum), blockStart, blocksPerSector * 
+  if( deviceRead( fatDev->device.owner, MINOR(fatDev->deviceNum), blockStart, blocksPerSector * 
                   sectorsPerCluster, secsize * sectorsPerCluster, buffer ) == -1 )
   {
     return -1;
@@ -442,11 +442,11 @@ int readSector( struct FAT_Dev *fatDev, unsigned sector, void *buffer )
   else if( fatDev->cache.fatType == FAT16 )
     secsize = fatDev->bpb.fat16.bytes_per_sec;
 
-  blocksPerSector = secsize / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
+  blocksPerSector = secsize / fatDev->device.blockLen; // FIXME: FAT sector size might be less than block length
 
   blockStart = sector * blocksPerSector;
 
-  if( deviceRead( fatDev->device.ownerTID, MINOR(fatDev->deviceNum), blockStart, blocksPerSector,
+  if( deviceRead( fatDev->device.owner, MINOR(fatDev->deviceNum), blockStart, blocksPerSector,
                   secsize, buffer ) == -1 )
   {
     return -1;
@@ -482,11 +482,11 @@ static int writeCluster( struct FAT_Dev *fatDev, unsigned cluster, void *buffer 
   else
     return -1; // XXX: FAT32 unsupported
 
-  blocksPerSector = secsize / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
+  blocksPerSector = secsize / fatDev->device.blockLen; // FIXME: FAT sector size might be less than block length
 
   blockStart = (fatDev->cache.firstDataSec + (cluster-2) * sectorsPerCluster) * blocksPerSector;
 
-  if( deviceWrite( fatDev->device.ownerTID, MINOR(fatDev->deviceNum), blockStart, blocksPerSector * 
+  if( deviceWrite( fatDev->device.owner, MINOR(fatDev->deviceNum), blockStart, blocksPerSector * 
                   sectorsPerCluster, secsize * sectorsPerCluster, buffer ) == -1 )
   {
     return -1;
@@ -510,11 +510,11 @@ int writeSector( struct FAT_Dev *fatDev, unsigned sector, void *buffer )
   else if( fatDev->cache.fatType == FAT16 )
     secsize = fatDev->bpb.fat16.bytes_per_sec;
 
-  blocksPerSector = secsize / fatDev->device.dataBlkLen; // FIXME: FAT sector size might be less than block length
+  blocksPerSector = secsize / fatDev->device.blockLen; // FIXME: FAT sector size might be less than block length
 
   blockStart = sector * blocksPerSector;
 
-  if( deviceWrite( fatDev->device.ownerTID, MINOR(fatDev->deviceNum), blockStart, blocksPerSector,
+  if( deviceWrite( fatDev->device.owner, MINOR(fatDev->deviceNum), blockStart, blocksPerSector,
                   secsize, buffer ) == -1 )
   {
     return -1;
@@ -542,12 +542,12 @@ static int getDeviceData( unsigned short devNum, struct FAT_Dev *fatDev )
 
   fatDev->device = *device;
 
-  if( (buffer = malloc( fatDev->device.dataBlkLen )) == NULL )
+  if( (buffer = malloc( fatDev->device.blockLen )) == NULL )
     return -1;
 
   /* Read the first sector and extract the boot parameter block. */
 
-  if( deviceRead( fatDev->device.ownerTID, MINOR(devNum), 0, 1, fatDev->device.dataBlkLen, buffer ) < 0 )
+  if( deviceRead( fatDev->device.owner, MINOR(devNum), 0, 1, fatDev->device.blockLen, buffer ) < 0 )
   {
     free(buffer);
     return -1;

@@ -4,109 +4,100 @@
 #include <string.h>
 
 extern int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSpace );
+extern void print(const char *, ...);
 
-void dump_regs( int cr2, struct ThreadInfo *info );
-void handle_exception( tid_t tid, unsigned int cr2 );
+void dump_regs( struct Tcb *tcb );
+int handle_exception( int args[5] );
 
-void dump_regs( int cr2, struct ThreadInfo *info )
+void dump_regs( struct Tcb *tcb )
 {
-  print( "\n\n\n\n\nException: " );
-  print(toIntString( info->state.int_num ) );
   print( " @ EIP: 0x" );
-  print(toHexString( info->state.eip ));
-
-  print( " TID: ");
-  print( toIntString(info->tid) );
+  print(toHexString( tcb->state.eip ));
 
   print( "\nEAX: 0x" );
-  print(toHexString( info->state.eax  ));
+  print(toHexString( tcb->state.eax  ));
   print( " EBX: 0x" );
-  print(toHexString( info->state.ebx  ));
+  print(toHexString( tcb->state.ebx  ));
   print( " ECX: 0x" );
-  print(toHexString( info->state.ecx  ));
+  print(toHexString( tcb->state.ecx  ));
   print( " EDX: 0x" );
-  print(toHexString( info->state.edx  ));
+  print(toHexString( tcb->state.edx  ));
 
   print( "\nESI: 0x" );
-  print(toHexString( info->state.esi  ));
+  print(toHexString( tcb->state.esi  ));
   print( " EDI: 0x" );
-  print(toHexString( info->state.edi  ));
+  print(toHexString( tcb->state.edi  ));
 
   print( " ESP: 0x" );
-  print(toHexString( info->state.esp  ));
+  print(toHexString( tcb->state.esp  ));
   print( " EBP: 0x" );
-  print(toHexString( info->state.ebp ));
-
-  print( "\nDS: 0x" );
-  print(toHexString( info->state.ds ));
-  print( " ES: 0x" );
-  print(toHexString( info->state.es ));
-
-  if( info->state.int_num == 14 )
-  {
-    print(" CR2: 0x");
-    print(toHexString( cr2 ));
-  }
-
-  print( " error code: 0x" );
-  print(toHexString( info->state.error_code ));
+  print(toHexString( tcb->state.ebp ));
 
   print( " CR3: 0x" );
-  print(toHexString( (int)info->addr_space ) );
+  print(toHexString( (int)tcb->addrSpace ) );
 
   print("\nEFLAGS: 0x");
-  print(toHexString( info->state.eflags ));
-
-  print(" User SS: 0x");
-  print(toHexString(info->state.userEsp));
-
-  print(" SS: 0x");
-  print(toHexString(info->state.userSs));
+  print(toHexString( tcb->state.eflags ));
 }
 
-void handle_exception( tid_t tid, unsigned int cr2 )
+int handle_exception( int args[5] )
 {
   struct ResourcePool *pool;
-  struct ThreadInfo thread_info;
+  struct Tcb tcb;
   void *addr;
+  tid_t tid = args[1];
+  int intNum = args[2];
+  int errorCode = args[3];
+  dword cr2 = args[4];
 
-  sys_get_thread_info( tid, &thread_info );
   pool = lookup_tid(tid);
 
-  if( thread_info.state.int_num == 14 )
+  sys_read(RES_TCB, &tcb);
+
+  if(intNum == 14)
   {
   /* Only accept if exception was caused by accessing a non-existant user page.
      Then check to make sure that the accessed page was allocated to the thread. */
 
-    if( pool && (thread_info.state.error_code & 0x5) == 0x4 &&
+    if( pool && (errorCode & 0x5) == 0x4 &&
          find_address(&pool->addrSpace, (void *)cr2))
     {
-      addr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
+      addr = alloc_phys_page(NORMAL, (void *)tcb.addrSpace);
 
       _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
-      sys_end_page_fault(thread_info.tid);
+      tcb.status = TCB_STATUS_READY;
+      sys_update(RES_TCB, &tcb);
+      return 0;
     }
-    else if( pool && (thread_info.state.error_code & 0x05) &&
+    else if( pool && (errorCode & 0x05) &&
              (cr2 & ~0x3FFFFF) == STACK_TABLE ) /* XXX: This can be done better. Will not work if there aren't
                                                                                        any pages in the stack page! */
     {
-      addr = alloc_phys_page(NORMAL, (void *)thread_info.addr_space);
+      addr = alloc_phys_page(NORMAL, (void *)tcb.addrSpace);
 
       _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
-      sys_end_page_fault(thread_info.tid);
+      tcb.status = TCB_STATUS_READY;
+      sys_update(RES_TCB, &tcb);
+      return 0;
     }
     else
     {
       if( !pool )
         print("Invalid pool\n");
 
-      dump_regs( cr2, &thread_info );
-      print("Can't find address: 0x"), print(toHexString(cr2)), print(" in addr space 0x"), print(toHexString(thread_info.addr_space));
+      dump_regs( &tcb );
+      print("Can't find address: 0x");
+      print(toHexString(cr2));
+      print(" in addr space 0x");
+      print(toHexString(tcb.addrSpace));
+
+      return -1;
     }
   }
   else
   {
 //    print("Exception!!!(Need to put the rest of data here)\n");
-    dump_regs( cr2, &thread_info );
+    dump_regs( &tcb );
+    return -1;
   }
 }

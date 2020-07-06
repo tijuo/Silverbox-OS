@@ -4,6 +4,7 @@
 #include <kernel/schedule.h>
 #include <kernel/pic.h>
 #include <kernel/paging.h>
+#include <kernel/lowlevel.h>
 
 extern void init2( void );
 extern int numBootMods;
@@ -74,8 +75,6 @@ TCB *schedule( TCB *thread )
 
   assert( thread == currentThread );
 
-  thread->reschedule = 0;
-
   if( thread->threadState == RUNNING )
     thread->threadState = READY;
 
@@ -122,6 +121,45 @@ TCB *schedule( TCB *thread )
   newThread->quantaLeft = newThread->priority + 1;
 
   return newThread;
+}
+
+dword *updateCurrentThread(TCB *tcb, ExecutionState state)
+{
+  if(tcb->threadState != RUNNING)
+  {
+    TCB *newTcb = schedule(tcb);
+
+    if(newTcb == tcb)
+      return (dword *)&state;
+    else
+    {
+      if(tcb->cr3.base != newTcb->cr3.base)
+        __asm__ __volatile__("mov %0, %%cr3" :: "r"(newTcb->cr3));
+
+      tcb->kernel = (state.user.cs == KCODE);
+
+      if(state.user.cs == KCODE)
+      {
+        dword *stackTop = ((dword *)&tcb) - 1;
+        *stackTop = tcb->execState.user.edi;
+        tcb->execState.kernel.stackTop = (dword)stackTop;
+      }
+
+      *(dword *)EXT_PTR(tssEsp0) = (dword)(((ExecutionState *)&newTcb->execState) + 1);
+
+      if(newTcb->kernel)
+      {
+        dword *stackTop = (dword *)newTcb->execState.kernel.stackTop;
+        newTcb->execState.user.edi = *stackTop;
+        newTcb->kernel = ((ExecutionState *)stackTop)->user.cs == KCODE;
+        return stackTop+1;
+      }
+      else
+        return (dword *)&newTcb->execState;
+    }
+  }
+  else
+    return (dword *)&state;
 }
 
 /**
@@ -192,7 +230,6 @@ TCB *attachRunQueue( TCB *thread )
   if( thread->priority < currentThread->priority )
   {
     kprintf("Preempting thread: %d with thread: %d\n", GET_TID(currentThread), GET_TID(thread));
-    currentThread->reschedule = 1;
   }
 
   return enqueue( &runQueues[thread->priority], thread );
@@ -254,12 +291,12 @@ void timerInt( TCB *thread )
       thread->quantaLeft--;
     }
 
-    assert( timerQueue.head == NULL || timerQueue.head->timerDelta );
+    assert( timerQueue.head == NULL || timerQueue.head->queue.delta );
 
-    if( timerQueue.head && timerQueue.head->timerDelta )
-      timerQueue.head->timerDelta--;
+    if( timerQueue.head && timerQueue.head->queue.delta )
+      timerQueue.head->queue.delta--;
 
-    while( timerQueue.head && timerQueue.head->timerDelta == 0 )
+    while( timerQueue.head && timerQueue.head->queue.delta == 0 )
     {
       wokenThread = timerPop();
 

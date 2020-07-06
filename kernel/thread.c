@@ -6,6 +6,7 @@
 #include <kernel/pit.h>
 #include <util.h>
 #include <oslib.h>
+#include <kernel/message.h>
 
 //extern void saveAndSwitchContext( TCB *, TCB * );
 
@@ -25,34 +26,28 @@ int startThread( TCB *thread )
 
   assert( !isInTimerQueue(thread) );
 
-  if( thread->threadState == PAUSED ) /* A paused queue really isn't necessary. */
+  switch(thread->threadState)
   {
-    #if DEBUG
-      unsigned int level;
-
-      for( level=0; level < NUM_RUN_QUEUES; level++ )
-      {
-        if( isInQueue( &runQueues[level], thread ) )
-          kprintf("Thread is in run queue, but it's paused?\n");
-        assert( !isInQueue( &runQueues[level], thread ) );
-      }
-    #endif /* DEBUG */
-
-    thread->threadState = READY;
-
-    attachRunQueue( thread );
-    return 0;
+    case SLEEPING:
+      timerDequeue(thread);
+      break;
+    case WAIT_FOR_RECV:
+      detachSendQueue(thread, thread->waitPort);
+      break;
+    case WAIT_FOR_SEND:
+      detachReceiveQueue(thread, thread->waitPort);
+      break;
+    case RUNNING:
+      return -1;
+    default:
+      break;
   }
-  else
-  {
-    kprintf("Can't start a thread unless it's paused!\n");
-    return 1;
-  }
-}
 
-TCB *getTcb(tid_t tid)
-{
-  return &tcbTable[tid];
+  thread->threadState = READY;
+  thread->waitPort = NULL_PID;
+
+  attachRunQueue( thread );
+  return 0;
 }
 
 /**
@@ -89,7 +84,6 @@ int sleepThread( TCB *thread, int msecs )
   }
   else
   {
-    thread->reschedule = 1;
     thread->threadState = SLEEPING;
     return 0;
   }
@@ -105,7 +99,6 @@ int pauseThread( TCB *thread )
       detachRunQueue( thread );
     case RUNNING:
       thread->threadState = PAUSED;
-      thread->reschedule = 1;
       return 0;
     case PAUSED:
       RET_MSG(1, "Thread is already paused.")//return 1;
@@ -120,24 +113,24 @@ int pauseThread( TCB *thread )
 
     @param threadAddr The start address of the thread.
     @param addrSpace The physical address of the thread's page directory.
-    @param -tack The address of the top of the thread's stack.
-    @param exHandler The TID of the thread's exception handler.
+    @param stack The address of the top of the thread's stack.
+    @param exHandler The PID of the thread's exception handler.
     @return The TCB of the newly created thread. NULL on failure.
 */
 
-TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, TCB *exHandler )
+TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, pid_t exHandler )
 {
   TCB * thread = NULL;
   u32 pentry;
 
   #if DEBUG
-    if( exHandler == NULL )
+    if( exHandler == NULL_TID )
       kprintf("createThread(): NULL exception handler.\n");
   #endif /* DEBUG */
 
   if( threadAddr == NULL )
     RET_MSG(NULL, "NULL thread addr")
-  else if((addrSpace & 0xFFFu) != 0)
+  else if((addrSpace & 0xFFF) != 0)
     RET_MSG(NULL, "Invalid address space address.")
 
   if(addrSpace == NULL_PADDR)
@@ -169,10 +162,10 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, TCB *exHan
   thread->priority = NORMAL_PRIORITY;
   thread->cr3.base = (addrSpace >> 12);
   thread->exHandler = exHandler;
-  thread->waitThread = NULL;
-  thread->threadQueue.tail = thread->threadQueue.head = NULL;
-  thread->queueNext = thread->queuePrev = thread->timerNext = NULL;
-  thread->timerDelta = 0u;
+
+  thread->waitPort = NULL_PID;
+  thread->queue.next = NULL_TID;
+  thread->queue.delta = 0u;
 
   memset(&thread->execState.user, 0, sizeof thread->execState.user);
 
@@ -184,16 +177,14 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, TCB *exHan
   if( GET_TID(thread) == IDLE_TID )
   {
     thread->execState.user.cs = KCODE;
-    thread->execState.user.ds = thread->execState.user.es = KDATA;
-    thread->execState.user.esp = stack - (sizeof(ExecutionState)-8);
+    dword *esp = (dword *)(stack - (sizeof(ExecutionState)-8));
 
-    memcpy( (void *)thread->execState.user.esp,
+    memcpy( (void *)esp,
             (void *)&thread->execState, sizeof(ExecutionState) - 8);
   }
-  else if( ((unsigned int)threadAddr & KERNEL_VSTART) != KERNEL_VSTART )
+  else if( (threadAddr & KERNEL_VSTART) != KERNEL_VSTART )
   {
     thread->execState.user.cs = UCODE;
-    thread->execState.user.ds = thread->execState.user.es = thread->execState.user.userSS = UDATA;
     thread->execState.user.userEsp = stack;
   }
 
@@ -251,23 +242,50 @@ int releaseThread( TCB *thread )
       break;
   }
 
-  /* XXX: Are these implemented properly? */
+  // Find each port that this thread owns and notify the waiting
+  // senders that sending to that port failed.
 
-  if( thread->threadState == WAIT_FOR_SEND )
+  const tid_t tid = GET_TID(thread);
+
+  for(struct Port *port=getPort((pid_t)1); port != getPort((pid_t)(MAX_PORTS-1)); 
+      port++)
   {
-    TCB *waitingThread;
-
-    while( (waitingThread=popQueue( &thread->threadQueue )) != NULL )
+    if(port->owner == tid)
     {
-      waitingThread->threadState = READY;
-      attachRunQueue(waitingThread);
+      TCB *prevWaitTcb;
+
+      for(TCB *waitTcb=getTcb(port->sendWaitTail); waitTcb != NULL;
+          waitTcb=prevWaitTcb)
+      {
+        prevWaitTcb = getTcb(waitTcb->queue.prev);
+
+        waitTcb->threadState = READY;
+        attachRunQueue(waitTcb);
+      }
     }
   }
-  else if( thread->threadState == WAIT_FOR_RECV )
-  {
-    assert( thread->waitThread != NULL ); // XXX: Why?
 
-    detachQueue( &thread->waitThread->threadQueue, thread );
+  if(thread->threadState == WAIT_FOR_RECV && thread->waitPort != NULL_PID)
+  {
+    struct Port *port = getPort(thread->waitPort);
+
+    if(port->sendWaitTail == tid)
+      port->sendWaitTail = NULL_TID;
+    else
+    {
+      if(thread->queue.prev != NULL_TID)
+        getTcb(thread->queue.prev)->queue.next = thread->queue.next;
+
+      getTcb(thread->queue.next)->queue.prev = thread->queue.prev;
+    }
+  }
+
+  // XXX: Recursive calls may result in stack overflow
+
+  for(TCB *tcbPtr=getTcb(1); tcbPtr != getTcb((tid_t)(MAX_THREADS-1)); tcbPtr++)
+  {
+    if(tcbPtr->threadState != DEAD && tcbPtr->exHandler == tid)
+      releaseThread(tcbPtr);
   }
 
   memset(thread, 0, sizeof *thread);

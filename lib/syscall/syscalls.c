@@ -1,210 +1,96 @@
 #include <oslib.h>
 
-int sys_send( tid_t recipient, void *msg, int timeout )
+int sys_send(pid_t out_port, pid_t recipient, const int args[5], int block)
+{
+  return sys_rpc(out_port, recipient, args, NULL, block);
+}
+
+int sys_receive(pid_t in_port, pid_t *sender, int args[5], int block)
+{
+  int retval;
+  unsigned pair;
+  pid_t _sender;
+
+  __asm__ __volatile__("int %6\n" : "=a"(args[0]),
+                       "=b"(pair),
+                       "=c"(args[1]), "=d"(args[2]),
+                       "=S"(args[3]), "=D"(args[4])
+                     : "i"(SYSCALL_INT),
+                       "a"(block ? SYS_RECEIVE_BLOCK : SYS_RECEIVE),
+                       "b"((in_port << 16) | (sender ? *sender : NULL_PID)));
+
+  _sender = (pid_t)(pair >> 16);
+  retval = args[0] & 0xFFFF;
+  args[0] >>= 16;
+
+  if(sender)
+    *sender = _sender;
+
+  return (short int)retval;
+}
+
+int sys_rpc(pid_t client, pid_t server, const int in_args[5],
+            int out_args[5], int block)
 {
   int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SEND),
-                   "b"(recipient), "c"(msg), "d"(timeout));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
+  if(!in_args || !out_args)
+    return ESYS_ARG;
+
+  __asm__ __volatile__("int %5\n" : "=a"(out_args[0]), "=c"(out_args[1]),
+                       "=d"(out_args[2]), "=S"(out_args[3]), "=D"(out_args[4])
+                     : "i"(SYSCALL_INT),
+                       "a"(((in_args[0] & 0xFFFF) << 16)
+                           | (block ? SYS_RPC_BLOCK : SYS_RPC)),
+                       "b"((client << 16) | server), "c"(in_args[1]),
+                       "d"(in_args[2]), "S"(in_args[3]), "D"(in_args[4]));
+
+  retval = out_args[0] & 0xFFFF;
+  out_args[0] >>=  16;
+  return (short int)retval;
 }
 
-int sys_receive( tid_t sender, void *buf, int timeout )
-{
-  int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_RECEIVE),
-                   "b"(sender), "c"(buf), "d"(timeout));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-#if 0
-int __pause( void )
+void sys_exit(int code)
 {
-  return sys_pause_thread( NULL_TID );
+  int args[5] = { SYS_MSG_EXIT, code, 0, 0, 0 };
+
+  sys_rpc(NULL_PID, NULL_PID, args, NULL, 0);
 }
 
-int sys_pause_thread( tid_t tid )
+int sys_create(int res, void *arg)
 {
-  int retval;
+  int args[5] = { SYS_MSG_CREATE, res, (int)arg, 0, 0 };
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_PAUSE_THREAD), "b"(tid));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
+  return sys_rpc(NULL_PID, NULL_PID, args, NULL, 0);
 }
 
-int sys_start_thread( tid_t tid )
+int sys_read(int res, void *arg)
 {
-  int retval;
+  int args[5] = { SYS_MSG_READ, res, (int)arg, 0, 0 };
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_START_THREAD),
-                   "b"(tid));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-#endif /* 0 */
-
-int sys_destroy_thread( tid_t tid )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_DESTROY_THREAD),
-                   "b"(tid));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
+  return sys_rpc(NULL_PID, NULL_PID, args, NULL, 0);
 }
 
-int sys_get_thread_info( tid_t tid, struct ThreadInfo *info )
-{
-  int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_GET_THREAD_INFO),
-                   "b"(tid), "c"(info));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
+int sys_update(int res, void *arg)
+{
+  int args[5] = { SYS_MSG_UPDATE, res, (int)arg, 0, 0 };
+
+  return sys_rpc(NULL_PID, NULL_PID, args, NULL, 0);
 }
 
-int sys_register_int( int intNum )
-{
-  int retval;
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_REGISTER_INT),
-                   "b"(intNum));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
+int sys_destroy(int res, void *arg)
+{
+  int args[5] = { SYS_MSG_DESTROY, res, (int)arg, 0, 0 };
+
+  return sys_rpc(NULL_PID, NULL_PID, args, NULL, 0);
 }
 
-int sys_unregister_int( int intNum )
+int sys_wait(unsigned int timeout)
 {
-  int retval;
+  int args[5] = { SYS_MSG_WAIT, (int)timeout, 0, 0, 0 };
 
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_UNREGISTER_INT),
-                   "b"(intNum));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-tid_t sys_create_thread( void *entry, void *addr_space, void *stack,
-                       tid_t exhandler )
-{
-  tid_t retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_CREATE_THREAD),
-                   "b"(entry), "c"(addr_space), "d"(stack),
-                   "S"(exhandler));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-void sys_exit( int status )
-{
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_EXIT),
-                   "b"(status));
-}
-
-void __yield( void )
-{
-  __sleep( 0 );
-}
-
-int sys_sleep( int msecs, tid_t tid )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SLEEP),
-                   "b"(msecs));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-int __sleep( int msecs )
-{
-  return sys_sleep( msecs, NULL_TID );
-}
-
-int sys_eoi( int irqNum )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_EOI),
-                   "b"(irqNum));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-int sys_end_page_fault( tid_t tid )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_END_PAGE_FAULT),
-                   "b"(tid));
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-int sys_raise( int signal, int arg )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_RAISE),
-                   "b"(signal), "c"(arg) );
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-int sys_set_sig_handler( void *handler )
-{
-  int retval;
-
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_SET_SIG_HANDLER),
-                   "b"(handler) );
-  asm __volatile__("mov %%eax, %0\n" : "=m"(retval));
-  return retval;
-}
-
-#if 0
-void sys_invalidate_page( addr_t addr )
-{
-  asm __volatile__("int %0\n" :: "i"(SYSCALL_INT), "a"(SYS_INVALIDATE_PAGE),
-                   "b"(addr) );
-}
-#endif /* 0 */
-
-int sys_invalidate_tlb( void )
-{
-  int retval;
-
-  asm __volatile__("int %1\n" : "=a"(retval) : "i"(SYSCALL_INT), "a"(SYS_INVALIDATE_TLB));
-  return retval;
-}
-
-int sys_set_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid)
-{
-  int retval;
-
-  asm __volatile__("int %1\n" : "=a"(retval) : "i"(SYSCALL_INT), "a"(SYS_SET_PAGE_MAPPING),
-                   "b"(mappings), "c"(len), "d"(tid));
-
-  return retval;
-}
-
-int sys_get_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid)
-{
-  int retval;
-
-  asm __volatile__("int %1\n" : "=a"(retval) : "i"(SYSCALL_INT), "a"(SYS_GET_PAGE_MAPPING),
-                   "b"(mappings), "c"(len), "d"(tid));
-
-  return retval;
-}
-
-int sys_grant_privilege( int privilege, tid_t tid )
-{
-  int retval;
-
-  asm __volatile__("int %1\n" : "=a"(retval) : "i"(SYSCALL_INT), "a"(SYS_GRANT_PRIVILEGE),
-                   "b"(privilege), "c"(tid));
-
-  return retval;
+  return sys_rpc(NULL_PID, NULL_PID, args, NULL, 0);
 }

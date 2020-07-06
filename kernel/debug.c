@@ -20,8 +20,8 @@ void doNewLine( int *x, int *y );
 char *kitoa(int value, char *str, int base);
 void _putChar( char c, int x, int y, unsigned char attrib );
 void putChar( char c, int x, int y );
-void dump_regs( const TCB *thread );
-void dump_state( const ExecutionState *state );
+void dump_regs( const TCB *thread, const ExecutionState *state, int intNum, int errorCode);
+void dump_state( const ExecutionState *state, int intNum, int errorCode);
 void dump_stack( addr_t, addr_t );
 
 static const char *_digits="0123456789abcdefghijklmnopqrstuvwxyz";
@@ -333,8 +333,8 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
 {
   kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
 
-  if( currentThread )
-    dump_regs((TCB *)currentThread);
+  if( currentThread && !currentThread->kernel )
+    dump_regs((TCB *)currentThread, &currentThread->execState, 0, 0);
 
   if( badAssertHlt )
   {
@@ -516,7 +516,7 @@ void kprintf( const char *str, ... )
   va_end(args);
 }
 
-void dump_state( const ExecutionState *execState )
+void dump_state( const ExecutionState *execState, int intNum, int errorCode )
 {
   if( execState == NULL )
   {
@@ -524,41 +524,41 @@ void dump_state( const ExecutionState *execState )
     return;
   }
 
-  if( execState->user.intNum == 0x40 )
+  if( intNum == 0x40 )
   {
     kprintf("Syscall");
   }
-  else if( execState->user.intNum < IRQ0 )
+  else if( intNum < IRQ0 )
   {
-    kprintf("Exception %d", execState->user.intNum);
+    kprintf("Exception %d", intNum);
   }
-  else if( execState->user.intNum >= IRQ0 && execState->user.intNum <= IRQ15 )
+  else if( intNum >= IRQ0 && intNum <= IRQ15 )
   {
-    kprintf("IRQ%d", execState->user.intNum - IRQ0);
+    kprintf("IRQ%d", intNum - IRQ0);
   }
   else
   {
-    kprintf("Software Interrupt %d", execState->user.intNum);
+    kprintf("Software Interrupt %d", intNum);
   }
 
   kprintf(" @ EIP: 0x%x", execState->user.eip);
 
   kprintf( "\nEAX: 0x%x EBX: 0x%x ECX: 0x%x EDX: 0x%x", execState->user.eax, execState->user.ebx, execState->user.ecx, execState->user.edx );
-  kprintf( "\nESI: 0x%x EDI: 0x%x ESP: 0x%x EBP: 0x%x", execState->user.esi, execState->user.edi, execState->user.esp, execState->user.ebp );
-  kprintf( "\nCS: 0x%x DS: 0x%x ES: 0x%x", execState->user.cs, execState->user.ds, execState->user.es );
+  kprintf( "\nESI: 0x%x EDI: 0x%x EBP: 0x%x", execState->user.esi, execState->user.edi, execState->user.ebp );
+  kprintf( "\nCS: 0x%x", execState->user.cs );
 
-  if( execState->user.intNum == 14 )
+  if( intNum == 14 )
   {
     kprintf(" CR2: 0x%x", getCR2());
   }
 
-  kprintf( " error code: 0x%x\n", execState->user.errorCode );
+  kprintf( " error code: 0x%x\n", errorCode );
 
   kprintf("EFLAGS: 0x%x ", execState->user.eflags);
 
   if( execState->user.cs == UCODE )
   {
-    kprintf("User ESP: 0x%x User SS: 0x%x\n", execState->user.userEsp, execState->user.userSS);
+    kprintf("ESP: 0x%x User SS: 0x%x\n", execState->user.userEsp, execState->user.userSS);
   }
 }
 
@@ -607,9 +607,8 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
 
 /// Prints useful debugging information about the current thread
 
-void dump_regs( const TCB *thread )
+void dump_regs( const TCB *thread, const ExecutionState *execState, int intNum, int errorCode )
 {
-  ExecutionState *execState=NULL;
   addr_t stackFramePtr;
 
   kprintf( "Thread: 0x%x ", thread, GET_TID(thread));
@@ -629,7 +628,7 @@ void dump_regs( const TCB *thread )
     execState = (ExecutionState *)&thread->execState;
   }
 
-  dump_state(execState);
+  dump_state(execState, intNum, errorCode);
 
   if( !execState )
   {

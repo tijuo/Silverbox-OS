@@ -8,133 +8,132 @@
 #include <kernel/paging.h>
 #include <kernel/interrupt.h>
 
-#define NUM_IRQS	16
-
-#define IRQ(x)    ((x)-IRQ0)
-#define INT(x)    ((x)+IRQ0)
-
-void handleIRQ( TCB *thread, ExecutionState );
-void handleCPUException( TCB *thread, ExecutionState );
-
-/// The threads that are responsible for handling an IRQ
-
-static TCB *IRQHandlers[ NUM_IRQS ];
-
-void endIRQ( int irqNum )
+void endIRQ(int irqNum)
 {
-  enableIRQ(IRQ(irqNum));
+  enableIRQ(irqNum);
   sendEOI();
 }
 
-/** This allows a thread to register an interrupt handler. All
-   interrupts will be sent to the registered thread .
-*/
+/** All interrupts will be sent to the registered port. */
 
-int registerInt( TCB *thread, int intNum )
+int registerInt(pid_t port, int intNum)
 {
-  if(!IRQHandlers[IRQ(intNum)] )
+  if(intNum < 0 || intNum > NUM_IRQS-1 || port == NULL_PID)
+    return -1;
+  else if(IRQHandlers[intNum] == NULL_PID)
   {
-    kprintf("Thread %d registered IRQ: 0x%x\n", GET_TID(thread), IRQ(intNum));
+    kprintf("Port %d registered IRQ: 0x%x\n", port, intNum);
 
-    IRQHandlers[IRQ(intNum)] = thread;
+    IRQHandlers[intNum] = port;
+    enableIRQ(intNum);
     return 0;
   }
   else
     return -1;
 }
 
-void unregisterInt( int intNum )
+void unregisterInt(int intNum)
 {
-  IRQHandlers[IRQ(intNum)] = NULL;
+  if(intNum < 0 || intNum > NUM_IRQS-1)
+    return;
+
+  IRQHandlers[intNum] = NULL_PID;
 }
-
-/** Notifies the kernel that a pager is finished handling a
-   page fault, and it should resume execution.
-
-   Warning: This assumes that the page fault wasn't fatal.
-
-   XXX: this doesn't need to be implemented in kernel mode.
-*/
 
 /// Handles an IRQ (from 0 to 15).
 /** If an IRQ occurs, the kernel will send a message to the
     thread that registered to handle the IRQ (if it exists). */
 
-void handleIRQ( TCB *thread, ExecutionState state )
+void handleIRQ(int irqNum, TCB *thread, ExecutionState state)
 {
-  ExecutionState *execState;
-
-  if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
-    execState = (ExecutionState *)&thread->execState;
-  else
-    execState = (ExecutionState *)&state;
-
-  if( execState->user.intNum == INT(7) && !IRQHandlers[7] )
+  if(irqNum == 0)
+    timerInt(thread);
+  else if(irqNum == 7 && IRQHandlers[7] == NULL_PID)
     sendEOI(); // Stops the spurious IRQ7
   else
   {
-    disableIRQ(IRQ(execState->user.intNum));
     sendEOI();
+    disableIRQ(irqNum);
 
-    if( IRQHandlers[IRQ(execState->user.intNum)] == NULL )
+    if(IRQHandlers[irqNum] == NULL_PID)
       return;
 
-    setPriority(IRQHandlers[IRQ(execState->user.intNum)], HIGHEST_PRIORITY);
+    setPriority(getTcb(getPort(IRQHandlers[irqNum])->owner), HIGHEST_PRIORITY);
 
-    // XXX: Send a message to the handler
+    struct PortPair pair;
 
-    return;
+    pair.local = NULL_PID;
+    pair.remote = IRQHandlers[irqNum];
+
+    int args[5] = { IRQ_MSG, irqNum, 0, 0, 0 };
+
+    if(sendMessage(irqThreads[irqNum], pair, 1, args) != 0)
+      kprintf("Failed to send IRQ%d message to port %d.\n", irqNum, pair.local);
   }
 }
 
 /// Handles the CPU exceptions
 
-void handleCPUException( TCB *thread, ExecutionState state)
+void handleCPUException(int intNum, int errorCode, TCB *tcb,
+                        ExecutionState state)
 {
-  if( thread == NULL )
+  if( tcb == NULL )
   {
-    kprintf("NULL thread. Unable to handle exception. System halted.\n");
-    dump_state(&state);
+    kprintf("NULL tcb. Unable to handle exception. System halted.\n");
+    dump_state(&state, intNum, errorCode);
     __asm__("hlt\n");
     return;
   }
 
   #if DEBUG
 
-  if( GET_TID(thread) == IDLE_TID )
+  if( GET_TID(tcb) == IDLE_TID )
   {
-    kprintf("Idle thread died. System halted.\n");
-    dump_regs( thread );
-    dump_state(&state);
+    kprintf("Exception for idle thread. System halted.\n");
+    dump_regs( tcb, &state, intNum, errorCode );
+    dump_state(&state, intNum, errorCode);
     __asm__("hlt\n");
     return;
   }
-  else if( thread == init_server )
+  else if( tcb == init_server )
   {
     kprintf("Exception for initial server. System Halted.\n");
-    dump_regs( thread );
+    dump_regs( tcb, &state, intNum, errorCode );
     __asm__("hlt\n");
     return;
   }
   else
   {
-    dump_regs( thread );
+    dump_regs( tcb, &state, intNum, errorCode );
   }
   #endif
 
-  pauseThread( thread );
-
-  if( thread->exHandler == NULL || GET_TID(thread->exHandler) >= MAX_THREADS )
+  if( tcb->exHandler == NULL_PID )
   {
-    kprintf("Invalid exception handler\n");
-    dump_regs( thread );
-    return;
+    kprintf("TID: %d has no exception handler. Releasing...\n", GET_TID(tcb));
+    dump_regs( tcb, &state, intNum, errorCode );
+    releaseThread(tcb);
   }
-
-  if( thread->exHandler == thread )
+  else if( getPort(tcb->exHandler)->owner == GET_TID(tcb) )
   {
-    kprintf("Oops! The thread is its own exception handler!\n");
-    dump_regs( thread );
-    return;
+    kprintf("Oops! TID %d is its own exception handler! Releasing...\n", GET_TID(tcb));
+    dump_regs( tcb, &state, intNum, errorCode );
+    releaseThread(tcb);
+  }
+  else
+  {
+    struct PortPair pair;
+    pair.local = NULL_PID;
+    pair.remote = tcb->exHandler;
+    int args[5] = { EXCEPTION_MSG, GET_TID(tcb), intNum,
+                    errorCode, intNum == 14 ? getCR2() : 0 };
+
+    if(sendMessage(tcb, pair, 1, args) != 0)
+    {
+      kprintf("Unable to send exception message to PID: %d\n", tcb->exHandler);
+      releaseThread(tcb);
+    }
+    else
+      pauseThread(tcb);
   }
 }

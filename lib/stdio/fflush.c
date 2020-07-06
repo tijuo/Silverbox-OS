@@ -8,7 +8,7 @@ int fflush(FILE *stream)
 
   if( stream == stdout )
   {
-    printStrN(stream->buffer, stream->buf_pos);
+//    printStrN(stream->buffer, stream->buf_pos);
 
     stream->buf_pos = 0;
   }

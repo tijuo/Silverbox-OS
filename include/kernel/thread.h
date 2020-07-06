@@ -18,13 +18,12 @@
 
 #define NUM_PROCESSORS   	1u
 
-#define NULL_TID	 	0
-#define TID_MAX		 	0xFFFFu
+#define TID_MAX		 	((tid_t)0xFFFFu)
 
-#define	INITIAL_TID		1u
+#define	INITIAL_TID		((tid_t)1u)
 #define IDLE_TID		INITIAL_TID
 
-#define GET_TID(t)		(tid_t)(t - tcbTable)
+#define GET_TID(t)		(t == NULL ? NULL_TID : (tid_t)((t) - tcbTable))
 
 #define MAX_THREADS		1024u
 
@@ -36,38 +35,35 @@
 struct ThreadControlBlock
 {
   cr3_t cr3;
-  unsigned char quantaLeft;
+  unsigned char quantaLeft : 7;
+  unsigned char kernel : 1;
   unsigned char threadState : 4;
   unsigned char priority : 3;
-  unsigned char reschedule : 1;
-  unsigned short int privileged : 1;
-  unsigned short int pager : 1;
-  unsigned short int __packing : 14;
-  struct Queue
+  unsigned char privileged : 1;
+  pid_t exHandler; // Send interrupts and exceptions to this port
+
+  struct
   {
-    struct ThreadControlBlock *head;
-    struct ThreadControlBlock *tail;
-  } threadQueue;	// the queue of waiting senders
-  struct ThreadControlBlock *exHandler;		// Send interrupts and exceptions to this thread
-  struct ThreadControlBlock *waitThread;		// wait to receive from/send to this thread
-  struct ThreadControlBlock *queueNext;
-  struct ThreadControlBlock *queuePrev;
-  struct ThreadControlBlock *timerNext;
-  unsigned int timerDelta;
-  ExecutionState execState;
-  unsigned int __packing2[4];
+    union
+    {
+      unsigned int delta;
+      tid_t prev;
+    };
+    tid_t next;
+  } queue;
+
+  pid_t waitPort;   // wait to receive from/send to this port
+  ExecutionState execState; // 48 bytes
 } __PACKED__;
 
 typedef struct ThreadControlBlock TCB;
 
-struct Queue freeThreadQueue;
+struct Queue
+{
+  TCB *head, *tail;
+};
 
-TCB *init_server;
-TCB *currentThread;
-TCB *idleThread;
-TCB tcbTable[MAX_THREADS];
-
-TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, TCB *exHandler );
+TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, pid_t exHandler );
 int releaseThread( TCB *thread );
 
 int sleepThread( TCB *thread, int msecs );
@@ -75,8 +71,14 @@ int startThread( TCB *thread );
 int pauseThread( TCB *thread );
 int sysYield( TCB *thread );
 
-TCB *getTcb(tid_t tid);
+#define getTcb(tid)   (((tid_t)(tid) == NULL_TID || (tid_t)(tid) >= MAX_THREADS) ? NULL : (&tcbTable[tid]))
 
 //int switchToThread(  TCB *oldThread,  TCB *newThread );
+
+struct Queue freeThreadQueue;
+TCB *init_server;
+TCB *currentThread;
+TCB *idleThread;
+TCB tcbTable[MAX_THREADS];
 
 #endif /* THREAD_H */

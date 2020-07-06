@@ -157,28 +157,28 @@ static int _free_phys_page(unsigned page_num)
     return -1;
 }
 
-void *alloc_phys_page(enum PageType type, void *addr_space)
+addr_t alloc_phys_page(enum PageType type, addr_t addr_space)
 {
   int page_num;
 
-  if( type >= 4 || (unsigned)addr_space == (unsigned)NULL_PADDR )
+  if( type >= 4 || addr_space == NULL_PADDR )
   {
 //    print("Bad ADDR space\n");
-    return (void *)NULL_PADDR;
+    return NULL_PADDR;
   }
 
   page_num = _alloc_phys_page(type);
 
   if( page_num == -1 )
-    return (void *)NULL_PADDR;
+    return NULL_PADDR;
   else
   {
     phys_page_list[page_num].pdir_page = (unsigned long)addr_space / PAGE_SIZE;
-    return (void *)(page_num * PAGE_SIZE);
+    return (page_num * PAGE_SIZE);
   }
 }
 
-void free_phys_page(void *address)
+void free_phys_page(addr_t address)
 {
 
   unsigned page_num = (unsigned)address / PAGE_SIZE;

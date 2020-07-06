@@ -47,5 +47,6 @@ void *sbrk( int increment )
   {
     // XXX: unmap pages?
   }
+
   return prevHeap;
 }

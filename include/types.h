@@ -22,7 +22,7 @@ typedef signed int s32;
 typedef unsigned long long u64;
 typedef signed long long s64;
 
-typedef u32 addr_t;
+typedef s32 addr_t;
 
 typedef u8  byte;
 typedef u16 word;
@@ -47,6 +47,10 @@ typedef s64 int64;
 typedef s64 quad;
 
 typedef unsigned short int tid_t;
+typedef unsigned short int pid_t;
+
+#define NULL_TID  ((tid_t)0)
+#define NULL_PID  ((pid_t)0)
 
 #ifndef __cplusplus
 /* typedef char _Bool; */
@@ -54,7 +58,7 @@ typedef unsigned short int tid_t;
 #endif /* __cplusplus */
 
 #ifndef NULL
-  #define NULL 0
+  #define NULL ((void *)0)
 #endif
 
 #ifdef __cplusplus

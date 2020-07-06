@@ -1,0 +1,8 @@
+*.o
+*.a
+*.dbg
+*.dmp
+*.tmp
+*.sym
+*.exe
+*.gz

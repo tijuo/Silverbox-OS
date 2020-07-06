@@ -4,17 +4,13 @@
 #include <types.h>
 #include <oslib.h>
 
-#define DEV_NUM(major, minor)	(((major & 0xFF) << 8) | (minor & 0xFF))
+#define DEV_NUM(major, minor)	((((major) & 0xFFFF) << 16) | ((minor) & 0xFFFF))
 
-#define N_MAX_NAME_LEN 		12
+#define N_MAX_NAME_LEN 		16
 #define N_MAX_NAMES		(MAX_DEVICES + MAX_FILESYSTEMS)
 #define MAX_DEVICES 		256
 #define MAX_FILESYSTEMS		32
 #define MAX_MOUNT_ENTRIES	32
-
-// #define REGISTER_DEVICE	 	0
-// #define LOOKUP_DEV_MAJOR      	1
-// #define LOOKUP_DEV_NAME       	2
 
 // #define DEV_REGISTER		0
 // #define DEV_LOOKUP_MAJOR	1
@@ -22,21 +18,29 @@
 
 #define DEV_REG_SERVER		30
 
-enum DeviceTypes { CHAR_DEV, BLOCK_DEV };
-enum CacheTypes { NO_CACHE, WRITE_THRU, WRITE_BACK };
+#define FLG_CHAR_DEV           0
+#define FLG_BLOCK_DEV          1
+#define FLG_NO_CACHE           0
+#define FLG_WRITE_THRU         4
+#define FLG_WRITE_BACK         8
 
 /* Maybe use a linked list instead... */
+
+struct DeviceRecord
+{
+  int numDevices;
+  unsigned long blockLen;
+  int flags;
+};
 
 struct Device
 {
 //  char name[MAX_DEV_NAME_LEN + 1];
-  unsigned char major;
   unsigned char numDevices;
-  unsigned long dataBlkLen : 31;
-  unsigned long used : 1;
-  tid_t ownerTID;
-  enum DeviceTypes type;
-  enum CacheTypes cacheType;
+  pid_t owner;
+  unsigned long blockLen;
+  int flags : 31;
+  int used : 1;
 } devices[MAX_DEVICES];
 
 /*
@@ -51,33 +55,6 @@ union Entry
 {
   struct Device device;
 //  struct Filesystem fs;
-};
-
-struct RegisterNameReq
-{
-  union Entry entry;
-
-  char name[N_MAX_NAME_LEN];
-  size_t name_len;
-};
-
-struct NameLookupReq
-{
-  union
-  {
-    unsigned char major;
-
-    struct
-    {
-      char name[N_MAX_NAME_LEN];
-      size_t name_len;
-    };
-  };
-};
-
-struct DevMgrReply
-{
-  union Entry entry;
 };
 
 #endif

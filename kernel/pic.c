@@ -4,8 +4,6 @@
 HOT(void sendEOI(void));
 COLD(void enableIRQ( unsigned int irq ));
 COLD(void disableIRQ( unsigned int irq ));
-COLD(void enableAllIRQ(void));
-COLD(void disableAllIRQ(void));
 
 /* TODO: Maybe I should use APIC? */
 
@@ -27,23 +25,14 @@ void sendEOI( void )
 
 void enableIRQ( unsigned int irq )
 {
-  byte data;
-
-  if( irq > 15 )
-    return;
-
   if( irq < 8 )
   {
-    data = inByte( (word)0x21u );
-    ioWait();
-    outByte( (word)0x21u, data & (byte)~(1u << irq));
+    outByte( (word)0x21u, inByte((word)0x21u) & (byte)~(1u << irq));
     ioWait();
   }
   else
   {
-    data = inByte( (word)0xA1u );
-    ioWait();
-    outByte( (word)0xA1u, data & (byte)~(1u << (irq-8)));
+    outByte( (word)0xA1u, inByte((word)0xA1u) & (byte)~(1u << (irq-8)));
     ioWait();
   }
 }
@@ -56,43 +45,14 @@ void enableIRQ( unsigned int irq )
 
 void disableIRQ( unsigned int irq )
 {
-  byte data;
-
-  if( irq > 15 )
-    return;
-
   if( irq < 8 )
   {
-    data = inByte( (word)0x21 );
-    ioWait();
-    outByte( (word)0x21, data | (byte)(1u << irq));
+    outByte( (word)0x21, inByte((word)0x21u) | (byte)(1u << irq));
     ioWait();
   }
   else
   {
-    data = inByte( (word)0xA1 );
-    ioWait();
-    outByte( (word)0xA1, data | (byte)(1u << (irq-8)));
+    outByte( (word)0xA1, inByte((word)0xA1) | (byte)(1u << (irq-8)));
     ioWait();
   }
-}
-
-/// Unmask all IRQs (enables all IRQs)
-
-void enableAllIRQ( void )
-{
-  outByte( (word)0x21u, 0 );
-  ioWait();
-  outByte( (word)0xA1u, 0 );
-  ioWait();
-}
-
-/// Mask all IRQs (disables all IRQs)
-
-void disableAllIRQ( void )
-{
-  outByte( (word)0x21u, 0xFFu );
-  ioWait();
-  outByte( (word)0xA1u, 0xFFu );
-  ioWait();
 }

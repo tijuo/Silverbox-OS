@@ -5,44 +5,99 @@
 
 #define SYSCALL_INT             0x40
 
-#define SYS_EXIT                0x00
-#define SYS_SEND                0x01
-#define SYS_WAIT                0x02
-#define SYS_CREATE              0x03
-#define SYS_READ                0x04
-#define SYS_UPDATE              0x05
-#define SYS_DESTROY             0x06
+#define SYS_MSG_EXIT            0x00
+#define SYS_MSG_WAIT            0x01
+#define SYS_MSG_CREATE          0x02
+#define SYS_MSG_READ            0x03
+#define SYS_MSG_UPDATE          0x04
+#define SYS_MSG_DESTROY         0x05
+
+#define SYS_RPC                 0x00
+#define SYS_RPC_BLOCK           0x01
+#define SYS_RECEIVE             0x02
+#define SYS_RECEIVE_BLOCK       0x03
 
 #define RES_MAPPING     0
 #define RES_IHANDLER    1
 #define RES_TCB         2
+#define RES_PORT	      3
 
 struct SyscallCreateTcbArgs
 {
-  addr_t address;
-  addr_t addr_space;
+  addr_t entry;
+  addr_t addrSpace;
   addr_t stack;
-  tid_t ex_handler;
+  pid_t exHandler;
 };
 
-/*
-#define SYS_GET_THREAD_INFO     0x03
-#define SYS_CREATE_THREAD       0x04
-#define SYS_SET_THREAD_STATE    0x05
-#define SYS_SET_THREAD_PRIORITY	0x06
-#define SYS_SLEEP		0x07
-#define SYS_REGISTER_INT        0x08
-#define SYS_EOI             	0x09
-#define SYS_END_PAGE_FAULT      0x0A
-#define SYS_RAISE               0x0B
-#define SYS_SET_SIG_HANDLER     0x0C
-#define SYS_DESTROY_THREAD      0x0D
-#define SYS_UNREGISTER_INT      0x0E
-#define SYS_INVALIDATE_TLB	0x0F
-#define SYS_SET_PAGE_MAPPING	0x10
-#define SYS_GET_PAGE_MAPPING	0x11
-#define SYS_GRANT_PRIVILEGE	0x12
-*/
+struct SyscallCreateIHandlerArgs
+{
+  pid_t handler;
+  int intNum;
+};
+
+struct SyscallCreateMappingArgs
+{
+  addr_t addrSpace;
+  int entry;
+  void *buffer;
+  int level;
+};
+
+struct SyscallCreatePortArgs
+{
+  pid_t port;
+};
+
+struct SyscallReadMappingArgs
+{
+  addr_t addrSpace;
+  int entry;
+  void *buffer;
+  int level;
+};
+
+struct SyscallReadTcbArgs
+{
+  tid_t tid;
+  struct Tcb *tcb;
+};
+
+struct SyscallUpdateTcbArgs
+{
+  tid_t tid;
+  struct Tcb *tcb;
+};
+
+struct SyscallUpdateMappingArgs
+{
+  addr_t addrSpace;
+  int entry;
+  void *buffer;
+  int level;
+};
+
+struct SyscallDestroyMappingArgs
+{
+  addr_t addrSpace;
+  int entry;
+  int level;
+};
+
+struct SyscallDestroyPortArgs
+{
+  pid_t port;
+};
+
+struct SyscallDestroyIHandlerArgs
+{
+  int intNum;
+};
+
+struct SyscallDestroyTcbArgs
+{
+  tid_t tid;
+};
 
 #define PM_PRESENT              0x01
 #define PM_NOT_PRESENT          0
@@ -82,15 +137,11 @@ struct RegisterState
   dword edi;
   dword esi;
   dword ebp;
-  dword esp;
   dword ebx;
   dword edx;
   dword ecx;
   dword eax;
-  word es;
-  word ds;
-  dword int_num;
-  dword error_code;
+
   dword eip;
   dword cs;
   dword eflags;
@@ -101,37 +152,21 @@ struct RegisterState
 struct ThreadInfo
 {
   tid_t tid;
-  tid_t exHandler;
+  pid_t exHandler;
   int priority;
   addr_t addr_space;
   struct RegisterState state;
 };
 
-int sys_send( tid_t recipient, void *msg, int timeout );
-int sys_receive( tid_t sender, void *buf, int timeout );
-int __pause( void );
-int sys_set_thread_state( unsigned int state );
-int sys_set_thread_priority( unsigned int priority );
-
-//int sys_pause_thread( tid_t tid );
-//int sys_start_thread( tid_t tid );
-void __yield( void );
-int sys_get_thread_info( tid_t tid, struct ThreadInfo *info );
-int sys_register_int( int int_num );
-int sys_unregister_int( int int_num );
-tid_t sys_create_thread( void *entry, void *addr_space,
-                       void *user_stack, tid_t exhandler );
-int sys_set_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid);
-int sys_get_page_mapping( struct PageMapping *mappings, size_t len, tid_t tid);
-void sys_exit( int status );
-int __sleep( int msecs );
-int sys_sleep( int msecs, tid_t tid );
-int sys_eoi( int irqNum );
-int sys_end_page_fault( tid_t tid );
-int sys_raise( int signal, int arg );
-int sys_set_sig_handler( void *handler );
-int sys_destroy_thread( tid_t tid );
-int sys_invalidate_tlb( void );
-int sys_grant_privilege( int privilege, tid_t tid );
+void sys_exit(int code);
+int sys_send(pid_t out_port, pid_t recipient, const int args[5], int block);
+int sys_receive(pid_t in_port, pid_t *sender, int args[5], int block);
+int sys_create(int resource, void *arg);
+int sys_read(int resource, void *arg);
+int sys_update(int resource, void *arg);
+int sys_destroy(int resource, void *arg);
+int sys_rpc(pid_t client, pid_t server, const int in_args[5],
+            int out_args[5], int block);
+int sys_wait(unsigned int timeout);
 
 #endif /* OS_SYSCALLS */

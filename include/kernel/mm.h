@@ -9,37 +9,37 @@
 /* FIXME: Changing any of these values may require changing
    the asm code */
 
-#define BOOTSTRAP_VSTART    	0x1000000u
-#define BOOTSTRAP_START     	0x1000000u
+#define BOOTSTRAP_VSTART    	0x1000000
+#define BOOTSTRAP_START     	0x1000000
 
 #define KERNEL_VSTART       	((addr_t)&kVirtStart)
 #define PHYSMEM_START       	((addr_t)&VPhysMemStart)
 #define KERNEL_START        	((addr_t)&kPhysStart)
 #define RESD_PHYSMEM	    	KERNEL_START
 
-#define KVIRT_TO_PHYS(x)	(((u32)x) - (KERNEL_VSTART-KERNEL_START))
+#define KVIRT_TO_PHYS(x)	((x) - (KERNEL_VSTART-KERNEL_START))
 
 /* FIXME: Changing any of these values may require changing the
    asm code. */
 
-#define TEMP_PAGEADDR           (PHYSMEM_START + 0xC0000u)
+#define TEMP_PAGEADDR           (PHYSMEM_START + 0xC0000)
 #define LAPIC_VADDR             (TEMP_PAGEADDR + PAGE_SIZE)
 #define KERNEL_VARIABLES	(LAPIC_VADDR + PAGE_SIZE)
 
 #define KERNEL_CLOCK		KERNEL_VARIABLES
 
-#define INVALID_VADDR       	0xFFFFFFFFu
-#define INVALID_ADDR        	0xFFFFFFFFu
+#define INVALID_VADDR       	((addr_t)0xFFFFFFFF)
+#define INVALID_ADDR        	((addr_t)0xFFFFFFFF)
 
 /// Aligns an address to the next page boundary (if not already aligned)
 #define PAGE_ALIGN(addr)    ALIGN(PAGE_SIZE, addr)
 
 /// Aligns an address to the next boundary (if not already aligned)
 #define ALIGN(mod, addr)    (((addr == ALIGN_DOWN(mod, addr)) ? (addr_t)addr : \
-                               ((addr_t)(((u32)ALIGN_DOWN(mod, addr)) + mod)) ))
+                               ((addr_t)((ALIGN_DOWN(mod, addr)) + mod)) ))
 
 /// Aligns an address to the previous boundary (if not already aligned)
-#define ALIGN_DOWN(mod, addr) ((addr_t)( (u32)addr & ~(mod - 1) ))
+#define ALIGN_DOWN(mod, addr) ((addr_t)( addr & ~(mod - 1) ))
 
 /// Temporarily maps a physical page into the current address space
 #define mapTemp( phys ) kMapPage((addr_t)(TEMP_PAGEADDR), phys, PAGING_RW)

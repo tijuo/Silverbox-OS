@@ -4,7 +4,24 @@
 #include <oslib.h>
 #include <kernel/thread.h>
 
-HOT(int sendMessage( TCB *tcb, tid_t recipient, void *msg, unsigned int timeout ));
-HOT(int receiveMessage( TCB *tcb, tid_t sender, void *buf, unsigned int timeout ));
+#define MAX_PORTS   1024
+
+struct Port
+{
+  tid_t owner, sendWaitTail;
+};
+
+struct PortPair
+{
+  pid_t remote, local;
+};
+
+struct Port portTable[MAX_PORTS];
+
+#define getPort(pid)   ((pid == NULL_PID || pid >= MAX_PORTS) ? NULL : (&portTable[pid]))
+#define GET_PID(port)  (port == NULL ? NULL_PID : (pid_t)(port - portTable))
+
+HOT(int sendMessage(TCB *tcb, struct PortPair portPair, int block, int args[5]));
+HOT(int receiveMessage(TCB *tcb, struct PortPair portPair, int block));
 
 #endif /* MESSAGE */

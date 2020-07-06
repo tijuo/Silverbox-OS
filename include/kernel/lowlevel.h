@@ -53,7 +53,7 @@
 #define FP_SEG(addr)    (((addr_t)addr & 0xF0000u) >> 4)
 #define FP_OFF(addr)    ((addr_t)addr & 0xFFFFu)
 
-#define IRQ0            0x20u
+#define IRQ0            0x20
 #define IRQ1            (IRQ0 + 1)
 #define IRQ2            (IRQ0 + 2)
 #define IRQ3            (IRQ0 + 3)
@@ -61,7 +61,7 @@
 #define IRQ5            (IRQ0 + 5)
 #define IRQ6            (IRQ0 + 6)
 #define IRQ7            (IRQ0 + 7)
-#define IRQ8            0x28u
+#define IRQ8            0x28
 #define IRQ9            (IRQ8 + 1)
 #define IRQ10           (IRQ8 + 2)
 #define IRQ11           (IRQ8 + 3)
@@ -124,9 +124,8 @@ typedef union
 {
   struct
   {
-    dword edi, esi, ebp, esp, ebx, edx, ecx, eax;
-    dword es, ds;
-    dword intNum, errorCode, eip, cs, eflags, userEsp, userSS;
+    dword edi, esi, ebp, ebx, edx, ecx, eax;
+    dword eip, cs, eflags, userEsp, userSS;
   } user;
   struct
   {
@@ -235,6 +234,7 @@ extern const unsigned int initKrnlPDir;
 extern const unsigned int initServStack;
 extern const unsigned int idleStack;
 extern const unsigned int kernelStack;
+extern const unsigned int irqStack;
 extern const unsigned int kernelVars;
 extern const unsigned int tssEsp0;
 extern const unsigned int kVirtToPhys;
@@ -244,4 +244,5 @@ extern const unsigned int ioPermBitmap;
 
 extern const size_t idleStackLen;
 extern const size_t kernelStackLen;
+extern const size_t irqStackLen;
 #endif /* LOWLEVEL_H */

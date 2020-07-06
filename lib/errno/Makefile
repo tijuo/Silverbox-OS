@@ -9,7 +9,3 @@ include ../../vars.mk
 
 clean:
 	rm -f *.o
-
-# DO NOT DELETE
-
-errno.o: /home/tiju/Silverbox-OS/include/errno.h

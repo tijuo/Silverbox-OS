@@ -4,6 +4,7 @@
 #ifdef DEBUG
 
 #include <kernel/mm.h>
+#include <kernel/thread.h>
 #define  VIDMEM_START   0xB8000u
 
 #define RET_MSG(ret, msg)	{ kprintf("<'%s' %s: %d> Ret: %d. %s\n", \
@@ -28,8 +29,8 @@ void kprintf( const char *str, ... );
 void printAssertMsg(const char *exp, const char *file, const char *func, int line);
 void setBadAssertHlt( bool value );
 void setVideoLowMem( bool value );
-void dump_regs( const TCB *thread );
-void dump_state( const ExecutionState *state );
+void dump_regs( const TCB *thread, const ExecutionState *state, int intNum, int errorCode );
+void dump_state( const ExecutionState *state, int intNum, int errorCode );
 
 /*
 char *_toHexString(unsigned int num);

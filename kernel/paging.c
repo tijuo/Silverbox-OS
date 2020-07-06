@@ -71,6 +71,11 @@ int writePmapEntry(addr_t pbase, int entry, void *buffer)
   return poke(pbase+sizeof(pmap_t)*entry, buffer, 4);
 }
 
+#define _readPTE(virt)  _readPTE2(virt, PAGETAB)
+#define _readPTE2(virt, base) *((pmap_t *)(base + ((int)(virt)) >> 10))
+#define _writePTE(virt, x) _writePTE2(virt, x, PAGETAB)
+#define _writePTE2(virt, x, base)  *((pmap_t *)(base + ((int)(virt)) >> 10)) = x
+
 /**
   Flushes the entire TLB by reloading the CR3 register.
 
@@ -101,7 +106,9 @@ inline void invalidate_page( addr_t virt )
 
   @param entryNum The index of the PDE in the page directory
   @param pde The PDE to be read.
-  @param pdir The physical address of the page directory.
+  @param pdir The physical address of the page directory. If
+         NULL_PADDR, then use the physical address of the current
+         page directory in register CR3.
   @return 0 on success. -1 on failure.
 */
 
@@ -124,7 +131,9 @@ static int readPDE( unsigned entryNum, pde_t *pde, addr_t pdir )
 
   @param virt The virtual address for which the PTE represents.
   @param pte The PTE to be read.
-  @param pdir The physical address of the page directory.
+  @param pdir The physical address of the page directory. If
+         NULL_PADDR, then use the physical address of the current
+         page directory in register CR3.
   @return 0 on success. -1 on failure.
 */
 
@@ -193,6 +202,9 @@ int peek( addr_t phys, void *buffer, size_t bytes )
 static int accessPhys( addr_t phys, void *buffer, size_t len, bool readPhys )
 {
   size_t offset, bytes;
+
+  if(phys == NULL_PADDR)
+    return -1;
 
   for( size_t i=0; len; phys += bytes, i += bytes, len -= bytes )
   {
@@ -310,7 +322,7 @@ static int accessMem( addr_t address, size_t len, void *buffer, addr_t pdir, boo
 
 int pokeVirt( addr_t address, size_t len, void *buffer, addr_t pdir )
 {
-  if( pdir == (getCR3() & ~(PAGE_SIZE-1)) )
+  if( pdir == (addr_t)(getCR3() & ~(PAGE_SIZE-1)) )
   {
     memcpy( (void *)address, buffer, len );
     return 0;
@@ -335,7 +347,7 @@ int pokeVirt( addr_t address, size_t len, void *buffer, addr_t pdir )
 
 int peekVirt( addr_t address, size_t len, void *buffer, addr_t pdir )
 {
-  if( pdir == (getCR3() & ~(PAGE_SIZE-1)) )
+  if( pdir == (addr_t)(getCR3() & ~(PAGE_SIZE-1)) )
   {
     memcpy( buffer, (void *)address, len );
     return 0;
@@ -368,8 +380,8 @@ int kMapPage( addr_t virt, addr_t phys, u32 flags )
     return -1;
   }
 
-  assert( phys == (phys & ~0xFFFu) );
-  assert( virt == (virt & ~0xFFFu) );
+  assert( phys == (phys & ~0xFFF) );
+  assert( virt == (virt & ~0xFFF) );
 
   pdePtr = ADDR_TO_PDE( virt );
   ptePtr = ADDR_TO_PTE( virt );
@@ -405,7 +417,7 @@ int kUnmapPage( addr_t virt, addr_t *phys )
   pte_t *ptePtr;
   pde_t *pdePtr;
 
-  assert( virt == (virt & ~0xFFFu) );
+  assert( virt == (virt & ~0xFFF) );
 
   ptePtr = ADDR_TO_PTE( virt );
   pdePtr = ADDR_TO_PDE( virt );

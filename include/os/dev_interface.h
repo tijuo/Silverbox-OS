@@ -17,33 +17,11 @@
 #define DEVICE_NOMORE		0
 #define DEVICE_SUCCESS		0
 
-struct DeviceMsg
-{
-  char msg_type;
-  unsigned char deviceNum;
-
-  union
-  {
-    size_t length;
-    size_t count;
-    size_t blocks;
-    size_t args_len;
-  };
-
-  union
-  {
-    unsigned offset;
-    unsigned command;
-  };
-  unsigned char data[];
-};
-
-// Non-timeout version
-int _deviceRead( tid_t tid, unsigned char device, unsigned offset, size_t num_blks,
-                size_t blk_len, void *buffer );
-int deviceRead( tid_t tid, unsigned char device, unsigned offset, size_t num_blks,
-                size_t blk_len, void *buffer );
-int deviceWrite( tid_t tid, unsigned char device, unsigned offset, size_t num_blks, size_t blk_size, void *buffer );
-int deviceIoctl( tid_t tid, unsigned char device, int command, void *args, size_t args_len);
+int deviceRead(tid_t tid, unsigned char device, unsigned offset,
+                size_t num_blks, shmid_t shmid, size_t *blocks_read);
+int deviceWrite(tid_t tid, unsigned char device, unsigned offset,
+                size_t num_blks, shmid_t shmid, size_t *blocks_written);
+int deviceIoctl(tid_t tid, unsigned char device, short int command,
+                void *in_buffer, size_t args_len, void *out_buffer);
 
 #endif /* DEVICE_INTERFACE */

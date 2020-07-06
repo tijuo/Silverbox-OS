@@ -41,7 +41,9 @@ int fputc(int c, FILE *stream)
     return c;
   }
   else
+  {
     ; // put the raw char
+  }
 /*
   if( stream == stdout || stream == stderr )
   {

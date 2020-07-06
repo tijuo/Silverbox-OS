@@ -8,7 +8,7 @@
 /* Initializes an address space and its tables. The physical
    address is the address of the page directory. */
 
-void init_addr_space(struct AddrSpace *addr_space, void *phys_addr)
+void init_addr_space(struct AddrSpace *addr_space, addr_t phys_addr)
 {
   struct AddrRegion region1 = { { 0, 0xC0000 }, { 0, 0xC0000 }, REG_RESD };
   struct AddrRegion region2 = { { 0xFF400000, 0xC00000 }, { 0, 0 }, REG_RESD };
@@ -23,7 +23,7 @@ void init_addr_space(struct AddrSpace *addr_space, void *phys_addr)
   attach_mem_region(addr_space, &region1);
   attach_mem_region(addr_space, &region2);
   set_ptable_status(addr_space, (void *)0, true);
-  set_ptable_status(addr_space, (void *)0xFF400000, true);
+  set_ptable_status(addr_space, (void *)0x80000000, true);
   set_ptable_status(addr_space, (void *)0xFF800000, true);
   set_ptable_status(addr_space, (void *)0xFFC00000, true);
 #if 0
@@ -100,7 +100,7 @@ struct AddrSpace *removeAddrSpace(void *phys_addr)
 int set_ptable_status(struct AddrSpace *addr_space, void *virt, bool status)
 {
   if( addr_space == NULL )
-    return -1;
+    addr_space = &initsrv_pool;
 
   if( status == true )
     setBitmapBit(addr_space->bitmap, (unsigned)virt / PTABLE_SIZE);
@@ -115,7 +115,7 @@ int set_ptable_status(struct AddrSpace *addr_space, void *virt, bool status)
 bool get_ptable_status(struct AddrSpace *addr_space, void *virt)
 {
   if( addr_space == NULL )
-    return false;
+    addr_space = &initsrv_pool;
 
   return bitIsSet(addr_space->bitmap, (unsigned)virt / PTABLE_SIZE);
 }
@@ -201,6 +201,9 @@ int attach_mem_region(struct AddrSpace *addr_space, struct AddrRegion *region)
 {
   struct AddrRegion *tRegion;
 
+  if(addr_space == NULL)
+    addr_space = &initsrv_pool;
+
   for(int i=0; i < sbArrayCount(&addr_space->memoryRegions); i++)
   {
     if( sbArrayElemAt(&addr_space->memoryRegions, i, (void **)&tRegion, NULL) != 0 )
@@ -222,6 +225,9 @@ int attach_mem_region(struct AddrSpace *addr_space, struct AddrRegion *region)
 bool find_address(struct AddrSpace *addr_space, void *addr)
 {
   struct AddrRegion *addr_region;
+
+  if(addr_space == NULL)
+    addr_space = &initsrv_pool;
 
   for( int i=0; i < sbArrayCount(&addr_space->memoryRegions); i++ )
   {
@@ -255,6 +261,9 @@ bool find_address(void *aspace_phys, void *addr)
 bool region_overlaps(struct AddrSpace *addr_space, struct MemRegion *region)
 {
   struct AddrRegion *addr_region;
+
+  if(addr_space == NULL)
+    addr_space = &initsrv_pool;
 
   if( region == NULL )
     return false;

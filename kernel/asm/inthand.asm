@@ -9,122 +9,117 @@ IMPORT timerInt
 IMPORT _syscall
 IMPORT handleIRQ
 
-enterExceptionHandler:
-    SAVE_STATE
-    call handleCPUException
-    RESTORE_STATE
-    add  esp, 8
-    iret
+%macro ECODE_CPU_EX_HANDLER 1
+  push ecx
+  mov ecx, [esp+4]
+  mov [esp+4], eax
+  mov [esp-6*4], ecx  ; Move error code out of the way
+  ECODE_SAVE_STATE
+  sub  esp, 4
+  push %1
+
+  call handleCPUException
+
+  add esp, 8
+  RESTORE_STATE
+  iret
+%endmacro
+
+%macro CPU_EX_HANDLER 1
+  SAVE_STATE
+  push 0
+  push %1
+
+  call handleCPUException
+
+  add esp, 8
+  RESTORE_STATE
+  iret
+%endmacro
+
+%macro INVALID_EX_HANDLER 1
+  SAVE_STATE
+  push 0xBAD1
+  push %1
+
+  call handleCPUException
+
+  add esp, 8
+  RESTORE_STATE
+  iret
+%endmacro
+
+%macro IRQ_HANDLER 1
+  SAVE_STATE
+  push %1
+
+  call handleIRQ
+
+  add esp, 4
+  RESTORE_STATE
+  iret
+%endmacro
+
 
 EXPORT intHandler0
-	push dword	0
-	push dword	0
-	jmp     enterExceptionHandler
+  CPU_EX_HANDLER 0
 
 EXPORT intHandler1
-	push dword	0
-	push dword	1
-	jmp     enterExceptionHandler
+  CPU_EX_HANDLER 1
 
 EXPORT intHandler2
-	push dword	0
-	push dword	2
-	jmp     enterExceptionHandler
+  CPU_EX_HANDLER 2
 
 EXPORT intHandler3
-	push dword	0
-	push dword	3
-	jmp     enterExceptionHandler
+  CPU_EX_HANDLER 3
 
 EXPORT intHandler4
-    push dword    0
-    push dword    4
-    jmp     enterExceptionHandler
+  CPU_EX_HANDLER 4
 
 EXPORT intHandler5
-    push dword    0
-    push dword    5
-    jmp     enterExceptionHandler
+  CPU_EX_HANDLER 5
 
 EXPORT intHandler6
-    push dword    0
-    push dword    6
-    jmp     enterExceptionHandler
+  CPU_EX_HANDLER 6
 
 EXPORT intHandler7
-    push dword    0
-    push dword    7
-	jmp     enterExceptionHandler
+  CPU_EX_HANDLER 7
 
 EXPORT intHandler8
-    push dword    8
-	jmp     enterExceptionHandler
+  ECODE_CPU_EX_HANDLER 8
 
 EXPORT intHandler9
-    push dword    0
-    push dword    9
-	jmp     enterExceptionHandler
+  CPU_EX_HANDLER 9
 
 EXPORT intHandler10
-    push dword    10
-	jmp     enterExceptionHandler
+  ECODE_CPU_EX_HANDLER 10
 
 EXPORT intHandler11
-    push dword    11
-	jmp     enterExceptionHandler
+  ECODE_CPU_EX_HANDLER 11
 
 EXPORT intHandler12
-    push dword    12
-	jmp     enterExceptionHandler
+  ECODE_CPU_EX_HANDLER 12
 
 EXPORT intHandler13
-    push dword   	13
-	jmp     enterExceptionHandler
+  ECODE_CPU_EX_HANDLER 13
 
 EXPORT intHandler14
-    push dword    14
-	jmp     enterExceptionHandler
+  ECODE_CPU_EX_HANDLER 14
 
 EXPORT intHandler16
-
-    push dword    0
-    push dword    16
-	jmp     enterExceptionHandler
+  CPU_EX_HANDLER 16
 
 EXPORT intHandler17
-    push dword    17
-	jmp     enterExceptionHandler
+  ECODE_CPU_EX_HANDLER 17
 
 EXPORT intHandler18
-
-    push dword    0
-    push dword    18
-	jmp     enterExceptionHandler
+  CPU_EX_HANDLER 18
 
 EXPORT intHandler19
-    push dword    0
-    push dword    19
-	jmp     enterExceptionHandler
+  ECODE_CPU_EX_HANDLER 19
 
 EXPORT invalidIntHandler
-	push dword	0
-	push dword	0xBAD1
-    jmp     enterExceptionHandler
-
-EXPORT spuriousIntHandler
-	push dword	0
-	push dword	39
-    jmp     enterExceptionHandler
-
-enterIrqHandler:
-    SAVE_STATE
-
-    call handleIRQ
-
-    RESTORE_STATE
-    add esp, 8
-
-    iret
+  INVALID_EX_HANDLER 0
 
 ;EXPORT irq0Handler
 ;        mov     dword [kernelStack-4], 0x20
@@ -134,39 +129,25 @@ enterIrqHandler:
 ;    jmp enterIrqHandler
 
 EXPORT irq1Handler
-    push dword 0
-    push dword 0x21
-    jmp enterIrqHandler
+    IRQ_HANDLER 1
 
 EXPORT irq2Handler
-    push dword 0
-    push dword 0x22
-    jmp enterIrqHandler
+    IRQ_HANDLER 2
 
 EXPORT irq3Handler
-    push dword 0
-    push dword 0x23
-    jmp enterIrqHandler
+    IRQ_HANDLER 3
 
 EXPORT irq4Handler
-    push dword 0
-    push dword 0x24
-    jmp enterIrqHandler
+    IRQ_HANDLER 4
 
 EXPORT irq5Handler
-    push dword 0
-    push dword 0x25
-    jmp enterIrqHandler
+    IRQ_HANDLER 5
 
 EXPORT irq6Handler
-    push dword 0
-    push dword 0x26
-    jmp enterIrqHandler
+    IRQ_HANDLER 6
 
 EXPORT irq7Handler
-    push dword 0
-    push dword 0x27
-    jmp enterIrqHandler
+    IRQ_HANDLER 7
 
 EXPORT irq8Handler
     inc dword [0x91000]
@@ -187,57 +168,31 @@ EXPORT irq8Handler
     iret
 
 EXPORT irq9Handler
-    push dword 0
-    push dword 0x29
-    jmp enterIrqHandler
+    IRQ_HANDLER 9
 
 EXPORT irq10Handler
-    push dword 0
-    push dword 0x2A
-    jmp enterIrqHandler
+    IRQ_HANDLER 10
 
 EXPORT irq11Handler
-    push dword 0
-    push dword 0x2B
-    jmp enterIrqHandler
+    IRQ_HANDLER 11
 
 EXPORT irq12Handler
-    push dword 0
-    push dword 0x2C
-    jmp enterIrqHandler
+    IRQ_HANDLER 12
 
 EXPORT irq13Handler
-    push dword 0
-    push dword 0x2D
-    jmp enterIrqHandler
+    IRQ_HANDLER 13
 
 EXPORT irq14Handler
-    push dword 0
-    push dword 0x2E
-    jmp enterIrqHandler
+    IRQ_HANDLER 14
 
 EXPORT irq15Handler
-    push dword 0
-    push dword 0x2F
-    jmp enterIrqHandler
+    IRQ_HANDLER 15
 
 EXPORT timerHandler
-    push dword 0
-    push dword 0x20
-    SAVE_STATE
-    call timerInt
-    RESTORE_STATE
-	add  esp, 8
-    iret
+    IRQ_HANDLER 0
 
 EXPORT syscallHandler
-    push dword 0
-    push dword 0x40
     SAVE_STATE
-
     call _syscall
-
     RESTORE_STATE
-    add  esp, 8
-
     iret

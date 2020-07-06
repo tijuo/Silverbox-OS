@@ -46,7 +46,7 @@ struct AddrRegion
 
 struct AddrSpace
 {
-  void *phys_addr;
+  addr_t phys_addr;
   SBArray memoryRegions;
   bitmap_t bitmap[NUM_PTABLES / 8];
 };
@@ -67,7 +67,7 @@ struct ListType addr_space_list;
 
 //SBAssocArray addrSpaces; // phys_addr -> struct AddrSpace
 
-void init_addr_space(struct AddrSpace *addr_space, void *phys_addr);
+void init_addr_space(struct AddrSpace *addr_space, addr_t phys_addr);
 void delete_addr_space(struct AddrSpace *addr_space);
 /*
 int addAddrSpace(struct AddrSpace *addrSpace);
