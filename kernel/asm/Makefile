@@ -11,5 +11,5 @@ all:	$(OBJ)
 clean:
 	rm -f *.o
 
-%.o: %.asm $(DEPS)
+%.o: %.asm $(INC_DIR)
 	$(AS_I) $(ASIFLAGS) $< -o $@

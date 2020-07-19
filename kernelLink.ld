@@ -2,10 +2,10 @@ OUTPUT_FORMAT("elf32-i386")
 ENTRY(start)
 SECTIONS
 {
-  kPhysCode  = 0x00400000;
-  kPhysStart = 0x00400000;
-  kVirtCode  = 0xF0000000;
-  kVirtStart = 0xF0000000;
+  kPhysCode  = 0x00100000;
+  kPhysStart = 0x00100000;
+  kVirtCode  = 0x80000000;
+  kVirtStart = 0x80000000;
 
   kVirtToPhys = kPhysStart - kVirtStart;
   kPhysToVirt = kVirtStart - kPhysStart;
@@ -57,4 +57,6 @@ SECTIONS
 
   kEnd = ALIGN(4096);
   kSize = kEnd - kCode;
+  
+  kVirtPageStack = .;
 }

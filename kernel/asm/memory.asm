@@ -1,3 +1,4 @@
+[BITS 32]
 %include "asm/asm.inc"
 
 EXPORT memset

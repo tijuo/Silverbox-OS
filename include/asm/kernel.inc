@@ -4,7 +4,7 @@
 %include "asm/asm.inc"
 
 %define KERNEL_VIRT_START       0x80000000
-%define KERNEL_PHYS_START       0x00400000
+%define KERNEL_PHYS_START       0x00100000
 %define KERNEL_CODE_SEL		0x08
 %define KERNEL_DATA_SEL		0x10
 %define USER_CODE_SEL		(0x18 | 0x03)
@@ -12,7 +12,8 @@
 %define KERNEL_TSS_SEL		0x28
 %define BOOT_CODE_SEL		0x30
 %define BOOT_DATA_SEL		0x38
-%define KERNEL_RESD_TABLES	4
+%define KERNEL_RESD_TABLES	4	; for page tables/directory, temporary page tables 1 & 2, and physical memory mapping
+%define PAGE_SIZE		4096
 
 %define KERNEL_IDT_LEN		0x800
 %define KERNEL_GDT_LEN		0x40
@@ -51,6 +52,13 @@ IMPORT VPhysMemStart
 ;bootCodeSel equ 0x30
 ;bootDataSel equ 0x38
 ;kResdTables equ 4
+
+kBootStackTop equ 0xA0000
+kPageDir      equ 0x1000
+idleStackTop  equ 0x1000
+kLowPageTab   equ 0x2000
+kPageTab      equ 0x3000
+k1to1PageTab  equ 0x4000
 
 ;_kernelIDTLen equ 0x800
 ;_kernelGDTLen equ 0x40

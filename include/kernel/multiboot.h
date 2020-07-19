@@ -30,32 +30,32 @@
 /* The Multiboot header.  */
 typedef struct multiboot_header
 {
-  unsigned long magic;
-  unsigned long flags;
-  unsigned long checksum;
-  unsigned long header_addr;
-  unsigned long load_addr;
-  unsigned long load_end_addr;
-  unsigned long bss_end_addr;
-  unsigned long entry_addr;
+  unsigned int magic;
+  unsigned int flags;
+  unsigned int checksum;
+  unsigned int header_addr;
+  unsigned int load_addr;
+  unsigned int load_end_addr;
+  unsigned int bss_end_addr;
+  unsigned int entry_addr;
 } multiboot_header_t;
 
 /* The symbol table for a.out.  */
 typedef struct aout_symbol_table
 {
-  unsigned long tabsize;
-  unsigned long strsize;
-  unsigned long addr;
-  unsigned long reserved;
+  unsigned int tabsize;
+  unsigned int strsize;
+  unsigned int addr;
+  unsigned int reserved;
 } aout_symbol_table_t;
 
 /* The section header table for ELF.  */
 typedef struct elf_section_header_table
 {
-  unsigned long num;
-  unsigned long size;
-  unsigned long addr;
-  unsigned long shndx;
+  unsigned int num;
+  unsigned int size;
+  unsigned int addr;
+  unsigned int shndx;
 } elf_section_header_table_t;
 
 #define MBI_FLAGS_MEM            (1u << 0)  /* 'mem_*' fields are valid */
@@ -74,76 +74,79 @@ typedef struct elf_section_header_table
 /* The Multiboot information.  */
 typedef struct multiboot_info
 {
-  unsigned long flags;
-  unsigned long mem_lower;
-  unsigned long mem_upper;
-  unsigned long boot_device;
-  unsigned long cmdline;
-  unsigned long mods_count;
-  unsigned long mods_addr;
+  unsigned int flags;
+  unsigned int mem_lower;
+  unsigned int mem_upper;
+  unsigned int boot_device;
+  unsigned int cmdline;
+  unsigned int mods_count;
+  unsigned int mods_addr;
   union Tables
   {
     aout_symbol_table_t symtab;
     elf_section_header_table_t shdr;
   } syms;
-  unsigned long mmap_length;
-  unsigned long mmap_addr;
-  unsigned long drives_length;
-  unsigned long drives_addr;
-  unsigned long config_table;
-  unsigned long boot_loader_name;
-  unsigned long apm_table;
-  unsigned long vbe_control_info;
-  unsigned long vbe_mode_info;
-  unsigned short vbe_mode;
-  unsigned short vbe_inferace_seg;
-  unsigned short vbe_interface_off;
-  unsigned short vbe_interface_len;
+  unsigned int mmap_length;
+  unsigned int mmap_addr;
+  unsigned int drives_length;
+  unsigned int drives_addr;
+  unsigned int config_table;
+  unsigned int boot_loader_name;
+  unsigned int apm_table;
+  unsigned int vbe_control_info;
+  unsigned int vbe_mode_info;
+  unsigned short int vbe_mode;
+  unsigned short int vbe_inferace_seg;
+  unsigned short int vbe_interface_off;
+  unsigned short int vbe_interface_len;
 } multiboot_info_t;
 
 /* The module structure.  */
 typedef struct module
 {
-  unsigned long mod_start;
-  unsigned long mod_end;
-  unsigned long string;
-  unsigned long reserved;
+  unsigned int mod_start;
+  unsigned int mod_end;
+  unsigned int string;
+  unsigned int reserved;
 } module_t;
 
-/* The memory map. Be careful that the offset 0 is base_addr_low
-   but no size.  */
+#define MBI_TYPE_AVAIL  1   // Available RAM
+#define MBI_TYPE_ACPI   3   // ACPI tables
+#define MBI_TYPE_RESD   4   // Reserved RAM that must be preserved upon hibernation
+#define MBI_TYPE_BAD    5   // Defective RAM
+
 typedef struct memory_map
 {
-  unsigned long size;
-  unsigned long base_addr_low;
-  unsigned long base_addr_high;
-  unsigned long length_low;
-  unsigned long length_high;
-  unsigned long type;
+  unsigned int size; // doesn't include itself
+  unsigned int base_addr_low;
+  unsigned int base_addr_high;
+  unsigned int length_low;
+  unsigned int length_high;
+  unsigned int type;
 } memory_map_t;
 
 typedef struct apm_table
 {
-  unsigned short version;
-  unsigned short cseg;
-  unsigned long  offset;
-  unsigned short cseg_16;
-  unsigned short dseg;
-  unsigned short flags;
-  unsigned short cseg_len;
-  unsigned short cseg_16_len;
-  unsigned short dseg_len;
+  unsigned short int version;
+  unsigned short int cseg;
+  unsigned int offset;
+  unsigned short int cseg_16;
+  unsigned short int dseg;
+  unsigned short int flags;
+  unsigned short int cseg_len;
+  unsigned short int cseg_16_len;
+  unsigned short int dseg_len;
 } apm_table_t;
 
-struct drive_info
+typedef struct drive_info
 {
-  unsigned long size;
+  unsigned int size;
   unsigned char drive_number;
   unsigned char drive_mode;
-  unsigned short drive_cylinders;
+  unsigned short int drive_cylinders;
   unsigned char drive_heads;
   unsigned char drive_sectors;
-  unsigned short drive_ports[];
+  unsigned short int drive_ports[];
 } drive_info_t;
 
 #endif

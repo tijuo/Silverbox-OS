@@ -1,8 +1,9 @@
 #ifndef PAGING_H
 #define PAGING_H
 
-#define PAGE_SIZE		0x1000
-#define TABLE_SIZE		0x400000
+#define PAGE_SIZE		      0x1000
+#define LARGE_PAGE_SIZE   0x400000
+#define PAGE_TABLE_SIZE	  0x400000
 
 #define PAGETAB			0xFFC00000
 #define PAGEDIR			0xFFFFF000
@@ -35,6 +36,12 @@
 #define PAGING_4KB_PAGE		0u
 #define PAGING_4MB_PAGE		(1u << 7)
 #define PAGING_GLOBAL		(1u << 8)
+
+#define PAGING_ERR_PRES		(1u << 0)
+#define PAGING_ERR_READ		0u
+#define PAGING_ERR_WRITE	(1u << 1)
+#define PAGING_ERR_SUPERVISOR	0u
+#define PAGING_ERR_USER		(1u << 2)
 
 struct CR3_Struct
 {
@@ -109,13 +116,13 @@ typedef struct PageDirEntry pde_t;
 /// Represents an x86 page directory
 
 typedef struct {
-  pde_t pageTables[1024];
+  pde_t entries[1024];
 } __PACKED__ pdir_t;
 
 /// Represents an x86 page table
 
 typedef struct {
-  pte_t pages[1024];
+  pte_t entries[1024];
 } __PACKED__ ptab_t;
 
 #endif /* PAGING_H */

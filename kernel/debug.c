@@ -11,6 +11,10 @@
 #define SCREEN_HEIGHT   25
 #define SCREEN_WIDTH    80
 
+bool useLowMem;
+bool badAssertHlt;
+dword upper1, lower1, upper2, lower2;
+
 void kprintAt( const char *str, int x, int y );
 void kprintf( const char *str, ... );
 void resetScroll( void );
@@ -23,7 +27,6 @@ void putChar( char c, int x, int y );
 void dump_regs( const TCB *thread, const ExecutionState *state, int intNum, int errorCode);
 void dump_state( const ExecutionState *state, int intNum, int errorCode);
 void dump_stack( addr_t, addr_t );
-
 static const char *_digits="0123456789abcdefghijklmnopqrstuvwxyz";
 
 unsigned int sx=0, sy=1;
@@ -36,6 +39,28 @@ unsigned int sx=0, sy=1;
 /** Sets up the serial ports for printing debug messages
     (and possibly receiving commands).
 */
+
+void startTimeStamp(void)
+{
+  rdtsc(&upper1, &lower1);
+}
+
+void stopTimeStamp(void)
+{
+  rdtsc(&upper2, &lower2);
+}
+
+unsigned int getTimeDifference(void)
+{
+  if( upper1 == upper2 )
+    return (unsigned)(lower2 - lower1);
+  else if( upper2 == upper1 + 1 )
+  {
+    if( lower2 < lower1 )
+        return (0xFFFFFFFFu - lower1) + lower2;
+  }
+  return 0xFFFFFFFFu;
+}
 
 void init_serial(void)
 {
@@ -55,6 +80,7 @@ int getDebugChar(void)
 
 void putDebugChar(int ch)
 {
+    outByte(0xE9, (byte)ch); // Use E9 hack to output characters
     while (!(inByte(combase + 5) & 0x20u));
     outByte(combase, (byte) ch);
 /*
@@ -349,6 +375,7 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
     the scheduler was called.
 */
 
+CALL_COUNTER(incSchedCount)
 void incSchedCount( void )
 {
   volatile char *vidmem = ( volatile char * ) ( VIDMEM_START );
@@ -365,7 +392,7 @@ void incSchedCount( void )
   if( currentThread )
   {
     kprintAt("            ", 2, 0);
-    kprintAt( kitoa((int)GET_TID(currentThread), digits, 10), 2, 0 );
+    kprintAt( kitoa((int)currentThread->tid, digits, 10), 2, 0 );
     kprintAt( kitoa((int)currentThread->priority, digits, 10), 5, 0 );
     kprintAt( "        ", 30, 0 );
     kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10), 8, 0 );
@@ -422,7 +449,6 @@ void doNewLine( int *x, int *y )
       *y = 0;
   }
 }
-
 
 
 void _putChar( char c, int x, int y, unsigned char attrib )
@@ -497,7 +523,7 @@ void kprintf( const char *str, ... )
         case '\n':
           //doNewLine( x, y );
           putDebugChar('\r');
-         // putDebugChar('\n');
+          putDebugChar('\n');
           break;
 /*
         case '\r':
@@ -611,18 +637,19 @@ void dump_regs( const TCB *thread, const ExecutionState *execState, int intNum, 
 {
   addr_t stackFramePtr;
 
-  kprintf( "Thread: 0x%x ", thread, GET_TID(thread));
+  kprintf( "Thread: 0x%x (TID: %d) ", thread, thread->tid);
 
+/*
   if( ((addr_t)thread - (addr_t)tcbTable) % sizeof *thread == 0 &&
-      GET_TID(thread) >= INITIAL_TID && GET_TID(thread) < MAX_THREADS )
+      thread->tid >= INITIAL_TID )
   {
-    kprintf("TID: %d ", GET_TID(thread));
+    kprintf("TID: %d ", thread->tid);
   }
   else
   {
     kprintf("(invalid thread address) ");
   }
-
+*/
   if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
   {
     execState = (ExecutionState *)&thread->execState;
@@ -641,7 +668,7 @@ void dump_regs( const TCB *thread, const ExecutionState *execState, int intNum, 
   {
     __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
 
-    if( !is_readable(*(dword *)stackFramePtr, thread->cr3.base << 12) )
+    if( !is_readable(*(dword *)stackFramePtr, thread->cr3) )
     {
       kprintf("Unable to dump the stack\n");
       return;
@@ -654,6 +681,15 @@ void dump_regs( const TCB *thread, const ExecutionState *execState, int intNum, 
     stackFramePtr = (addr_t)execState->user.ebp;
   }
 
-  dump_stack(stackFramePtr, thread->cr3.base << 12);
+  dump_stack(stackFramePtr, thread->cr3);
 }
+
 #endif /* DEBUG */
+
+void abort();
+
+void abort()
+{
+  kprintf("Debug Error: abort() has been called.");
+  __asm__("hlt");
+}

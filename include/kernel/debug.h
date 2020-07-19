@@ -11,18 +11,16 @@
 				__FILE__, __func__, __LINE__, ret, msg); \
 				return ret; }
 
-#define CALL_COUNTER(ret_type, fname, arg)		ret_type fname(arg); int fname ## _counter 
-#define INC_COUNT()					__func__ _counter++
-//unsigned xVideoPos, yVideoPos;
-bool useLowMem;
-bool badAssertHlt;
+#define DECL_CALL_COUNTER(fname)		extern unsigned int fname ## _counter;
+#define CALL_COUNTER(fname)			unsigned int fname ## _counter;
+#define INC_COUNT()				__func__ _counter++
 
 void init_serial(void);
 int getDebugChar(void);
 void putDebugChar(int ch);
 
-CALL_COUNTER(void, incSchedCount, void);
-//void incSchedCount( void );
+DECL_CALL_COUNTER(incSchedCount)
+void incSchedCount( void );
 void incTimerCount( void );
 void clearScreen( void );
 void kprintf( const char *str, ... );
@@ -43,34 +41,11 @@ void _putChar( char, int, int, unsigned char );
 void printString(const char *, ...);
 void initVideo( void );
 
-static inline void rdtsc( dword *upper, dword *lower )
-{
-  asm __volatile__( "rdtsc\n" : "=a"( *lower ), "=d"( *upper ) );
-}
+#define rdtsc( upper, lower ) asm __volatile__( "rdtsc\n" : "=a"( *lower ), "=d"( *upper ) )
 
-dword upper1, lower1, upper2, lower2;
-
-static inline void startTimeStamp(void)
-{
-  rdtsc(&upper1, &lower1);
-}
-
-static inline void stopTimeStamp(void)
-{
-  rdtsc(&upper2, &lower2);
-}
-
-static inline unsigned getTimeDifference(void)
-{
-  if( upper1 == upper2 )
-    return (unsigned)(lower2 - lower1);
-  else if( upper2 == upper1 + 1 )
-  {
-    if( lower2 < lower1 )
-        return (0xFFFFFFFFu - lower1) + lower2;
-  }
-  return 0xFFFFFFFFu;
-}
+void startTimeStamp(void);
+void stopTimeStamp(void);
+unsigned int getTimeDifference(void);
 
 #define calcTime(function, ret) \
   startTimeStamp(); \

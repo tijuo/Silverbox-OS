@@ -3,34 +3,44 @@
 #include <kernel/thread.h>
 #include <kernel/memory.h>
 #include <kernel/paging.h>
+#include <kernel/error.h>
 #include <oslib.h>
+#include <string.h>
 
-static int readPDE( unsigned entryNum, pde_t *pde, addr_t pdir );
-static int readPTE( addr_t virt, pte_t *pte, addr_t pdir );
+static int readPDE( unsigned entryNum, pde_t *pde, paddr_t pdir );
+static int readPTE( addr_t virt, pte_t *pte, paddr_t pdir );
 
-int readPmapEntry(addr_t pbase, int entry, void *buffer);
-int writePmapEntry(addr_t pbase, int entry, void *buffer);
+//int readPmapEntry(paddr_t pbase, int entry, void *buffer);
+//int writePmapEntry(paddr_t pbase, int entry, void *buffer);
 
-static int accessPhys( addr_t phys, void *buffer, size_t len, bool readPhys );
-static int accessMem( addr_t address, size_t len, void *buffer, addr_t pdir,
+static int accessPhys( paddr_t phys, void *buffer, size_t len, bool readPhys );
+static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir,
     bool read );
-int pokeVirt( addr_t address, size_t len, void *buffer, addr_t pdir );
-int peekVirt( addr_t address, size_t len, void *buffer, addr_t pdir );
+/*
+int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t pdir );
+int peekVirt( addr_t address, size_t len, void *buffer, paddr_t pdir );
 
-int poke( addr_t phys, void *buffer, size_t bytes );
-int peek( addr_t phys, void *buffer, size_t bytes );
+int poke( paddr_t phys, void *buffer, size_t bytes );
+int peek( paddr_t phys, void *buffer, size_t bytes );
 
 void invalidate_tlb(void);
 void invalidate_page( addr_t virt );
 
-bool is_readable( addr_t addr, addr_t pdir );
-bool is_writable( addr_t addr, addr_t pdir );
+bool is_readable( addr_t addr, paddr_t pdir );
+bool is_writable( addr_t addr, paddr_t pdir );
+*/
+/**
+    Can data be read from some virtual address in a particular address space?
+    @param addr The virtual address to be tested.
+    @param pdir The physical address of the address space
+    @return true if address is readable. false, otherwise.
+**/
 
-bool is_readable( addr_t addr, addr_t pdir )
+bool is_readable( addr_t addr, paddr_t pdir )
 {
   pte_t pte;
 
-  if( readPTE( addr, &pte, pdir ) != 0 )
+  if( readPTE( addr, &pte, pdir ) != E_OK )
     return false;
 
   if( pte.present )
@@ -39,20 +49,25 @@ bool is_readable( addr_t addr, addr_t pdir )
     return false;
 }
 
-bool is_writable( addr_t addr, addr_t pdir )
+/**
+    Can data be written to some virtual address in a particular address space?
+    @param addr The virtual address to be tested.
+    @param pdir The physical address of the address space
+    @return true if address is writable. false, otherwise.
+**/
+
+bool is_writable( addr_t addr, paddr_t pdir )
 {
   pte_t pte;
   pde_t pde;
 
-  assert(addr != INVALID_VADDR);
-
-  if( readPDE( PDE_INDEX(addr), &pde, pdir ) != 0 )
+  if( readPDE( PDE_INDEX(addr), &pde, pdir ) != E_OK )
     return false;
 
   if( !pde.rwPriv )
     return false;
 
-  if( readPTE( addr, &pte, pdir ) != 0 )
+  if( readPTE( addr, &pte, pdir ) != E_OK )
     return false;
 
   if( pte.present && pte.rwPriv )
@@ -61,14 +76,38 @@ bool is_writable( addr_t addr, addr_t pdir )
     return false;
 }
 
-int readPmapEntry(addr_t pbase, int entry, void *buffer)
+/**
+  Read an arbitrary entry from a generic page map in some address space.
+  (A page directory is considered to be a level 2 page map, a page table
+   is a level 1 page map.)
+  @param pbase The base physical address of the page map
+  @param entry The page map entry to be read.
+  @param buffer The memory buffer to which the entry data will be written.
+  @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the
+          PDE corresponding to the virtual address hasn't been mapped
+          yet. E_INVALID_ARG if pdir is NULL_PADDR.
+*/
+
+int readPmapEntry(paddr_t pbase, int entry, void *buffer)
 {
-  return peek(pbase+sizeof(pmap_t)*entry, buffer, 4);
+  return peek(pbase+sizeof(pmap_t)*entry, buffer, sizeof(pmap_t));
 }
 
-int writePmapEntry(addr_t pbase, int entry, void *buffer)
+/**
+  Write an arbitrary entry to a generic page map in some address space.
+  (A page directory is considered to be a level 2 page map, a page table
+   is a level 1 page map.)
+  @param pbase The base physical address of the page map
+  @param entry The page map entry to be written.
+  @param buffer The memory buffer from which the entry data will be read.
+  @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the
+          PDE corresponding to the virtual address hasn't been mapped
+          yet. E_INVALID_ARG if pdir is NULL_PADDR.
+*/
+
+int writePmapEntry(paddr_t pbase, int entry, void *buffer)
 {
-  return poke(pbase+sizeof(pmap_t)*entry, buffer, 4);
+  return poke(pbase+sizeof(pmap_t)*entry, buffer, sizeof(pmap_t));
 }
 
 #define _readPTE(virt)  _readPTE2(virt, PAGETAB)
@@ -83,7 +122,7 @@ int writePmapEntry(addr_t pbase, int entry, void *buffer)
   If only a few entries need to be flushed, use invalidate_page().
 */
 
-inline void invalidate_tlb(void)
+void invalidate_tlb(void)
 {
   __asm__ __volatile__("movl %%cr3, %%eax\n"
           "movl %%eax, %%cr3\n" ::: "eax", "memory");
@@ -96,7 +135,7 @@ inline void invalidate_tlb(void)
   This is faster than reload_cr3() for flushing a few entries.
 */
 
-inline void invalidate_page( addr_t virt )
+void invalidate_page( addr_t virt )
 {
   __asm__ __volatile__( "invlpg (%0)\n" :: "r"( virt ) : "memory" );
 }
@@ -109,10 +148,11 @@ inline void invalidate_page( addr_t virt )
   @param pdir The physical address of the page directory. If
          NULL_PADDR, then use the physical address of the current
          page directory in register CR3.
-  @return 0 on success. -1 on failure.
+  @return E_OK on success. E_FAIL on failure. E_INVALID_ARG if
+         pdir is NULL_PADDR.
 */
 
-static int readPDE( unsigned entryNum, pde_t *pde, addr_t pdir )
+static int readPDE( unsigned entryNum, pde_t *pde, paddr_t pdir )
 {
   assert( entryNum < 1024 );
   assert( pde != NULL );
@@ -120,7 +160,7 @@ static int readPDE( unsigned entryNum, pde_t *pde, addr_t pdir )
   if(pdir == NULL_PADDR)
   {
     *pde = *(pde_t *)ADDR_TO_PDE( entryNum << 22 );
-    return 0;
+    return E_OK;
   }
   else
     return readPmapEntry(pdir, entryNum, pde);
@@ -134,29 +174,31 @@ static int readPDE( unsigned entryNum, pde_t *pde, addr_t pdir )
   @param pdir The physical address of the page directory. If
          NULL_PADDR, then use the physical address of the current
          page directory in register CR3.
-  @return 0 on success. -1 on failure.
+  @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the
+          PDE corresponding to the virtual address hasn't been mapped
+          yet. E_INVALID_ARG if pdir is NULL_PADDR
 */
 
-int readPTE( addr_t virt, pte_t *pte, addr_t pdir )
+int readPTE( addr_t virt, pte_t *pte, paddr_t pdir )
 {
   pde_t pde;
 
-  if( readPDE( PDE_INDEX(virt), &pde, pdir ) != 0 )
+  if( readPDE( PDE_INDEX(virt), &pde, pdir ) != E_OK )
   {
     kprintf("readPDE() failed\n");
-    return -1;
+    return E_FAIL;
   }
 
   if( !pde.present )
-    return -1;
+    return E_NOT_MAPPED;
 
   if( pdir == NULL_PADDR )
   {
     *pte = *(pte_t *)ADDR_TO_PTE( virt );
-    return 0;
+    return E_OK;
   }
   else
-    return readPmapEntry((addr_t)(pde.base << 12), PTE_INDEX(virt), pte);
+    return readPmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(virt), pte);
 }
 
 /**
@@ -165,10 +207,10 @@ int readPTE( addr_t virt, pte_t *pte, addr_t pdir )
   @param phys The starting physical address to which data will be copied.
   @param buffer The starting address from which data will be copied.
   @param bytes The number of bytes to be written.
-  @return 0 on success. -1 on failure.
+  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
 */
 
-int poke( addr_t phys, void *buffer, size_t bytes )
+int poke( paddr_t phys, void *buffer, size_t bytes )
 {
   return accessPhys( phys, buffer, bytes, false );
 }
@@ -179,10 +221,10 @@ int poke( addr_t phys, void *buffer, size_t bytes )
   @param phys The starting physical address from which data will be copied.
   @param buffer The starting address to which data will be copied.
   @param bytes The number of bytes to be read.
-  @return 0 on success. -1 on failure.
+  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
 */
 
-int peek( addr_t phys, void *buffer, size_t bytes )
+int peek( paddr_t phys, void *buffer, size_t bytes )
 {
   return accessPhys( phys, buffer, bytes, true );
 }
@@ -196,15 +238,15 @@ int peek( addr_t phys, void *buffer, size_t bytes )
   @param buffer The starting address of the buffer
   @param bytes The number of bytes to be read/written.
   @param readPhys True if operation is a read, false if it's a write
-  @return 0 on success. -1 on failure.
+  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
 */
 
-static int accessPhys( addr_t phys, void *buffer, size_t len, bool readPhys )
+static int accessPhys( paddr_t phys, void *buffer, size_t len, bool readPhys )
 {
   size_t offset, bytes;
 
   if(phys == NULL_PADDR)
-    return -1;
+    return E_INVALID_ARG;
 
   for( size_t i=0; len; phys += bytes, i += bytes, len -= bytes )
   {
@@ -221,7 +263,7 @@ static int accessPhys( addr_t phys, void *buffer, size_t len, bool readPhys )
     unmapTemp();
   }
 
-  return 0;
+  return E_OK;
 }
 
 /**
@@ -238,15 +280,15 @@ static int accessPhys( addr_t phys, void *buffer, size_t len, bool readPhys )
   @param buffer The buffer in the current address space that is used for the read/write.
   @param pdir The physical address of the address space.
   @param read True if reading. False if writing.
-  @return 0 on success. -1 on failure.
+  @return E_OK on success. E_FAIL on failure.
 */
 
-static int accessMem( addr_t address, size_t len, void *buffer, addr_t pdir, bool read )
+static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bool read )
 {
   addr_t read_addr;
   addr_t write_addr;
-  addr_t read_pdir;
-  addr_t write_pdir;
+  paddr_t read_pdir;
+  paddr_t write_pdir;
   size_t addr_offset;
   size_t buffer_offset;
   pte_t pte;
@@ -283,29 +325,29 @@ static int accessMem( addr_t address, size_t len, void *buffer, addr_t pdir, boo
           kprintf("0x%x is not writable in address space: 0x%x\n", write_addr+addr_offset, write_pdir);
       #endif /* DEBUG */
 
-      return -1;
+      return E_FAIL;
     }
   }
 
   while( len )
   {
-    if( readPTE( address, &pte, pdir ) != 0 )
-      return -1;
+    if( readPTE( address, &pte, pdir ) != E_OK )
+      return E_FAIL;
 
     addr_offset = address & (PAGE_SIZE - 1);
     bytes = (len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
 
     if( read )
-      peek( ((addr_t)pte.base << 12) + addr_offset, (void *)((addr_t)buffer + buffer_offset), bytes );
+      peek( ((paddr_t)pte.base << 12) + addr_offset, (void *)((addr_t)buffer + buffer_offset), bytes );
     else
-      poke( ((addr_t)pte.base << 12) + addr_offset, (void *)((addr_t)buffer + buffer_offset), bytes );
+      poke( ((paddr_t)pte.base << 12) + addr_offset, (void *)((addr_t)buffer + buffer_offset), bytes );
 
     address += bytes;
     buffer_offset += bytes;
     len -= bytes;
   }
 
-  return 0;
+  return E_OK;
 }
 
 /**
@@ -317,15 +359,15 @@ static int accessMem( addr_t address, size_t len, void *buffer, addr_t pdir, boo
   @param len The length of the block to write.
   @param buffer The buffer in the current address space that is used for the write.
   @param pdir The physical address of the address space.
-  @return 0 on success. -1 on failure.
+  @return E_OK on success. E_FAIL on failure.
 */
 
-int pokeVirt( addr_t address, size_t len, void *buffer, addr_t pdir )
+int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t pdir )
 {
-  if( pdir == (addr_t)(getCR3() & ~(PAGE_SIZE-1)) )
+  if( pdir == (paddr_t)(getCR3() & ~(PAGE_SIZE-1)) )
   {
     memcpy( (void *)address, buffer, len );
-    return 0;
+    return E_OK;
   }
   else
     return accessMem( address, len, buffer, pdir, false );
@@ -342,15 +384,15 @@ int pokeVirt( addr_t address, size_t len, void *buffer, addr_t pdir )
   @param len The length of the block to read.
   @param buffer The buffer in the current address space that is used for the read.
   @param pdir The physical address of the address space.
-  @return 0 on success. -1 on failure.
+  @return E_OK on success. E_FAIL on failure.
 */
 
-int peekVirt( addr_t address, size_t len, void *buffer, addr_t pdir )
+int peekVirt( addr_t address, size_t len, void *buffer, paddr_t pdir )
 {
-  if( pdir == (addr_t)(getCR3() & ~(PAGE_SIZE-1)) )
+  if( pdir == (paddr_t)(getCR3() & ~(PAGE_SIZE-1)) )
   {
     memcpy( buffer, (void *)address, len );
-    return 0;
+    return E_OK;
   }
   else
     return accessMem( address, len, buffer, pdir, true );
@@ -362,78 +404,196 @@ int peekVirt( addr_t address, size_t len, void *buffer, addr_t pdir )
   @param virt The virtual address of the page.
   @param phys The physical address of the page.
   @param flags The flags that modify page properties.
-  @return 0 on success. -1 on failure. -2 if a mapping already exists.
-          -3 if the page table of the page isn't mapped.
+  @return E_OK on success. E_INVALID_ARG if virt is invalid or phys is NULL.
+          E_OVERWRITE if a mapping already exists.
+          E_NOT_MAPPED if the page table of the page isn't mapped.
 */
 
-int kMapPage( addr_t virt, addr_t phys, u32 flags )
+int kMapPage( addr_t virt, paddr_t phys, u32 flags )
 {
   pde_t *pdePtr;
   pte_t *ptePtr;
 
-  assert( virt != INVALID_VADDR );
-  assert( phys != NULL_PADDR );
-
   if( virt == INVALID_VADDR || phys == NULL_PADDR )
   {
-    kprintf("mapPage(): Error!!! ");
-    return -1;
-  }
+    kprintf("kMapPage():");
 
-  assert( phys == (phys & ~0xFFF) );
-  assert( virt == (virt & ~0xFFF) );
+    if(virt == INVALID_VADDR)
+      kprintf(" Invalid virtual address.");
+
+    if(phys == NULL_PADDR)
+      kprintf(" Invalid physical address.");
+
+    kprintf("\n");
+
+    return E_INVALID_ARG;
+  }
 
   pdePtr = ADDR_TO_PDE( virt );
-  ptePtr = ADDR_TO_PTE( virt );
 
-  if ( !pdePtr->present )
+  if(flags & PAGING_4MB_PAGE)
   {
-    kprintf("Trying to map %x -> %x, but no PDE present.\n", phys, virt);
-    assert( false );
-    return -3;
+    if( pdePtr->present )
+    {
+      kprintf("%x -> %x: 0x%x is already mapped!\n", virt, phys, virt);
+      return E_OVERWRITE;
+    }
+
+    *(dword *)pdePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
   }
-  else if( ptePtr->present )
+  else
   {
-    kprintf("%x -> %x: 0x%x is already mapped!\n", virt, phys, virt);
-    assert( false );
-    return -2;
+    ptePtr = ADDR_TO_PTE( virt );
+
+    if ( !pdePtr->present )
+    {
+      kprintf("Trying to map %x -> %x, but no PDE present.\n", phys, virt);
+      return E_NOT_MAPPED;
+    }
+    else if( ptePtr->present )
+    {
+      kprintf("%x -> %x: 0x%x is already mapped!\n", virt, phys, virt);
+      return E_OVERWRITE;
+    }
+
+    *(dword *)ptePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
   }
 
-  *(dword *)ptePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
   invalidate_page( virt );
 
-  return 0;
+  return E_OK;
 }
 
 /**
   Unmaps a page from the current address space
 
   @param virt The virtual address of the page to unmap.
-  @return 0 on success with *phys set to the physical address of the page frame. -1 on failure.
+  @return E_OK on success with *phys set to the physical address of the page frame.
+          E_INVALID_ARG if virt is INVALID_VADDR. E_NOT_MAPPED if address was already unmapped.
 */
 
-int kUnmapPage( addr_t virt, addr_t *phys )
+int kUnmapPage( addr_t virt, paddr_t *phys )
 {
   pte_t *ptePtr;
   pde_t *pdePtr;
 
-  assert( virt == (virt & ~0xFFF) );
+  if( virt == INVALID_VADDR  )
+  {
+    kprintf("kUnmapPage(): Invalid virtual address.\n");
 
-  ptePtr = ADDR_TO_PTE( virt );
+    return E_INVALID_ARG;
+  }
+
   pdePtr = ADDR_TO_PDE( virt );
 
-  assert( pdePtr->present && ptePtr->present );
-
-  if ( pdePtr->present && ptePtr->present )
+  if ( pdePtr->present )
   {
-    if(phys != NULL)
-      *phys = (addr_t)ptePtr->base << 12;
+    if(!(pdePtr->pageSize))
+    {
+      ptePtr = ADDR_TO_PTE( virt );
 
-    ptePtr->present = 0;
-    invalidate_page( virt );
+      if(ptePtr->present)
+      {
+        if(phys != NULL)
+          *phys = (paddr_t)ptePtr->base << 12;
+
+        ptePtr->present = 0;
+      }
+      else
+        return E_NOT_MAPPED;
+    }
+    else
+    {
+      if(phys != NULL)
+        *phys = (paddr_t)pdePtr->base << 12;
+
+      pdePtr->present = 0;
+    }
   }
   else
-    return -1;
+    return E_NOT_MAPPED;
 
-  return 0;
+  invalidate_page( virt );
+
+  return E_OK;
+}
+
+/**
+  Maps a page in physical memory to virtual memory in the current address space
+
+  @param virt The virtual address of the page.
+  @param phys The physical address of the page.
+  @param flags The flags that modify page properties.
+  @return E_OK on success. E_INVALID_ARG if virt is INVALID_VADDR or phys is NULL_PADDR.
+          E_OVERWRITE if a mapping already exists.
+*/
+
+int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
+{
+  pde_t *pdePtr;
+
+  if( virt == INVALID_VADDR || phys == NULL_PADDR )
+  {
+    kprintf("mapPageTable():");
+
+    if(virt == INVALID_VADDR)
+      kprintf(" Invalid virtual address.");
+
+    if(phys == NULL_PADDR)
+      kprintf(" Invalid physical address.");
+
+    kprintf("\n");
+
+    return E_INVALID_ARG;
+  }
+
+  pdePtr = ADDR_TO_PDE( virt );
+
+  if( pdePtr->present )
+  {
+    kprintf("%x -> %x: 0x%x is already mapped!\n", virt, phys, virt);
+    return E_OVERWRITE;
+  }
+
+  *(dword *)pdePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
+
+  invalidate_page(virt & ~(PAGE_TABLE_SIZE-1));
+
+  return E_OK;
+}
+
+/**
+  Unmaps a page table from the current address space
+
+  @param virt The virtual address of the page.
+  @param phys A pointer for the unmapped physical address of the page table that
+              will be returned
+  @return E_OK on success. E_INVALID_ARG if virt is INVALID_VADDR or phys is NULL_PADDR.
+          E_NOT_MAPPED if mapping didn't exist yet
+*/
+
+int kUnmapPageTable( addr_t virt, paddr_t *phys )
+{
+  pde_t *pdePtr;
+
+  if( virt == INVALID_VADDR)
+  {
+    kprintf("mapPageTable(): Invalid virtual address.\n");
+
+    return E_INVALID_ARG;
+  }
+
+  pdePtr = ADDR_TO_PDE( virt );
+
+  if( !pdePtr->present )
+    return E_NOT_MAPPED;
+
+  pdePtr->present = 0;
+
+  if(phys != NULL)
+    *phys = (paddr_t)pdePtr->base << 12;
+
+  invalidate_page(virt & ~(PAGE_TABLE_SIZE-1));
+
+  return E_OK;
 }

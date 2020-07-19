@@ -4,6 +4,7 @@
 #include <types.h>
 #include <kernel/mm.h>
 #include <kernel/lowlevel.h>
+#include <kernel/struct.h>
 
 #define DEAD			0u
 #define PAUSED			1u  // Infinite blocking state
@@ -18,14 +19,10 @@
 
 #define NUM_PROCESSORS   	1u
 
-#define TID_MAX		 	((tid_t)0xFFFFu)
-
 #define	INITIAL_TID		((tid_t)1u)
 #define IDLE_TID		INITIAL_TID
 
-#define GET_TID(t)		(t == NULL ? NULL_TID : (tid_t)((t) - tcbTable))
-
-#define MAX_THREADS		1024u
+#define GET_TID(t)		(t == NULL ? NULL_TID : t->tid)
 
 /* This assumes a uniprocessor system */
 
@@ -34,7 +31,7 @@
 
 struct ThreadControlBlock
 {
-  cr3_t cr3;
+  dword cr3;
   unsigned char quantaLeft : 7;
   unsigned char kernel : 1;
   unsigned char threadState : 4;
@@ -52,6 +49,7 @@ struct ThreadControlBlock
     tid_t next;
   } queue;
 
+  tid_t tid;
   pid_t waitPort;   // wait to receive from/send to this port
   ExecutionState execState; // 48 bytes
 } __PACKED__;
@@ -63,22 +61,24 @@ struct Queue
   TCB *head, *tail;
 };
 
-TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t uStack, pid_t exHandler );
+TCB *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t uStack, pid_t exHandler );
 int releaseThread( TCB *thread );
+
+TCB *getTcb(tid_t tid);
 
 int sleepThread( TCB *thread, int msecs );
 int startThread( TCB *thread );
 int pauseThread( TCB *thread );
 int sysYield( TCB *thread );
 
-#define getTcb(tid)   (((tid_t)(tid) == NULL_TID || (tid_t)(tid) >= MAX_THREADS) ? NULL : (&tcbTable[tid]))
+extern struct Queue freeThreadQueue;
+extern TCB *init_server;
+extern TCB *currentThread;
+extern TCB *idleThread;
+extern tree_t tcbTree;
+//extern TCB tcbTable[MAX_THREADS];
+
 
 //int switchToThread(  TCB *oldThread,  TCB *newThread );
-
-struct Queue freeThreadQueue;
-TCB *init_server;
-TCB *currentThread;
-TCB *idleThread;
-TCB tcbTable[MAX_THREADS];
 
 #endif /* THREAD_H */

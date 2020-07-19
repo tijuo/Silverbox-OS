@@ -1,8 +1,6 @@
 [BITS 32]
 %include "asm/kernel.inc"
 
-%define PAGE_SIZE	4096
-
 [section .data]
 
 EXPORT kernelIDT
@@ -32,8 +30,6 @@ EXPORT idleStack
 	resb IDLE_STACK_LEN
 EXPORT kernelStack
 	resb KERNEL_STACK_LEN
-EXPORT irqStack
-  resb IRQ_STACK_LEN
 ;EXPORT initKrnlPDir
 ;	resb PAGE_SIZE
 ;EXPORT kernelVars
@@ -46,9 +42,6 @@ EXPORT irqStack
 [section .dpages progbits alloc noexec write align=4096]
 EXPORT lowMemPTab
 	times PAGE_SIZE		db 0
-[section .ddata progbits alloc noexec write align=4]
-EXPORT kernelBootStack
-	times KERNEL_BOOT_STACK_LEN db 0
 
 [section .data]
 EXPORT initKrnlPDir

@@ -7,6 +7,15 @@
 #include <util.h>
 #include <oslib.h>
 #include <kernel/message.h>
+#include <kernel/error.h>
+#include <kernel/dlmalloc.h>
+
+TCB *init_server;
+TCB *currentThread;
+TCB *idleThread;
+tree_t tcbTree;
+static tid_t lastTID=0;
+static tid_t getNewTID();
 
 //extern void saveAndSwitchContext( TCB *, TCB * );
 
@@ -29,7 +38,7 @@ int startThread( TCB *thread )
   switch(thread->threadState)
   {
     case SLEEPING:
-      timerDequeue(thread);
+      timerDetach(thread);
       break;
     case WAIT_FOR_RECV:
       detachSendQueue(thread, thread->waitPort);
@@ -118,7 +127,7 @@ int pauseThread( TCB *thread )
     @return The TCB of the newly created thread. NULL on failure.
 */
 
-TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, pid_t exHandler )
+TCB *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t exHandler )
 {
   TCB * thread = NULL;
   u32 pentry;
@@ -136,21 +145,7 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, pid_t exHa
   if(addrSpace == NULL_PADDR)
     addrSpace = getCR3() & 0x3FF;
 
-   // Map the page directory and kernel space into the new address space
-
-  pentry = (u32)addrSpace | PAGING_RW | PAGING_PRES;
-
-  if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(PAGETAB), &pentry) != 0))
-    return NULL;
-  else if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(KERNEL_VSTART), &(((u32 *)PAGEDIR))[PDE_INDEX(KERNEL_VSTART)]) != 0))
-    return NULL;
-
-#if DEBUG
-  if(unlikely(writePmapEntry(addrSpace, 0, (void *)PAGEDIR) != 0))
-    return NULL;
-#endif /* DEBUG */
-
-  thread = popQueue(&freeThreadQueue);
+  thread = malloc(sizeof(TCB));//popQueue(&freeThreadQueue);
 
   if( thread == NULL )
     RET_MSG(NULL, "Couldn't get a free thread.")
@@ -159,8 +154,10 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, pid_t exHa
 
   memset(thread, 0, sizeof thread);
 
+  thread->tid = getNewTID();
   thread->priority = NORMAL_PRIORITY;
-  thread->cr3.base = (addrSpace >> 12);
+
+  thread->cr3 = (dword)addrSpace;
   thread->exHandler = exHandler;
 
   thread->waitPort = NULL_PID;
@@ -189,6 +186,38 @@ TCB *createThread( addr_t threadAddr, addr_t addrSpace, addr_t stack, pid_t exHa
   }
 
   thread->threadState = PAUSED;
+
+  if(tree_insert(&tcbTree, thread->tid, thread) != E_OK)
+  {
+    free(thread);
+    return NULL;
+  }
+
+   // Map the page directory and kernel space into the new address space
+
+  pentry = (u32)addrSpace | PAGING_RW | PAGING_PRES;
+
+  if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(PAGETAB), &pentry) != 0))
+  {
+    tree_remove(&tcbTree, thread->tid);
+    free(thread);
+    return NULL;
+  }
+  else if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(KERNEL_VSTART), &(((u32 *)PAGEDIR))[PDE_INDEX(KERNEL_VSTART)]) != 0))
+  {
+    tree_remove(&tcbTree, thread->tid);
+    free(thread);
+    return NULL;
+  }
+
+#if DEBUG
+  if(unlikely(writePmapEntry(addrSpace, 0, (void *)PAGEDIR) != 0))
+  {
+    tree_remove(&tcbTree, thread->tid);
+    free(thread);
+    return NULL;
+  }
+#endif /* DEBUG */
 
   return thread;
 }
@@ -280,6 +309,7 @@ int releaseThread( TCB *thread )
     }
   }
 
+/*
   // XXX: Recursive calls may result in stack overflow
 
   for(TCB *tcbPtr=getTcb(1); tcbPtr != getTcb((tid_t)(MAX_THREADS-1)); tcbPtr++)
@@ -288,9 +318,43 @@ int releaseThread( TCB *thread )
       releaseThread(tcbPtr);
   }
 
+
   memset(thread, 0, sizeof *thread);
   thread->threadState = DEAD;
 
-  enqueue(&freeThreadQueue, thread);
+//  enqueue(&freeThreadQueue, thread);
+*/
+  free(thread);
   return 0;
+}
+
+TCB *getTcb(tid_t tid)
+{
+  if(tid == NULL_TID)
+    return NULL;
+  else
+  {
+    TCB *tcb=NULL;
+
+    if(tree_find(&tcbTree, (int)tid, (void **)&tcb) == E_OK)
+      return tcb;
+    else
+      return NULL;
+  }
+}
+
+tid_t getNewTID()
+{
+  int i, maxAttempts=1000;
+
+  lastTID++;
+
+  for(i=1;(tree_find(&tcbTree, (int)lastTID, NULL) == E_OK && i < maxAttempts)
+      || !lastTID;
+      lastTID += i*i);
+
+  if(i == maxAttempts)
+    return NULL_TID;
+  else
+    return lastTID;
 }

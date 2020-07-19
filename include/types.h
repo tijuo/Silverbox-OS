@@ -23,6 +23,7 @@ typedef unsigned long long u64;
 typedef signed long long s64;
 
 typedef s32 addr_t;
+typedef u64 paddr_t;
 
 typedef u8  byte;
 typedef u16 word;

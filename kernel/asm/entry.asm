@@ -23,7 +23,6 @@
 
 IMPORT init
 IMPORT initKrnlPDir
-IMPORT kernelBootStack
 IMPORT lowMemPTab
 IMPORT kernelGDT
 
@@ -39,21 +38,19 @@ mboot:
         dd start
 
 ; NOTE: Virtual addresses are used, but paging isn't enabled yet.
-; GRUB loads the kernel to it's physical address. Memory needs
+; GRUB loads the kernel to its physical address. Memory needs
 ; to be accessed *extra* carefully here until paging is enabled.
 
 [section .dtext progbits alloc exec nowrite align=16]
 
-IMPORT free_page_ptr
-
 EXPORT start
 ;  eax has the mulitboot magic value
 ;  ebx has multiboot data address
-  lea   esp, [kernelBootStack + KERNEL_BOOT_STACK_LEN]
-  add   esp, kVirtToPhys
-
+  mov	esp, kBootStackTop
+  mov	ebp, esp
   cld
 
+  push eax
   push ebx
 
   lea ecx, [kernelGDT]
@@ -67,20 +64,22 @@ EXPORT start
   mov  cx, BOOT_DATA_SEL
   mov  ds, cx
   mov  es, cx
-  mov  ss, cx
   mov  cx, KERNEL_DATA_SEL
+  mov  ss, cx
   mov  fs, cx
   xor  cx, cx
   mov  gs, cx
 
-  sub esp, kVirtToPhys
+;  sub esp, kVirtToPhys
   jmp BOOT_CODE_SEL:.reloadSel
 
 .reloadSel:
-  push kernelGDT
-  push KERNEL_GDT_LEN << 16
-  lgdt [esp+2]
-  add  esp, 8
+ ; Load valid linear addresses into the GDTR
+
+;  push kernelGDT
+;  push KERNEL_GDT_LEN << 16
+;  lgdt [esp+2]
+;  add  esp, 8
 
   cmp eax, mbootMagic
   jne  .badMboot
@@ -90,153 +89,221 @@ EXPORT start
   jmp printMultibootErrMsg
 
 .okMboot:
-  call initPaging
+  call initPaging2
 
-  xor ebp, ebp
   call   init
+  jmp stop
 
-initPaging:
+videoRamStart equ 0xA0000
+videoBiosStart equ 0xC0000
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+initPaging2:
+;kPageDir      equ 0x1000
+;idleStackTop  equ 0x1000
+;kLowPageTab   equ 0x2000
+;kPageTab      equ 0x3000
 
-; Map the first page table
+  push ebp
+  mov ebp, esp
 
-  mov	ebp, [initKrnlPDir]
-  mov   edi, lowMemPTab
-  lea	edx, [edi+kVirtToPhys]
+  mov ax, es
+  push eax
+  mov ax, ds
+  push eax
 
-  or	edx, PG_USER | PG_READ_WRITE | PG_PRESENT
-  mov   dword [fs:ebp], edx
+  ; Since we want to be writing to physical memory, use the
+  ; data selector that 1:1 maps linear memory to physical memory
 
-; 1:1 map the physical memory range (0x00-0xA00000)
+  mov ax, KERNEL_DATA_SEL
+  mov es, ax
+  mov ds, ax
 
-  mov	eax, 0x00 | PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
-  mov	ecx, 0xA0000 / 4096
+  ; Clear the initial page directory, low memory page table, and kernel page table
 
-.mapFirstTable1:
-  stosd
-  add  eax, 0x1000
-  loop .mapFirstTable1
-
-; Map video memory (no-cache, write-through, user, r/w)
-
-  mov	eax, 0xA0000 | PG_CD | PG_PWT | PG_USER | PG_READ_WRITE | PG_PRESENT
-  mov	ecx, (128*1024) / 4096
-  lea	edi, [lowMemPTab+(0xA0000/4096)*4]
-
-.mapFirstTable2:
-  stosd
-  add	eax, 0x1000
-  loop	.mapFirstTable2
-
-  ; Set the unused entries as not-present
-
-  lea  edi, [lowMemPTab+(0xC0000/4096)*4]
-  mov  ecx, (0x100000-0xC0000) / 4096
-  xor  eax, eax
-
+  xor eax, eax
+  mov ecx, 1024
+  mov edi, kPageDir
   rep stosd
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  mov   esi, kSize
-  cmp   esi, 256*1048576-KERNEL_RESD_TABLES*4096*1024
-  jg	printSizeErrMsg
+  mov ecx, 1024
+  mov edi, kLowPageTab
+  rep stosd
 
-  shr   esi, 12
-  xor	ebx, ebx
-  lea   edx, [free_page_ptr]
-  mov   edx, [edx]
+  mov ecx, 1024
+  mov edi, kPageTab
+  rep stosd
+
+  mov ecx, 1024
+  mov edi, k1to1PageTab
+  rep stosd
+
+  mov ebx, kLowPageTab
+  xor ecx, ecx
+
+.mapLowMemLoop:
+  mov eax, ecx
+  or  eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov [ebx], eax
+
+  cmp ecx, videoRamStart
+  jge  .mapVideoRam
+
+  add ecx, PAGE_SIZE
+  add ebx, 4
+  jmp .mapLowMemLoop
+
+.mapVideoRam:
+  mov ecx, videoRamStart
+  mov ebx, kLowPageTab
+  mov edx, videoRamStart
+  shr edx, 12
+  and edx, PAGE_SIZE-1
+  lea ebx, [ebx+4*edx]
+
+.mapVideoRamLoop:
+  mov eax, ecx
+  or  eax, PG_USER | PG_READ_WRITE | PG_CD | PG_PWT | PG_PRESENT
+  mov [ebx], eax
+
+  cmp ecx, videoBiosStart
+  jge  .mapKernel
+
+  add ecx, PAGE_SIZE
+  add ebx, 4
+  jmp .mapVideoRamLoop
 
 .mapKernel:
-  lea	edi, [edx+kPhysToVirt]
+  mov ebx, kPageTab
+  mov esi, kPhysStart
+  mov edi, kVirtStart
+  shr edi, 12
+  and edi, PAGE_SIZE - 1
+  lea ebx, [ebx+edi*4]
+  xor ecx, ecx
 
-  cmp   esi, 1024
-  jge   .continueMapping
+.mapKernelLoop:
+  mov eax, esi
+  or  eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov [ebx], eax
 
-  lea   edi, [edi+4*esi]	; Clear unused PTEs
-  mov	ecx, 1024
-  sub	ecx, esi
-  xor   eax, eax
+  cmp ecx, kSize
+  jge  .mapPDEs
 
-  rep   stosd
-  lea   edi, [edx+kPhysToVirt]
+  add ecx, PAGE_SIZE
+  add esi, PAGE_SIZE
+  add ebx, 4
+  jmp .mapKernelLoop
 
-.continueMapping:
-  mov   eax, kPhysStart
-  or    eax, PG_SUPERVISOR | PG_GLOBAL | PG_READ_WRITE | PG_PRESENT
+.mapPDEs:
+  mov ebx, kPageDir
 
-  cmp   esi, 1024
-  jge    .setCounters
-  mov	ecx, esi
-  xor	esi, esi
-  jmp   .mapKernelTable
+  ; Map page directory onto itself
 
-.setCounters:
-  mov   ecx, 1024
-  sub	esi, ecx
+  mov ecx, 1023
+  lea edx, [ebx+ecx*4]
+  mov eax, kPageDir
+  or  eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov [edx], eax
 
-.mapKernelTable:
-  stosd
-  add  eax, 0x1000
-  loop .mapKernelTable
+  ; Map first page table (1:1 mapping of low memory)
 
-  ; Set the PDEs
+  mov ecx, 0
+  lea edx, [ebx+ecx*4]
+  mov eax, kLowPageTab
+  or  eax, PG_USER | PG_READ_WRITE | PG_PRESENT
+  mov [edx], eax
 
-  lea	eax, [kVirtStart+ebx]
-  lea   ecx, [kPhysStart+ebx]
-  shr	eax, 20		; page directory offset
-  shr   ecx, 20
+  ; Map the page table for 1:1 kernel mapping (if necessary)
 
-  lea   eax, [ebp + eax]
-  lea   ecx, [ebp + ecx]
-  mov   edi, edx
-  or    edi, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
-  mov   [fs:eax], edi
-  mov   [fs:ecx], edi
+  mov  ecx, kPhysStart
+  shr  ecx, 22
+  lea  edx, [ebx+ecx*4]
+  push ebx
 
-  add  ebx, 4096*1024
-  add  edx, 4096
-  test esi, esi
-  jnz .mapKernel
+  test dword [edx], PG_PRESENT
+  jnz  .tablePresent
+  xor  edi, edi
+  mov  ebx, k1to1PageTab
+  jmp  .map1to1Kernel
 
-  lea edi, [free_page_ptr]
-  mov [edi], edx
+.tablePresent:
+  mov edi, 1
+  mov ebx, kLowPageTab
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+.map1to1Kernel:
+  mov ecx, kPhysStart
+  shr ecx, 12
+  and ecx, PAGE_SIZE - 1
+  lea ebx, [ebx+ecx*4]
 
-  lea   ecx, [ebp + 4 * 1023]
-  mov   edx, ebp
-;  add	edx, kVirtToPhys
-  or    edx, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
-  mov   dword [fs:ecx], edx        ; Map the page directory into itself
+  ; If a page table was needed for 1:1 kernel mapping, then
+  ; map the kernel pages to the page table
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  xor ecx, ecx
+  mov esi, kPhysStart
 
-;  mov   eax, initKrnlPDir   ; Load the page directory into the PDBR
-;  add   eax, kVirtToPhys
-;  mov   cr3, eax
-  mov	cr3, ebp
+.map1to1KernelLoop:
+  mov eax, esi
+  or  eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov [ebx], eax
 
-  mov	eax, cr4
-  or	eax, CR4_PGE
-  mov	cr4, eax
+  cmp ecx, kSize
+  jge  .restoreEBX
+
+  add ecx, PAGE_SIZE
+  add esi, PAGE_SIZE
+  add ebx, 4
+  jmp .map1to1KernelLoop
+
+.restoreEBX:
+  pop ebx
+  test edi, edi
+  jnz .setKPDE
+
+.map1to1KernelPDE:
+  mov  eax, k1to1PageTab
+  or   eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov  [edx], eax
+
+  ; Map the kernel's page table
+
+.setKPDE:
+  mov ecx, kVirtStart
+  shr ecx, 22
+  lea edx, [ebx+ecx*4]
+  mov eax, kPageTab
+  or  eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
+  mov [edx], eax
+
+  mov   eax, kPageDir
+  mov   cr3, eax
+
+  mov   eax, cr4
+  or    eax, CR4_PGE | CR4_PSE
+  mov   cr4, eax
 
   mov   eax, cr0
-  and	eax, ~(CR0_CD | CR0_NW)	; Enable normal caching
+  and   eax, ~(CR0_CD | CR0_NW) ; Enable normal caching
   or    eax, CR0_PG | CR0_WP    ; Enable paging, write-protection
   mov   cr0, eax
 
-  mov	ax, KERNEL_DATA_SEL
-  mov	ds, ax
-  mov	es, ax
-  mov	ss, ax
+ ; Load valid linear addresses into the GDTR
+
+  push kernelGDT
+  push KERNEL_GDT_LEN << 16
+  lgdt [esp+2]
+  add  esp, 8
+
+  mov   ax, KERNEL_DATA_SEL
+  mov   ds, ax
+  mov   es, ax
+  mov   fs, ax
+  mov   ss, ax
 
   jmp   KERNEL_CODE_SEL:.reloadCS
-;  push kCodeSel
-;  push .reloadCS
-;  retf
 
 .reloadCS:
+  leave
   ret
 
 printMultibootErrMsg:
@@ -253,6 +320,8 @@ printBootMsg:
   pop esi
   mov edi, 0xB8000
   mov al, 0x07
+  mov bx, BOOT_DATA_SEL
+  mov es, bx
 
 .cpyStr:
   cmp byte [esi], 0

@@ -17,7 +17,13 @@
 #define KERNEL_START        	((addr_t)&kPhysStart)
 #define RESD_PHYSMEM	    	KERNEL_START
 
+#define PAGE_STACK            ((addr_t)&kVirtPageStack)
+
 #define KVIRT_TO_PHYS(x)	((x) - (KERNEL_VSTART-KERNEL_START))
+
+#define KERNEL_HEAP_START     ((addr_t)0xD0000000)
+#define MIN_AMT               (8*PAGE_SIZE)
+#define KERNEL_HEAP_LIMIT     ((addr_t)0xE0000000)
 
 /* FIXME: Changing any of these values may require changing the
    asm code. */
@@ -47,29 +53,35 @@
 /// Unmaps the temporary page
 #define unmapTemp() 	kUnmapPage((addr_t)(TEMP_PAGEADDR), NULL)
 
-bool tempMapped;
+HOT(int readPmapEntry(paddr_t pbase, int entry, void *buffer));
+HOT(int writePmapEntry(paddr_t pbase, int entry, void *buffer));
 
-pdir_t *kernelAddrSpace;
+HOT(int kMapPage( addr_t virt, paddr_t phys, u32 flags ));
+HOT(int mapPage( addr_t virt, paddr_t phys, u32 flags, paddr_t paddrSpace ));
+HOT(int kUnmapPage( addr_t virt, paddr_t *phys ));
+HOT(int kMapPageTable( addr_t virt, paddr_t phys, u32 flags ));
+HOT(int kUnmapPageTable( addr_t virt, paddr_t *phys ));
+HOT(addr_t unmapPage( addr_t virt, paddr_t addrSpace ));
 
-HOT(int readPmapEntry(addr_t pbase, int entry, void *buffer));
-HOT(int writePmapEntry(addr_t pbase, int entry, void *buffer));
+int peek( paddr_t, void *, size_t );
+int poke( paddr_t, void *, size_t );
 
-int mapPageTable( addr_t virt, addr_t phys, u32 flags, addr_t addrSpace );
-HOT(int kMapPage( addr_t virt, addr_t phys, u32 flags ));
-HOT(int mapPage( addr_t virt, addr_t phys, u32 flags, addr_t addrSpace ));
-HOT(int kUnmapPage( addr_t virt, addr_t *phys ));
-HOT(addr_t unmapPage( addr_t virt, addr_t addrSpace ));
-addr_t unmapPageTable( addr_t virt, addr_t addrSpace );
+HOT(int peekVirt( addr_t address, size_t len, void *buffer, paddr_t paddrSpace ));
+HOT(int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t paddrSpace ));
 
-int peek( addr_t, void *, size_t );
-int poke( addr_t, void *, size_t );
+bool is_readable( addr_t addr, paddr_t addrSpace );
+bool is_writable( addr_t addr, paddr_t addrSpace );
 
-HOT(int peekVirt( addr_t address, size_t len, void *buffer, addr_t addrSpace ));
-HOT(int pokeVirt( addr_t address, size_t len, void *buffer, addr_t addrSpace ));
+void invalidate_tlb(void);
+void invalidate_page( addr_t virt );
 
-bool is_readable( addr_t addr, addr_t addrSpace );
-bool is_writable( addr_t addr, addr_t addrSpace );
+extern paddr_t *freePageStack, *freePageStackTop;
 
 //extern void addGDTEntry( word, addr_t, uint32, uint32 );
+
+paddr_t allocPageFrame(void);
+void freePageFrame(paddr_t frame);
+
+void *morecore(int amt);
 
 #endif

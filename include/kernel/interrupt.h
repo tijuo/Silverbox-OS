@@ -12,9 +12,9 @@ void handleCPUException(int intNum, int errorCode, TCB *thread, ExecutionState);
 
 /// The threads that are responsible for handling an IRQ
 
-pid_t IRQHandlers[NUM_IRQS];
-TCB *irqThreads[NUM_IRQS];
-pid_t irqPorts[NUM_IRQS];
+extern pid_t IRQHandlers[NUM_IRQS];
+extern TCB *irqThreads[NUM_IRQS];
+extern pid_t irqPorts[NUM_IRQS];
 
 void endIRQ( int irqNum );
 int registerInt( pid_t port, int intNum );

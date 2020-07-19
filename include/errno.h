@@ -81,6 +81,6 @@
 #define EWOULDBLOCK	78	/*Operation would block.*/
 #define EXDEV		79	/*Cross-device link.*/
 
-volatile int errno;
+extern volatile int errno;
 extern const char * const _errno_reasons[80];
-#endif 
+#endif

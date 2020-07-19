@@ -9,7 +9,8 @@
 extern void init2( void );
 extern int numBootMods;
 void systemThread( void );
-TCB *idleThread;
+
+struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;
 
 int setPriority( TCB *thread, unsigned int level );
 TCB *attachRunQueue( TCB *thread );
@@ -133,7 +134,7 @@ dword *updateCurrentThread(TCB *tcb, ExecutionState state)
       return (dword *)&state;
     else
     {
-      if(tcb->cr3.base != newTcb->cr3.base)
+      if((tcb->cr3 & 0xFFFFF000u) != (newTcb->cr3 & 0xFFFFF000u))
         __asm__ __volatile__("mov %0, %%cr3" :: "r"(newTcb->cr3));
 
       tcb->kernel = (state.user.cs == KCODE);

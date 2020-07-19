@@ -21,7 +21,7 @@ extern "C" {
 #define DIE_MSG		    	0xF1FE
 #define ALIVE_MSG	    	0xA1B2
 
-#define NULL_PADDR          	((addr_t)0xFFFFFFFF)
+#define NULL_PADDR          	((paddr_t)0xFFFFFFFFFFFFFFFFull)
 
 #define KERNEL_MBOX_ID 		0
 
@@ -85,7 +85,8 @@ struct MemInfo
 
 struct PageMapRecord
 {
-  addr_t virt, phys;
+  addr_t virt;
+  paddr_t phys;
   size_t size;
 };
 
@@ -101,7 +102,7 @@ struct Tcb
 {
   int priority;
   int status;
-  addr_t addrSpace;
+  paddr_t addrSpace;
   pid_t exHandler;
 
   struct State

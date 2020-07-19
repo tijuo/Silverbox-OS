@@ -25,7 +25,7 @@
 struct SyscallCreateTcbArgs
 {
   addr_t entry;
-  addr_t addrSpace;
+  paddr_t addrSpace;
   addr_t stack;
   pid_t exHandler;
 };
@@ -38,7 +38,7 @@ struct SyscallCreateIHandlerArgs
 
 struct SyscallCreateMappingArgs
 {
-  addr_t addrSpace;
+  paddr_t addrSpace;
   int entry;
   void *buffer;
   int level;
@@ -51,7 +51,7 @@ struct SyscallCreatePortArgs
 
 struct SyscallReadMappingArgs
 {
-  addr_t addrSpace;
+  paddr_t addrSpace;
   int entry;
   void *buffer;
   int level;
@@ -71,7 +71,7 @@ struct SyscallUpdateTcbArgs
 
 struct SyscallUpdateMappingArgs
 {
-  addr_t addrSpace;
+  paddr_t addrSpace;
   int entry;
   void *buffer;
   int level;
@@ -79,7 +79,7 @@ struct SyscallUpdateMappingArgs
 
 struct SyscallDestroyMappingArgs
 {
-  addr_t addrSpace;
+  paddr_t addrSpace;
   int entry;
   int level;
 };
@@ -127,7 +127,7 @@ struct PageMapping
 {
   addr_t virt;
   int level;
-  addr_t frame;
+  paddr_t frame;
   unsigned int flags;
   int status;
 };
@@ -154,7 +154,7 @@ struct ThreadInfo
   tid_t tid;
   pid_t exHandler;
   int priority;
-  addr_t addr_space;
+  paddr_t addr_space;
   struct RegisterState state;
 };
 

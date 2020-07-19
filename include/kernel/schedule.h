@@ -25,6 +25,6 @@ HOT(void timerInt( TCB * ));
 HOT(dword *updateCurrentThread(TCB *tcb, ExecutionState state));
 void idle(void);
 
-struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;
+extern struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;
 
 #endif /* SCHEDULE_H */

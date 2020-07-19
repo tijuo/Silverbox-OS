@@ -16,12 +16,17 @@ struct PortPair
   pid_t remote, local;
 };
 
-struct Port portTable[MAX_PORTS];
-
 #define getPort(pid)   ((pid == NULL_PID || pid >= MAX_PORTS) ? NULL : (&portTable[pid]))
 #define GET_PID(port)  (port == NULL ? NULL_PID : (pid_t)(port - portTable))
 
 HOT(int sendMessage(TCB *tcb, struct PortPair portPair, int block, int args[5]));
 HOT(int receiveMessage(TCB *tcb, struct PortPair portPair, int block));
+
+void attachSendQueue(TCB *tcb, pid_t pid);
+void attachReceiveQueue(TCB *tcb, pid_t pid);
+void detachSendQueue(TCB *tcb, pid_t pid);
+void detachReceiveQueue(TCB *tcb, pid_t pid);
+
+extern struct Port portTable[MAX_PORTS];
 
 #endif /* MESSAGE */

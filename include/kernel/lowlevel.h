@@ -220,6 +220,8 @@ extern const void * const kPhysBss;
 extern const void * const kVirtBss;
 extern const void * const kSize;
 
+extern const void * const kVirtPageStack;
+
 extern const unsigned int kernelGDT;
 extern const unsigned int kernelIDT;
 extern const unsigned int kernelTSS;

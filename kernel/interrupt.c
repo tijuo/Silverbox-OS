@@ -7,6 +7,15 @@
 #include <kernel/pic.h>
 #include <kernel/paging.h>
 #include <kernel/interrupt.h>
+#include <kernel/error.h>
+
+static bool handleHeapPageFault(void);
+
+pid_t IRQHandlers[NUM_IRQS];
+
+// The threads that are responsible for handling IRQs
+TCB *irqThreads[NUM_IRQS];
+pid_t irqPorts[NUM_IRQS];
 
 void endIRQ(int irqNum)
 {
@@ -72,11 +81,77 @@ void handleIRQ(int irqNum, TCB *thread, ExecutionState state)
   }
 }
 
+bool handleHeapPageFault(void)
+{
+  addr_t faultAddr = (addr_t)getCR2();
+
+  if(faultAddr >= KERNEL_HEAP_START && faultAddr <= KERNEL_HEAP_LIMIT)
+  {
+    pde_t *pde = ADDR_TO_PDE(faultAddr);
+
+    // If the page table isn't mapped yet, map it.
+
+    if(!pde->present)
+    {
+      if(kMapPageTable(faultAddr, allocPageFrame(), PAGING_RW | PAGING_SUPERVISOR) != E_OK)
+        return false;
+    }
+
+    pte_t *pte = ADDR_TO_PTE(faultAddr);
+
+    if(!pte->present)
+    {
+      if(kMapPage(faultAddr, allocPageFrame(), PAGING_RW | PAGING_SUPERVISOR) != E_OK)
+        return false;
+    }
+
+    if(pte->usPriv || !pte->rwPriv)
+      return false;
+  }
+
+  return true;
+}
+
 /// Handles the CPU exceptions
 
 void handleCPUException(int intNum, int errorCode, TCB *tcb,
                         ExecutionState state)
 {
+  #if DEBUG
+
+  if(tcb != NULL)
+  {
+    if( tcb->tid == IDLE_TID )
+    {
+      kprintf("Exception for idle thread. System halted.\n");
+      dump_regs( tcb, &state, intNum, errorCode );
+      dump_state(&state, intNum, errorCode);
+      __asm__("hlt\n");
+      return;
+    }
+    else if( tcb == init_server )
+    {
+      kprintf("Exception for initial server. System Halted.\n");
+      dump_regs( tcb, &state, intNum, errorCode );
+      __asm__("hlt\n");
+      return;
+    }
+    else
+    {
+      dump_regs( tcb, &state, intNum, errorCode );
+    }
+  }
+  #endif
+
+  // Handle page faults due to non-present pages in kernel heap
+
+  if( intNum == 14
+      && (errorCode & 0xF) == PAGING_ERR_SUPERVISOR
+      && handleHeapPageFault() )
+  {
+    return;
+  }
+
   if( tcb == NULL )
   {
     kprintf("NULL tcb. Unable to handle exception. System halted.\n");
@@ -85,38 +160,16 @@ void handleCPUException(int intNum, int errorCode, TCB *tcb,
     return;
   }
 
-  #if DEBUG
-
-  if( GET_TID(tcb) == IDLE_TID )
-  {
-    kprintf("Exception for idle thread. System halted.\n");
-    dump_regs( tcb, &state, intNum, errorCode );
-    dump_state(&state, intNum, errorCode);
-    __asm__("hlt\n");
-    return;
-  }
-  else if( tcb == init_server )
-  {
-    kprintf("Exception for initial server. System Halted.\n");
-    dump_regs( tcb, &state, intNum, errorCode );
-    __asm__("hlt\n");
-    return;
-  }
-  else
-  {
-    dump_regs( tcb, &state, intNum, errorCode );
-  }
-  #endif
 
   if( tcb->exHandler == NULL_PID )
   {
-    kprintf("TID: %d has no exception handler. Releasing...\n", GET_TID(tcb));
+    kprintf("TID: %d has no exception handler. Releasing...\n", tcb->tid);
     dump_regs( tcb, &state, intNum, errorCode );
     releaseThread(tcb);
   }
-  else if( getPort(tcb->exHandler)->owner == GET_TID(tcb) )
+  else if( getPort(tcb->exHandler)->owner == tcb->tid )
   {
-    kprintf("Oops! TID %d is its own exception handler! Releasing...\n", GET_TID(tcb));
+    kprintf("Oops! TID %d is its own exception handler! Releasing...\n", tcb->tid);
     dump_regs( tcb, &state, intNum, errorCode );
     releaseThread(tcb);
   }
@@ -125,7 +178,7 @@ void handleCPUException(int intNum, int errorCode, TCB *tcb,
     struct PortPair pair;
     pair.local = NULL_PID;
     pair.remote = tcb->exHandler;
-    int args[5] = { EXCEPTION_MSG, GET_TID(tcb), intNum,
+    int args[5] = { EXCEPTION_MSG, tcb->tid, intNum,
                     errorCode, intNum == 14 ? getCR2() : 0 };
 
     if(sendMessage(tcb, pair, 1, args) != 0)

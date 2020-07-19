@@ -6,6 +6,8 @@
 #include <os/syscalls.h>
 #include <kernel/message.h>
 
+struct Port portTable[MAX_PORTS];
+
 void attachSendQueue(TCB *tcb, pid_t pid)
 {
   struct Port *port = getPort(pid);
@@ -17,11 +19,11 @@ void attachSendQueue(TCB *tcb, pid_t pid)
   tcb->waitPort = pid;
 
   if(port->sendWaitTail != NULL_TID)
-    getTcb(port->sendWaitTail)->queue.next = GET_TID(tcb);
+    getTcb(port->sendWaitTail)->queue.next = tcb->tid;
 
   tcb->queue.next = NULL_TID;
   tcb->queue.prev = port->sendWaitTail;
-  port->sendWaitTail = GET_TID(tcb);
+  port->sendWaitTail = tcb->tid;
 }
 
 void attachReceiveQueue(TCB *tcb, pid_t pid)
@@ -33,17 +35,31 @@ void attachReceiveQueue(TCB *tcb, pid_t pid)
   tcb->waitPort = pid;
 }
 
-void deatchSendQueue(TCB *tcb, pid_t pid)
+void detachSendQueue(TCB *tcb, pid_t pid)
 {
   struct Port *port = getPort(pid);
 
-  port->sendWaitTail = tcb->queue.prev;
-  getTcb(port->queue.prev)->queue.next = NULL_TID;
+  if(tcb->queue.prev != NULL_TID)
+    getTcb(tcb->queue.prev)->queue.next = tcb->queue.next;
+
+  if(tcb->queue.next != NULL_TID)
+    getTcb(tcb->queue.next)->queue.prev = tcb->queue.prev;
+
+  if(port->sendWaitTail == tcb->tid)
+    port->sendWaitTail = tcb->queue.prev;
+
+  tcb->queue.next = tcb->queue.prev = NULL_TID;
+  tcb->waitPort = NULL_PID;
+  tcb->threadState = READY;
+  attachRunQueue(tcb);
 }
 
 void detachReceiveQueue(TCB *tcb, pid_t pid)
 {
-
+  tcb->waitPort = NULL_PID;
+  tcb->threadState = READY;
+  
+  attachRunQueue(tcb);
 }
 
 /**
@@ -74,13 +90,13 @@ int sendMessage(TCB *tcb, struct PortPair portPair, int block,
   if(portPair.remote == NULL_PID
       || portPair.remote >= MAX_PORTS
       || portPair.local >= MAX_PORTS
-      || GET_TID(tcb) == getPort(portPair.remote)->owner)
+      || tcb->tid == getPort(portPair.remote)->owner)
   {
     kprintf("Invalid port.\n");
     return -2;
   }
   else if(portPair.local != NULL_PID &&
-    getPort(portPair.local)->owner != GET_TID(tcb))
+    getPort(portPair.local)->owner != tcb->tid)
   {
     kprintf("Thread doesn't own local port.\n");
     return -1;
@@ -124,7 +140,7 @@ int sendMessage(TCB *tcb, struct PortPair portPair, int block,
   }
   else if( !block )	// A timeout of 0 is indicates not to block
   {
-    kprintf("send: Non-blocking. TID: %d\tEIP: 0x%x\n", GET_TID(tcb), tcb->execState.user.eip);
+    kprintf("send: Non-blocking. TID: %d\tEIP: 0x%x\n", tcb->tid, tcb->execState.user.eip);
     kprintf("EIP: 0x%x\n", *(dword *)(tcb->execState.user.ebp + 4));
     return -3;
   }
@@ -161,12 +177,12 @@ int receiveMessage( TCB *tcb, struct PortPair portPair, int block )
       || portPair.local == NULL_PID
       || portPair.local >= MAX_PORTS
       || (portPair.remote != NULL_PID
-            && GET_TID(tcb) == getPort(portPair.remote)->owner))
+            && tcb->tid == getPort(portPair.remote)->owner))
   {
     kprintf("Invalid port.\n");
     return -2;
   }
-  else if(getPort(portPair.local)->owner != GET_TID(tcb))
+  else if(getPort(portPair.local)->owner != tcb->tid)
   {
     kprintf("Thread doesn't own local port.\n");
     return -1;
@@ -223,7 +239,7 @@ int receiveMessage( TCB *tcb, struct PortPair portPair, int block )
   }
   else if( !block )
   {
-    kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", GET_TID(tcb), tcb->execState.user.eip);
+    kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", tcb->tid, tcb->execState.user.eip);
     kprintf("EIP: 0x%x\n", *(dword *)(tcb->execState.user.ebp + 4));
     return -3;
   }

@@ -18,8 +18,6 @@
 #include <kernel/io.h>
 #include <os/variables.h>
 
-#define FREE_PAGE_PTR_START     0x100000
-
 #define DISC_CODE(X) \
   X __attribute__((section(".dtext")))
 
@@ -28,9 +26,9 @@
 
 #define INIT_SRV_FLAG	"initsrv="
 
-static inline void contextSwitch( cr3_t addrSpace, addr_t stack ) __attribute__((section(".dtext")));
+static inline void contextSwitch( dword addrSpace, addr_t stack ) __attribute__((section(".dtext")));
 
-static inline void contextSwitch( cr3_t addrSpace, addr_t stack )
+static inline void contextSwitch( dword addrSpace, addr_t stack )
 {
    __asm__ __volatile__(
     "mov %%edx, %%esp\n"
@@ -50,7 +48,8 @@ static inline void contextSwitch( cr3_t addrSpace, addr_t stack )
     "edx"((dword)stack) : "%eax");
 }
 
-extern TCB *idleThread;
+extern TCB *idleThread, *currentThread, *init_server;
+extern paddr_t *freePageStack, *freePageStackTop;
 
 static TCB *DISC_CODE(load_elf_exec( addr_t, pid_t, addr_t, addr_t ));
 static bool DISC_CODE(isValidElfExe( addr_t img ));
@@ -69,7 +68,7 @@ static int DISC_CODE(strncmp(const char * restrict, const char * restrict, size_
 //static size_t DISC_CODE(strlen(const char *s));
 static char *DISC_CODE(strstr(const char * restrict, const char * restrict));
 static char *DISC_CODE(strchr(const char * restrict, int));
-static int DISC_CODE(clearPhysPage(addr_t phys));
+static int DISC_CODE(clearPhysPage(paddr_t phys));
 static void DISC_CODE(showCPU_Features(void));
 static void DISC_CODE(showMBInfoFlags(multiboot_info_t * restrict));
 static void DISC_CODE(init_clock(void));
@@ -78,11 +77,9 @@ static unsigned DISC_CODE(bcd2bin(unsigned num));
 static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month, unsigned int day, unsigned int hour,
                           unsigned int minute, unsigned int second));
 static addr_t DISC_DATA(init_server_img);
-static addr_t DISC_CODE(alloc_page(void));
 
-addr_t DISC_DATA(free_page_ptr) = (addr_t)FREE_PAGE_PTR_START;
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
-
+static void DISC_CODE(initPageAllocator(multiboot_info_t * restrict info));
 extern void invalidate_page( addr_t );
 
 /*
@@ -107,7 +104,259 @@ void readPhysMem(addr_t address, addr_t buffer, size_t len)
   }
 }
 */
-int clearPhysPage( addr_t phys )
+
+void initPageAllocator(multiboot_info_t * restrict info)
+{
+  const memory_map_t *mmap;
+
+  /* 1. Look for a region of page-aligned contiguous memory
+        in the size of a large page (2 MiB/4 MiB) that will
+        hold the page stack entries.
+
+        If no such region exists then use small sized pages.
+        An extra page will be needed as the page table.
+
+     2. For each 2 MiB/4 MiB region of memory, insert the available
+        page frame numbers into the stack. Page frames corresponding
+        to reserved memory, kernel memory (incl. page stack), MMIO,
+        and boot modules are not added.
+
+     3. Repeat until all available page frames are added to the page
+        frame stack.
+  */
+
+  // Assumes PAE is enabled
+
+      kprintf("Multiboot MMAP base: 0x%x Multiboot MMAP length: 0x%x\n", info->mmap_addr, info->mmap_length);
+
+      for(unsigned long offset=0; offset < info->mmap_length; offset += mmap->size+sizeof(mmap->size))
+      {
+        mmap = (const memory_map_t *)(info->mmap_addr + offset);
+
+        u64 mmap_len = mmap->length_high;
+        mmap_len = mmap_len << 32;
+        mmap_len |= mmap->length_low;
+
+       u64 mmap_base = mmap->base_addr_high;
+       mmap_base = mmap_base << 32;
+       mmap_base |= mmap->base_addr_low;
+
+       kprintf("Base Addr: 0x");
+
+       if(mmap->base_addr_high)
+         kprintf("%x", mmap->base_addr_high);
+
+       kprintf("%x Length: 0x", mmap->base_addr_low);
+
+       if(mmap->length_high)
+         kprintf("%x", mmap->length_high);
+
+       kprintf("%x Type: 0x%x Size: 0x%x\n", mmap->length_low, mmap->type, mmap->size);
+     }
+
+  unsigned long page_stack_size = (info->mem_upper + 1024 + ((info->mem_upper & 0x03) ? 4 : 0)) / 16;
+  unsigned long large_page_size = LARGE_PAGE_SIZE;
+
+  if(info->flags & MBI_FLAGS_MMAP)
+  {
+    paddr_t large_pages[32], page_tables[32];
+    size_t page_table_count=0, large_page_count=0; // Number of addresses corresponding to page tables and large pages in each of the previous arrays
+
+    int page_stack_mapped=0;
+    int small_page_map_count=0;
+    addr_t map_ptr = (addr_t)freePageStack;
+
+
+    kprintf("Scanning for pages to use...\n");
+
+    for(int pass=0; pass < 2; pass++)
+    {
+      if(page_stack_mapped)
+        break;
+
+      for(unsigned long offset=0; offset < info->mmap_length; offset += mmap->size+sizeof(mmap->size))
+      {
+        if(page_stack_mapped)
+          break;
+
+        mmap = (const memory_map_t *)(info->mmap_addr + offset);
+
+        u64 mmap_len = mmap->length_high;
+        mmap_len = mmap_len << 32;
+        mmap_len |= mmap->length_low;
+
+        if(mmap->type == MBI_TYPE_AVAIL && mmap_len >= page_stack_size)
+        {
+          paddr_t base_addr = mmap->base_addr_high;
+          unsigned long extra_space;
+          base_addr = base_addr << 32;
+          base_addr |= mmap->base_addr_low;
+
+          if(base_addr >= 0x100000000000ull) // Ignore physical addresses greater than 64 GiB
+            continue;
+
+          if(pass == 0) // Looking for large page-sized memory
+          {
+            int large_pages_found = 0; // Number of 4 MiB pages found in this memory region
+            extra_space = mmap->base_addr_low & (large_page_size-1);
+
+            if(extra_space != 0)
+              base_addr += large_page_size - extra_space; // Make sure the address we'll use is aligned to a 4 MiB boundary.
+
+            // Find and map all large-sized pages in the memory region that we'll need
+
+            while(page_stack_size >= large_page_size
+                  && mmap_len >= extra_space + (large_pages_found+1)*large_page_size)
+            {
+              large_pages[large_page_count] = base_addr + large_page_size * large_pages_found;
+              page_stack_size -= large_page_size;
+
+              kMapPage(map_ptr, large_pages[large_page_count],
+                       PAGING_RW | PAGING_SUPERVISOR | PAGING_4MB_PAGE);
+              large_page_count++;
+              large_pages_found++;
+              map_ptr += large_page_size;
+            }
+          }
+          else // Looking for small page-sized memory
+          {
+            int small_pages_found = 0; // Number of 4 KiB pages found in this memory region
+            int page_tables_needed = 0;
+            extra_space = mmap->base_addr_low & (PAGE_SIZE-1);
+
+            if(extra_space != 0)
+              base_addr += PAGE_SIZE - extra_space; // Make sure the address we'll use is aligned to a 4 KiB boundary.
+
+            // Map the remaining regions with 4 KiB pages
+
+            while(page_stack_size > 0
+                  && mmap_len >= extra_space + (page_tables_needed+small_pages_found+1)*PAGE_SIZE)
+            {
+              // Locate the memory to be used for the page table
+
+              if(small_page_map_count % 1024 == 0)
+              {
+                if(mmap_len < extra_space + (page_tables_needed+small_pages_found+2)*PAGE_SIZE)
+                  break;
+
+                page_tables[page_table_count] = base_addr + PAGE_SIZE * (small_pages_found+page_tables_needed);
+                clearPhysPage(page_tables[page_table_count]);
+
+                pde_t *pde = ADDR_TO_PDE(map_ptr);
+
+                *(dword *)pde = page_tables[page_table_count] | PAGING_RW | PAGING_SUPERVISOR | PAGING_PRES;
+                page_table_count++;
+                page_tables_needed++;
+              }
+
+              kMapPage(map_ptr, base_addr + PAGE_SIZE * (small_pages_found+page_tables_needed),
+                       PAGING_RW | PAGING_SUPERVISOR);
+              page_stack_size -= PAGE_SIZE;
+              small_pages_found++;
+              small_page_map_count++;
+              map_ptr += PAGE_SIZE;
+            }
+          }
+        }
+      }
+    }
+
+    paddr_t *stack_ptr=freePageStack;
+
+    kprintf("Adding pages to free page stack\n");
+
+    for(unsigned long offset=0; offset < info->mmap_length; offset += mmap->size+sizeof(mmap->size))
+    {
+      mmap = (const memory_map_t *)(info->mmap_addr + offset);
+
+      if(mmap->type == MBI_TYPE_AVAIL)
+      {
+        u64 mmap_len = mmap->length_high;
+        mmap_len = mmap_len << 32;
+        mmap_len |= mmap->length_low;
+
+        paddr_t mmap_addr = mmap->base_addr_high;
+        mmap_addr = mmap_addr << 32;
+        mmap_addr |= mmap->base_addr_low;
+
+        if(mmap_addr & (PAGE_SIZE-1))
+        {
+          mmap_addr += PAGE_SIZE - (mmap_addr & (PAGE_SIZE-1));
+          mmap_len -= PAGE_SIZE - (mmap_addr & (PAGE_SIZE-1));
+        }
+
+        // Check each address in this region to determine if it should be added to the free page list
+
+        for(paddr_t paddr=mmap_addr, end=mmap_addr+mmap_len; paddr < end; )
+        {
+          int found = 0;
+
+          // Is this address within a large page?
+
+          for(size_t i=0; i < large_page_count; i++)
+          {
+            if(paddr >= large_pages[i] && paddr < large_pages[i] + large_page_size)
+            {
+              found = 1;
+              paddr = large_pages[i] + large_page_size;
+              break;
+            }
+          }
+
+          if(found)
+            continue;
+
+          // Is this address used as a page table?
+
+          for(size_t i=0; i < page_table_count; i++)
+          {
+            if(paddr >= page_tables[i] && paddr < page_tables[i] + PAGE_SIZE)
+            {
+              found = 1;
+              paddr += PAGE_SIZE;
+              break;
+            }
+          }
+
+          if(found)
+            continue;
+
+          // Read each PTE that maps to the page stack and compare with pte.base, if a match, mark it as found
+
+          for(addr_t addr=((addr_t)freePageStack) & ~0xFFF; addr <= (((addr_t)freePageStackTop) & ~0xFFF); addr += PAGE_SIZE)
+          {
+            pte_t *pte = ADDR_TO_PTE(addr);
+
+            if((paddr_t)(pte->base << 12) == paddr)
+            {
+              found = 1;
+              paddr += PAGE_SIZE;
+              break;
+            }
+
+            addr += PAGE_SIZE;
+          }
+
+          if(found)
+            continue;
+          else
+          {
+            *stack_ptr++ = paddr;
+            paddr += PAGE_SIZE;
+          }
+        }
+      }
+    }
+    kprintf("Page allocator initialized.\n");
+  }
+  else
+  {
+    kprintf("Multiboot memory map is missing.\n");
+    assert(false);
+  }
+}
+
+int clearPhysPage( paddr_t phys )
 {
   assert( phys != NULL_PADDR );
 
@@ -329,8 +578,8 @@ int initMemory( multiboot_info_t * restrict info )
   {
     pdePtr = ADDR_TO_PDE(addr);
     pdePtr->present = 0;
-    addr += TABLE_SIZE;
-    len -= (len > TABLE_SIZE ? TABLE_SIZE : len);
+    addr += PAGE_TABLE_SIZE;
+    len -= (len > PAGE_TABLE_SIZE ? PAGE_TABLE_SIZE : len);
   } while(len);
 
   setupGDT();
@@ -544,18 +793,12 @@ bool isValidElfExe( addr_t img )
 
 }
 
-addr_t alloc_page(void)
-{
-  free_page_ptr += PAGE_SIZE;
-  return free_page_ptr - PAGE_SIZE;
-}
-
 TCB *load_elf_exec( addr_t img, pid_t exHandler, addr_t addrSpace, addr_t uStack )
 {
   elf_header_t image;
   elf_sheader_t sheader;
   TCB *thread;
-  addr_t page;
+  paddr_t page;
   pde_t pde;
   pte_t pte;
   size_t i, offset;
@@ -603,7 +846,7 @@ TCB *load_elf_exec( addr_t img, pid_t exHandler, addr_t addrSpace, addr_t uStack
 
       if( !pde.present )
       {
-        page = alloc_page();
+        page = allocPageFrame();
         clearPhysPage(page);
 
         *(u32 *)&pde = (u32)page | PAGING_RW | PAGING_USER | PAGING_PRES;
@@ -646,7 +889,7 @@ TCB *load_elf_exec( addr_t img, pid_t exHandler, addr_t addrSpace, addr_t uStack
       {
         if( !pte.present )
         {
-          page = alloc_page();
+          page = allocPageFrame();
           clearPhysPage( page );
           kprintf("mapping NOBITS 0x%x->0x%x\n", (sheader.addr + offset), page);
 
@@ -683,11 +926,14 @@ TCB *load_elf_exec( addr_t img, pid_t exHandler, addr_t addrSpace, addr_t uStack
 void init2( multiboot_info_t * restrict mb_boot_info )
 {
   pmap_t pmap, pmap2;
-  addr_t page;
+  paddr_t page;
   unsigned int *ptr = (unsigned int *)(TEMP_PAGEADDR + PAGE_SIZE);
   addr_t init_server_stack = KERNEL_VSTART - PAGE_SIZE;
-  addr_t uStackPage, initServerPDir;
+  paddr_t uStackPage;
+  paddr_t initServerPDir;
   elf_header_t elf_header;
+
+  kprintf("Bootstrapping initial server...\n");
 
   peek( init_server_img, &elf_header, sizeof elf_header );
 
@@ -696,7 +942,7 @@ void init2( multiboot_info_t * restrict mb_boot_info )
     /* Allocate memory for the page directory and stack including any necessary page tables and
        start the initial server. */
 
-    initServerPDir = alloc_page();
+    initServerPDir = allocPageFrame();
 
     clearPhysPage(initServerPDir);
 
@@ -707,7 +953,7 @@ void init2( multiboot_info_t * restrict mb_boot_info )
       return;
     }
 
-    page = alloc_page();
+    page = allocPageFrame();
     clearPhysPage(page);
 
     *(u32 *)&pmap = (u32)page | PAGING_RW | PAGING_USER | PAGING_PRES;
@@ -715,7 +961,7 @@ void init2( multiboot_info_t * restrict mb_boot_info )
 
     writePmapEntry(initServerPDir, PDE_INDEX(init_server_stack), &pmap);
 
-    uStackPage = alloc_page();
+    uStackPage = allocPageFrame();
     clearPhysPage(uStackPage);
 
     *(u32 *)&pmap2 = (u32)uStackPage | PAGING_RW | PAGING_USER | PAGING_PRES;
@@ -729,8 +975,8 @@ void init2( multiboot_info_t * restrict mb_boot_info )
 
     *--ptr = (unsigned int)&kBss - (unsigned int)&kdCode; // Arg 5
     *--ptr = (unsigned int)&kdCode; // Arg 4
-    *--ptr = (unsigned int)free_page_ptr - FREE_PAGE_PTR_START; // Arg 3
-    *--ptr = FREE_PAGE_PTR_START; // Arg 2
+//    *--ptr = (unsigned int)free_page_ptr - FREE_PAGE_PTR_START; // Arg 3
+//    *--ptr = FREE_PAGE_PTR_START; // Arg 2
     *--ptr = (unsigned int)mb_boot_info; // Arg 1
 
     unmapTemp();
@@ -811,6 +1057,7 @@ void showCPU_Features(void)
 
 void initStructures(void)
 {
+/*
   tid_t tid=0;
 
   for(tid=INITIAL_TID; tid + 1 < (tid_t)MAX_THREADS; tid++)
@@ -818,14 +1065,16 @@ void initStructures(void)
     getTcb(tid)->queue.next = tid+1;
     getTcb(tid+1)->queue.prev = tid;
   }
+*/
+  tree_init(&tcbTree);
 
   for(pid_t pid=0; pid < MAX_PORTS; pid++)
     getPort(pid)->owner = getPort(pid)->sendWaitTail = NULL_PID;
 
-  freeThreadQueue.head = getTcb(INITIAL_TID);
-  freeThreadQueue.tail = getTcb(MAX_THREADS-1);
+//  freeThreadQueue.head = getTcb(INITIAL_TID);
+//  freeThreadQueue.tail = getTcb(MAX_THREADS-1);
 
-  freeThreadQueue.head->queue.prev = freeThreadQueue.tail->queue.next = NULL_TID;
+//  freeThreadQueue.head->queue.prev = freeThreadQueue.tail->queue.next = NULL_TID;
 }
 
 /**
@@ -902,13 +1151,20 @@ void init( multiboot_info_t * restrict info )
   if( !init_srv_found )
     stopInit("Can't find initial server.");
 
-  kprintf("%d threads. %d run queues.\n", MAX_THREADS, NUM_RUN_QUEUES);
+  kprintf("%d run queues.\n", NUM_RUN_QUEUES);
 
   /* Initialize memory */
 
   if( initMemory( info ) < 0 )
     stopInit("Not enough memory! At least 8 MiB is needed.");
 
+  kprintf("Initializing interrupt handling.\n");
+  initInterrupts();
+
+  kprintf("Initializing free page allocator.\n");
+  initPageAllocator(info);
+
+  kprintf("Initializing data structures.\n");
   initStructures();
 
   // Map the kernel variable page (there should be a rw/supervisor page and a r/o user page that points to kernelVars)
@@ -917,23 +1173,25 @@ void init( multiboot_info_t * restrict info )
   kMapPage( (addr_t)KERNEL_VARIABLES, (addr_t)kernelVars,
     PAGING_RW | PAGING_USER ); // this should be mapped as read-only
 
-  initInterrupts();
 //  enable_apic();
 //  init_apic_timer();
+  kprintf("Initializing scheduler.\n");
   initScheduler( (addr_t)initKrnlPDir );
 
   if( currentThread == NULL )
     stopInit("Unable to initialize the idle thread.");
 
-  if( GET_TID(currentThread) == IDLE_TID )
+  if( currentThread->tid == IDLE_TID )
     stack = (addr_t)EXT_PTR(idleStack) + idleStackLen - (sizeof(ExecutionState) - 8);
   else
     stack = (addr_t)&currentThread->execState;
 
   assert( currentThread->threadState != DEAD );
 
+  kprintf("Initializing clock.\n");
   init_clock();
 #if 0
+  kprintf("Initializing ATA.\n");
   testATA();
 #endif /* DEBUG */
   init2(info);
