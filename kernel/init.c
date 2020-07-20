@@ -77,7 +77,7 @@ static unsigned DISC_CODE(bcd2bin(unsigned num));
 static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month, unsigned int day, unsigned int hour,
                           unsigned int minute, unsigned int second));
 static addr_t DISC_DATA(init_server_img);
-
+static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * restrict info));
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
 static void DISC_CODE(initPageAllocator(multiboot_info_t * restrict info));
 extern void invalidate_page( addr_t );
@@ -105,6 +105,69 @@ void readPhysMem(addr_t address, addr_t buffer, size_t len)
 }
 */
 
+bool isReservedPage(paddr_t addr, multiboot_info_t * restrict info)
+{
+  unsigned int kernelStart = (unsigned int)&kPhysStart;
+  unsigned int kernelLength = (unsigned int)&kSize;
+
+  addr = ALIGN_DOWN(PAGE_SIZE, addr);
+  paddr_t addrEnd = addr + PAGE_SIZE;
+
+  if(addr < (paddr_t)0x100000)
+    return true;
+  else if((addr >= kernelStart && addr < kernelStart + kernelLength)
+          || (addrEnd >= kernelStart && addrEnd < kernelStart+kernelLength))
+    return true;
+  else
+  {
+    int inSomeRegion = 0;
+    const memory_map_t *mmap;
+
+    for(unsigned long offset=0; offset < info->mmap_length; offset += mmap->size+sizeof(mmap->size))
+    {
+      mmap = (const memory_map_t *)(info->mmap_addr + offset);
+
+      u64 mmapLen = mmap->length_high;
+      mmapLen = mmapLen << 32;
+      mmapLen |= mmap->length_low;
+
+      u64 mmap_base = mmap->base_addr_high;
+      mmap_base = mmap_base << 32;
+      mmap_base |= mmap->base_addr_low;
+
+      if(((u64)addr >= mmap_base && (u64)addr <= mmap_base + mmapLen)
+         || ((u64)addrEnd >= mmap_base && (u64)addrEnd <= mmap_base + mmapLen))
+      {
+        inSomeRegion = 1;
+
+        if(mmap->type != MBI_TYPE_AVAIL)
+          return true;
+        else
+          break;
+      }
+    }
+
+    if(!inSomeRegion)
+      return true;
+
+    module_t *module = (module_t *)info->mods_addr;
+
+    for(unsigned int i=0; i < info->mods_count; i++, module++)
+    {
+      if(addr > module->mod_start && addr >= module->mod_end
+         && addrEnd > module->mod_start && addrEnd > module->mod_end)
+        continue;
+      else if(addr < module->mod_start && addr < module->mod_end &&
+              addrEnd <= module->mod_start && addrEnd < module->mod_end)
+        continue;
+      else
+        return true;
+    }
+
+    return false;
+  }
+}
+
 void initPageAllocator(multiboot_info_t * restrict info)
 {
   const memory_map_t *mmap;
@@ -127,15 +190,15 @@ void initPageAllocator(multiboot_info_t * restrict info)
 
   // Assumes PAE is enabled
 
-      kprintf("Multiboot MMAP base: 0x%x Multiboot MMAP length: 0x%x\n", info->mmap_addr, info->mmap_length);
+/*      kprintf("Multiboot MMAP base: 0x%x Multiboot MMAP length: 0x%x\n", info->mmap_addr, info->mmap_length);
 
       for(unsigned long offset=0; offset < info->mmap_length; offset += mmap->size+sizeof(mmap->size))
       {
         mmap = (const memory_map_t *)(info->mmap_addr + offset);
 
-        u64 mmap_len = mmap->length_high;
-        mmap_len = mmap_len << 32;
-        mmap_len |= mmap->length_low;
+        u64 mmapLen = mmap->length_high;
+        mmapLen = mmapLen << 32;
+        mmapLen |= mmap->length_low;
 
        u64 mmap_base = mmap->base_addr_high;
        mmap_base = mmap_base << 32;
@@ -153,23 +216,22 @@ void initPageAllocator(multiboot_info_t * restrict info)
 
        kprintf("%x Type: 0x%x Size: 0x%x\n", mmap->length_low, mmap->type, mmap->size);
      }
+*/
+  unsigned long pageStackSize = PAGE_ALIGN(sizeof(paddr_t)*(info->mem_upper) / (16 * 4));
+  unsigned long largePageSize = LARGE_PAGE_SIZE;
 
-  unsigned long page_stack_size = (info->mem_upper + 1024 + ((info->mem_upper & 0x03) ? 4 : 0)) / 16;
-  unsigned long large_page_size = LARGE_PAGE_SIZE;
+  kprintf("Page Stack size: 0x%x\n", pageStackSize);
 
   if(info->flags & MBI_FLAGS_MMAP)
   {
-    paddr_t large_pages[32], page_tables[32];
-    size_t page_table_count=0, large_page_count=0; // Number of addresses corresponding to page tables and large pages in each of the previous arrays
+    paddr_t largePages[32], pageTables[32];
+    int pageTableCount=0, largePageCount=0; // Number of addresses corresponding to page tables and large pages in each of the previous arrays
 
     int page_stack_mapped=0;
-    int small_page_map_count=0;
-    addr_t map_ptr = (addr_t)freePageStack;
+    int smallPageMapCount=0;
+    addr_t mapPtr = (addr_t)freePageStack;
 
-
-    kprintf("Scanning for pages to use...\n");
-
-    for(int pass=0; pass < 2; pass++)
+    for(int isSmallPageSearch=0; isSmallPageSearch < 2; isSmallPageSearch++)
     {
       if(page_stack_mapped)
         break;
@@ -181,89 +243,109 @@ void initPageAllocator(multiboot_info_t * restrict info)
 
         mmap = (const memory_map_t *)(info->mmap_addr + offset);
 
-        u64 mmap_len = mmap->length_high;
-        mmap_len = mmap_len << 32;
-        mmap_len |= mmap->length_low;
+        u64 mmapLen = mmap->length_high;
+        mmapLen = mmapLen << 32;
+        mmapLen |= mmap->length_low;
 
-        if(mmap->type == MBI_TYPE_AVAIL && mmap_len >= page_stack_size)
+        if(mmap->type == MBI_TYPE_AVAIL && mmapLen >= pageStackSize)
         {
-          paddr_t base_addr = mmap->base_addr_high;
-          unsigned long extra_space;
-          base_addr = base_addr << 32;
-          base_addr |= mmap->base_addr_low;
+          paddr_t baseAddr = mmap->base_addr_high;
+          unsigned long extraSpace;
+          baseAddr = baseAddr << 32;
+          baseAddr |= mmap->base_addr_low;
 
-          if(base_addr >= 0x100000000000ull) // Ignore physical addresses greater than 64 GiB
+          if(baseAddr >= 0x100000000ull) // Ignore physical addresses greater than 4 GiB
             continue;
 
-          if(pass == 0) // Looking for large page-sized memory
+          if(!isSmallPageSearch) // Looking for large page-sized memory
           {
-            int large_pages_found = 0; // Number of 4 MiB pages found in this memory region
-            extra_space = mmap->base_addr_low & (large_page_size-1);
+            int largePagesSearched = 0; // Number of 4 MiB pages found in this memory region
+            extraSpace = mmap->base_addr_low & (largePageSize-1);
 
-            if(extra_space != 0)
-              base_addr += large_page_size - extra_space; // Make sure the address we'll use is aligned to a 4 MiB boundary.
+            if(extraSpace != 0)
+              baseAddr += largePageSize - extraSpace; // Make sure the address we'll use is aligned to a 4 MiB boundary.
 
             // Find and map all large-sized pages in the memory region that we'll need
 
-            while(page_stack_size >= large_page_size
-                  && mmap_len >= extra_space + (large_pages_found+1)*large_page_size)
+            while(pageStackSize >= largePageSize
+                  && mmapLen >= extraSpace + (largePagesSearched+1)*largePageSize)
             {
-              large_pages[large_page_count] = base_addr + large_page_size * large_pages_found;
-              page_stack_size -= large_page_size;
+              if(!isReservedPage(baseAddr + largePageSize * largePagesSearched, info))
+              {
+                largePages[largePageCount] = baseAddr + largePageSize * largePagesSearched;
+                pageStackSize -= largePageSize;
 
-              kMapPage(map_ptr, large_pages[large_page_count],
-                       PAGING_RW | PAGING_SUPERVISOR | PAGING_4MB_PAGE);
-              large_page_count++;
-              large_pages_found++;
-              map_ptr += large_page_size;
+                //kprintf("Mapping 4 MB page phys 0x%llx to virt 0x%x\n", largePages[largePageCount], mapPtr);
+
+                kMapPage(mapPtr, largePages[largePageCount],
+                         PAGING_RW | PAGING_SUPERVISOR | PAGING_4MB_PAGE);
+                largePageCount++;
+                mapPtr += largePageSize;
+              }
+
+              largePagesSearched++;
             }
           }
           else // Looking for small page-sized memory
           {
-            int small_pages_found = 0; // Number of 4 KiB pages found in this memory region
-            int page_tables_needed = 0;
-            extra_space = mmap->base_addr_low & (PAGE_SIZE-1);
+            int smallPagesSearched = 0; // Number of 4 KiB pages found in this memory region
+            int pageTablesNeeded = 0;
+            extraSpace = mmap->base_addr_low & (PAGE_SIZE-1);
 
-            if(extra_space != 0)
-              base_addr += PAGE_SIZE - extra_space; // Make sure the address we'll use is aligned to a 4 KiB boundary.
+            baseAddr = PAGE_ALIGN(baseAddr);
 
             // Map the remaining regions with 4 KiB pages
 
-            while(page_stack_size > 0
-                  && mmap_len >= extra_space + (page_tables_needed+small_pages_found+1)*PAGE_SIZE)
+            while(pageStackSize > 0
+                  && mmapLen >= extraSpace + (pageTablesNeeded+smallPagesSearched+1)*PAGE_SIZE)
             {
-              // Locate the memory to be used for the page table
-
-              if(small_page_map_count % 1024 == 0)
+              if(isReservedPage(baseAddr + PAGE_SIZE * (smallPagesSearched+pageTablesNeeded), info))
               {
-                if(mmap_len < extra_space + (page_tables_needed+small_pages_found+2)*PAGE_SIZE)
-                  break;
-
-                page_tables[page_table_count] = base_addr + PAGE_SIZE * (small_pages_found+page_tables_needed);
-                clearPhysPage(page_tables[page_table_count]);
-
-                pde_t *pde = ADDR_TO_PDE(map_ptr);
-
-                *(dword *)pde = page_tables[page_table_count] | PAGING_RW | PAGING_SUPERVISOR | PAGING_PRES;
-                page_table_count++;
-                page_tables_needed++;
+                smallPagesSearched++;
+                continue;
               }
 
-              kMapPage(map_ptr, base_addr + PAGE_SIZE * (small_pages_found+page_tables_needed),
+              // Locate the memory to be used for the page table
+
+              if(smallPageMapCount % 1024 == 0)
+              {
+                if(mmapLen < extraSpace + (pageTablesNeeded+smallPagesSearched+2)*PAGE_SIZE)
+                  break;
+
+                pde_t *pde = ADDR_TO_PDE(mapPtr);
+
+                if(!pde->present)
+                {
+                  pageTables[pageTableCount] = baseAddr + PAGE_SIZE * (smallPagesSearched+pageTablesNeeded);
+                  clearPhysPage(pageTables[pageTableCount]);
+
+                  //kprintf("Mapping page table phys 0x%llx to virt 0x%x\n", pageTables[pageTableCount], mapPtr);
+
+                  *(dword *)pde = pageTables[pageTableCount] | PAGING_RW | PAGING_SUPERVISOR | PAGING_PRES;
+                  pageTableCount++;
+                  pageTablesNeeded++;
+                }
+              }
+
+              //kprintf("Mapping page phys 0x%llx to virt 0x%x\n", baseAddr + PAGE_SIZE * (smallPagesSearched+pageTablesNeeded), mapPtr);
+
+              kMapPage(mapPtr, baseAddr + PAGE_SIZE * (smallPagesSearched+pageTablesNeeded),
                        PAGING_RW | PAGING_SUPERVISOR);
-              page_stack_size -= PAGE_SIZE;
-              small_pages_found++;
-              small_page_map_count++;
-              map_ptr += PAGE_SIZE;
+              pageStackSize -= PAGE_SIZE;
+              smallPagesSearched++;
+              smallPageMapCount++;
+              mapPtr += PAGE_SIZE;
             }
           }
         }
       }
     }
 
+    //kprintf("%d large pages needed. %d page tables needed.\n", largePageCount, pageTableCount);
+
     paddr_t *stack_ptr=freePageStack;
 
-    kprintf("Adding pages to free page stack\n");
+    //kprintf("Adding pages to free page stack\n");
 
     for(unsigned long offset=0; offset < info->mmap_length; offset += mmap->size+sizeof(mmap->size))
     {
@@ -271,34 +353,38 @@ void initPageAllocator(multiboot_info_t * restrict info)
 
       if(mmap->type == MBI_TYPE_AVAIL)
       {
-        u64 mmap_len = mmap->length_high;
-        mmap_len = mmap_len << 32;
-        mmap_len |= mmap->length_low;
+        u64 mmapLen = mmap->length_high;
+        mmapLen = mmapLen << 32;
+        mmapLen |= mmap->length_low;
 
-        paddr_t mmap_addr = mmap->base_addr_high;
-        mmap_addr = mmap_addr << 32;
-        mmap_addr |= mmap->base_addr_low;
+        paddr_t mmapAddr = mmap->base_addr_high;
+        mmapAddr = mmapAddr << 32;
+        mmapAddr |= mmap->base_addr_low;
 
-        if(mmap_addr & (PAGE_SIZE-1))
+        if(mmapAddr & (PAGE_SIZE-1))
         {
-          mmap_addr += PAGE_SIZE - (mmap_addr & (PAGE_SIZE-1));
-          mmap_len -= PAGE_SIZE - (mmap_addr & (PAGE_SIZE-1));
+          u64 extraSpace = PAGE_SIZE - (mmapAddr & (PAGE_SIZE-1));
+
+          mmapAddr += extraSpace;
+          mmapLen -= extraSpace;
         }
+
+        int pagesAdded = 0;
 
         // Check each address in this region to determine if it should be added to the free page list
 
-        for(paddr_t paddr=mmap_addr, end=mmap_addr+mmap_len; paddr < end; )
+        for(paddr_t paddr=mmapAddr, end=mmapAddr+mmapLen; paddr < end && pagesAdded < pageStackSize / sizeof(paddr_t); )
         {
           int found = 0;
 
           // Is this address within a large page?
 
-          for(size_t i=0; i < large_page_count; i++)
+          for(size_t i=0; i < largePageCount; i++)
           {
-            if(paddr >= large_pages[i] && paddr < large_pages[i] + large_page_size)
+            if(paddr >= largePages[i] && paddr < largePages[i] + largePageSize)
             {
               found = 1;
-              paddr = large_pages[i] + large_page_size;
+              paddr = largePages[i] + largePageSize;
               break;
             }
           }
@@ -306,11 +392,11 @@ void initPageAllocator(multiboot_info_t * restrict info)
           if(found)
             continue;
 
-          // Is this address used as a page table?
+          // Is this page used as a page table?
 
-          for(size_t i=0; i < page_table_count; i++)
+          for(size_t i=0; i < pageTableCount; i++)
           {
-            if(paddr >= page_tables[i] && paddr < page_tables[i] + PAGE_SIZE)
+            if(paddr >= pageTables[i] && paddr < pageTables[i] + PAGE_SIZE)
             {
               found = 1;
               paddr += PAGE_SIZE;
@@ -321,9 +407,17 @@ void initPageAllocator(multiboot_info_t * restrict info)
           if(found)
             continue;
 
+          // Is this page reserved?
+
+          if(isReservedPage(paddr, info))
+          {
+            paddr += PAGE_SIZE;
+            continue;
+          }
+
           // Read each PTE that maps to the page stack and compare with pte.base, if a match, mark it as found
 
-          for(addr_t addr=((addr_t)freePageStack) & ~0xFFF; addr <= (((addr_t)freePageStackTop) & ~0xFFF); addr += PAGE_SIZE)
+          for(addr_t addr=((addr_t)freePageStack); addr < (((addr_t)freePageStack) + pageStackSize); addr += PAGE_SIZE)
           {
             pte_t *pte = ADDR_TO_PTE(addr);
 
@@ -343,6 +437,7 @@ void initPageAllocator(multiboot_info_t * restrict info)
           {
             *stack_ptr++ = paddr;
             paddr += PAGE_SIZE;
+            pagesAdded++;
           }
         }
       }
@@ -563,6 +658,7 @@ int initMemory( multiboot_info_t * restrict info )
 
   kprintf("Kernel AddrSpace: 0x%x\n", (unsigned)initKrnlPDir);
 
+
   for( addr=(addr_t)EXT_PTR(kCode); addr < (addr_t)EXT_PTR(kData); addr += PAGE_SIZE )
   {
     ptePtr = ADDR_TO_PTE( addr );
@@ -574,6 +670,7 @@ int initMemory( multiboot_info_t * restrict info )
   addr = (addr_t)EXT_PTR(kPhysStart);
   len = (size_t)EXT_PTR(kSize);
 
+/*
   do
   {
     pdePtr = ADDR_TO_PDE(addr);
@@ -581,7 +678,7 @@ int initMemory( multiboot_info_t * restrict info )
     addr += PAGE_TABLE_SIZE;
     len -= (len > PAGE_TABLE_SIZE ? PAGE_TABLE_SIZE : len);
   } while(len);
-
+*/
   setupGDT();
 
   return 0;

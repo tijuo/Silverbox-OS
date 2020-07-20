@@ -319,10 +319,10 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
     {
       #if DEBUG
         if( !is_readable(read_addr+addr_offset, read_pdir) )
-          kprintf("0x%x is not readable in address space: 0x%x\n", read_addr+addr_offset, read_pdir);
+          kprintf("0x%x is not readable in address space: 0x%llx\n", read_addr+addr_offset, read_pdir);
 
         if( !is_writable(write_addr+addr_offset, write_pdir) )
-          kprintf("0x%x is not writable in address space: 0x%x\n", write_addr+addr_offset, write_pdir);
+          kprintf("0x%x is not writable in address space: 0x%llx\n", write_addr+addr_offset, write_pdir);
       #endif /* DEBUG */
 
       return E_FAIL;
@@ -435,7 +435,7 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
   {
     if( pdePtr->present )
     {
-      kprintf("%x -> %x: 0x%x is already mapped!\n", virt, phys, virt);
+      kprintf("%llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
       return E_OVERWRITE;
     }
 
@@ -447,12 +447,12 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
 
     if ( !pdePtr->present )
     {
-      kprintf("Trying to map %x -> %x, but no PDE present.\n", phys, virt);
+      kprintf("Trying to map %llx -> %x, but no PDE present.\n", phys, virt);
       return E_NOT_MAPPED;
     }
     else if( ptePtr->present )
     {
-      kprintf("%x -> %x: 0x%x is already mapped!\n", virt, phys, virt);
+      kprintf("%llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
       return E_OVERWRITE;
     }
 
@@ -551,7 +551,7 @@ int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
 
   if( pdePtr->present )
   {
-    kprintf("%x -> %x: 0x%x is already mapped!\n", virt, phys, virt);
+    kprintf("%llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
     return E_OVERWRITE;
   }
 

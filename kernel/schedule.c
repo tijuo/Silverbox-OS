@@ -126,7 +126,7 @@ TCB *schedule( TCB *thread )
 
 dword *updateCurrentThread(TCB *tcb, ExecutionState state)
 {
-  if(tcb->threadState != RUNNING)
+  if(tcb != NULL && tcb->threadState != RUNNING)
   {
     TCB *newTcb = schedule(tcb);
 

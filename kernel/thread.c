@@ -15,7 +15,7 @@ TCB *currentThread;
 TCB *idleThread;
 tree_t tcbTree;
 static tid_t lastTID=0;
-static tid_t getNewTID();
+static tid_t getNewTID(void);
 
 //extern void saveAndSwitchContext( TCB *, TCB * );
 
@@ -343,7 +343,7 @@ TCB *getTcb(tid_t tid)
   }
 }
 
-tid_t getNewTID()
+tid_t getNewTID(void)
 {
   int i, maxAttempts=1000;
 

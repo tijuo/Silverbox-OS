@@ -138,15 +138,15 @@ initPaging2:
   rep stosd
 
   mov ebx, kLowPageTab
-  xor ecx, ecx
+  mov ecx, 1		; Skip the first page (leave it as not present to catch NULL dereferences)
 
 .mapLowMemLoop:
+  cmp ecx, videoRamStart
+  jge  .mapVideoRam
+
   mov eax, ecx
   or  eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
   mov [ebx], eax
-
-  cmp ecx, videoRamStart
-  jge  .mapVideoRam
 
   add ecx, PAGE_SIZE
   add ebx, 4
@@ -161,12 +161,12 @@ initPaging2:
   lea ebx, [ebx+4*edx]
 
 .mapVideoRamLoop:
+  cmp ecx, videoBiosStart
+  jge  .mapKernel
+
   mov eax, ecx
   or  eax, PG_USER | PG_READ_WRITE | PG_CD | PG_PWT | PG_PRESENT
   mov [ebx], eax
-
-  cmp ecx, videoBiosStart
-  jge  .mapKernel
 
   add ecx, PAGE_SIZE
   add ebx, 4
@@ -182,12 +182,12 @@ initPaging2:
   xor ecx, ecx
 
 .mapKernelLoop:
+  cmp ecx, kSize
+  jge  .mapPDEs
+
   mov eax, esi
   or  eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
   mov [ebx], eax
-
-  cmp ecx, kSize
-  jge  .mapPDEs
 
   add ecx, PAGE_SIZE
   add esi, PAGE_SIZE
@@ -243,12 +243,12 @@ initPaging2:
   mov esi, kPhysStart
 
 .map1to1KernelLoop:
+  cmp ecx, kSize
+  jge  .restoreEBX
+
   mov eax, esi
   or  eax, PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT
   mov [ebx], eax
-
-  cmp ecx, kSize
-  jge  .restoreEBX
 
   add ecx, PAGE_SIZE
   add esi, PAGE_SIZE

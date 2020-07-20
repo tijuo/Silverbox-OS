@@ -22,6 +22,7 @@ void scrollUp( void );
 int scrollDown( void );
 void doNewLine( int *x, int *y );
 char *kitoa(int value, char *str, int base);
+char *klltoa(long long int value, char *str, int base);
 void _putChar( char c, int x, int y, unsigned char attrib );
 void putChar( char c, int x, int y );
 void dump_regs( const TCB *thread, const ExecutionState *state, int intNum, int errorCode);
@@ -149,6 +150,45 @@ char *kitoa(int value, char *str, int base)
   return str;
 }
 
+/*
+char *klltoa(long long int value, char *str, int base)
+{
+  unsigned long long int num = (unsigned long long int)value;
+  size_t str_end=0;
+
+  if( !str )
+    return NULL;
+  else if( base >= 2 && base <= 36 )
+  {
+    if( base == 10 && value < 0 )
+    {
+      str[str_end++] = '-';
+    }
+    do
+    {
+      unsigned long long int quot = base * (num / base);
+
+      str[str_end++] = _digits[num - quot];
+      num = quot / base;
+    } while( num );
+  }
+
+  str[str_end] = '\0';
+
+  if( str_end )
+  {
+    str_end--;
+
+    for( size_t i=0; i < str_end; i++, str_end-- )
+    {
+      char tmp = str[i];
+      str[i] = str[str_end];
+      str[str_end] = tmp;
+    }
+  }
+  return str;
+}
+*/
 void initVideo( void )
 {
   useLowMem = false;
@@ -475,6 +515,8 @@ void putChar( char c, int x, int y )
 
 void kprintf( const char *str, ... )
 {
+  int longCounter=0;
+  int unSigned=0; // XXX: not implemented
   int percent = 0;
   va_list args;
   char digits[12];
@@ -488,29 +530,65 @@ void kprintf( const char *str, ... )
     {
       switch( str[i] )
       {
+        case 'l':
+          longCounter++;
+          break;
         case '%':
           putDebugChar('%');
+          longCounter = 0;
+          unSigned = 0;
+          percent = 0;
           break;
         case 'c':
           putDebugChar((char)va_arg(args,char));
+          longCounter = 0;
+          unSigned = 0;
+          percent = 0;
           break;
         case 'p':
         case 'x':
         case 'X':
-          kprintf(kitoa(va_arg(args, int), digits, 16));
+          if(longCounter >= 2)
+           {
+             long long int arg = va_arg(args, long long int);
+
+             if(arg >> 32)
+               kprintf(kitoa((int)(arg >> 32), digits, 16));
+
+             kprintf(kitoa((int)(arg & 0xFFFFFFFF), digits, 16));
+           }
+           else
+             kprintf(kitoa(va_arg(args, int), digits, 16));
+
+          longCounter = 0;
+          unSigned = 0;
+          percent = 0;
           break;
         case 's':
           kprintf(va_arg(args, char *));
+          percent=0;
+          longCounter=0;
+          unSigned = 0;
           break;
         case 'u':
+          unSigned = 1;
+          break;
         case 'd':
         case 'i':
-           kprintf(kitoa(va_arg(args, int), digits, 10));
+/*
+          if(longCounter >= 2)
+            kprintf(klltoa(va_arg(args, long long int), digits, 10));
+          else
+*/
+          kprintf(kitoa(va_arg(args, int), digits, 10));
+
+          percent = 0;
+          longCounter = 0;
+          unSigned = 0;
           break;
         default:
           break;
       }
-      percent = 0;
     }
     else
     {
@@ -686,9 +764,9 @@ void dump_regs( const TCB *thread, const ExecutionState *execState, int intNum, 
 
 #endif /* DEBUG */
 
-void abort();
+void abort(void);
 
-void abort()
+void abort(void)
 {
   kprintf("Debug Error: abort() has been called.");
   __asm__("hlt");

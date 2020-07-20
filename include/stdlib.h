@@ -28,7 +28,7 @@ long atol(char *nptr);
 long strtol(const char *nptr, char **endptr, int base);
 unsigned long strtoul(const char *nptr, char **endptr, int base);
 
-void abort();
+void abort(void);
 void exit(int status);
 int atexit(void (*func)(void));
 

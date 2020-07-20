@@ -49,8 +49,6 @@ IMPORT kernelStack
     push  dword [esi]
 %endmacro
 
-; This desperately needs to be cleaned up!
-
 %macro RESTORE_STATE 0
     call updateCurrentThread
     mov  esp, eax
