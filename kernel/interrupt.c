@@ -114,8 +114,8 @@ bool handleHeapPageFault(void)
 
 /// Handles the CPU exceptions
 
-void handleCPUException(int intNum, int errorCode, volatile tcb_t * volatile tcb,
-                        volatile ExecutionState state)
+void handleCPUException(int intNum, int errorCode, tcb_t * tcb,
+                        ExecutionState state)
 {
   #if DEBUG
 

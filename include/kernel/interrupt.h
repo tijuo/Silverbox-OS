@@ -8,7 +8,7 @@
 #define NUM_IRQS        16
 
 void handleIRQ(int irqNum, tcb_t *thread, ExecutionState state);
-void handleCPUException(int intNum, int errorCode, volatile tcb_t *thread, volatile ExecutionState);
+void handleCPUException(int intNum, int errorCode, tcb_t *thread, ExecutionState);
 
 /// The threads that are responsible for handling an IRQ
 

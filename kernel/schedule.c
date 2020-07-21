@@ -162,7 +162,7 @@ dword *updateCurrentThread(tcb_t *tcb, ExecutionState state)
     }
   }
   else
-    return NULL;(dword *)&state;
+    return NULL;//(dword *)&state;
 }
 
 /**

@@ -31,7 +31,7 @@
 /* FIXME: Changing any of these values may require changing the
    asm code. */
 
-#define TEMP_PAGEADDR           (0xC0000)
+#define TEMP_PAGEADDR           ((addr_t)0xC0000)
 #define LAPIC_VADDR             (TEMP_PAGEADDR + PAGE_SIZE)
 #define KERNEL_CLOCK		(LAPIC_VADDR + PAGE_SIZE)
 
