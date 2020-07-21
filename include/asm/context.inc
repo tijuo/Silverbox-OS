@@ -10,9 +10,6 @@ IMPORT updateCurrentThread
 [section .data]
 IMPORT currentThread
 IMPORT tssEsp0
-IMPORT tcbTable
-
-IMPORT kernelStack
 
 %define stateCsOff		(8*4)
 %define DPL_MASK		0x03
@@ -23,7 +20,7 @@ IMPORT kernelStack
     ECODE_SAVE_STATE
 %endmacro
 
-; Used to streamline saving stack state with error code push on
+; Used to streamline saving stack state with error code pushed on
 
 %macro ECODE_SAVE_STATE 0
     push edx
@@ -43,7 +40,7 @@ IMPORT kernelStack
 
     jz   .saveCurrentThread
 
-    lea   esp, [kernelStack+KERNEL_STACK_LEN]
+    lea   esp, [kernelStackTop]
 .saveCurrentThread:
     lea   esi, [currentThread]
     push  dword [esi]
@@ -51,7 +48,16 @@ IMPORT kernelStack
 
 %macro RESTORE_STATE 0
     call updateCurrentThread
+    add  esp, 4
+
+    test eax, eax
+    jz   .testDPL
+
+;  Load the new stack that was returned by updateCurrentThread
+
     mov  esp, eax
+
+.testDPL:
 
     test word [esp+4*9], DPL_MASK
     jz  .popRegs

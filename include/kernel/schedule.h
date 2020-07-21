@@ -13,16 +13,16 @@
 
 /** The number of run queues used for the scheduler. */
 
-int attachPausedQueue( TCB *thread );
-int detachPausedQueue( TCB *thread );
-TCB *attachRunQueue( TCB *thread );
-TCB *detachRunQueue( TCB *thread );
+int attachPausedQueue( tcb_t *thread );
+int detachPausedQueue( tcb_t *thread );
+tcb_t *attachRunQueue( tcb_t *thread );
+tcb_t *detachRunQueue( tcb_t *thread );
 
-int setPriority( TCB *thread, unsigned int level );
+int setPriority( tcb_t *thread, unsigned int level );
 
-HOT(TCB *schedule( TCB * ));
-HOT(void timerInt( TCB * ));
-HOT(dword *updateCurrentThread(TCB *tcb, ExecutionState state));
+HOT(tcb_t *schedule( tcb_t * ));
+HOT(void timerInt( tcb_t * ));
+HOT(dword *updateCurrentThread(tcb_t *tcb, ExecutionState state));
 void idle(void);
 
 extern struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;

@@ -28,23 +28,3 @@ EXPORT ioPermBitmap
 	resb TSS_IO_PERM_BMP_LEN
 EXPORT idleStack
 	resb IDLE_STACK_LEN
-EXPORT kernelStack
-	resb KERNEL_STACK_LEN
-;EXPORT initKrnlPDir
-;	resb PAGE_SIZE
-;EXPORT kernelVars
-;	resb KERNEL_VARS_LEN
-;EXPORT lowMemPTab
-;	resb PAGE_SIZE
-;EXPORT kernelPTab
-;	resb PAGE_SIZE
-
-[section .dpages progbits alloc noexec write align=4096]
-EXPORT lowMemPTab
-	times PAGE_SIZE		db 0
-
-[section .data]
-EXPORT initKrnlPDir
-  dd (ioPermBitmap + ~KERNEL_VIRT_START + 1) + KERNEL_PHYS_START
-EXPORT kernelVars
-  dd (ioPermBitmap + ~KERNEL_VIRT_START + 1) + KERNEL_PHYS_START + PAGE_SIZE

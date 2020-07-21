@@ -250,7 +250,7 @@ static int accessPhys( paddr_t phys, void *buffer, size_t len, bool readPhys )
 
   for( size_t i=0; len; phys += bytes, i += bytes, len -= bytes )
   {
-    offset = (size_t)phys & (PAGE_SIZE - 1);
+    offset = (size_t)(phys & (PAGE_SIZE - 1));
     bytes = (len > PAGE_SIZE - offset) ? PAGE_SIZE - offset : len;
 
     mapTemp( phys & ~(PAGE_SIZE-1) );
@@ -416,7 +416,7 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
 
   if( virt == INVALID_VADDR || phys == NULL_PADDR )
   {
-    kprintf("kMapPage():");
+    kprintf("kMapPage(): %llx -> %x: ", phys, virt);
 
     if(virt == INVALID_VADDR)
       kprintf(" Invalid virtual address.");
@@ -435,7 +435,7 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
   {
     if( pdePtr->present )
     {
-      kprintf("%llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
+      kprintf("kMapPage(): %llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
       return E_OVERWRITE;
     }
 
@@ -447,12 +447,12 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
 
     if ( !pdePtr->present )
     {
-      kprintf("Trying to map %llx -> %x, but no PDE present.\n", phys, virt);
+      kprintf("kMapPage(): Trying to map %llx -> %x, but no PDE present.\n", phys, virt);
       return E_NOT_MAPPED;
     }
     else if( ptePtr->present )
     {
-      kprintf("%llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
+      kprintf("kMapPage(): %llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
       return E_OVERWRITE;
     }
 
@@ -534,7 +534,7 @@ int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
 
   if( virt == INVALID_VADDR || phys == NULL_PADDR )
   {
-    kprintf("mapPageTable():");
+    kprintf("kMapPageTable(): %llx -> %x: ", phys, virt);
 
     if(virt == INVALID_VADDR)
       kprintf(" Invalid virtual address.");
@@ -551,7 +551,7 @@ int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
 
   if( pdePtr->present )
   {
-    kprintf("%llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
+    kprintf("kMapPageTable(): %llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
     return E_OVERWRITE;
   }
 

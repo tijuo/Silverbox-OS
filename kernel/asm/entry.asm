@@ -22,8 +22,6 @@
 [section .header progbits alloc noexec nowrite align=4]
 
 IMPORT init
-IMPORT initKrnlPDir
-IMPORT lowMemPTab
 IMPORT kernelGDT
 
 mboot:
@@ -98,11 +96,6 @@ videoRamStart equ 0xA0000
 videoBiosStart equ 0xC0000
 
 initPaging2:
-;kPageDir      equ 0x1000
-;idleStackTop  equ 0x1000
-;kLowPageTab   equ 0x2000
-;kPageTab      equ 0x3000
-
   push ebp
   mov ebp, esp
 
@@ -372,8 +365,8 @@ EXPORT gdtLen
 EXPORT tssLen
   dd KERNEL_TSS_LEN
 
-EXPORT kernelStackLen
-  dd KERNEL_STACK_LEN
+EXPORT initKrnlPDir
+  dd kPageDir
 
 EXPORT idleStackLen
   dd IDLE_STACK_LEN

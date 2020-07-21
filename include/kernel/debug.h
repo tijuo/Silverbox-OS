@@ -27,7 +27,7 @@ void kprintf( const char *str, ... );
 void printAssertMsg(const char *exp, const char *file, const char *func, int line);
 void setBadAssertHlt( bool value );
 void setVideoLowMem( bool value );
-void dump_regs( const TCB *thread, const ExecutionState *state, int intNum, int errorCode );
+void dump_regs( const tcb_t *thread, const ExecutionState *state, int intNum, int errorCode );
 void dump_state( const ExecutionState *state, int intNum, int errorCode );
 
 /*

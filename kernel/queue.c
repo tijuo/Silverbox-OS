@@ -3,29 +3,29 @@
 #include <kernel/thread.h>
 #include <kernel/schedule.h>
 
-TCB *timerDetach( TCB *thread );
-TCB *timerEnqueue( TCB *thread, unsigned int time );
-TCB *timerPop( void );
-TCB *enqueue( struct Queue *queue, TCB *thread );
-TCB *detachQueue( struct Queue *queue, TCB *thread );
-TCB *popQueue( struct Queue *queue );
-int isInQueue( const struct Queue *queue, const TCB *thread );
-int isInTimerQueue( const TCB *thread );
+tcb_t *timerDetach( tcb_t *thread );
+tcb_t *timerEnqueue( tcb_t *thread, unsigned int time );
+tcb_t *timerPop( void );
+tcb_t *enqueue( struct Queue *queue, tcb_t *thread );
+tcb_t *detachQueue( struct Queue *queue, tcb_t *thread );
+tcb_t *popQueue( struct Queue *queue );
+int isInQueue( const struct Queue *queue, const tcb_t *thread );
+int isInTimerQueue( const tcb_t *thread );
 
 #if DEBUG
 unsigned int totalTimerTime(void);
 #endif
 
-int isInQueue(const struct Queue *queue, const TCB *thread)
+int isInQueue(const struct Queue *queue, const tcb_t *thread)
 {
-  const TCB *ptr;
+  const tcb_t *ptr;
 
   for(ptr=queue->head; ptr != thread && ptr != NULL; ptr=getTcb(ptr->queue.next));
 
   return (ptr == thread);
 }
 
-int isInTimerQueue( const TCB *thread )
+int isInTimerQueue( const tcb_t *thread )
 {
   return isInQueue( &timerQueue, thread );
 }
@@ -38,9 +38,9 @@ int isInTimerQueue( const TCB *thread )
   @return The enqueued thread on success. NULL on failure.
 */
 
-TCB *timerEnqueue( TCB *thread, unsigned int time )
+tcb_t *timerEnqueue( tcb_t *thread, unsigned int time )
 {
-  TCB *prev, *ptr;
+  tcb_t *prev, *ptr;
 
   if( time == 0 || !thread )
     RET_MSG(NULL, "Invalid time or NULL pointer")
@@ -104,7 +104,7 @@ TCB *timerEnqueue( TCB *thread, unsigned int time )
   @return The dequeued thread. NULL on failure.
 */
 
-TCB *timerPop( void )
+tcb_t *timerPop( void )
 {
   return timerDetach(timerQueue.head);
 }
@@ -115,7 +115,7 @@ unsigned int totalTimerTime(void)
 {
   unsigned int total=0;
 
-  for(const TCB *ptr=timerQueue.head; ptr != NULL; ptr=getTcb(ptr->queue.next))
+  for(const tcb_t *ptr=timerQueue.head; ptr != NULL; ptr=getTcb(ptr->queue.next))
     total += ptr->queue.delta;
 
   return total;
@@ -131,7 +131,7 @@ unsigned int totalTimerTime(void)
   @return The detached thread if successful. NULL if unsuccessful.
 */
 
-TCB *timerDetach( TCB *thread )
+tcb_t *timerDetach( tcb_t *thread )
 {
   if( !thread )
     RET_MSG(NULL, "NULL thread");
@@ -161,7 +161,7 @@ TCB *timerDetach( TCB *thread )
   }
   else
   {
-    TCB *ptr;
+    tcb_t *ptr;
 
     for(ptr=timerQueue.head; ptr != NULL; ptr=getTcb(ptr->queue.next))
     {
@@ -201,7 +201,7 @@ TCB *timerDetach( TCB *thread )
   @return The enqueued thread on success. NULL on failure.
 */
 
-TCB *enqueue( struct Queue *queue, TCB *thread )
+tcb_t *enqueue( struct Queue *queue, tcb_t *thread )
 {
   if( !queue || !thread )
     RET_MSG(NULL, "NULL pointer")//return -1;
@@ -244,7 +244,7 @@ TCB *enqueue( struct Queue *queue, TCB *thread )
   @return The detached thread, if found. NULL if not found or failure.
 */
 
-TCB *detachQueue( struct Queue *queue, TCB *thread )
+tcb_t *detachQueue( struct Queue *queue, tcb_t *thread )
 {
   assert( queue );
   assert( (queue->head == NULL && queue->tail == NULL) ||
@@ -260,7 +260,7 @@ TCB *detachQueue( struct Queue *queue, TCB *thread )
 
   assert( !isInTimerQueue( thread ) );
 
-  for( TCB *ptr=queue->head; ptr; ptr=getTcb(ptr->queue.next) )
+  for( tcb_t *ptr=queue->head; ptr; ptr=getTcb(ptr->queue.next) )
   {
     if( ptr == thread )
     {
@@ -290,7 +290,7 @@ TCB *detachQueue( struct Queue *queue, TCB *thread )
           thread queue is empty or on failure.
 */
 
-TCB *popQueue( struct Queue *queue )
+tcb_t *popQueue( struct Queue *queue )
 {
   return detachQueue( queue, queue->head );
 }

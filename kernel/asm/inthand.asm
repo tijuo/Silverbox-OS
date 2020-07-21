@@ -13,7 +13,7 @@ IMPORT handleIRQ
   push ecx
   mov ecx, [esp+4]
   mov [esp+4], eax
-  mov [esp-6*4], ecx  ; Move error code out of the way
+  mov [esp-7*4], ecx  ; Move error code out of the way (to be used in a future interrupt handler)
   ECODE_SAVE_STATE
   sub  esp, 4
   push %1

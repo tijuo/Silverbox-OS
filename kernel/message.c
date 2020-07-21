@@ -5,12 +5,20 @@
 #include <kernel/memory.h>
 #include <os/syscalls.h>
 #include <kernel/message.h>
+#include <kernel/error.h>
+#include <kernel/dlmalloc.h>
 
-struct Port portTable[MAX_PORTS];
+static pid_t getNewPID(void);
 
-void attachSendQueue(TCB *tcb, pid_t pid)
+tree_t portTree;
+static pid_t lastPID=0;
+
+void attachSendQueue(tcb_t *tcb, pid_t pid)
 {
-  struct Port *port = getPort(pid);
+  port_t *port = getPort(pid);
+
+  if(!port)
+    return;
 
   if( tcb->threadState == READY )
     detachRunQueue( tcb );
@@ -26,7 +34,7 @@ void attachSendQueue(TCB *tcb, pid_t pid)
   port->sendWaitTail = tcb->tid;
 }
 
-void attachReceiveQueue(TCB *tcb, pid_t pid)
+void attachReceiveQueue(tcb_t *tcb, pid_t pid)
 {
   if( tcb->threadState == READY )
     detachRunQueue( tcb );
@@ -35,9 +43,12 @@ void attachReceiveQueue(TCB *tcb, pid_t pid)
   tcb->waitPort = pid;
 }
 
-void detachSendQueue(TCB *tcb, pid_t pid)
+void detachSendQueue(tcb_t *tcb, pid_t pid)
 {
-  struct Port *port = getPort(pid);
+  port_t *port = getPort(pid);
+
+  if(!port)
+    return;
 
   if(tcb->queue.prev != NULL_TID)
     getTcb(tcb->queue.prev)->queue.next = tcb->queue.next;
@@ -54,11 +65,11 @@ void detachSendQueue(TCB *tcb, pid_t pid)
   attachRunQueue(tcb);
 }
 
-void detachReceiveQueue(TCB *tcb, pid_t pid)
+void detachReceiveQueue(tcb_t *tcb, pid_t pid)
 {
   tcb->waitPort = NULL_PID;
   tcb->threadState = READY;
-  
+
   attachRunQueue(tcb);
 }
 
@@ -79,30 +90,39 @@ void detachReceiveQueue(TCB *tcb, pid_t pid)
 
 /* XXX: sendMessage() and receiveMessage() won't work for kernel threads. */
 
-int sendMessage(TCB *tcb, struct PortPair portPair, int block,
+int sendMessage(tcb_t *tcb, port_pair_t portPair, int block,
   int args[5])
 {
-  TCB *rec_thread;
+  tcb_t *rec_thread;
+  port_t *remote, *local;
 
   assert( tcb != NULL );
   assert( tcb->threadState == RUNNING );
 
-  if(portPair.remote == NULL_PID
-      || portPair.remote >= MAX_PORTS
-      || portPair.local >= MAX_PORTS
-      || tcb->tid == getPort(portPair.remote)->owner)
+  if(portPair.remote != NULL_PID)
+    remote = getPort(portPair.remote);
+  else
+    remote = NULL;
+
+  if(portPair.local != NULL_PID)
+    local = getPort(portPair.local);
+  else
+    local = NULL;
+
+  if(remote == NULL
+     || (local == NULL && portPair.local != NULL_PID)
+     || tcb->tid == remote->owner)
   {
     kprintf("Invalid port.\n");
     return -2;
   }
-  else if(portPair.local != NULL_PID &&
-    getPort(portPair.local)->owner != tcb->tid)
+  else if(local != NULL && local->owner != tcb->tid)
   {
     kprintf("Thread doesn't own local port.\n");
     return -1;
   }
 
-  rec_thread = getTcb(getPort(portPair.remote)->owner);
+  rec_thread = getTcb(remote->owner);
 
   /* This may cause problems if the receiver is receiving into a NULL
      or non-mapped buffer */
@@ -166,35 +186,42 @@ int sendMessage(TCB *tcb, struct PortPair portPair, int block,
   @return 0 on success. -1 on failure. -2 on bad argument. -3 if no messages are pending to be received (and non-blocking).
 */
 
-int receiveMessage( TCB *tcb, struct PortPair portPair, int block )
+int receiveMessage( tcb_t *tcb, port_pair_t portPair, int block )
 {
-  TCB *send_thread;
+  tcb_t *send_thread;
+  port_t *local, *remote;
 
   assert( tcb != NULL );
   assert( tcb->threadState == RUNNING );
 
-  if(portPair.remote >= MAX_PORTS
-      || portPair.local == NULL_PID
-      || portPair.local >= MAX_PORTS
-      || (portPair.remote != NULL_PID
-            && tcb->tid == getPort(portPair.remote)->owner))
+  if(portPair.local != NULL_PID)
+    local = getPort(portPair.local);
+  else
+    local = NULL;
+
+  if(portPair.remote != NULL_PID)
+    remote = getPort(portPair.remote);
+  else
+    remote = NULL;
+
+  if(local == NULL
+     || (remote == NULL && portPair.remote != NULL_PID)
+     || (remote != NULL && tcb->tid == remote->owner))
   {
     kprintf("Invalid port.\n");
     return -2;
   }
-  else if(getPort(portPair.local)->owner != tcb->tid)
+  else if(local->owner != tcb->tid)
   {
     kprintf("Thread doesn't own local port.\n");
     return -1;
   }
 
-  struct Port *localPort = getPort(portPair.local);
-
-  if( portPair.remote == NULL_PID ) // receive message from anyone
-    send_thread = getTcb(localPort->sendWaitTail);
+  if( remote == NULL ) // receive message from anyone
+    send_thread = getTcb(local->sendWaitTail);
   else // receive message from particular port
   {
-    send_thread = getTcb(getPort(portPair.remote)->owner);
+    send_thread = getTcb(remote->owner);
 
     if(!(send_thread && send_thread->threadState == WAIT_FOR_RECV &&
        send_thread->waitPort == portPair.local))
@@ -217,7 +244,7 @@ int receiveMessage( TCB *tcb, struct PortPair portPair, int block )
       if(send_thread->execState.user.eax == SYS_RPC
          || send_thread->execState.user.eax == SYS_RPC_BLOCK)
       {
-        struct PortPair senderPair;
+        port_pair_t senderPair;
 
         senderPair.remote = portPair.local;
         senderPair.local = portPair.remote;
@@ -247,4 +274,50 @@ int receiveMessage( TCB *tcb, struct PortPair portPair, int block )
     attachReceiveQueue(tcb, portPair.remote);
 
   return 0;
+}
+
+port_t *getPort(pid_t pid)
+{
+  if(pid == NULL_PID)
+    return NULL;
+  else
+  {
+    port_t *port=NULL;
+
+    if(tree_find(&portTree, (int)pid, (void **)&port) == E_OK)
+      return port;
+    else
+      return NULL;
+  }
+}
+
+pid_t getNewPID(void)
+{
+  int i, maxAttempts=1000;
+
+  lastPID++;
+
+  for(i=1;(tree_find(&portTree, (int)lastPID, NULL) == E_OK && i < maxAttempts)
+      || !lastPID;
+      lastPID += i*i);
+
+  if(i == maxAttempts)
+    return NULL_PID;
+  else
+    return lastPID;
+}
+
+port_t *createPort(void)
+{
+  port_t *port = malloc(sizeof(port_t));
+
+  if(!port)
+    return NULL;
+
+  port->pid = getNewPID();
+  port->owner = NULL_TID;
+  port->sendWaitTail = NULL_TID;
+
+
+  return port;
 }

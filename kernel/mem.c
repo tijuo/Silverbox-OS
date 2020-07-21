@@ -4,10 +4,10 @@
 #include <kernel/debug.h>
 #include <oslib.h>
 
-addr_t heapEnd = KERNEL_HEAP_START;
+addr_t heapEnd = NULL;
 
 paddr_t *freePageStack=(paddr_t *)PAGE_STACK;
-paddr_t *freePageStackTop;//=freePageStack;
+paddr_t *freePageStackTop;
 
 bool tempMapped;
 pdir_t *kernelAddrSpace;
@@ -21,12 +21,20 @@ static void freeUnusedHeapPages(void);
 paddr_t allocPageFrame(void)
 {
   if(freePageStackTop == NULL)
+  {
+    kprintf("allocPageFrame(): Free page stack hasn't been initialized yet!\n");
     return NULL_PADDR;
+  }
 
   // Attempt to reclaim unused heap pages
 
   if(freePageStackTop == freePageStack)
     freeUnusedHeapPages();
+
+  if(freePageStackTop == freePageStack)
+  {
+    kprintf("allocPageFrame(): Free page stack is empty!\n");
+  }
 
   return (freePageStackTop == freePageStack) ? NULL_PADDR : *--freePageStackTop;
 }
@@ -103,28 +111,45 @@ void freeUnusedHeapPages(void)
 
 void *morecore(int amt)
 {
+  if(amt == 0)
+  {
+    kprintf("morecore(0)\n");
+    kprintf("heapEnd: 0x%x\n", heapEnd);
+    return (!heapEnd ? MFAIL : (void *)heapEnd);
+  }
+
+  if(!heapEnd)
+    heapEnd = KERNEL_HEAP_START;
+
+  addr_t prevHeapEnd = heapEnd;
+
   if(amt > 0)
   {
+/*
     if(amt < MIN_AMT)
       amt = MIN_AMT;
-
+*/
     // Ensure that we're mapping in multiples of pages
 
     if((amt & (PAGE_SIZE - 1)) != 0)
-      amt += (amt & (PAGE_SIZE - 1));
+      amt += PAGE_SIZE - (amt & (PAGE_SIZE - 1));
 
-    if(amt > KERNEL_HEAP_LIMIT - heapEnd)
+    if(heapEnd + amt > KERNEL_HEAP_LIMIT || heapEnd + amt < heapEnd) // overflow becomes underflow
       heapEnd = KERNEL_HEAP_LIMIT;
     else
       heapEnd += amt;
   }
   else if(amt < 0) // Shrink the kernel heap.
   {
-    if(heapEnd + amt < KERNEL_HEAP_START)
+    if(heapEnd + amt < KERNEL_HEAP_START
+       || heapEnd + amt > heapEnd) // underflow becomes overflow
       heapEnd = KERNEL_HEAP_START;
     else
       heapEnd += amt;
   }
 
-  return (void *)heapEnd;
+  kprintf("morecore(%d)\n", amt);
+  kprintf("prevHeapEnd: 0x%x heapEnd: 0x%x\n", prevHeapEnd, heapEnd);
+
+  return (void *)prevHeapEnd;
 }

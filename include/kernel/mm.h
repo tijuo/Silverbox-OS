@@ -5,6 +5,9 @@
 #include <kernel/multiboot.h>
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
+#include <kernel/dlmalloc.h>
+
+#define MFAIL                ((void*)(MAX_SIZE_T))
 
 /* FIXME: Changing any of these values may require changing
    the asm code */
@@ -21,18 +24,16 @@
 
 #define KVIRT_TO_PHYS(x)	((x) - (KERNEL_VSTART-KERNEL_START))
 
-#define KERNEL_HEAP_START     ((addr_t)0xD0000000)
-#define MIN_AMT               (8*PAGE_SIZE)
-#define KERNEL_HEAP_LIMIT     ((addr_t)0xE0000000)
+#define KERNEL_HEAP_START     ((addr_t)0xA0000000)
+#define MIN_AMT               (4*PAGE_SIZE)
+#define KERNEL_HEAP_LIMIT     ((addr_t)0xF0000000)
 
 /* FIXME: Changing any of these values may require changing the
    asm code. */
 
-#define TEMP_PAGEADDR           (PHYSMEM_START + 0xC0000)
+#define TEMP_PAGEADDR           (0xC0000)
 #define LAPIC_VADDR             (TEMP_PAGEADDR + PAGE_SIZE)
-#define KERNEL_VARIABLES	(LAPIC_VADDR + PAGE_SIZE)
-
-#define KERNEL_CLOCK		KERNEL_VARIABLES
+#define KERNEL_CLOCK		(LAPIC_VADDR + PAGE_SIZE)
 
 #define INVALID_VADDR       	((addr_t)0xFFFFFFFF)
 #define INVALID_ADDR        	((addr_t)0xFFFFFFFF)

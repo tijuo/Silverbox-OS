@@ -10,14 +10,14 @@
 #include <kernel/error.h>
 #include <kernel/dlmalloc.h>
 
-TCB *init_server;
-TCB *currentThread;
-TCB *idleThread;
+tcb_t *init_server;
+tcb_t *currentThread;
+tcb_t *idleThread;
 tree_t tcbTree;
 static tid_t lastTID=0;
 static tid_t getNewTID(void);
 
-//extern void saveAndSwitchContext( TCB *, TCB * );
+//extern void saveAndSwitchContext( tcb_t *, tcb_t * );
 
 /** Starts a non-running thread
 
@@ -26,7 +26,7 @@ static tid_t getNewTID(void);
     @param thread The TCB of the thread to be started.
     @return 0 on success. -1 on failure. 1 if the thread doesn't need to be started.
 */
-int startThread( TCB *thread )
+int startThread( tcb_t *thread )
 {
   #if DEBUG
   if( isInTimerQueue(thread) )
@@ -69,7 +69,7 @@ int startThread( TCB *thread )
             state. 1 if the thread is already sleeping.
 */
 
-int sleepThread( TCB *thread, int msecs )
+int sleepThread( tcb_t *thread, int msecs )
 {
   if( thread->threadState == SLEEPING )
     RET_MSG(1, "Already sleeping!")//return -1;
@@ -100,12 +100,14 @@ int sleepThread( TCB *thread, int msecs )
 
 /// Pauses a thread
 
-int pauseThread( TCB *thread )
+int pauseThread( tcb_t *thread )
 {
   switch( thread->threadState )
   {
     case READY:
       detachRunQueue( thread );
+      thread->threadState = PAUSED;
+      return 0;
     case RUNNING:
       thread->threadState = PAUSED;
       return 0;
@@ -127,9 +129,9 @@ int pauseThread( TCB *thread )
     @return The TCB of the newly created thread. NULL on failure.
 */
 
-TCB *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t exHandler )
+tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t exHandler )
 {
-  TCB * thread = NULL;
+  tcb_t * thread = NULL;
   u32 pentry;
 
   #if DEBUG
@@ -145,14 +147,10 @@ TCB *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t exH
   if(addrSpace == NULL_PADDR)
     addrSpace = getCR3() & 0x3FF;
 
-  thread = malloc(sizeof(TCB));//popQueue(&freeThreadQueue);
+  thread = malloc(sizeof(tcb_t));//popQueue(&freeThreadQueue);
 
   if( thread == NULL )
-    RET_MSG(NULL, "Couldn't get a free thread.")
-
-  assert( thread->threadState == DEAD );
-
-  memset(thread, 0, sizeof thread);
+    RET_MSG(NULL, "Couldn't allocate memory for a thread.")
 
   thread->tid = getNewTID();
   thread->priority = NORMAL_PRIORITY;
@@ -229,10 +227,10 @@ TCB *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t exH
     @return 0 on success. -1 on failure.
 */
 
-int releaseThread( TCB *thread )
+int releaseThread( tcb_t *thread )
 {
   #if DEBUG
-    TCB *retThread;
+    tcb_t *retThread;
   #endif
 
   assert(thread->threadState != DEAD);
@@ -271,19 +269,21 @@ int releaseThread( TCB *thread )
       break;
   }
 
+  // TODO:
   // Find each port that this thread owns and notify the waiting
   // senders that sending to that port failed.
 
-  const tid_t tid = GET_TID(thread);
 
-  for(struct Port *port=getPort((pid_t)1); port != getPort((pid_t)(MAX_PORTS-1)); 
+  const tid_t tid = GET_TID(thread);
+/*
+  for(port_t *port=getPort((pid_t)1); port != getPort((pid_t)(MAX_PORTS-1)); 
       port++)
   {
     if(port->owner == tid)
     {
-      TCB *prevWaitTcb;
+      tcb_t *prevWaitTcb;
 
-      for(TCB *waitTcb=getTcb(port->sendWaitTail); waitTcb != NULL;
+      for(tcb_t *waitTcb=getTcb(port->sendWaitTail); waitTcb != NULL;
           waitTcb=prevWaitTcb)
       {
         prevWaitTcb = getTcb(waitTcb->queue.prev);
@@ -293,10 +293,11 @@ int releaseThread( TCB *thread )
       }
     }
   }
+*/
 
   if(thread->threadState == WAIT_FOR_RECV && thread->waitPort != NULL_PID)
   {
-    struct Port *port = getPort(thread->waitPort);
+    port_t *port = getPort(thread->waitPort);
 
     if(port->sendWaitTail == tid)
       port->sendWaitTail = NULL_TID;
@@ -309,32 +310,17 @@ int releaseThread( TCB *thread )
     }
   }
 
-/*
-  // XXX: Recursive calls may result in stack overflow
-
-  for(TCB *tcbPtr=getTcb(1); tcbPtr != getTcb((tid_t)(MAX_THREADS-1)); tcbPtr++)
-  {
-    if(tcbPtr->threadState != DEAD && tcbPtr->exHandler == tid)
-      releaseThread(tcbPtr);
-  }
-
-
-  memset(thread, 0, sizeof *thread);
-  thread->threadState = DEAD;
-
-//  enqueue(&freeThreadQueue, thread);
-*/
   free(thread);
   return 0;
 }
 
-TCB *getTcb(tid_t tid)
+tcb_t *getTcb(tid_t tid)
 {
   if(tid == NULL_TID)
     return NULL;
   else
   {
-    TCB *tcb=NULL;
+    tcb_t *tcb=NULL;
 
     if(tree_find(&tcbTree, (int)tid, (void **)&tcb) == E_OK)
       return tcb;

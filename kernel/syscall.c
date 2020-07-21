@@ -11,18 +11,18 @@
 #include <kernel/pic.h>
 #include <stdarg.h>
 
-void _syscall(TCB *tcb);
-static int sysReceive(TCB *tcb, struct PortPair pair, int blocking);
-static int sysRpc(TCB *tcb, struct PortPair pair, int blocking);
+void _syscall(tcb_t *tcb);
+static int sysReceive(tcb_t *tcb, port_pair_t pair, int blocking);
+static int sysRpc(tcb_t *tcb, port_pair_t pair, int blocking);
 
-static int sysExit( TCB *tcb, ... );
-static int sysCreate( TCB *tcb, ... );
-static int sysRead( TCB *tcb, ... );
-static int sysUpdate( TCB *tcb, ... );
-static int sysDestroy( TCB *tcb, ... );
-static int sysWait( TCB *tcb, ... );
+static int sysExit( tcb_t *tcb, ... );
+static int sysCreate( tcb_t *tcb, ... );
+static int sysRead( tcb_t *tcb, ... );
+static int sysUpdate( tcb_t *tcb, ... );
+static int sysDestroy( tcb_t *tcb, ... );
+static int sysWait( tcb_t *tcb, ... );
 
-int (*syscallMsgTable[])(TCB *, ...) =
+int (*syscallMsgTable[])(tcb_t *, ...) =
 {
   sysExit,
   sysWait,
@@ -32,13 +32,13 @@ int (*syscallMsgTable[])(TCB *, ...) =
   sysDestroy
 };
 
-int (*syscallTable[])(TCB *, struct PortPair, int) =
+int (*syscallTable[])(tcb_t *, port_pair_t, int) =
 {
   sysRpc,
   sysReceive
 };
 
-static int sysExit(TCB *tcb, ...)
+static int sysExit(tcb_t *tcb, ...)
 {
   if( unlikely(tcb->exHandler == NULL_PID
       || getPort(tcb->exHandler)->owner == NULL_PID) )
@@ -52,7 +52,7 @@ static int sysExit(TCB *tcb, ...)
   return ESYS_OK;
 }
 
-static int sysRpc(TCB *tcb, struct PortPair pair, int blocking)
+static int sysRpc(tcb_t *tcb, port_pair_t pair, int blocking)
 {
   unsigned int call = tcb->execState.user.eax & 0xFFFF;
 
@@ -62,8 +62,12 @@ static int sysRpc(TCB *tcb, struct PortPair pair, int blocking)
     {
       int irq = tcb->execState.user.ecx;
 
-      if(irq >= 0 && irq < NUM_IRQS && pair.local == IRQHandlers[irq]
-          && getPort(pair.local)->owner == GET_TID(tcb))
+      port_t *local = getPort(pair.local);
+
+      if(!local)
+        return ESYS_ARG;
+      else if(irq >= 0 && irq < NUM_IRQS && pair.local == IRQHandlers[irq]
+          && local->owner == GET_TID(tcb))
       {
         enableIRQ(irq);
         return 0;
@@ -93,7 +97,7 @@ static int sysRpc(TCB *tcb, struct PortPair pair, int blocking)
   return ESYS_FAIL;
 }
 
-static int sysWait(TCB *tcb, ...)
+static int sysWait(tcb_t *tcb, ...)
 {
   va_list args;
   va_start(args, tcb);
@@ -133,7 +137,7 @@ static int sysWait(TCB *tcb, ...)
   }
 }
 
-int sysReceive(TCB *tcb, struct PortPair pair, int blocking)
+int sysReceive(tcb_t *tcb, port_pair_t pair, int blocking)
 {
   switch(receiveMessage(tcb, pair, blocking))
   {
@@ -150,7 +154,7 @@ int sysReceive(TCB *tcb, struct PortPair pair, int blocking)
   return ESYS_FAIL;
 }
 
-static int sysCreate(TCB *tcb, ...)
+static int sysCreate(tcb_t *tcb, ...)
 {
   if(!tcb->privileged)
     return ESYS_PERM;
@@ -190,7 +194,7 @@ static int sysCreate(TCB *tcb, ...)
       if(unlikely(args == NULL))
         return ESYS_ARG;
 
-      TCB *newTcb = createThread(args->entry, args->addrSpace,
+      tcb_t *newTcb = createThread(args->entry, args->addrSpace,
                    args->stack, args->exHandler);
 
       if(unlikely(newTcb == NULL))
@@ -206,37 +210,18 @@ static int sysCreate(TCB *tcb, ...)
     case RES_PORT:
     {
       struct SyscallCreatePortArgs *args = (struct SyscallCreatePortArgs *)argBuffer;
-      struct Port *port;
-
-      if(args->port >= MAX_PORTS)
-        return ESYS_ARG;
+      port_t *port;
 
       if(args->port == NULL_PID)
       {
-        static pid_t lastPid = MAX_PORTS / 2;
-        pid_t pid = lastPid;
-
-        do
-        {
-          port = getPort(pid);
-
-          if(port->owner == NULL_PID)
-          {
-            port->owner = GET_TID(tcb);
-            port->sendWaitTail = NULL_PID;
-
-            return pid;
-          }
-          pid = (pid == MAX_PORTS ? MAX_PORTS / 2 : pid + 1);
-        } while(pid != lastPid);
-
-        return ESYS_FAIL;
+        port = createPort();
+        return port ? port->pid : ESYS_FAIL;
       }
       else
       {
       	port = getPort(args->port);
 
-      	if(port->owner != NULL_TID)
+      	if(!port)
           return ESYS_FAIL;
       	else
       	{
@@ -254,7 +239,7 @@ static int sysCreate(TCB *tcb, ...)
   return ESYS_FAIL;
 }
 
-static int sysRead(TCB *tcb, ...)
+static int sysRead(tcb_t *tcb, ...)
 {
   if(!tcb->privileged)
     return ESYS_PERM;
@@ -282,7 +267,10 @@ static int sysRead(TCB *tcb, ...)
     {
       struct SyscallReadTcbArgs *args = (struct SyscallReadTcbArgs *)argBuffer;
 
-      TCB *targetTcb = getTcb(args->tid);
+      tcb_t *targetTcb = getTcb(args->tid);
+
+      if(!targetTcb)
+        return ESYS_FAIL;
 
       args->tcb->addrSpace = targetTcb->cr3;
       args->tcb->status = targetTcb->threadState;
@@ -308,7 +296,7 @@ static int sysRead(TCB *tcb, ...)
   return ESYS_FAIL;
 }
 
-static int sysUpdate(TCB *tcb, ...)
+static int sysUpdate(tcb_t *tcb, ...)
 {
   if(!tcb->privileged)
     return ESYS_PERM;
@@ -335,7 +323,10 @@ static int sysUpdate(TCB *tcb, ...)
     case RES_TCB:
     {
       struct SyscallUpdateTcbArgs *args = (struct SyscallUpdateTcbArgs *)argBuffer;
-      TCB *targetTcb = getTcb(args->tid);
+      tcb_t *targetTcb = getTcb(args->tid);
+
+      if(!targetTcb)
+        return ESYS_FAIL;
 
       switch(args->tcb->status)
       {
@@ -423,7 +414,7 @@ static int sysUpdate(TCB *tcb, ...)
   return ESYS_NOTIMPL;
 }
 
-static int sysDestroy(TCB *tcb, ...)
+static int sysDestroy(tcb_t *tcb, ...)
 {
   if(!tcb->privileged)
     return ESYS_PERM;
@@ -451,8 +442,9 @@ static int sysDestroy(TCB *tcb, ...)
     case RES_IHANDLER:
     {
       struct SyscallDestroyIHandlerArgs *args = (struct SyscallDestroyIHandlerArgs *)argBuffer;
+      port_t *irqHandler = getPort(IRQHandlers[args->intNum]);
 
-      if(args->intNum < 0 || args->intNum >= NUM_IRQS || getPort(IRQHandlers[args->intNum])->owner != GET_TID(tcb))
+      if(args->intNum < 0 || args->intNum >= NUM_IRQS || !irqHandler || irqHandler->owner != GET_TID(tcb))
         return ESYS_FAIL;
       else
       {
@@ -469,9 +461,9 @@ static int sysDestroy(TCB *tcb, ...)
     {
       struct SyscallDestroyPortArgs *args = (struct SyscallDestroyPortArgs *)argBuffer;
 
-      struct Port *port = getPort(args->port);
+      port_t *port = getPort(args->port);
 
-      if(port->owner != NULL_TID)
+      if(!port)
         return ESYS_FAIL;
       else
       {
@@ -490,7 +482,7 @@ static int sysDestroy(TCB *tcb, ...)
 
 // Handles a system call
 
-void _syscall( TCB *tcb )
+void _syscall( tcb_t *tcb )
 {
   /* sent as a message to kernel?
     can only batch create, read, update, destroy
@@ -506,7 +498,7 @@ void _syscall( TCB *tcb )
   */
 
   unsigned int call = (tcb->execState.user.eax & 0xFF) >> 1;
-  struct PortPair *pair = (struct PortPair *)&tcb->execState.user.ebx;
+  port_pair_t *pair = (port_pair_t *)&tcb->execState.user.ebx;
 
   if(call > sizeof syscallTable / sizeof syscallTable)
   {

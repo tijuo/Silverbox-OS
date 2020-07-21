@@ -48,6 +48,9 @@ check:
 clean:
 	make -C asm/ clean
 	rm -f *.o
-	rm -f kernel.{dmp,tmp,sym,dbg}
+	rm -f kernel.dmp
+	rm -f kernel.tmp
+	rm -f kernel.sym
+	rm -f kernel.dbg
 	rm -f kernel
 	rm -f kernel.gz

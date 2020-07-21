@@ -54,31 +54,27 @@ struct ThreadControlBlock
   ExecutionState execState; // 48 bytes
 } __PACKED__;
 
-typedef struct ThreadControlBlock TCB;
+typedef struct ThreadControlBlock tcb_t;
 
 struct Queue
 {
-  TCB *head, *tail;
+  tcb_t *head, *tail;
 };
 
-TCB *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t uStack, pid_t exHandler );
-int releaseThread( TCB *thread );
+tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t uStack, pid_t exHandler );
+int releaseThread( tcb_t *thread );
 
-TCB *getTcb(tid_t tid);
+tcb_t *getTcb(tid_t tid);
 
-int sleepThread( TCB *thread, int msecs );
-int startThread( TCB *thread );
-int pauseThread( TCB *thread );
-int sysYield( TCB *thread );
+int sleepThread( tcb_t *thread, int msecs );
+int startThread( tcb_t *thread );
+int pauseThread( tcb_t *thread );
+int sysYield( tcb_t *thread );
 
 extern struct Queue freeThreadQueue;
-extern TCB *init_server;
-extern TCB *currentThread;
-extern TCB *idleThread;
+extern tcb_t *init_server;
+extern tcb_t *currentThread;
+extern tcb_t *idleThread;
 extern tree_t tcbTree;
-//extern TCB tcbTable[MAX_THREADS];
-
-
-//int switchToThread(  TCB *oldThread,  TCB *newThread );
 
 #endif /* THREAD_H */

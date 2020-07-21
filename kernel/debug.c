@@ -25,7 +25,7 @@ char *kitoa(int value, char *str, int base);
 char *klltoa(long long int value, char *str, int base);
 void _putChar( char c, int x, int y, unsigned char attrib );
 void putChar( char c, int x, int y );
-void dump_regs( const TCB *thread, const ExecutionState *state, int intNum, int errorCode);
+void dump_regs( const tcb_t *thread, const ExecutionState *state, int intNum, int errorCode);
 void dump_state( const ExecutionState *state, int intNum, int errorCode);
 void dump_stack( addr_t, addr_t );
 static const char *_digits="0123456789abcdefghijklmnopqrstuvwxyz";
@@ -400,7 +400,7 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
   kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
 
   if( currentThread && !currentThread->kernel )
-    dump_regs((TCB *)currentThread, &currentThread->execState, 0, 0);
+    dump_regs((tcb_t *)currentThread, &currentThread->execState, 0, 0);
 
   if( badAssertHlt )
   {
@@ -711,7 +711,7 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
 
 /// Prints useful debugging information about the current thread
 
-void dump_regs( const TCB *thread, const ExecutionState *execState, int intNum, int errorCode )
+void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum, int errorCode )
 {
   addr_t stackFramePtr;
 

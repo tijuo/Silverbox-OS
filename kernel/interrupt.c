@@ -14,7 +14,7 @@ static bool handleHeapPageFault(void);
 pid_t IRQHandlers[NUM_IRQS];
 
 // The threads that are responsible for handling IRQs
-TCB *irqThreads[NUM_IRQS];
+tcb_t *irqThreads[NUM_IRQS];
 pid_t irqPorts[NUM_IRQS];
 
 void endIRQ(int irqNum)
@@ -25,15 +25,15 @@ void endIRQ(int irqNum)
 
 /** All interrupts will be sent to the registered port. */
 
-int registerInt(pid_t port, int intNum)
+int registerInt(pid_t pid, int intNum)
 {
-  if(intNum < 0 || intNum > NUM_IRQS-1 || port == NULL_PID)
+  if(intNum < 0 || intNum > NUM_IRQS-1 || pid == NULL_PID)
     return -1;
   else if(IRQHandlers[intNum] == NULL_PID)
   {
-    kprintf("Port %d registered IRQ: 0x%x\n", port, intNum);
+    kprintf("PID %d registered IRQ: 0x%x\n", pid, intNum);
 
-    IRQHandlers[intNum] = port;
+    IRQHandlers[intNum] = pid;
     enableIRQ(intNum);
     return 0;
   }
@@ -53,7 +53,7 @@ void unregisterInt(int intNum)
 /** If an IRQ occurs, the kernel will send a message to the
     thread that registered to handle the IRQ (if it exists). */
 
-void handleIRQ(int irqNum, TCB *thread, ExecutionState state)
+void handleIRQ(int irqNum, tcb_t *thread, ExecutionState state)
 {
   if(irqNum == 0)
     timerInt(thread);
@@ -69,7 +69,7 @@ void handleIRQ(int irqNum, TCB *thread, ExecutionState state)
 
     setPriority(getTcb(getPort(IRQHandlers[irqNum])->owner), HIGHEST_PRIORITY);
 
-    struct PortPair pair;
+    port_pair_t pair;
 
     pair.local = NULL_PID;
     pair.remote = IRQHandlers[irqNum];
@@ -114,8 +114,8 @@ bool handleHeapPageFault(void)
 
 /// Handles the CPU exceptions
 
-void handleCPUException(int intNum, int errorCode, TCB *tcb,
-                        ExecutionState state)
+void handleCPUException(int intNum, int errorCode, volatile tcb_t * volatile tcb,
+                        volatile ExecutionState state)
 {
   #if DEBUG
 
@@ -146,7 +146,7 @@ void handleCPUException(int intNum, int errorCode, TCB *tcb,
   // Handle page faults due to non-present pages in kernel heap
 
   if( intNum == 14
-      && (errorCode & 0xF) == PAGING_ERR_SUPERVISOR
+      && (errorCode & 0x05) == PAGING_ERR_SUPERVISOR
       && handleHeapPageFault() )
   {
     return;
@@ -175,7 +175,7 @@ void handleCPUException(int intNum, int errorCode, TCB *tcb,
   }
   else
   {
-    struct PortPair pair;
+    port_pair_t pair;
     pair.local = NULL_PID;
     pair.remote = tcb->exHandler;
     int args[5] = { EXCEPTION_MSG, tcb->tid, intNum,

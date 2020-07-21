@@ -226,13 +226,14 @@ extern const unsigned int kernelGDT;
 extern const unsigned int kernelIDT;
 extern const unsigned int kernelTSS;
 
+extern const unsigned int initKrnlPDir;
+
 extern const unsigned int kCodeSel;
 extern const unsigned int kDataSel;
 extern const unsigned int uCodeSel;
 extern const unsigned int uDataSel;
 extern const unsigned int kTssSel;
 
-extern const unsigned int initKrnlPDir;
 extern const unsigned int initServStack;
 extern const unsigned int idleStack;
 extern const unsigned int kernelStack;

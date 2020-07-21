@@ -12,9 +12,9 @@ void systemThread( void );
 
 struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;
 
-int setPriority( TCB *thread, unsigned int level );
-TCB *attachRunQueue( TCB *thread );
-TCB *detachRunQueue( TCB *thread );
+int setPriority( tcb_t *thread, unsigned int level );
+tcb_t *attachRunQueue( tcb_t *thread );
+tcb_t *detachRunQueue( tcb_t *thread );
 
 void idle(void)
 {
@@ -59,10 +59,10 @@ void idle(void)
   @return A pointer to the TCB of the newly scheduled thread on success. NULL on failure.
 */
 
-TCB *schedule( TCB *thread )
+tcb_t *schedule( tcb_t *thread )
 {
   unsigned int priority, priorityLimit=LOWEST_PRIORITY;
-  TCB *newThread = NULL;
+  tcb_t *newThread = NULL;
 
   assert( thread != NULL );
   assert( GET_TID(thread) != NULL_TID );
@@ -124,14 +124,16 @@ TCB *schedule( TCB *thread )
   return newThread;
 }
 
-dword *updateCurrentThread(TCB *tcb, ExecutionState state)
+dword *updateCurrentThread(tcb_t *tcb, ExecutionState state)
 {
-  if(tcb != NULL && tcb->threadState != RUNNING)
+  if(tcb == NULL)
+    return NULL;
+  else if(tcb->threadState != RUNNING)
   {
-    TCB *newTcb = schedule(tcb);
+    tcb_t *newTcb = schedule(tcb);
 
     if(newTcb == tcb)
-      return (dword *)&state;
+      return NULL;//(dword *)&state;
     else
     {
       if((tcb->cr3 & 0xFFFFF000u) != (newTcb->cr3 & 0xFFFFF000u))
@@ -160,7 +162,7 @@ dword *updateCurrentThread(TCB *tcb, ExecutionState state)
     }
   }
   else
-    return (dword *)&state;
+    return NULL;(dword *)&state;
 }
 
 /**
@@ -175,7 +177,7 @@ dword *updateCurrentThread(TCB *tcb, ExecutionState state)
     @return 0 on success. -1 on failure.
 */
 
-int setPriority( TCB *thread, unsigned int level )
+int setPriority( tcb_t *thread, unsigned int level )
 {
   assert( thread != NULL );
   assert( GET_TID(thread) != NULL_TID );
@@ -213,7 +215,7 @@ int setPriority( TCB *thread, unsigned int level )
 */
 
 
-TCB *attachRunQueue( TCB *thread )
+tcb_t *attachRunQueue( tcb_t *thread )
 {
   assert( thread != NULL );
   assert( GET_TID(thread) != NULL_TID );
@@ -243,7 +245,7 @@ TCB *attachRunQueue( TCB *thread )
     @return The TCB of the detached thread. NULL on failure or if the thread isn't on a run queue
 */
 
-TCB *detachRunQueue( TCB *thread )
+tcb_t *detachRunQueue( tcb_t *thread )
 {
   assert( thread != NULL );
   assert( thread->priority < NUM_PRIORITIES );
@@ -274,9 +276,9 @@ TCB *detachRunQueue( TCB *thread )
   @param thread The TCB of the current thread.
 */
 
-void timerInt( TCB *thread )
+void timerInt( tcb_t *thread )
 {
-    TCB *wokenThread;
+    tcb_t *wokenThread;
 
     incTimerCount();
 

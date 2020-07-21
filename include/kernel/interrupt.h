@@ -7,17 +7,17 @@
 #define IRQ_PID_START  1
 #define NUM_IRQS        16
 
-void handleIRQ(int irqNum, TCB *thread, ExecutionState state);
-void handleCPUException(int intNum, int errorCode, TCB *thread, ExecutionState);
+void handleIRQ(int irqNum, tcb_t *thread, ExecutionState state);
+void handleCPUException(int intNum, int errorCode, volatile tcb_t *thread, volatile ExecutionState);
 
 /// The threads that are responsible for handling an IRQ
 
 extern pid_t IRQHandlers[NUM_IRQS];
-extern TCB *irqThreads[NUM_IRQS];
+extern tcb_t *irqThreads[NUM_IRQS];
 extern pid_t irqPorts[NUM_IRQS];
 
 void endIRQ( int irqNum );
-int registerInt( pid_t port, int intNum );
+int registerInt( pid_t pid, int intNum );
 void unregisterInt( int intNum );
 
 #endif /* INTERRUPT_H */
