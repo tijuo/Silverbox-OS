@@ -4,7 +4,7 @@
 
 enum __strtotype_type { __LONG_TYPE,  __ULONG_TYPE };
 
-long __strtotype(const char *nptr, char **endptr, int base, int type);
+long __strtotype(const char *nptr, char **endptr, int base, .../*int type*/);
 
 
 long atol(char *nptr)
@@ -27,7 +27,7 @@ unsigned long strtoul(const char *nptr, char **endptr, int base)
   return (unsigned long)__strtotype(nptr, endptr, base, __ULONG_TYPE);
 }
 
-long __strtotype(const char *nptr, char **endptr, int base, int type)
+long __strtotype(const char *nptr, char **endptr, int base, .../*int type*/)
 {
   int neg = 0;
   long num=0;
@@ -35,19 +35,19 @@ long __strtotype(const char *nptr, char **endptr, int base, int type)
   while(isspace(*nptr))
     nptr++;
 
-  if(*nptr == '-' || *nptr == '+') 
+  if(*nptr == '-' || *nptr == '+')
     neg = (*nptr++ == '-' ? 1 : 0);
-  
-  if(base == 0) 
-  { 
-    if(*nptr == '0') 
+
+  if(base == 0)
+  {
+    if(*nptr == '0')
     {
       nptr++;
-      if(tolower(*nptr) == 'x') 
+      if(tolower(*nptr) == 'x')
       {
         base = 16;
         nptr++;
-      } 
+      }
       else
         base = 8;
     }

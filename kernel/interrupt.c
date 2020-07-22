@@ -9,7 +9,7 @@
 #include <kernel/interrupt.h>
 #include <kernel/error.h>
 
-static bool handleHeapPageFault(void);
+static bool handleHeapPageFault(int errorCode);
 
 pid_t IRQHandlers[NUM_IRQS];
 
@@ -81,9 +81,14 @@ void handleIRQ(int irqNum, tcb_t *thread, ExecutionState state)
   }
 }
 
-bool handleHeapPageFault(void)
+bool handleHeapPageFault(int errorCode)
 {
+  if(errorCode & (PAGING_ERR_PRES | PAGING_ERR_USER))
+    return false;
+
   addr_t faultAddr = (addr_t)getCR2();
+
+  kprintf("Handling heap page fault at 0x%x\n", faultAddr);
 
   if(faultAddr >= KERNEL_HEAP_START && faultAddr <= KERNEL_HEAP_LIMIT)
   {
@@ -94,7 +99,10 @@ bool handleHeapPageFault(void)
     if(!pde->present)
     {
       if(kMapPageTable(faultAddr, allocPageFrame(), PAGING_RW | PAGING_SUPERVISOR) != E_OK)
+      {
+        kprintf("Unable to map page table.\n");
         return false;
+      }
     }
 
     pte_t *pte = ADDR_TO_PTE(faultAddr);
@@ -102,11 +110,27 @@ bool handleHeapPageFault(void)
     if(!pte->present)
     {
       if(kMapPage(faultAddr, allocPageFrame(), PAGING_RW | PAGING_SUPERVISOR) != E_OK)
+      {
+        kprintf("Unable to map page.\n");
         return false;
+      }
     }
 
-    if(pte->usPriv || !pte->rwPriv)
+    if(pte->usPriv || (!pte->rwPriv && (errorCode & PAGING_ERR_WRITE)))
+    {
+      if(pte->usPriv)
+        kprintf("Page is marked as user.\n");
+
+      if(!pte->rwPriv)
+        kprintf("Page is marked as read-only (but a write access was performed).\n");
+
       return false;
+    }
+  }
+  else
+  {
+    kprintf("Fault address lies outside of heap range.\n");
+    return false;
   }
 
   return true;
@@ -117,19 +141,16 @@ bool handleHeapPageFault(void)
 void handleCPUException(int intNum, int errorCode, tcb_t * tcb,
                         ExecutionState state)
 {
+  // Handle page faults due to non-present pages in kernel heap
+
+  if( intNum == 14 && handleHeapPageFault(errorCode) )
+    return;
+
   #if DEBUG
 
   if(tcb != NULL)
   {
-    if( tcb->tid == IDLE_TID )
-    {
-      kprintf("Exception for idle thread. System halted.\n");
-      dump_regs( tcb, &state, intNum, errorCode );
-      dump_state(&state, intNum, errorCode);
-      __asm__("hlt\n");
-      return;
-    }
-    else if( tcb == init_server )
+    if( tcb == init_server )
     {
       kprintf("Exception for initial server. System Halted.\n");
       dump_regs( tcb, &state, intNum, errorCode );
@@ -137,20 +158,9 @@ void handleCPUException(int intNum, int errorCode, tcb_t * tcb,
       return;
     }
     else
-    {
       dump_regs( tcb, &state, intNum, errorCode );
-    }
   }
   #endif
-
-  // Handle page faults due to non-present pages in kernel heap
-
-  if( intNum == 14
-      && (errorCode & 0x05) == PAGING_ERR_SUPERVISOR
-      && handleHeapPageFault() )
-  {
-    return;
-  }
 
   if( tcb == NULL )
   {

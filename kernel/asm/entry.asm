@@ -90,7 +90,7 @@ EXPORT start
   call initPaging2
 
   call   init
-  jmp stop
+  jmp idle
 
 videoRamStart equ 0xA0000
 videoBiosStart equ 0xC0000
@@ -318,15 +318,17 @@ printBootMsg:
 
 .cpyStr:
   cmp byte [esi], 0
-  je stop
+  je idle
 
   movsb
   stosb
   jmp .cpyStr
 
-stop:
+[section .text]
+
+idle:
   hlt
-  jmp stop
+  jmp idle
 
 [section .ddata progbits alloc noexec nowrite align=4]
 
@@ -368,8 +370,11 @@ EXPORT tssLen
 EXPORT initKrnlPDir
   dd kPageDir
 
-EXPORT idleStackLen
-  dd IDLE_STACK_LEN
+EXPORT lowMemPageTable
+  dd kLowPageTab
 
-EXPORT irqStackLen
-  dd IRQ_STACK_LEN
+EXPORT k1To1PageTable
+  dd k1to1PageTab
+
+EXPORT bootStackTop
+  dd kBootStackTop

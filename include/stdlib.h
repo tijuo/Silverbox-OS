@@ -55,6 +55,7 @@ void *pvalloc(size_t n);
 int malloc_trim(size_t pad);
 size_t malloc_usable_size(void *p);
 void malloc_stats(void);
+size_t malloc_footprint_limit(void);
 
 void *bsearch(const void *key, const void *base, size_t n, size_t size,
 int (*cmp)(const void *, const void *));

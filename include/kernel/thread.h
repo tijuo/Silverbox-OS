@@ -20,7 +20,7 @@
 #define NUM_PROCESSORS   	1u
 
 #define	INITIAL_TID		((tid_t)1u)
-#define IDLE_TID		INITIAL_TID
+#define INIT_SERVER_TID		INITIAL_TID
 
 #define GET_TID(t)		(t == NULL ? NULL_TID : t->tid)
 
@@ -74,7 +74,6 @@ int sysYield( tcb_t *thread );
 extern struct Queue freeThreadQueue;
 extern tcb_t *init_server;
 extern tcb_t *currentThread;
-extern tcb_t *idleThread;
 extern tree_t tcbTree;
 
 #endif /* THREAD_H */

@@ -8,8 +8,8 @@
 #define PAGETAB			0xFFC00000
 #define PAGEDIR			0xFFFFF000
 
-#define ADDR_TO_PTE( addr )	(pte_t *)( PAGETAB + ( ((addr) & 0xFFFFF000) >> 10 ))
-#define ADDR_TO_PDE( addr )	(pde_t *)( PAGEDIR + ( ((addr) & 0xFFC00000) >> 20 ))
+#define ADDR_TO_PTE( addr )	((pte_t *)( PAGETAB + ( ((addr) & 0xFFFFF000) >> 10 )))
+#define ADDR_TO_PDE( addr )	((pde_t *)( PAGEDIR + ( ((addr) & 0xFFC00000) >> 20 )))
 
 #define VIRT_TO_PHYS( addr )	(addr_t)( (addr) + &kVirtToPhys )
 #define PHYS_TO_VIRT( addr )	(addr_t)( (addr) + &kPhysToVirt )

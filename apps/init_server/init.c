@@ -89,12 +89,13 @@ static int get_boot_info( int argc, char **argv )
 
   server_name = argv[0];
   boot_info = (struct BootInfo *)argv[1];
-  memory_areas = (struct MemoryArea *)argv[2];
+  paddr_t lastKernelPage = (paddr_t *)argv[2];
+  //memory_areas = (struct MemoryArea *)argv[2];
   boot_modules = (struct BootModule *)argv[3];
   page_dir = (unsigned int *)argv[4];
 
   /* Get the total number of pages in the system. */
-
+/*
   max_mem_addr = memory_areas[0].base;
   max_mem_length = memory_areas[0].length;
 
@@ -108,6 +109,7 @@ static int get_boot_info( int argc, char **argv )
   }
 
   total_pages = max_mem_addr / PAGE_SIZE + max_mem_length;
+*/
 
   /* Find out how many pages we need for everything. */
 

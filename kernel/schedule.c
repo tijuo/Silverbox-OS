@@ -6,51 +6,23 @@
 #include <kernel/paging.h>
 #include <kernel/lowlevel.h>
 
-extern void init2( void );
-extern int numBootMods;
-void systemThread( void );
-
 struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;
 
 int setPriority( tcb_t *thread, unsigned int level );
 tcb_t *attachRunQueue( tcb_t *thread );
 tcb_t *detachRunQueue( tcb_t *thread );
 
-void idle(void)
-{
-  addr_t addr;
-
-  disableInt();
-  kprintf("\n0x%x bytes of discardable code.", (addr_t)EXT_PTR(kdData) - (addr_t)EXT_PTR(kdCode));
-  kprintf(" 0x%x bytes of discardable data.\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdData));
-  kprintf("Discarding %d bytes in total\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdCode));
-
-  /* Get rid of the code and data that will never be used again. */
-
-  for( addr=(addr_t)EXT_PTR(kdCode); addr < (addr_t)EXT_PTR(kBss); addr += PAGE_SIZE )
-    kUnmapPage( (addr_t)addr, NULL );
-
-  kUnmapPage( (addr_t)EXT_PTR(ioPermBitmap), NULL );
-  kUnmapPage( (addr_t)EXT_PTR(ioPermBitmap) + PAGE_SIZE, NULL );
-
-  enableInt();
-
-  while(1)
-    __asm__("hlt\n");
-}
-
 /* TODO: There's probably a more efficient way of scheduling threads */
 
 /**
-  Picks the best thread to run next. Picks the idle thread, if none are available.
+  Picks the best thread to run next.
 
   This scheduler picks a thread according to priority. Higher priority threads
   will always run before lower priority threads (given that they are ready-to-run).
   Higher priority threads are given shorter time slices than lower priority threads.
   This assumes that high priority threads are IO-bound threads and lower priority
   threads are CPU-bound. If a thread uses up too much of its time slice, then its
-  priority level is decreased. If there are no threads to run, then run the idle
-  thread.
+  priority level is decreased.
 
   @todo Add a way to increase the priority level of threads if it uses very little of
         its time slice.
@@ -91,12 +63,10 @@ tcb_t *schedule( tcb_t *thread )
   if( !newThread ) // If no other threads are found (the previously running thread is the only one in its queue that's ready)
   {
     if( thread->threadState == READY ) // and the current thread is ready to run, then run it
-    {
       currentThread = newThread = thread;
-    }
     else
     {
-      kprintf("Unable to schedule any threads! (including the idle thread)\n");
+      kprintf("Unable to schedule any threads!\n");
       assert(false);
     }
   }
@@ -182,15 +152,8 @@ int setPriority( tcb_t *thread, unsigned int level )
   assert( thread != NULL );
   assert( GET_TID(thread) != NULL_TID );
   assert( level < NUM_PRIORITIES );
-  assert( thread != idleThread || level == LOWEST_PRIORITY );
 
-  if( thread == NULL )
-    return -1;
-
-  if( level >= NUM_PRIORITIES )
-    return -1;
-
-  if( thread == idleThread && level != LOWEST_PRIORITY )
+  if( thread == NULL || level >= NUM_PRIORITIES )
     return -1;
 
   if( thread->threadState == READY )
@@ -287,12 +250,8 @@ void timerInt( tcb_t *thread )
     assert( thread->threadState == RUNNING );
     assert( thread->quantaLeft );
 
-    thread->quantaLeft--;
-
     if( thread->quantaLeft )
-    {
       thread->quantaLeft--;
-    }
 
     assert( timerQueue.head == NULL || timerQueue.head->queue.delta );
 

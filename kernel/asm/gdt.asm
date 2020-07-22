@@ -26,5 +26,3 @@ EXPORT tssEsp0
 [section .pages nobits alloc noexec write align=4096]
 EXPORT ioPermBitmap
 	resb TSS_IO_PERM_BMP_LEN
-EXPORT idleStack
-	resb IDLE_STACK_LEN

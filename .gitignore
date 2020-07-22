@@ -6,3 +6,5 @@
 *.sym
 *.exe
 *.gz
+*.save*
+*.img

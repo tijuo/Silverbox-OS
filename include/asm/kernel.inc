@@ -17,8 +17,6 @@
 
 %define KERNEL_IDT_LEN		0x800
 %define KERNEL_GDT_LEN		0x40
-%define IDLE_STACK_LEN		4096
-%define IRQ_STACK_LEN     8192
 %define KERNEL_TSS_LEN		0x68
 %define TSS_IO_PERM_BMP_LEN	2*4096
 
@@ -52,16 +50,13 @@ IMPORT VPhysMemStart
 kernelStackTop equ 0xA0000
 kBootStackTop  equ 0x9F000
 kPageDir       equ 0x70000
-idleStackTop   equ 0x71000
-kLowPageTab    equ 0x72000
-kPageTab       equ 0x73000
-k1to1PageTab   equ 0x74000
+kLowPageTab    equ 0x71000
+kPageTab       equ 0x72000
+k1to1PageTab   equ 0x73000
 
 ;_kernelIDTLen equ 0x800
 ;_kernelGDTLen equ 0x40
 ;_kernelTSSLen equ 0x068
 ;_kernelBootStackLen equ 1024
-;_idleStackLen equ 4096
 ;_kernelStackLen equ 4096
-;_kernelVarsLen equ 4096
 %endif

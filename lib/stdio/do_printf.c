@@ -305,7 +305,7 @@ int do_printf(void *s, const char *format, va_list ap, int is_stream)
             int num = va_arg(ap,int);
             int neg = (num < 0 ? 1 : 0);
             int int_len = _itostr(num,buf, 0), count=0;
-            
+
             if( !(flags & FLG_PSTART) )
               precision = 1;
 
@@ -350,13 +350,13 @@ int do_printf(void *s, const char *format, va_list ap, int is_stream)
 
               for( int i=count; i < width; i++ )
               {
-                add_char(padding, &s, is_stream);          
+                add_char(padding, &s, is_stream);
                 write_count++;
               }
             }
             else
             {
-              if( neg || (!neg && ((options & OPT_BLANK) || 
+              if( neg || (!neg && ((options & OPT_BLANK) ||
                                    (options & OPT_FORCE))) )
               {
                 count++;
@@ -395,7 +395,7 @@ int do_printf(void *s, const char *format, va_list ap, int is_stream)
                   write_count++;
                 }
               }
-            }            
+            }
 
             break;
           }

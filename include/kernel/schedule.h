@@ -23,7 +23,6 @@ int setPriority( tcb_t *thread, unsigned int level );
 HOT(tcb_t *schedule( tcb_t * ));
 HOT(void timerInt( tcb_t * ));
 HOT(dword *updateCurrentThread(tcb_t *tcb, ExecutionState state));
-void idle(void);
 
 extern struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;
 

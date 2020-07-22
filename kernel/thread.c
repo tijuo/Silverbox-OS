@@ -12,7 +12,6 @@
 
 tcb_t *init_server;
 tcb_t *currentThread;
-tcb_t *idleThread;
 tree_t tcbTree;
 static tid_t lastTID=0;
 static tid_t getNewTID(void);
@@ -83,7 +82,7 @@ int sleepThread( tcb_t *thread, int msecs )
     return -2;
   }
 
-  if( thread->threadState == READY && thread != idleThread )
+  if( thread->threadState == READY )
     detachRunQueue( thread );
 
   if( !timerEnqueue( thread, (msecs * HZ) / 1000 ) )
@@ -164,25 +163,11 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
 
   memset(&thread->execState.user, 0, sizeof thread->execState.user);
 
-  thread->execState.user.eflags = 0x0201u; //0x3201u; // XXX: Warning: Magic Number
+  thread->execState.user.eflags = EFLAGS_IOPL0 | EFLAGS_IF | EFLAGS_DEFAULT;
   thread->execState.user.eip = ( dword ) threadAddr;
 
-  /* XXX: This doesn't yet initialize a kernel thread other than the idle thread. */
-
-  if( GET_TID(thread) == IDLE_TID )
-  {
-    thread->execState.user.cs = KCODE;
-    dword *esp = (dword *)(stack - (sizeof(ExecutionState)-8));
-
-    memcpy( (void *)esp,
-            (void *)&thread->execState, sizeof(ExecutionState) - 8);
-  }
-  else if( (threadAddr & KERNEL_VSTART) != KERNEL_VSTART )
-  {
-    thread->execState.user.cs = UCODE;
-    thread->execState.user.userEsp = stack;
-  }
-
+  thread->execState.user.cs = UCODE;
+  thread->execState.user.userEsp = stack;
   thread->threadState = PAUSED;
 
   if(tree_insert(&tcbTree, thread->tid, thread) != E_OK)
@@ -191,7 +176,8 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
     return NULL;
   }
 
-   // Map the page directory and kernel space into the new address space
+   // Map the page directory, kernel space, and first page table
+   // into the new address space
 
   pentry = (u32)addrSpace | PAGING_RW | PAGING_PRES;
 

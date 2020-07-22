@@ -70,6 +70,28 @@
 #define IRQ14           (IRQ8 + 6)
 #define IRQ15           (IRQ8 + 7)
 
+#define EFLAGS_DEFAULT	0x02
+#define EFLAGS_CF	(1 << 0)
+#define EFLAGS_PF	(1 << 2)
+#define EFLAGS_AF	(1 << 4)
+#define EFLAGS_ZF	(1 << 6)
+#define EFLAGS_SF	(1 << 7)
+#define EFLAGS_TF	(1 << 8)
+#define EFLAGS_IF	(1 << 9)
+#define EFLAGS_DF	(1 << 10)
+#define EFLAGS_OF	(1 << 11)
+#define EFLAGS_IOPL0	0
+#define EFLAGS_IOPL1	(1 << 12)
+#define EFLAGS_IOPL2	(2 << 12)
+#define EFLAGS_IOPL3	(3 << 12)
+#define EFLAGS_NT	(1 << 14)
+#define EFLAGS_RF	(1 << 16)
+#define EFLAGS_VM	(1 << 17)
+#define EFLAGS_AC	(1 << 18)
+#define EFLAGS_VIF	(1 << 19)
+#define EFLAGS_VIP	(1 << 20)
+#define EFLAGS_ID	(1 << 21)
+
 #define enableInt()     __asm__ __volatile__("sti\n")
 #define disableInt()    __asm__ __volatile__("cli\n")
 
@@ -227,6 +249,9 @@ extern const unsigned int kernelIDT;
 extern const unsigned int kernelTSS;
 
 extern const unsigned int initKrnlPDir;
+extern const unsigned int lowMemPageTable;
+extern const unsigned int k1To1PageTable;
+extern const unsigned int bootStackTop;
 
 extern const unsigned int kCodeSel;
 extern const unsigned int kDataSel;
@@ -235,17 +260,12 @@ extern const unsigned int uDataSel;
 extern const unsigned int kTssSel;
 
 extern const unsigned int initServStack;
-extern const unsigned int idleStack;
 extern const unsigned int kernelStack;
-extern const unsigned int irqStack;
-extern const unsigned int kernelVars;
 extern const unsigned int tssEsp0;
 extern const unsigned int kVirtToPhys;
 extern const unsigned int kPhysToVirt;
 extern const unsigned int VPhysMemStart;
 extern const unsigned int ioPermBitmap;
 
-extern const size_t idleStackLen;
 extern const size_t kernelStackLen;
-extern const size_t irqStackLen;
 #endif /* LOWLEVEL_H */

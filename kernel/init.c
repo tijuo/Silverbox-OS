@@ -49,19 +49,19 @@ static inline void contextSwitch( paddr_t addrSpace, addr_t stack )
     "edx"((dword)stack) : "%eax");
 }
 
-extern tcb_t *idleThread, *currentThread, *init_server;
+extern tcb_t *currentThread, *init_server;
 extern paddr_t *freePageStack, *freePageStackTop;
 
 static tcb_t *DISC_CODE(load_elf_exec( addr_t, pid_t, paddr_t, addr_t ));
 static bool DISC_CODE(isValidElfExe( addr_t img ));
 static void DISC_CODE(initInterrupts( void ));
-static void DISC_CODE(initScheduler( paddr_t ));
+static void DISC_CODE(initScheduler(void));
 static void DISC_CODE(initTimer( void ));
 static int DISC_CODE(initMemory( multiboot_info_t *info ));
 //int DISC_CODE(add_gdt_entry(int sel, dword base, dword limit, int flags));
 static void DISC_CODE(setupGDT(void));
 static void DISC_CODE(stopInit(const char *));
-static void DISC_CODE(init2(multiboot_info_t * restrict));
+static void DISC_CODE(bootstrap_init_server(multiboot_info_t * restrict));
 void DISC_CODE(init(multiboot_info_t * restrict));
 static void DISC_CODE(initPIC( void ));
 static int DISC_CODE(memcmp(const char *s1, const char *s2, register size_t n));
@@ -72,15 +72,18 @@ static char *DISC_CODE(strchr(const char * restrict, int));
 static int DISC_CODE(clearPhysPage(paddr_t phys));
 static void DISC_CODE(showCPU_Features(void));
 static void DISC_CODE(showMBInfoFlags(multiboot_info_t * restrict));
-static void DISC_CODE(init_clock(void));
+//static void DISC_CODE(init_clock(void));
 static void DISC_CODE(initStructures(void));
+/*
 static unsigned DISC_CODE(bcd2bin(unsigned num));
 static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month, unsigned int day, unsigned int hour,
                           unsigned int minute, unsigned int second));
+*/
 static addr_t DISC_DATA(init_server_img);
 static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * restrict info));
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
 static void DISC_CODE(initPageAllocator(multiboot_info_t * restrict info));
+static paddr_t DISC_DATA(lastKernelFreePage);
 extern void invalidate_page( addr_t );
 
 /*
@@ -439,6 +442,7 @@ void initPageAllocator(multiboot_info_t * restrict info)
           {
             *freePageStackTop = paddr;
             freePageStackTop++;
+            lastKernelFreePage = paddr;
             paddr += PAGE_SIZE;
             pagesAdded++;
           }
@@ -673,7 +677,7 @@ int initMemory( multiboot_info_t * restrict info )
 
   return 0;
 }
-
+/*
 #define UNIX_EPOCH          1970u
 #define CENTURY_START       2000u
 
@@ -773,6 +777,7 @@ void init_clock()
 
   *time = mktime(year, month, day, hour, minute, second);
 }
+*/
 
 void initTimer( void )
 {
@@ -786,15 +791,8 @@ void initTimer( void )
   enableIRQ( 0 );
 }
 
-void initScheduler( paddr_t addrSpace )
+void initScheduler( void)
 {
-  currentThread = idleThread = createThread( (addr_t)idle, addrSpace,
-    (addr_t)EXT_PTR(idleStack) + idleStackLen, NULL_PID );
-
-  idleThread->priority = LOWEST_PRIORITY;
-  idleThread->quantaLeft = LOWEST_PRIORITY + 1;
-  idleThread->threadState = RUNNING;
-
   initTimer();
 }
 
@@ -830,8 +828,7 @@ void initInterrupts( void )
   addIDTEntry( ( void * ) irq5Handler, 0x25, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq6Handler, 0x26, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq7Handler, 0x27, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) invalidIntHandler, 0x28, INT_GATE | KCODE ) ;
-  //addIDTEntry( ( void * ) irq8Handler, 0x28, INT_GATE | KCODE ) ;
+  addIDTEntry( ( void * ) irq8Handler, 0x28, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq9Handler, 0x29, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq10Handler, 0x2A, INT_GATE | KCODE ) ;
   addIDTEntry( ( void * ) irq11Handler, 0x2B, INT_GATE | KCODE ) ;
@@ -1010,7 +1007,7 @@ tcb_t *load_elf_exec( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uSt
     Bootstraps the initial server and passes necessary boot data to it.
 */
 
-void init2( multiboot_info_t * restrict mb_boot_info )
+void bootstrap_init_server( multiboot_info_t * restrict mb_boot_info )
 {
   pmap_t pmap, pmap2;
   paddr_t page;
@@ -1040,6 +1037,8 @@ void init2( multiboot_info_t * restrict mb_boot_info )
       return;
     }
 
+    currentThread = init_server;
+
     page = allocPageFrame();
     clearPhysPage(page);
 
@@ -1062,28 +1061,19 @@ void init2( multiboot_info_t * restrict mb_boot_info )
 
     *--ptr = (unsigned int)&kBss - (unsigned int)&kdCode; // Arg 5
     *--ptr = (unsigned int)&kdCode; // Arg 4
-//    *--ptr = (unsigned int)free_page_ptr - FREE_PAGE_PTR_START; // Arg 3
-//    *--ptr = FREE_PAGE_PTR_START; // Arg 2
+    //*--ptr = (unsigned int)free_page_ptr - FREE_PAGE_PTR_START; // Arg 3*/
+    *--ptr = (unsigned int)(lastKernelFreePage >> 32);
+    *--ptr = (unsigned int)(lastKernelFreePage & 0xFFFFFFFFu);//FREE_PAGE_PTR_START; // Arg 2
     *--ptr = (unsigned int)mb_boot_info; // Arg 1
 
     unmapTemp();
     init_server->privileged = 1;
+
+    kprintf("Starting initial server...\n");
     startThread(init_server);
   }
   else
-  {
     kprintf("Unable to load initial server.\n");
-  }
-
- // kprintf("\n0x%x bytes of discardable code.", (unsigned)&kdData - (unsigned)&kdCode);
- // kprintf(" 0x%x bytes of discardable data.\n", (unsigned)&kBss - (unsigned)&kdData);
-
- // kprintf("Discarding %d bytes of kernel code/data\n", (unsigned)&kBss - (unsigned)&kdCode);
-
-  /* Get rid of the code and data that will never be used again. */
-
-//  for( addr_t addr=(addr_t)&kdCode; addr < (addr_t)&kBss; addr += PAGE_SIZE )
-//    kUnmapPage( addr );
 }
 #if DEBUG
 #if 0
@@ -1241,27 +1231,50 @@ void init( multiboot_info_t * restrict info )
 //  enable_apic();
 //  init_apic_timer();
   kprintf("Initializing scheduler.\n");
-  initScheduler( initKrnlPDir );
+  initScheduler();
 
-  if( currentThread == NULL )
-    stopInit("Unable to initialize the idle thread.");
-
-  if( currentThread->tid == IDLE_TID )
-    stack = (addr_t)/*EXT_PTR(idleStack) + idleStackLen*/malloc(idleStackLen) - (sizeof(ExecutionState) - 8);
-  else
-    stack = (addr_t)&currentThread->execState;
+  stack = (addr_t)&currentThread->execState;
 
   assert( currentThread->threadState != DEAD );
 
+#if 0
   kprintf("Initializing clock.\n");
   init_clock();
-#if 0
   kprintf("Initializing ATA.\n");
   testATA();
 #endif /* DEBUG */
-  init2(info);
+  bootstrap_init_server(info);
+
+  kprintf("\n0x%x bytes of discardable code.", (addr_t)EXT_PTR(kdData) - (addr_t)EXT_PTR(kdCode));
+  kprintf(" 0x%x bytes of discardable data.\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdData));
+  kprintf("Discarding %d bytes in total\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdCode));
+
+  /* Release the pages for the code and data that will never be used again. */
+
+  for( addr_t addr=(addr_t)EXT_PTR(kdCode); addr < (addr_t)EXT_PTR(kBss); addr += PAGE_SIZE )
+    freePageFrame((paddr_t)(ADDR_TO_PTE(addr)->base << 12));
+
+  // XXX: Release any pages tables used for discardable sections
+
+  // Release the pages for the TSS IO permission bitmap
+
+  pte_t *pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap));
+
+  freePageFrame((paddr_t)(pte->base << 12));
+
+  pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap) + PAGE_SIZE);
+
+  freePageFrame((paddr_t)(pte->base << 12));
+
+  /* Only the kernel mappings are needed for new address spaces. Since
+     each new address space gets a copy (including the one for the
+     initial page server), the initial kernel page directory can be
+     released. */
+
+  freePageFrame((paddr_t)initKrnlPDir);
+  freePageFrame((paddr_t)k1To1PageTable);
+  freePageFrame((paddr_t)(bootStackTop-PAGE_SIZE));
 
   contextSwitch( currentThread->cr3, stack );
-  stopInit("Unable to start operating system.");
+  stopInit("Error: Context switch failed.");
 }
-
