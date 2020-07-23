@@ -12,5 +12,7 @@
 #define E_INVALID_ARG   -2
 #define E_NOT_MAPPED    -3
 #define E_OVERWRITE     -4
+#define E_RANGE		-5
+#define E_PERM		-6
 
 #endif /* ERROR_H */

@@ -1,9 +1,9 @@
 #ifndef PAGING_H
 #define PAGING_H
 
-#define PAGE_SIZE		      0x1000
-#define LARGE_PAGE_SIZE   0x400000
-#define PAGE_TABLE_SIZE	  0x400000
+#define PAGE_SIZE		0x1000
+#define LARGE_PAGE_SIZE   	0x400000
+#define PAGE_TABLE_SIZE	  	0x400000
 
 #define PAGETAB			0xFFC00000
 #define PAGEDIR			0xFFFFF000

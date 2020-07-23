@@ -378,3 +378,6 @@ EXPORT k1To1PageTable
 
 EXPORT bootStackTop
   dd kBootStackTop
+
+EXPORT kernelStackTop
+  dd kStackTop

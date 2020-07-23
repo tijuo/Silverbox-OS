@@ -31,60 +31,54 @@ tcb_t *detachRunQueue( tcb_t *thread );
   @return A pointer to the TCB of the newly scheduled thread on success. NULL on failure.
 */
 
-tcb_t *schedule( tcb_t *thread )
+tcb_t *schedule(void)
 {
   unsigned int priority, priorityLimit=LOWEST_PRIORITY;
-  tcb_t *newThread = NULL;
+  tcb_t *newThread = NULL, *oldThread = currentThread;
 
-  assert( thread != NULL );
-  assert( GET_TID(thread) != NULL_TID );
-
-  if( thread == NULL )
-    return NULL;
-
-  /* Threads with lower priority numbers *MUST* execute before threads
-     with higher priority numbers. Warning: This may cause starvation
+  /* Threads with higher priority *MUST* execute before threads
+     with lower priority. Warning: This may cause starvation
      if incorrectly set. */
 
-  assert( thread == currentThread );
+  if(oldThread)
+  {
+    if( oldThread->threadState == RUNNING )
+      oldThread->threadState = READY;
 
-  if( thread->threadState == RUNNING )
-    thread->threadState = READY;
+    if( oldThread->threadState == READY )
+      priorityLimit = oldThread->priority;
+  }
+  else
+    priorityLimit = LOWEST_PRIORITY;
 
-  if( thread->threadState == READY )
-    priorityLimit = thread->priority;
-
-  for( priority=HIGHEST_PRIORITY; priority <= priorityLimit; priority++ )
+  for( priority=HIGHEST_PRIORITY; priority >= priorityLimit; priority-- )
   {
     if( (newThread=popQueue(&runQueues[priority])) != NULL )
       break;
   }
 
-  if( !newThread ) // If no other threads are found (the previously running thread is the only one in its queue that's ready)
+  if(!newThread && !oldThread)
   {
-    if( thread->threadState == READY ) // and the current thread is ready to run, then run it
-      currentThread = newThread = thread;
-    else
-    {
-      kprintf("Unable to schedule any threads!\n");
-      assert(false);
-    }
+    kprintf("Unable to schedule any threads!\n");
+    return NULL;
   }
-  else                      // If a thread was found, then run it(assumes that the thread is ready since it's in the ready queue)
+  else if(newThread) // If a thread was found, then run it(assumes that the thread is ready since it's in the ready queue)
   {
     assert( newThread->threadState == READY );
 
     currentThread = newThread;
 
-    if( thread->threadState == READY )
+    if( oldThread && oldThread->threadState == READY )
     {
       #ifdef DEBUG
-        assert( attachRunQueue( thread ) == thread );
+        assert( attachRunQueue( oldThread ) == oldThread );
       #else
-        attachRunQueue( thread );
+        attachRunQueue( oldThread );
       #endif
     }
   }
+  else
+    newThread = oldThread;
 
   incSchedCount();
 
@@ -94,45 +88,23 @@ tcb_t *schedule( tcb_t *thread )
   return newThread;
 }
 
-dword *updateCurrentThread(tcb_t *tcb, ExecutionState state)
+void switchStacks(ExecutionState *state)
 {
-  if(tcb == NULL)
-    return NULL;
-  else if(tcb->threadState != RUNNING)
-  {
-    tcb_t *newTcb = schedule(tcb);
+  tcb_t *oldTcb = currentThread;
 
-    if(newTcb == tcb)
-      return NULL;//(dword *)&state;
-    else
+  if(oldTcb && oldTcb->threadState != RUNNING)
+  {
+    tcb_t *newTcb = schedule();
+
+    if(newTcb && newTcb != oldTcb)
     {
-      if((tcb->cr3 & 0xFFFFF000u) != (newTcb->cr3 & 0xFFFFF000u))
+      if((oldTcb->cr3 & 0xFFFFF000u) != (newTcb->cr3 & 0xFFFFF000u))
         __asm__ __volatile__("mov %0, %%cr3" :: "r"(newTcb->cr3));
 
-      tcb->kernel = (state.user.cs == KCODE);
-
-      if(state.user.cs == KCODE)
-      {
-        dword *stackTop = ((dword *)&tcb) - 1;
-        *stackTop = tcb->execState.user.edi;
-        tcb->execState.kernel.stackTop = (dword)stackTop;
-      }
-
-      *(dword *)EXT_PTR(tssEsp0) = (dword)(((ExecutionState *)&newTcb->execState) + 1);
-
-      if(newTcb->kernel)
-      {
-        dword *stackTop = (dword *)newTcb->execState.kernel.stackTop;
-        newTcb->execState.user.edi = *stackTop;
-        newTcb->kernel = ((ExecutionState *)stackTop)->user.cs == KCODE;
-        return stackTop+1;
-      }
-      else
-        return (dword *)&newTcb->execState;
+      oldTcb->execState = *state;
+      *state = newTcb->execState;
     }
   }
-  else
-    return NULL;//(dword *)&state;
 }
 
 /**
@@ -181,15 +153,13 @@ int setPriority( tcb_t *thread, unsigned int level )
 tcb_t *attachRunQueue( tcb_t *thread )
 {
   assert( thread != NULL );
-  assert( GET_TID(thread) != NULL_TID );
-  assert( thread->priority < NUM_PRIORITIES && thread->priority >= 0 );
+  assert( thread->priority <= HIGHEST_PRIORITY && thread->priority >= LOWEST_PRIORITY );
   assert( thread->threadState == READY );
-
-  assert( thread != currentThread );
 
   if( thread->threadState != READY )
     return NULL;
 
+/*
   // If a higher priority thread than the currently running thread is added to the run queue,
   // then indicate this to the scheduler
 
@@ -197,7 +167,7 @@ tcb_t *attachRunQueue( tcb_t *thread )
   {
     kprintf("Preempting thread: %d with thread: %d\n", GET_TID(currentThread), GET_TID(thread));
   }
-
+*/
   return enqueue( &runQueues[thread->priority], thread );
 }
 
@@ -239,19 +209,14 @@ tcb_t *detachRunQueue( tcb_t *thread )
   @param thread The TCB of the current thread.
 */
 
-void timerInt( tcb_t *thread )
+void timerInt(ExecutionState *state)
 {
     tcb_t *wokenThread;
 
     incTimerCount();
 
-    assert( thread != NULL );
-    assert( GET_TID(thread) != NULL_TID );
-    assert( thread->threadState == RUNNING );
-    assert( thread->quantaLeft );
-
-    if( thread->quantaLeft )
-      thread->quantaLeft--;
+    if( currentThread && currentThread->quantaLeft )
+      currentThread->quantaLeft--;
 
     assert( timerQueue.head == NULL || timerQueue.head->queue.delta );
 

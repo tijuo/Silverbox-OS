@@ -32,11 +32,9 @@
 struct ThreadControlBlock
 {
   dword cr3;
-  unsigned char quantaLeft : 7;
-  unsigned char kernel : 1;
+  unsigned char quantaLeft : 8;
   unsigned char threadState : 4;
-  unsigned char priority : 3;
-  unsigned char privileged : 1;
+  unsigned char priority : 4;
   pid_t exHandler; // Send interrupts and exceptions to this port
 
   struct

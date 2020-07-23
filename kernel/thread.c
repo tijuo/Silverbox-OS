@@ -46,7 +46,7 @@ int startThread( tcb_t *thread )
       detachReceiveQueue(thread, thread->waitPort);
       break;
     case RUNNING:
-      return -1;
+      return E_FAIL;
     default:
       break;
   }
@@ -55,7 +55,7 @@ int startThread( tcb_t *thread )
   thread->waitPort = NULL_PID;
 
   attachRunQueue( thread );
-  return 0;
+  return E_OK;
 }
 
 /**
@@ -146,7 +146,7 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
   if(addrSpace == NULL_PADDR)
     addrSpace = getCR3() & 0x3FF;
 
-  thread = malloc(sizeof(tcb_t));//popQueue(&freeThreadQueue);
+  thread = malloc(sizeof(tcb_t));
 
   if( thread == NULL )
     RET_MSG(NULL, "Couldn't allocate memory for a thread.")
@@ -163,11 +163,13 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
 
   memset(&thread->execState.user, 0, sizeof thread->execState.user);
 
-  thread->execState.user.eflags = EFLAGS_IOPL0 | EFLAGS_IF | EFLAGS_DEFAULT;
+  thread->execState.user.eflags = EFLAGS_IOPL3 | EFLAGS_IF;
   thread->execState.user.eip = ( dword ) threadAddr;
 
   thread->execState.user.cs = UCODE;
   thread->execState.user.userEsp = stack;
+  thread->execState.user.userSS = UDATA;
+
   thread->threadState = PAUSED;
 
   if(tree_insert(&tcbTree, thread->tid, thread) != E_OK)
@@ -181,13 +183,14 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
 
   pentry = (u32)addrSpace | PAGING_RW | PAGING_PRES;
 
-  if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(PAGETAB), &pentry) != 0))
+  if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(PAGETAB), &pentry) != E_OK))
   {
     tree_remove(&tcbTree, thread->tid);
     free(thread);
     return NULL;
   }
-  else if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(KERNEL_VSTART), &(((u32 *)PAGEDIR))[PDE_INDEX(KERNEL_VSTART)]) != 0))
+
+  else if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(KERNEL_VSTART), &(((u32 *)PAGEDIR))[PDE_INDEX(KERNEL_VSTART)]) != E_OK))
   {
     tree_remove(&tcbTree, thread->tid);
     free(thread);
@@ -195,7 +198,7 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
   }
 
 #if DEBUG
-  if(unlikely(writePmapEntry(addrSpace, 0, (void *)PAGEDIR) != 0))
+  if(unlikely(writePmapEntry(addrSpace, 0, (void *)PAGEDIR) != E_OK))
   {
     tree_remove(&tcbTree, thread->tid);
     free(thread);
@@ -203,6 +206,38 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
   }
 #endif /* DEBUG */
 
+  // Copy any page tables in the kernel region of virtual memory from
+  // the bootstrap address space to the thread's
+
+  size_t bufSize = 4*(1023-PDE_INDEX(KERNEL_VSTART));
+  void *buf = malloc(bufSize);
+
+  if(buf == NULL)
+  {
+    tree_remove(&tcbTree, thread->tid);
+    free(thread);
+    return NULL;
+  }
+
+  if(peek(initKrnlPDir, buf, bufSize) != E_OK)
+  {
+    tree_remove(&tcbTree, thread->tid);
+    free(thread);
+    free(buf);
+
+    return NULL;
+  }
+
+  if(poke(addrSpace, buf, bufSize) != E_OK)
+  {
+    tree_remove(&tcbTree, thread->tid);
+    free(thread);
+    free(buf);
+
+    return NULL;
+  }
+
+  free(buf);
   return thread;
 }
 

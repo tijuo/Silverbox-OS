@@ -141,8 +141,7 @@ int sendMessage(tcb_t *tcb, port_pair_t portPair, int block,
       rec_thread->execState.user.ecx = tcb->execState.user.ecx;
       rec_thread->execState.user.edx = tcb->execState.user.edx;
       rec_thread->execState.user.esi = tcb->execState.user.esi;
-      rec_thread->execState.user.edi = tcb->kernel ?
-        rec_thread->execState.user.edi : tcb->execState.user.edi;
+      rec_thread->execState.user.edi = tcb->execState.user.edi;
     }
     else
     {
@@ -151,8 +150,7 @@ int sendMessage(tcb_t *tcb, port_pair_t portPair, int block,
       rec_thread->execState.user.ecx = args[1];
       rec_thread->execState.user.edx = args[2];
       rec_thread->execState.user.esi = args[3];
-      rec_thread->execState.user.edi = tcb->kernel ?
-            rec_thread->execState.user.edi : (dword)args[4];
+      rec_thread->execState.user.edi = (dword)args[4];
     }
 
     startThread(rec_thread);
@@ -239,30 +237,25 @@ int receiveMessage( tcb_t *tcb, port_pair_t portPair, int block )
     tcb->execState.user.edi = send_thread->execState.user.edi;
     tcb->execState.user.ebx = (portPair.local << 16) | (send_thread->execState.user.ebx >> 16);
 
-    if(!send_thread->kernel)
+    if(send_thread->execState.user.eax == SYS_RPC
+       || send_thread->execState.user.eax == SYS_RPC_BLOCK)
     {
-      if(send_thread->execState.user.eax == SYS_RPC
-         || send_thread->execState.user.eax == SYS_RPC_BLOCK)
-      {
-        port_pair_t senderPair;
+      port_pair_t senderPair;
 
-        senderPair.remote = portPair.local;
-        senderPair.local = portPair.remote;
+      senderPair.remote = portPair.local;
+      senderPair.local = portPair.remote;
 
-        if(receiveMessage(send_thread, senderPair,
-           send_thread->execState.user.eax == SYS_RPC_BLOCK) != 0)
-        {
-          send_thread->execState.user.eax = ESYS_FAIL;
-        }
-      }
-      else
+      if(receiveMessage(send_thread, senderPair,
+         send_thread->execState.user.eax == SYS_RPC_BLOCK) != 0)
       {
-        startThread(send_thread);
-        send_thread->execState.user.eax = ESYS_OK;
+        send_thread->execState.user.eax = ESYS_FAIL;
       }
     }
     else
+    {
       startThread(send_thread);
+      send_thread->execState.user.eax = ESYS_OK;
+    }
   }
   else if( !block )
   {

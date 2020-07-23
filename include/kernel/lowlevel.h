@@ -252,6 +252,7 @@ extern const unsigned int initKrnlPDir;
 extern const unsigned int lowMemPageTable;
 extern const unsigned int k1To1PageTable;
 extern const unsigned int bootStackTop;
+extern const unsigned int kernelStackTop;
 
 extern const unsigned int kCodeSel;
 extern const unsigned int kDataSel;
@@ -259,7 +260,6 @@ extern const unsigned int uCodeSel;
 extern const unsigned int uDataSel;
 extern const unsigned int kTssSel;
 
-extern const unsigned int initServStack;
 extern const unsigned int kernelStack;
 extern const unsigned int tssEsp0;
 extern const unsigned int kVirtToPhys;

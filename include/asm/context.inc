@@ -4,14 +4,8 @@
 %include "asm/kernel.inc"
 
 [section .code]
-IMPORT schedule
-IMPORT updateCurrentThread
+IMPORT switchStacks
 
-[section .data]
-IMPORT currentThread
-IMPORT tssEsp0
-
-%define stateCsOff		(8*4)
 %define DPL_MASK		0x03
 
 %macro SAVE_STATE 0
@@ -33,31 +27,14 @@ IMPORT tssEsp0
     mov   ds, ax
     mov   es, ax
 
-  ; Was the processor using a DPL0 code segment
-  ; (thus running in kernel mode)?
-
-    test  word [esp+stateCsOff], DPL_MASK
-
-    jz   .saveCurrentThread
-
-    lea   esp, [kernelStackTop]
-.saveCurrentThread:
-    lea   esi, [currentThread]
-    push  dword [esi]
+    push  esp		; Pass the stack pointer to the handler
 %endmacro
 
 %macro RESTORE_STATE 0
-    call updateCurrentThread
+    call switchStacks
     add  esp, 4
 
-    test eax, eax
-    jz   .testDPL
-
-;  Load the new stack that was returned by updateCurrentThread
-
-    mov  esp, eax
-
-.testDPL:
+;   Load the user code/data segments if switching back to user mode
 
     test word [esp+4*9], DPL_MASK
     jz  .popRegs

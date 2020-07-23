@@ -23,12 +23,28 @@ int peekVirt( addr_t address, size_t len, void *buffer, paddr_t pdir );
 int poke( paddr_t phys, void *buffer, size_t bytes );
 int peek( paddr_t phys, void *buffer, size_t bytes );
 
-void invalidate_tlb(void);
-void invalidate_page( addr_t virt );
-
-bool is_readable( addr_t addr, paddr_t pdir );
-bool is_writable( addr_t addr, paddr_t pdir );
+bool isReadable( addr_t addr, paddr_t pdir );
+bool isWritable( addr_t addr, paddr_t pdir );
 */
+
+/**
+  Zero out a page frame.
+
+  @param phys Physical address frame to clear.
+  @return E_OK on success. E_FAIL on failure.
+*/
+
+int clearPhysPage( paddr_t phys )
+{
+  if( mapTemp( phys ) != E_OK )
+    return E_FAIL;
+
+  memset( (void *)TEMP_PAGEADDR, 0, PAGE_SIZE );
+
+  unmapTemp();
+  return E_OK;
+}
+
 /**
     Can data be read from some virtual address in a particular address space?
     @param addr The virtual address to be tested.
@@ -36,7 +52,7 @@ bool is_writable( addr_t addr, paddr_t pdir );
     @return true if address is readable. false, otherwise.
 **/
 
-bool is_readable( addr_t addr, paddr_t pdir )
+bool isReadable( addr_t addr, paddr_t pdir )
 {
   pte_t pte;
 
@@ -56,7 +72,7 @@ bool is_readable( addr_t addr, paddr_t pdir )
     @return true if address is writable. false, otherwise.
 **/
 
-bool is_writable( addr_t addr, paddr_t pdir )
+bool isWritable( addr_t addr, paddr_t pdir )
 {
   pte_t pte;
   pde_t pde;
@@ -119,10 +135,10 @@ int writePmapEntry(paddr_t pbase, int entry, void *buffer)
   Flushes the entire TLB by reloading the CR3 register.
 
   This must be done when switching to a new address space.
-  If only a few entries need to be flushed, use invalidate_page().
+  If only a few entries need to be flushed, use invalidatePage().
 */
 
-void invalidate_tlb(void)
+void invalidateTlb(void)
 {
   __asm__ __volatile__("movl %%cr3, %%eax\n"
           "movl %%eax, %%cr3\n" ::: "eax", "memory");
@@ -135,7 +151,7 @@ void invalidate_tlb(void)
   This is faster than reload_cr3() for flushing a few entries.
 */
 
-void invalidate_page( addr_t virt )
+void invalidatePage( addr_t virt )
 {
   __asm__ __volatile__( "invlpg (%0)\n" :: "r"( virt ) : "memory" );
 }
@@ -315,13 +331,13 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
   for( addr_offset=0; addr_offset < len;
        addr_offset = (len - addr_offset < PAGE_SIZE ? len : addr_offset + PAGE_SIZE) )
   {
-    if( !is_readable(read_addr+addr_offset, read_pdir) || !is_writable(write_addr+addr_offset, write_pdir) )
+    if( !isReadable(read_addr+addr_offset, read_pdir) || !isWritable(write_addr+addr_offset, write_pdir) )
     {
       #if DEBUG
-        if( !is_readable(read_addr+addr_offset, read_pdir) )
+        if( !isReadable(read_addr+addr_offset, read_pdir) )
           kprintf("0x%x is not readable in address space: 0x%llx\n", read_addr+addr_offset, read_pdir);
 
-        if( !is_writable(write_addr+addr_offset, write_pdir) )
+        if( !isWritable(write_addr+addr_offset, write_pdir) )
           kprintf("0x%x is not writable in address space: 0x%llx\n", write_addr+addr_offset, write_pdir);
       #endif /* DEBUG */
 
@@ -459,7 +475,7 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
     *(dword *)ptePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
   }
 
-  invalidate_page( virt );
+  invalidatePage( virt );
 
   return E_OK;
 }
@@ -513,7 +529,7 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
   else
     return E_NOT_MAPPED;
 
-  invalidate_page( virt );
+  invalidatePage( virt );
 
   return E_OK;
 }
@@ -557,7 +573,7 @@ int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
 
   *(dword *)pdePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
 
-  invalidate_page(virt & ~(PAGE_TABLE_SIZE-1));
+  invalidatePage(virt & ~(PAGE_TABLE_SIZE-1));
 
   return E_OK;
 }
@@ -593,7 +609,7 @@ int kUnmapPageTable( addr_t virt, paddr_t *phys )
   if(phys != NULL)
     *phys = (paddr_t)pdePtr->base << 12;
 
-  invalidate_page(virt & ~(PAGE_TABLE_SIZE-1));
+  invalidatePage(virt & ~(PAGE_TABLE_SIZE-1));
 
   return E_OK;
 }

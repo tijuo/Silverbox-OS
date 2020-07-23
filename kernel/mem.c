@@ -83,7 +83,9 @@ void freeUnusedHeapPages(void)
       addr += PAGE_TABLE_SIZE - (addr & (PAGE_TABLE_SIZE - 1));
   }
 
-  // Now unmap and free any unused page tables
+  /*
+  // Do not unmap and free any empty page tables. They'll still be
+  // mapped in other address spaces.
 
   addr = heapEnd;
 
@@ -101,6 +103,7 @@ void freeUnusedHeapPages(void)
       pde->present = 0;
     }
   }
+  */
 }
 
 /** Extend/shrink the kernel heap by a set amount.

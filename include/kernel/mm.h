@@ -12,9 +12,6 @@
 /* FIXME: Changing any of these values may require changing
    the asm code */
 
-#define BOOTSTRAP_VSTART    	0x1000000
-#define BOOTSTRAP_START     	0x1000000
-
 #define KERNEL_VSTART       	((addr_t)&kVirtStart)
 #define PHYSMEM_START       	((addr_t)&VPhysMemStart)
 #define KERNEL_START        	((addr_t)&kPhysStart)
@@ -37,6 +34,8 @@
 
 #define INVALID_VADDR       	((addr_t)0xFFFFFFFF)
 #define INVALID_ADDR        	((addr_t)0xFFFFFFFF)
+
+#define INIT_SERVER_STACK_TOP	((addr_t)KERNEL_VSTART)
 
 /// Aligns an address to the next page boundary (if not already aligned)
 #define PAGE_ALIGN(addr)    ALIGN(PAGE_SIZE, addr)
@@ -70,11 +69,13 @@ int poke( paddr_t, void *, size_t );
 HOT(int peekVirt( addr_t address, size_t len, void *buffer, paddr_t paddrSpace ));
 HOT(int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t paddrSpace ));
 
-bool is_readable( addr_t addr, paddr_t addrSpace );
-bool is_writable( addr_t addr, paddr_t addrSpace );
+int clearPhysPage( paddr_t phys );
 
-void invalidate_tlb(void);
-void invalidate_page( addr_t virt );
+bool isReadable( addr_t addr, paddr_t addrSpace );
+bool isWritable( addr_t addr, paddr_t addrSpace );
+
+void invalidateTlb(void);
+void invalidatePage( addr_t virt );
 
 extern paddr_t *freePageStack, *freePageStackTop;
 

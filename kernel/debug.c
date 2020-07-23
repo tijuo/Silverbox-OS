@@ -399,7 +399,7 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
 {
   kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
 
-  if( currentThread && !currentThread->kernel )
+  if( currentThread )
     dump_regs((tcb_t *)currentThread, &currentThread->execState, 0, 0);
 
   if( badAssertHlt )
@@ -674,7 +674,7 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
   {
     kprintf("<0x%x>:", stackFramePtr);
 
-    if( is_readable( stackFramePtr + 4, addrSpace ) )
+    if( isReadable( stackFramePtr + 4, addrSpace ) )
     {
       kprintf(" [0x%x]", *(dword *)(stackFramePtr + 4));
     }
@@ -685,7 +685,7 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
 
     for( int i=2; i < 8; i++ )
     {
-      if( is_readable( stackFramePtr + 4 * i, addrSpace) )
+      if( isReadable( stackFramePtr + 4 * i, addrSpace) )
       {
         kprintf(" 0x%x", *(dword *)(stackFramePtr + 4 * i));
       }
@@ -697,7 +697,7 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
 
     kprintf("\n");
 
-    if( !is_readable(*(dword *)stackFramePtr, addrSpace) )
+    if( !isReadable(*(dword *)stackFramePtr, addrSpace) )
     {
       kprintf("<0x%x (invalid)>:\n", *(dword *)stackFramePtr);
       break;
@@ -728,10 +728,10 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
     kprintf("(invalid thread address) ");
   }
 */
-  if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
-  {
+//  if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
+//  {
     execState = (ExecutionState *)&thread->execState;
-  }
+//  }
 
   dump_state(execState, intNum, errorCode);
 
@@ -746,7 +746,7 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
   {
     __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
 
-    if( !is_readable(*(dword *)stackFramePtr, thread->cr3) )
+    if( !isReadable(*(dword *)stackFramePtr, thread->cr3) )
     {
       kprintf("Unable to dump the stack\n");
       return;

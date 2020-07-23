@@ -156,7 +156,7 @@ int sysReceive(tcb_t *tcb, port_pair_t pair, int blocking)
 
 static int sysCreate(tcb_t *tcb, ...)
 {
-  if(!tcb->privileged)
+  if(tcb->tid != INIT_SERVER_TID)
     return ESYS_PERM;
 
   va_list vaargs;
@@ -241,7 +241,7 @@ static int sysCreate(tcb_t *tcb, ...)
 
 static int sysRead(tcb_t *tcb, ...)
 {
-  if(!tcb->privileged)
+  if(tcb->tid != INIT_SERVER_TID)
     return ESYS_PERM;
 
   va_list vaargs;
@@ -298,7 +298,7 @@ static int sysRead(tcb_t *tcb, ...)
 
 static int sysUpdate(tcb_t *tcb, ...)
 {
-  if(!tcb->privileged)
+  if(tcb->tid != INIT_SERVER_TID)
     return ESYS_PERM;
 
   va_list vaargs;
@@ -416,7 +416,7 @@ static int sysUpdate(tcb_t *tcb, ...)
 
 static int sysDestroy(tcb_t *tcb, ...)
 {
-  if(!tcb->privileged)
+  if(tcb->tid != INIT_SERVER_TID)
     return ESYS_PERM;
 
   va_list vaargs;

@@ -47,7 +47,7 @@ IMPORT VPhysMemStart
 ;bootDataSel equ 0x38
 ;kResdTables equ 4
 
-kernelStackTop equ 0xA0000
+kStackTop equ 0xA0000
 kBootStackTop  equ 0x9F000
 kPageDir       equ 0x70000
 kLowPageTab    equ 0x71000

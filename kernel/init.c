@@ -15,6 +15,7 @@
 #include <kernel/pic.h>
 #include <oslib.h>
 #include <kernel/dlmalloc.h>
+#include <kernel/error.h>
 
 #include <kernel/io.h>
 #include <os/variables.h>
@@ -27,17 +28,13 @@
 
 #define INIT_SRV_FLAG	"initsrv="
 
-static inline void contextSwitch( paddr_t addrSpace, addr_t stack ) __attribute__((section(".dtext")));
+static inline void switchContext( u32 addrSpace, ExecutionState state ) __attribute__((section(".dtext")));
 
-static inline void contextSwitch( paddr_t addrSpace, addr_t stack )
+static inline void switchContext( u32 addrSpace, ExecutionState state )
 {
    __asm__ __volatile__(
     "mov %%edx, %%esp\n"
-    "mov %%cr3, %%eax\n"
-    "cmp %%eax, %%ecx\n"
-    "je   __load_regs\n"
-    "mov  %%ecx, %%cr3\n"
-    "__load_regs:\n"
+    "mov %%ecx, %%cr3\n"
     "pop %%edi\n"
     "pop %%esi\n"
     "pop %%ebp\n"
@@ -45,14 +42,14 @@ static inline void contextSwitch( paddr_t addrSpace, addr_t stack )
     "pop %%edx\n"
     "pop %%ecx\n"
     "pop %%eax\n"
-    "iret\n" :: "ecx"(*(dword *)&addrSpace),
-    "edx"((dword)stack) : "%eax");
+    "iret\n" :: "ecx"(addrSpace),
+    "edx"((dword)&state));
 }
 
-extern tcb_t *currentThread, *init_server;
+extern tcb_t *init_server;
 extern paddr_t *freePageStack, *freePageStackTop;
 
-static tcb_t *DISC_CODE(load_elf_exec( addr_t, pid_t, paddr_t, addr_t ));
+static tcb_t *DISC_CODE(loadElfExe( addr_t, pid_t, paddr_t, addr_t ));
 static bool DISC_CODE(isValidElfExe( addr_t img ));
 static void DISC_CODE(initInterrupts( void ));
 static void DISC_CODE(initScheduler(void));
@@ -61,7 +58,7 @@ static int DISC_CODE(initMemory( multiboot_info_t *info ));
 //int DISC_CODE(add_gdt_entry(int sel, dword base, dword limit, int flags));
 static void DISC_CODE(setupGDT(void));
 static void DISC_CODE(stopInit(const char *));
-static void DISC_CODE(bootstrap_init_server(multiboot_info_t * restrict));
+static void DISC_CODE(bootstrapInitServer(void));
 void DISC_CODE(init(multiboot_info_t * restrict));
 static void DISC_CODE(initPIC( void ));
 static int DISC_CODE(memcmp(const char *s1, const char *s2, register size_t n));
@@ -69,7 +66,6 @@ static int DISC_CODE(strncmp(const char * restrict, const char * restrict, size_
 //static size_t DISC_CODE(strlen(const char *s));
 static char *DISC_CODE(strstr(const char * restrict, const char * restrict));
 static char *DISC_CODE(strchr(const char * restrict, int));
-static int DISC_CODE(clearPhysPage(paddr_t phys));
 static void DISC_CODE(showCPU_Features(void));
 static void DISC_CODE(showMBInfoFlags(multiboot_info_t * restrict));
 //static void DISC_CODE(init_clock(void));
@@ -79,12 +75,12 @@ static unsigned DISC_CODE(bcd2bin(unsigned num));
 static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month, unsigned int day, unsigned int hour,
                           unsigned int minute, unsigned int second));
 */
-static addr_t DISC_DATA(init_server_img);
+static addr_t DISC_DATA(initServerImg);
 static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * restrict info));
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
 static void DISC_CODE(initPageAllocator(multiboot_info_t * restrict info));
 static paddr_t DISC_DATA(lastKernelFreePage);
-extern void invalidate_page( addr_t );
+extern void invalidatePage( addr_t );
 
 /*
 void readPhysMem(addr_t address, addr_t buffer, size_t len)
@@ -458,19 +454,6 @@ void initPageAllocator(multiboot_info_t * restrict info)
   }
 }
 
-int clearPhysPage( paddr_t phys )
-{
-  assert( phys != NULL_PADDR );
-
-  if( mapTemp( phys ) == -1 )
-    return -1;
-
-  memset( (void *)TEMP_PAGEADDR, 0, PAGE_SIZE );
-
-  unmapTemp();
-  return 0;
-}
-
 int memcmp(const char *s1, const char *s2, register size_t n)
 {
   for( ; n && *s1 == *s2; n--, s1++, s2++);
@@ -670,7 +653,7 @@ int initMemory( multiboot_info_t * restrict info )
     ptePtr = ADDR_TO_PTE( addr );
 
     ptePtr->rwPriv = 0;
-    invalidate_page( addr );
+    invalidatePage( addr );
   }
 
   setupGDT();
@@ -877,7 +860,7 @@ bool isValidElfExe( addr_t img )
 
 }
 
-tcb_t *load_elf_exec( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uStack )
+tcb_t *loadElfExe( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uStack )
 {
   elf_header_t image;
   elf_sheader_t sheader;
@@ -904,7 +887,7 @@ tcb_t *load_elf_exec( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uSt
 
   if( thread == NULL )
   {
-    kprintf("load_elf_exec(): Couldn't create thread.\n");
+    kprintf("loadElfExe(): Couldn't create thread.\n");
     return NULL;
   }
 
@@ -1007,73 +990,79 @@ tcb_t *load_elf_exec( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uSt
     Bootstraps the initial server and passes necessary boot data to it.
 */
 
-void bootstrap_init_server( multiboot_info_t * restrict mb_boot_info )
+void bootstrapInitServer(void)
 {
-  pmap_t pmap, pmap2;
-  paddr_t page;
-  unsigned int *ptr = (unsigned int *)(TEMP_PAGEADDR + PAGE_SIZE);
-  addr_t init_server_stack = KERNEL_VSTART - PAGE_SIZE;
-  paddr_t uStackPage;
-  paddr_t initServerPDir;
+  int fail=0;
+  addr_t initServerStack = INIT_SERVER_STACK_TOP - PAGE_SIZE;
+  paddr_t initServerPDir=NULL_PADDR, stackPage=NULL_PADDR,
+          stackPTab=NULL_PADDR;
   elf_header_t elf_header;
+  int pdeEntry = PDE_INDEX(initServerStack);
+  int pteEntry = PTE_INDEX(initServerStack);
+  pde_t pde;
+  pte_t pte;
 
   kprintf("Bootstrapping initial server...\n");
 
-  peek( init_server_img, &elf_header, sizeof elf_header );
+  peek(initServerImg, &elf_header, sizeof elf_header);
 
-  if( isValidElfExe( (addr_t)&elf_header ) )
+  if(!isValidElfExe( (addr_t)&elf_header ))
+    fail = 1;
+  else if((initServerPDir = allocPageFrame()) == NULL_PADDR
+          || clearPhysPage(initServerPDir) != E_OK)
   {
-    /* Allocate memory for the page directory and stack including any necessary page tables and
-       start the initial server. */
-
-    initServerPDir = allocPageFrame();
-
-    clearPhysPage(initServerPDir);
-
-    if( (init_server=load_elf_exec(init_server_img, NULL_PID,
-         initServerPDir, init_server_stack + (((addr_t)ptr - 3) & 0xFFFu)) ) == NULL )
-    {
-      kprintf("Failed to initialize initial server.\n");
-      return;
-    }
-
-    currentThread = init_server;
-
-    page = allocPageFrame();
-    clearPhysPage(page);
-
-    *(u32 *)&pmap = (u32)page | PAGING_RW | PAGING_USER | PAGING_PRES;
-    //writePDE(init_server_stack, &pmap, initServerPDir);
-
-    writePmapEntry(initServerPDir, PDE_INDEX(init_server_stack), &pmap);
-
-    uStackPage = allocPageFrame();
-    clearPhysPage(uStackPage);
-
-    *(u32 *)&pmap2 = (u32)uStackPage | PAGING_RW | PAGING_USER | PAGING_PRES;
-    writePmapEntry((pmap.base << 12), PTE_INDEX(init_server_stack), &pmap2);
-
-    //writePTE(init_server_stack, &pmap, initServerPDir);
-
-    /* Push the bootstrap arguments onto the stack. */
-
-    mapTemp(uStackPage);
-
-    *--ptr = (unsigned int)&kBss - (unsigned int)&kdCode; // Arg 5
-    *--ptr = (unsigned int)&kdCode; // Arg 4
-    //*--ptr = (unsigned int)free_page_ptr - FREE_PAGE_PTR_START; // Arg 3*/
-    *--ptr = (unsigned int)(lastKernelFreePage >> 32);
-    *--ptr = (unsigned int)(lastKernelFreePage & 0xFFFFFFFFu);//FREE_PAGE_PTR_START; // Arg 2
-    *--ptr = (unsigned int)mb_boot_info; // Arg 1
-
-    unmapTemp();
-    init_server->privileged = 1;
-
-    kprintf("Starting initial server...\n");
-    startThread(init_server);
+    fail = 1;
   }
-  else
-    kprintf("Unable to load initial server.\n");
+  else if((stackPTab=allocPageFrame()) == NULL_PADDR
+          || clearPhysPage(stackPTab) != E_OK)
+    fail = 1;
+  else if((stackPage=allocPageFrame()) == NULL_PADDR)
+    fail = 1;
+
+  if(!fail)
+  {
+    *(u32 *)&pde = 0;
+    pde.base = (u32)(stackPTab >> 12);
+    pde.rwPriv = pde.usPriv = pde.present = 1;
+
+    *(u32 *)&pte = 0;
+    pte.base = (u32)(stackPage >> 12);
+    pte.rwPriv = pte.usPriv = pte.present = 1;
+
+    if((init_server=loadElfExe(initServerImg, NULL_PID,
+             initServerPDir, initServerStack+PAGE_SIZE)) == NULL )
+    {
+      fail = 1;
+    }
+    else if(writePmapEntry(initServerPDir, pdeEntry, &pde) != E_OK
+       || clearPhysPage(stackPTab) != E_OK)
+    {
+      fail = 1;
+    }
+    else if(writePmapEntry(stackPTab, pteEntry, &pte) != E_OK)
+      fail = 1;
+    else
+    {
+      kprintf("Starting initial server... 0x%x\n", init_server);
+
+      if(startThread(init_server) != E_OK || schedule() != init_server)
+        fail = 1;
+    }
+  }
+
+  if(fail)
+  {
+    kprintf("Unable to start initial server.\n");
+
+    if(initServerPDir != NULL_PADDR)
+      freePageFrame(initServerPDir);
+
+    if(stackPage != NULL_PADDR)
+      freePageFrame(stackPage);
+
+    if(stackPTab != NULL_PADDR)
+      freePageFrame(stackPTab);
+  }
 }
 #if DEBUG
 #if 0
@@ -1194,7 +1183,7 @@ void init( multiboot_info_t * restrict info )
   /* Copy the boot modules and locate the initial server. */
 
   if( !srv_str_ptr ) // If no initial server was specified, assume that the first module is the initial server
-    init_server_img = (addr_t)module->mod_start;
+    initServerImg = (addr_t)module->mod_start;
   else
   {
     for(i=info->mods_count; i; i--, module++)
@@ -1202,7 +1191,7 @@ void init( multiboot_info_t * restrict info )
       if( strncmp((char *)module->string, srv_str_ptr,
                       srv_str_end-srv_str_ptr) == 0 )
       {
-        init_server_img = (addr_t)module->mod_start;
+        initServerImg = (addr_t)module->mod_start;
         init_srv_found = true;
         break;
       }
@@ -1233,17 +1222,13 @@ void init( multiboot_info_t * restrict info )
   kprintf("Initializing scheduler.\n");
   initScheduler();
 
-  stack = (addr_t)&currentThread->execState;
-
-  assert( currentThread->threadState != DEAD );
-
 #if 0
   kprintf("Initializing clock.\n");
   init_clock();
   kprintf("Initializing ATA.\n");
   testATA();
 #endif /* DEBUG */
-  bootstrap_init_server(info);
+  bootstrapInitServer();
 
   kprintf("\n0x%x bytes of discardable code.", (addr_t)EXT_PTR(kdData) - (addr_t)EXT_PTR(kdCode));
   kprintf(" 0x%x bytes of discardable data.\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdData));
@@ -1266,15 +1251,11 @@ void init( multiboot_info_t * restrict info )
 
   freePageFrame((paddr_t)(pte->base << 12));
 
-  /* Only the kernel mappings are needed for new address spaces. Since
-     each new address space gets a copy (including the one for the
-     initial page server), the initial kernel page directory can be
-     released. */
-
-  freePageFrame((paddr_t)initKrnlPDir);
   freePageFrame((paddr_t)k1To1PageTable);
   freePageFrame((paddr_t)(bootStackTop-PAGE_SIZE));
 
-  contextSwitch( currentThread->cr3, stack );
+  *(dword *)EXT_PTR(tssEsp0) = (dword)kernelStackTop;
+
+  switchContext( init_server->cr3, init_server->execState );
   stopInit("Error: Context switch failed.");
 }
