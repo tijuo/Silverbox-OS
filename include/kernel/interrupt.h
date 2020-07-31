@@ -4,20 +4,20 @@
 #include <kernel/thread.h>
 #include <kernel/message.h>
 
-#define IRQ_PID_START  1
-#define NUM_IRQS        16
+#define NUM_IRQS        	16
+#define IRQ_BITMAP_COUNT	((NUM_IRQS / 32)+(NUM_IRQS & 0x1F ? 1 : 0))
+#define isValidIRQ(irq)		(irq >= 0 && irq < NUM_IRQS)
 
 void handleIRQ(int irqNum, ExecutionState *state);
 void handleCPUException(int intNum, int errorCode, ExecutionState *state);
 
 /// The threads that are responsible for handling an IRQ
 
-extern pid_t IRQHandlers[NUM_IRQS];
-extern tcb_t *irqThreads[NUM_IRQS];
-extern pid_t irqPorts[NUM_IRQS];
+extern tcb_t *irqHandlers[NUM_IRQS];
+extern int pendingIrqBitmap[IRQ_BITMAP_COUNT];
 
 void endIRQ( int irqNum );
-int registerInt( pid_t pid, int intNum );
-int unregisterInt( int intNum );
+int registerIrq( tcb_t *thread, int irqNum );
+int unregisterIrq( int irqNum );
 
 #endif /* INTERRUPT_H */

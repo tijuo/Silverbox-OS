@@ -7,7 +7,7 @@ include ../Makefile.inc
 include ../vars.mk
 
 SRC     =init.c paging.c thread.c schedule.c interrupt.c \
-        debug.c pic.c queue.c message.c syscall.c mem.c \
+        debug.c pic.c message.c syscall.c mem.c \
 	malloc.c struct.c
 
 OBJ     =$(SRC:.c=.o)

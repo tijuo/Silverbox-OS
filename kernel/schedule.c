@@ -5,8 +5,9 @@
 #include <kernel/pic.h>
 #include <kernel/paging.h>
 #include <kernel/lowlevel.h>
+#include <kernel/error.h>
 
-struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;
+queue_t runQueues[NUM_RUN_QUEUES], timerQueue;
 
 int setPriority( tcb_t *thread, unsigned int level );
 tcb_t *attachRunQueue( tcb_t *thread );
@@ -53,7 +54,7 @@ tcb_t *schedule(void)
 
   for( priority=HIGHEST_PRIORITY; priority >= priorityLimit; priority-- )
   {
-    if( (newThread=popQueue(&runQueues[priority])) != NULL )
+    if( queueDequeue(&runQueues[priority], (void **)&newThread) == E_OK )
       break;
   }
 
@@ -98,8 +99,8 @@ void switchStacks(ExecutionState *state)
 
     if(newTcb && newTcb != oldTcb)
     {
-      if((oldTcb->cr3 & 0xFFFFF000u) != (newTcb->cr3 & 0xFFFFF000u))
-        __asm__ __volatile__("mov %0, %%cr3" :: "r"(newTcb->cr3));
+      if((oldTcb->rootPageMap & 0xFFFFF000u) != (newTcb->rootPageMap & 0xFFFFF000u))
+        __asm__ __volatile__("mov %0, %%cr3" :: "r"(newTcb->rootPageMap));
 
       oldTcb->execState = *state;
       *state = newTcb->execState;
@@ -122,7 +123,6 @@ void switchStacks(ExecutionState *state)
 int setPriority( tcb_t *thread, unsigned int level )
 {
   assert( thread != NULL );
-  assert( GET_TID(thread) != NULL_TID );
   assert( level < NUM_PRIORITIES );
 
   if( thread == NULL || level >= NUM_PRIORITIES )
@@ -159,16 +159,10 @@ tcb_t *attachRunQueue( tcb_t *thread )
   if( thread->threadState != READY )
     return NULL;
 
-/*
-  // If a higher priority thread than the currently running thread is added to the run queue,
-  // then indicate this to the scheduler
-
-  if( thread->priority < currentThread->priority )
-  {
-    kprintf("Preempting thread: %d with thread: %d\n", GET_TID(currentThread), GET_TID(thread));
-  }
-*/
-  return enqueue( &runQueues[thread->priority], thread );
+  if(queueEnqueue(&runQueues[thread->priority], thread->tid, thread) == E_OK)
+    return thread;
+  else
+    return NULL;
 }
 
 /**
@@ -183,16 +177,18 @@ tcb_t *detachRunQueue( tcb_t *thread )
   assert( thread != NULL );
   assert( thread->priority < NUM_PRIORITIES );
 
-  if( thread == NULL )
-    return NULL;
-
-  if( thread->threadState == RUNNING )
+  if(thread == NULL || thread->threadState == RUNNING)
     return NULL;
 
   assert( thread != NULL );
-  assert( GET_TID(thread) != NULL_TID );
 
-  return detachQueue( &runQueues[ thread->priority ], thread );
+  if(queueRemoveFirst(&runQueues[ thread->priority ], thread->tid,
+                      NULL) == E_OK)
+  {
+    return thread;
+  }
+  else
+    return NULL;
 }
 
 /**
@@ -211,30 +207,38 @@ tcb_t *detachRunQueue( tcb_t *thread )
 
 void timerInt(ExecutionState *state)
 {
-    tcb_t *wokenThread;
+  tcb_t *wokenThread;
+  timer_delta_t *timerDelta;
 
-    incTimerCount();
+  incTimerCount();
 
-    if( currentThread && currentThread->quantaLeft )
-      currentThread->quantaLeft--;
+  if( currentThread && currentThread->quantaLeft )
+    currentThread->quantaLeft--;
 
-    assert( timerQueue.head == NULL || timerQueue.head->queue.delta );
+  if(!isQueueEmpty(&timerQueue))
+  {
+    timerDelta = (timer_delta_t *)queueGetHead(&timerQueue);
 
-    if( timerQueue.head && timerQueue.head->queue.delta )
-      timerQueue.head->queue.delta--;
+    if(timerDelta->delta)
+      timerDelta->delta--;
 
-    while( timerQueue.head && timerQueue.head->queue.delta == 0 )
+    for(; !isQueueEmpty(&timerQueue) && timerDelta->delta == 0; )
     {
-      wokenThread = timerPop();
+      assert( queuePop(&timerQueue, (void **)&timerDelta) == E_OK );
+
+      wokenThread = timerDelta->thread;
+
+      if(!isQueueEmpty(&timerQueue))
+        timerDelta = (timer_delta_t *)queueGetHead(&timerQueue);
 
       assert( wokenThread != NULL );
       assert( wokenThread->threadState != READY && wokenThread->threadState != RUNNING );
 
-      assert( !isInTimerQueue( wokenThread ) );
+      assert( queueFindFirst(&timerQueue, wokenThread->tid, NULL) == E_FAIL );
 
       if( wokenThread->threadState == WAIT_FOR_SEND || wokenThread->threadState == WAIT_FOR_RECV )
       {
-        kprintf("SIGTMOUT to %d\n", GET_TID(wokenThread));
+        kprintf("SIGTMOUT to %d\n", wokenThread->tid);
         //sysRaise(wokenThread, SIGTMOUT, 0);
       }
       else
@@ -250,6 +254,6 @@ void timerInt(ExecutionState *state)
 
       assert( wokenThread != currentThread );
     }
-
-    sendEOI();
+  }
+  sendEOI();
 }

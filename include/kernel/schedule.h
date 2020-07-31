@@ -2,14 +2,14 @@
 #define SCHEDULE_H
 
 #include <kernel/thread.h>
-#include <kernel/queue.h>
+//#include <kernel/queue.h>
 
-#define NUM_PRIORITIES		7u
+#define NUM_PRIORITIES		7
 #define NUM_RUN_QUEUES		NUM_PRIORITIES
 
 #define HIGHEST_PRIORITY 	(NUM_PRIORITIES - 1)
-#define NORMAL_PRIORITY 	3u
-#define LOWEST_PRIORITY		0u
+#define NORMAL_PRIORITY 	3
+#define LOWEST_PRIORITY		0
 
 /** The number of run queues used for the scheduler. */
 
@@ -24,6 +24,6 @@ HOT(tcb_t *schedule(void));
 HOT(void timerInt(ExecutionState *state));
 HOT(void switchStacks(ExecutionState *state));
 
-extern struct Queue runQueues[NUM_RUN_QUEUES], timerQueue;
+extern queue_t runQueues[NUM_RUN_QUEUES], timerQueue;
 
 #endif /* SCHEDULE_H */

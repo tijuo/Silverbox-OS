@@ -5,11 +5,14 @@
 #include <kernel/thread.h>
 #include <kernel/struct.h>
 
-typedef struct Port
+struct Port
 {
-  tid_t owner, sendWaitTail;
+  struct ThreadControlBlock *owner;
   pid_t pid;
-} port_t;
+  queue_t senderWaitQueue;
+};
+
+typedef struct Port port_t;
 
 typedef struct PortPair
 {
@@ -20,14 +23,17 @@ typedef struct PortPair
 
 port_t *getPort(pid_t pid);
 port_t *createPort(void);
+port_t *createPortWithPid(pid_t pid);
+void releasePort(port_t *port);
 
-HOT(int sendMessage(tcb_t *tcb, port_pair_t portPair, int block, int args[5]));
-HOT(int receiveMessage(tcb_t *tcb, port_pair_t portPair, int block));
+HOT(int sendMessage(struct ThreadControlBlock *sender, pid_t pid, int block));
+HOT(int receiveMessage(struct ThreadControlBlock *recipient, pid_t senderPid, tid_t senderTid, int block));
+int sendExceptionMessage(struct ThreadControlBlock *sender, pid_t remotePid, int args[5]);
 
-void attachSendQueue(tcb_t *tcb, pid_t pid);
-void attachReceiveQueue(tcb_t *tcb, pid_t pid);
-void detachSendQueue(tcb_t *tcb, pid_t pid);
-void detachReceiveQueue(tcb_t *tcb, pid_t pid);
+int attachSendQueue(struct ThreadControlBlock *sender, port_t *port);
+int attachReceiveQueue(struct ThreadControlBlock *receiver, struct ThreadControlBlock *sender);
+int detachSendQueue(struct ThreadControlBlock *sender);
+int detachReceiveQueue(struct ThreadControlBlock *receiver);
 
 extern tree_t portTree;
 

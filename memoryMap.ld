@@ -12,23 +12,12 @@
   _kernelTSS = 0x88F98 + VPhysMemStart;
   _initKrnlPDIR = _kernelIDT + 0x1000;
   _firstKrnlPTAB = _initKrnlPDIR + 0x1000;
-  _initServPDIR = _firstKrnlPTAB + 0x1000;
-  _initServStackPTAB = _initServPDIR + 0x1000;
-
-  /* Note that this is the address of the bottom of the stack. */
-
-  _initServStack = _initServStackPTAB + 0x1000;
-
-  _initServPTAB = _initServStack + 0x1000;
 
   /* Note that these addresses are the bottoms of the stacks. */
 
-  _idleStack = _initServPTAB + 0x1000;
   _kernelStack = _idleStack + 0x1000;
-  _irqStack = _kernelStack + 0x2000;
 
-  _kernelVars = _irqStack + 0x1000;
-  _firstPTAB = _kernelVars + 0x1000;
+  _firstPTAB = _kernelStack + 0x1000;
   _secondKrnlPTAB = _firstPTAB + 0x1000;
 
   /* Note that this is the address of the bottom of the stack. */

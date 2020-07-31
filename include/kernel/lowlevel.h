@@ -142,27 +142,11 @@ struct TSS_Struct
 	word	ioMap;
 } __PACKED__;
 
-typedef union
+typedef struct
 {
-  struct
-  {
-    dword edi, esi, ebp, ebx, edx, ecx, eax;
-    dword eip, cs, eflags, userEsp, userSS;
-  } user;
-  struct
-  {
-    dword stackTop; // points to saved edi and saved execution state
-  } kernel;
+  dword edi, esi, ebp, ebx, edx, ecx, eax;
+  dword eip, cs, eflags, userEsp, userSS;
 } ExecutionState;
-
-/*
-// This is eight bytes long
-
-struct IDT_Entry
-{
-
-} __PACKED__;
-*/
 
 extern void atomicInc( volatile void * );
 extern void atomicDec( volatile void *);

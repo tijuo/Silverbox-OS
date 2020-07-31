@@ -26,7 +26,8 @@
 #define  DISC_DATA(X)  \
   X __attribute__((section(".ddata")))
 
-#define INIT_SRV_FLAG	"initsrv="
+#define INIT_SERVER_FLAG	"initsrv="
+#define INIT_PAGER_FLAG "initpgr="
 
 static inline void switchContext( u32 addrSpace, ExecutionState state ) __attribute__((section(".dtext")));
 
@@ -46,7 +47,7 @@ static inline void switchContext( u32 addrSpace, ExecutionState state )
     "edx"((dword)&state));
 }
 
-extern tcb_t *init_server;
+extern tcb_t *initServerThread;
 extern paddr_t *freePageStack, *freePageStackTop;
 
 static tcb_t *DISC_CODE(loadElfExe( addr_t, pid_t, paddr_t, addr_t ));
@@ -59,6 +60,7 @@ static int DISC_CODE(initMemory( multiboot_info_t *info ));
 static void DISC_CODE(setupGDT(void));
 static void DISC_CODE(stopInit(const char *));
 static void DISC_CODE(bootstrapInitServer(void));
+static void DISC_CODE(bootstrapInitPager(void));
 void DISC_CODE(init(multiboot_info_t * restrict));
 static void DISC_CODE(initPIC( void ));
 static int DISC_CODE(memcmp(const char *s1, const char *s2, register size_t n));
@@ -76,6 +78,7 @@ static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month
                           unsigned int minute, unsigned int second));
 */
 static addr_t DISC_DATA(initServerImg);
+static addr_t DISC_DATA(initPagerImg);
 static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * restrict info));
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
 static void DISC_CODE(initPageAllocator(multiboot_info_t * restrict info));
@@ -984,8 +987,6 @@ tcb_t *loadElfExe( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uStack
   return thread;
 }
 
-// TODO: This *really* needs to be cleaned up
-
 /**
     Bootstraps the initial server and passes necessary boot data to it.
 */
@@ -993,14 +994,9 @@ tcb_t *loadElfExe( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uStack
 void bootstrapInitServer(void)
 {
   int fail=0;
-  addr_t initServerStack = INIT_SERVER_STACK_TOP - PAGE_SIZE;
-  paddr_t initServerPDir=NULL_PADDR, stackPage=NULL_PADDR,
-          stackPTab=NULL_PADDR;
+  addr_t initServerStack = INIT_SERVER_STACK_TOP;
+  paddr_t initServerPDir=NULL_PADDR;
   elf_header_t elf_header;
-  int pdeEntry = PDE_INDEX(initServerStack);
-  int pteEntry = PTE_INDEX(initServerStack);
-  pde_t pde;
-  pte_t pte;
 
   kprintf("Bootstrapping initial server...\n");
 
@@ -1010,6 +1006,58 @@ void bootstrapInitServer(void)
     fail = 1;
   else if((initServerPDir = allocPageFrame()) == NULL_PADDR
           || clearPhysPage(initServerPDir) != E_OK)
+  {
+    fail = 1;
+  }
+  else
+  {
+    if((initServerThread=loadElfExe(initServerImg, NULL_PID,
+             initServerPDir, initServerStack)) == NULL )
+    {
+      fail = 1;
+    }
+    else
+    {
+      kprintf("Starting initial server... 0x%x\n", initServerThread);
+
+      if(startThread(initServerThread) != E_OK)
+        fail = 1;
+    }
+  }
+
+  if(fail)
+  {
+    kprintf("Unable to start initial server.\n");
+
+    if(initServerPDir != NULL_PADDR)
+      freePageFrame(initServerPDir);
+  }
+}
+
+/**
+    Bootstraps the initial pager server and passes necessary boot data to it.
+*/
+
+void bootstrapInitPager(void)
+{
+  int fail=0;
+  addr_t initPagerStack = INIT_PAGER_STACK_TOP - PAGE_SIZE;
+  paddr_t initPagerPDir=NULL_PADDR, stackPage=NULL_PADDR,
+          stackPTab=NULL_PADDR;
+  elf_header_t elf_header;
+  int pdeEntry = PDE_INDEX(initPagerStack);
+  int pteEntry = PTE_INDEX(initPagerStack);
+  pde_t pde;
+  pte_t pte;
+
+  kprintf("Bootstrapping initial pager...\n");
+
+  peek(initPagerImg, &elf_header, sizeof elf_header);
+
+  if(!isValidElfExe( (addr_t)&elf_header ))
+    fail = 1;
+  else if((initPagerPDir = allocPageFrame()) == NULL_PADDR
+          || clearPhysPage(initPagerPDir) != E_OK)
   {
     fail = 1;
   }
@@ -1029,12 +1077,12 @@ void bootstrapInitServer(void)
     pte.base = (u32)(stackPage >> 12);
     pte.rwPriv = pte.usPriv = pte.present = 1;
 
-    if((init_server=loadElfExe(initServerImg, NULL_PID,
-             initServerPDir, initServerStack+PAGE_SIZE)) == NULL )
+    if((initPagerThread=loadElfExe(initPagerImg, NULL_PID,
+             initPagerPDir, initPagerStack+PAGE_SIZE)) == NULL )
     {
       fail = 1;
     }
-    else if(writePmapEntry(initServerPDir, pdeEntry, &pde) != E_OK
+    else if(writePmapEntry(initPagerPDir, pdeEntry, &pde) != E_OK
        || clearPhysPage(stackPTab) != E_OK)
     {
       fail = 1;
@@ -1043,19 +1091,19 @@ void bootstrapInitServer(void)
       fail = 1;
     else
     {
-      kprintf("Starting initial server... 0x%x\n", init_server);
+      kprintf("Starting initial pager server... 0x%x\n", initPagerThread);
 
-      if(startThread(init_server) != E_OK || schedule() != init_server)
+      if(startThread(initPagerThread) != E_OK)
         fail = 1;
     }
   }
 
   if(fail)
   {
-    kprintf("Unable to start initial server.\n");
+    kprintf("Unable to start initial pager server.\n");
 
-    if(initServerPDir != NULL_PADDR)
-      freePageFrame(initServerPDir);
+    if(initPagerPDir != NULL_PADDR)
+      freePageFrame(initPagerPDir);
 
     if(stackPage != NULL_PADDR)
       freePageFrame(stackPage);
@@ -1064,6 +1112,7 @@ void bootstrapInitServer(void)
       freePageFrame(stackPTab);
   }
 }
+
 #if DEBUG
 #if 0
 #define MBI_FLAGS_MEM		(1u << 0)  /* 'mem_*' fields are valid */
@@ -1123,8 +1172,14 @@ void showCPU_Features(void)
 
 void initStructures(void)
 {
-  tree_init(&tcbTree);
-  tree_init(&portTree);
+  treeInit(&tcbTree);
+  treeInit(&portTree);
+  treeInit(&asTree);
+
+  for(int i=LOWEST_PRIORITY; i <= HIGHEST_PRIORITY; i++)
+    queueInit(&runQueues[i]);
+
+  queueInit(&timerQueue);
 }
 
 /**
@@ -1137,10 +1192,10 @@ void init( multiboot_info_t * restrict info )
 {
 //  memory_map_t *mmap;
   module_t *module;
-  addr_t stack;
   unsigned int i=0;
-  bool init_srv_found=false;
-  char *srv_str_ptr = NULL, *srv_str_end=NULL;
+  bool initServerFound=false, initPagerFound=false;
+  char *initServerStrPtr = NULL, *initServerStrEnd=NULL;
+  char *initPagerStrPtr = NULL, *initPagerStrEnd=NULL;
 
 #ifdef DEBUG
   init_serial();
@@ -1151,55 +1206,72 @@ void init( multiboot_info_t * restrict info )
   showCPU_Features();
 #endif
 
-  srv_str_ptr = strstr( (char *)info->cmdline, INIT_SRV_FLAG );
+  initServerStrPtr = strstr( (char *)info->cmdline, INIT_SERVER_FLAG );
+  initPagerStrPtr = strstr( (char *)info->cmdline, INIT_PAGER_FLAG );
 
   /* Locate the initial server string (if it exists) */
 
-  if( srv_str_ptr )
+  if( initServerStrPtr )
   {
-    srv_str_ptr += (sizeof( INIT_SRV_FLAG ) - 1);
-    srv_str_end = strchr(srv_str_ptr, ' ');
+    initServerStrPtr += (sizeof( INIT_SERVER_FLAG ) - 1);
+    initServerStrEnd = strchr(initServerStrPtr, ' ');
 
-    if( !srv_str_end )
-      srv_str_end = strchr(srv_str_ptr, '\0');
+    if( !initServerStrEnd )
+      initServerStrEnd = strchr(initServerStrPtr, '\0');
   }
   else
   {
     kprintf("Initial server not specified.\n");
-
-   if( !info->mods_count )
-     stopInit("No boot modules found.\nNo initial servers to start.");
+    stopInit("No boot modules found.\nNo initial server to start.");
   }
+
+  /* Locate the initial pager string (if it exists) */
+
+  if( initPagerStrPtr )
+  {
+    initPagerStrPtr += (sizeof( INIT_PAGER_FLAG ) - 1);
+    initPagerStrEnd = strchr(initPagerStrPtr, ' ');
+
+    if( !initPagerStrEnd )
+      initPagerStrEnd = strchr(initPagerStrPtr, '\0');
+  }
+  else
+  {
+    kprintf("Initial pager server not specified.\n");
+    stopInit("No initial pager server to start.");
+  }
+
 
   if( info->flags & 1 )
-  {
     kprintf("Lower Memory: %d B Upper Memory: %d B\n", info->mem_lower << 10, info->mem_upper << 10);
-  }
 
   kprintf("Boot info struct: 0x%x\nModules located at 0x%x. %d modules\n",
     info, info->mods_addr, info->mods_count);
+
   module = (module_t *)info->mods_addr;
 
   /* Copy the boot modules and locate the initial server. */
 
-  if( !srv_str_ptr ) // If no initial server was specified, assume that the first module is the initial server
-    initServerImg = (addr_t)module->mod_start;
-  else
+  for(i=info->mods_count; i; i--, module++)
   {
-    for(i=info->mods_count; i; i--, module++)
+    if( strncmp((char *)module->string, initServerStrPtr,
+                initServerStrEnd-initServerStrPtr) == 0 )
     {
-      if( strncmp((char *)module->string, srv_str_ptr,
-                      srv_str_end-srv_str_ptr) == 0 )
-      {
-        initServerImg = (addr_t)module->mod_start;
-        init_srv_found = true;
-        break;
-      }
+      initServerImg = (addr_t)module->mod_start;
+      initServerFound = true;
+    }
+    else if( strncmp((char *)module->string, initPagerStrPtr,
+                     initPagerStrEnd-initPagerStrPtr) == 0 )
+    {
+      initPagerImg = (addr_t)module->mod_start;
+      initPagerFound = true;
     }
   }
 
-  if( !init_srv_found )
+  if( !initServerFound )
     stopInit("Can't find initial server.");
+  if( !initPagerFound )
+    stopInit("Can't find initial pager server.");
 
   kprintf("%d run queues.\n", NUM_RUN_QUEUES);
 
@@ -1228,7 +1300,9 @@ void init( multiboot_info_t * restrict info )
   kprintf("Initializing ATA.\n");
   testATA();
 #endif /* DEBUG */
+
   bootstrapInitServer();
+  bootstrapInitPager();
 
   kprintf("\n0x%x bytes of discardable code.", (addr_t)EXT_PTR(kdData) - (addr_t)EXT_PTR(kdCode));
   kprintf(" 0x%x bytes of discardable data.\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdData));
@@ -1256,6 +1330,8 @@ void init( multiboot_info_t * restrict info )
 
   *(dword *)EXT_PTR(tssEsp0) = (dword)kernelStackTop;
 
-  switchContext( init_server->cr3, init_server->execState );
+  schedule();
+
+  switchContext( initServerThread->rootPageMap, initServerThread->execState );
   stopInit("Error: Context switch failed.");
 }

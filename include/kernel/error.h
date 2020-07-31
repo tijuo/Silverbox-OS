@@ -14,5 +14,6 @@
 #define E_OVERWRITE     -4
 #define E_RANGE		-5
 #define E_PERM		-6
+#define E_BLOCK		-7
 
 #endif /* ERROR_H */

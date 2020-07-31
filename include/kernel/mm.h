@@ -6,6 +6,9 @@
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
 #include <kernel/dlmalloc.h>
+#include <kernel/struct.h>
+
+#define NULL_ASID	((asid_t)0)
 
 #define MFAIL                ((void*)(MAX_SIZE_T))
 
@@ -28,6 +31,7 @@
 /* FIXME: Changing any of these values may require changing the
    asm code. */
 
+#define PAGER_TABLE		((addr_t)0x1000)
 #define TEMP_PAGEADDR           ((addr_t)0xC0000)
 #define LAPIC_VADDR             (TEMP_PAGEADDR + PAGE_SIZE)
 #define KERNEL_CLOCK		(LAPIC_VADDR + PAGE_SIZE)
@@ -36,6 +40,7 @@
 #define INVALID_ADDR        	((addr_t)0xFFFFFFFF)
 
 #define INIT_SERVER_STACK_TOP	((addr_t)KERNEL_VSTART)
+#define INIT_PAGER_STACK_TOP	((addr_t)KERNEL_VSTART)
 
 /// Aligns an address to the next page boundary (if not already aligned)
 #define PAGE_ALIGN(addr)    ALIGN(PAGE_SIZE, addr)
@@ -85,5 +90,11 @@ paddr_t allocPageFrame(void);
 void freePageFrame(paddr_t frame);
 
 void *morecore(int amt);
+
+typedef unsigned int asid_t;
+extern tree_t asTree;
+asid_t createAddressSpace(paddr_t *addrSpace);
+int releaseAddressSpace(asid_t asid);
+paddr_t *getAddressSpace(asid_t asid);
 
 #endif

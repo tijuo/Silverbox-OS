@@ -23,6 +23,8 @@ extern "C" {
 
 #define NULL_PADDR          	((paddr_t)0xFFFFFFFFFFFFFFFFull)
 
+#define IRQ_ANY			-1
+
 #define KERNEL_MBOX_ID 		0
 
 #define REPLY_SUCCESS		0
@@ -51,6 +53,8 @@ extern "C" {
 
 typedef unsigned long shmid_t;
 typedef unsigned long rspid_t;
+
+typedef unsigned int	pframe_t;
 
 #define MAX_MSG_LEN	MSG_LEN
 #define MSG_LEN         1024
@@ -111,6 +115,8 @@ struct Tcb
     dword eip, eflags;
   } state;
 };
+
+typedef struct Tcb thread_info_t;
 
 struct ExitMsg
 {

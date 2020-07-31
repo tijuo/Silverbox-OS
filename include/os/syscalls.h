@@ -5,17 +5,22 @@
 
 #define SYSCALL_INT             0x40
 
-#define SYS_MSG_EXIT            0x00
-#define SYS_MSG_WAIT            0x01
-#define SYS_MSG_CREATE          0x02
-#define SYS_MSG_READ            0x03
-#define SYS_MSG_UPDATE          0x04
-#define SYS_MSG_DESTROY         0x05
-
-#define SYS_RPC                 0x00
-#define SYS_RPC_BLOCK           0x01
-#define SYS_RECEIVE             0x02
-#define SYS_RECEIVE_BLOCK       0x03
+#define SYS_EXIT		0
+#define SYS_WAIT		1
+#define SYS_SEND		2
+#define SYS_RECEIVE		3
+#define SYS_MAP			4
+#define SYS_UNMAP		5
+#define SYS_CREATE_THREAD	6
+#define SYS_DESTROY_THREAD	7
+#define SYS_READ_THREAD		8
+#define SYS_UPDATE_THREAD	9
+#define SYS_CREATE_PORT		10
+#define SYS_DESTROY_PORT	11
+#define SYS_EOI			12
+#define SYS_IRQ_WAIT		13
+#define SYS_BIND_IRQ		14
+#define SYS_UNBIND_IRQ		15
 
 #define RES_MAPPING     0
 #define RES_IHANDLER    1

@@ -10,7 +10,7 @@
 #include <kernel/error.h>
 #include <kernel/dlmalloc.h>
 
-tcb_t *init_server;
+tcb_t *initServerThread, *initPagerThread;
 tcb_t *currentThread;
 tree_t tcbTree;
 static tid_t lastTID=0;
@@ -28,22 +28,25 @@ static tid_t getNewTID(void);
 int startThread( tcb_t *thread )
 {
   #if DEBUG
-  if( isInTimerQueue(thread) )
+  if( queueFindFirst(&timerQueue, thread->tid, NULL) == E_OK )
     kprintf("Thread is in timer queue!\n");
   #endif /* DEBUG */
 
-  assert( !isInTimerQueue(thread) );
+  assert( queueFindFirst(&timerQueue, thread->tid, NULL) != E_OK );
 
   switch(thread->threadState)
   {
     case SLEEPING:
-      timerDetach(thread);
+      if(queueRemoveFirst(&timerQueue, thread->tid, NULL) != E_OK)
+        return E_FAIL;
       break;
     case WAIT_FOR_RECV:
-      detachSendQueue(thread, thread->waitPort);
+      if(detachSendQueue(thread) != E_OK)
+        return E_FAIL;
       break;
     case WAIT_FOR_SEND:
-      detachReceiveQueue(thread, thread->waitPort);
+      if(detachReceiveQueue(thread) != E_OK)
+        return E_FAIL;
       break;
     case RUNNING:
       return E_FAIL;
@@ -52,10 +55,9 @@ int startThread( tcb_t *thread )
   }
 
   thread->threadState = READY;
-  thread->waitPort = NULL_PID;
+  thread->wait.port = NULL;
 
-  attachRunQueue( thread );
-  return E_OK;
+  return attachRunQueue( thread ) ? E_OK : E_FAIL;
 }
 
 /**
@@ -73,27 +75,32 @@ int sleepThread( tcb_t *thread, int msecs )
   if( thread->threadState == SLEEPING )
     RET_MSG(1, "Already sleeping!")//return -1;
   else if( msecs >= (1 << 16) || msecs < 1)
-    RET_MSG(-1, "Invalid sleep interval");
+    RET_MSG(E_INVALID_ARG, "Invalid sleep interval");
 
   if( thread->threadState != READY && thread->threadState != RUNNING )
   {
     kprintf("sleepThread() failed!\n");
     assert(false);
-    return -2;
+    return E_FAIL;
   }
 
-  if( thread->threadState == READY )
-    detachRunQueue( thread );
+  if( thread->threadState == READY && detachRunQueue( thread ) != E_OK)
+    return E_FAIL;
 
-  if( !timerEnqueue( thread, (msecs * HZ) / 1000 ) )
-  {
-    assert( false );
-    return -1;
-  }
+  timer_delta_t *timerDelta = malloc(sizeof(timer_delta_t));
+
+  if(!timerDelta)
+    return E_FAIL;
+
+  timerDelta->delta = (msecs*HZ)/1000;
+  timerDelta->thread = thread;
+
+  if(queueEnqueue(&timerQueue, thread->tid, timerDelta) != E_OK)
+    return E_FAIL;
   else
   {
     thread->threadState = SLEEPING;
-    return 0;
+    return E_OK;
   }
 }
 
@@ -104,17 +111,21 @@ int pauseThread( tcb_t *thread )
   switch( thread->threadState )
   {
     case READY:
-      detachRunQueue( thread );
-      thread->threadState = PAUSED;
-      return 0;
+      if(detachRunQueue( thread ) != E_OK)
+        return E_FAIL;
+      else
+      {
+        thread->threadState = PAUSED;
+        return E_OK;
+      }
     case RUNNING:
       thread->threadState = PAUSED;
-      return 0;
+      return E_OK;
     case PAUSED:
       RET_MSG(1, "Thread is already paused.")//return 1;
     default:
       kprintf("Thread state: %d\n", thread->threadState);
-      RET_MSG(-1, "Thread is neither ready, running, nor paused.")//return -1;
+      RET_MSG(E_FAIL, "Thread is neither ready, running, nor paused.")//return -1;
   }
 }
 
@@ -144,7 +155,7 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
     RET_MSG(NULL, "Invalid address space address.")
 
   if(addrSpace == NULL_PADDR)
-    addrSpace = getCR3() & 0x3FF;
+    addrSpace = getCR3() & ~0x3FF;
 
   thread = malloc(sizeof(tcb_t));
 
@@ -154,25 +165,24 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
   thread->tid = getNewTID();
   thread->priority = NORMAL_PRIORITY;
 
-  thread->cr3 = (dword)addrSpace;
+  thread->rootPageMap = (dword)addrSpace;
   thread->exHandler = exHandler;
 
-  thread->waitPort = NULL_PID;
-  thread->queue.next = NULL_TID;
-  thread->queue.delta = 0u;
+  thread->wait.port = NULL;
 
-  memset(&thread->execState.user, 0, sizeof thread->execState.user);
+  memset(&thread->execState, 0, sizeof thread->execState);
 
-  thread->execState.user.eflags = EFLAGS_IOPL3 | EFLAGS_IF;
-  thread->execState.user.eip = ( dword ) threadAddr;
+  thread->execState.eflags = EFLAGS_IOPL3 | EFLAGS_IF;
+  thread->execState.eip = ( dword ) threadAddr;
 
-  thread->execState.user.cs = UCODE;
-  thread->execState.user.userEsp = stack;
-  thread->execState.user.userSS = UDATA;
+  thread->execState.cs = UCODE;
+  thread->execState.userEsp = stack;
+  thread->execState.userSS = UDATA;
 
   thread->threadState = PAUSED;
 
-  if(tree_insert(&tcbTree, thread->tid, thread) != E_OK)
+  if(queueInit(&thread->receiverWaitQueue) != E_OK
+     || treeInsert(&tcbTree, thread->tid, thread) != E_OK)
   {
     free(thread);
     return NULL;
@@ -185,14 +195,14 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
 
   if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(PAGETAB), &pentry) != E_OK))
   {
-    tree_remove(&tcbTree, thread->tid);
+    treeRemove(&tcbTree, thread->tid, NULL);
     free(thread);
     return NULL;
   }
 
   else if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(KERNEL_VSTART), &(((u32 *)PAGEDIR))[PDE_INDEX(KERNEL_VSTART)]) != E_OK))
   {
-    tree_remove(&tcbTree, thread->tid);
+    treeRemove(&tcbTree, thread->tid, NULL);
     free(thread);
     return NULL;
   }
@@ -200,7 +210,7 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
 #if DEBUG
   if(unlikely(writePmapEntry(addrSpace, 0, (void *)PAGEDIR) != E_OK))
   {
-    tree_remove(&tcbTree, thread->tid);
+    treeRemove(&tcbTree, thread->tid, NULL);
     free(thread);
     return NULL;
   }
@@ -214,14 +224,14 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
 
   if(buf == NULL)
   {
-    tree_remove(&tcbTree, thread->tid);
+    treeRemove(&tcbTree, thread->tid, NULL);
     free(thread);
     return NULL;
   }
 
   if(peek(initKrnlPDir, buf, bufSize) != E_OK)
   {
-    tree_remove(&tcbTree, thread->tid);
+    treeRemove(&tcbTree, thread->tid, NULL);
     free(thread);
     free(buf);
 
@@ -230,7 +240,7 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
 
   if(poke(addrSpace, buf, bufSize) != E_OK)
   {
-    tree_remove(&tcbTree, thread->tid);
+    treeRemove(&tcbTree, thread->tid, NULL);
     free(thread);
     free(buf);
 
@@ -254,9 +264,9 @@ int releaseThread( tcb_t *thread )
     tcb_t *retThread;
   #endif
 
-  assert(thread->threadState != DEAD);
+  assert(thread->threadState != STOPPED);
 
-  if( thread->threadState == DEAD )
+  if( thread->threadState == STOPPED )
     return -1;
 
   /* If the thread is a sender waiting for a recipient, remove the
@@ -269,22 +279,32 @@ int releaseThread( tcb_t *thread )
     /* Assumes that a ready/running thread can't be on the timer queue. */
 
     case READY:
-      #if DEBUG
-        retThread =
-      #endif /* DEBUG */
-
-      detachQueue( &runQueues[thread->priority], thread );
+      if(queueRemoveFirst( &runQueues[thread->priority], thread->tid,
+        #if DEBUG
+          (void **)retThread
+        #else
+          NULL
+        #endif
+      ) != E_OK)
+      {
+        return E_FAIL;
+      }
 
       assert( retThread == thread );
       break;
     case WAIT_FOR_RECV:
     case WAIT_FOR_SEND:
     case SLEEPING:
-      #if DEBUG
-       retThread =
-      #endif /* DEBUG */
-
-      timerDetach( thread );
+      if(queueRemoveFirst(&timerQueue, thread->tid,
+        #if DEBUG
+          (void **)&retThread
+        #else
+          NULL
+        #endif
+      ) != E_OK)
+      {
+        return E_FAIL;
+      }
 
       assert( retThread == thread );
       break;
@@ -294,8 +314,6 @@ int releaseThread( tcb_t *thread )
   // Find each port that this thread owns and notify the waiting
   // senders that sending to that port failed.
 
-
-  const tid_t tid = GET_TID(thread);
 /*
   for(port_t *port=getPort((pid_t)1); port != getPort((pid_t)(MAX_PORTS-1)); 
       port++)
@@ -316,11 +334,12 @@ int releaseThread( tcb_t *thread )
   }
 */
 
-  if(thread->threadState == WAIT_FOR_RECV && thread->waitPort != NULL_PID)
+/*
+  if(thread->threadState == WAIT_FOR_RECV && thread->wait.port != NULL_PID)
   {
-    port_t *port = getPort(thread->waitPort);
+    port_t *port = getPort(thread->wait.port);
 
-    if(port->sendWaitTail == tid)
+    if(port->sendWaitTail == thread->tid)
       port->sendWaitTail = NULL_TID;
     else
     {
@@ -330,7 +349,7 @@ int releaseThread( tcb_t *thread )
       getTcb(thread->queue.next)->queue.prev = thread->queue.prev;
     }
   }
-
+*/
   free(thread);
   return 0;
 }
@@ -343,7 +362,7 @@ tcb_t *getTcb(tid_t tid)
   {
     tcb_t *tcb=NULL;
 
-    if(tree_find(&tcbTree, (int)tid, (void **)&tcb) == E_OK)
+    if(treeFind(&tcbTree, (int)tid, (void **)&tcb) == E_OK)
       return tcb;
     else
       return NULL;
@@ -356,7 +375,7 @@ tid_t getNewTID(void)
 
   lastTID++;
 
-  for(i=1;(tree_find(&tcbTree, (int)lastTID, NULL) == E_OK && i < maxAttempts)
+  for(i=1;(treeFind(&tcbTree, (int)lastTID, NULL) == E_OK && i < maxAttempts)
       || !lastTID;
       lastTID += i*i);
 

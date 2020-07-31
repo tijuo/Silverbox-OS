@@ -339,7 +339,7 @@ int loadElfFile( char *filename, char *args )
 static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 {
   unsigned phtab_count, i, j;
-  elf_header_t *image = (elf_header_t *)0xC0000000;//module->start_addr;
+  elf_header_t *image = (elf_header_t *)0x40000000;//module->start_addr;
   elf_pheader_t *pheader;
   tid_t tid;
   void *phys;

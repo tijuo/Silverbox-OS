@@ -3,6 +3,7 @@
 # This copies executables into the appropriate directory on the drive
 # Assumes that SB_MNT_PT is an existing mount point for the drive image
 
+SB_MNT_PT="~/os_floppy"
 target_dir=
 file_list=
 
@@ -40,4 +41,3 @@ cp $file_list $SB_MNT_PT/$target_dir
 
 sleep 0.5
 umount $SB_MNT_PT
-

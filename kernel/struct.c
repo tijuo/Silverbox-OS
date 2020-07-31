@@ -139,13 +139,13 @@ int htable_get(const htable_t *htable, void *key, size_t keysize,
 }
 */
 
-static list_node_t *_create_list_node(int key, void *elem);
-static tree_node_t *_create_tree_node(int key, void *elem);
-static tree_node_t *_tree_find_node(tree_t *tree, int key);
-static void _attempt_rebalance(tree_t *tree, tree_node_t *node);
-static void _tree_free_nodes(tree_node_t *node);
+static list_node_t *_createListNode(int key, void *elem);
+static tree_node_t *_createTreeNode(int key, void *elem);
+static tree_node_t *_treeFindNode(tree_t *tree, int key);
+static void _attemptRebalance(tree_t *tree, tree_node_t *node);
+static void _treeFreeNodes(tree_node_t *node);
 
-list_node_t *_create_list_node(int key, void *elem)
+list_node_t *_createListNode(int key, void *elem)
 {
   list_node_t *node = malloc(sizeof(list_node_t));
 
@@ -159,34 +159,19 @@ list_node_t *_create_list_node(int key, void *elem)
   return node;
 }
 
-tree_node_t *_create_tree_node(int key, void *elem)
-{
-  tree_node_t *node = malloc(sizeof(tree_node_t));
-
-  if(!node)
-    return NULL;
-
-  node->key = key;
-  node->elem = elem;
-  node->left = node->right = node->parent = NULL;
-
-  return node;
-}
-
-int list_init(list_t *list)
+int listInit(list_t *list)
 {
   list->head = list->tail = NULL;
   return E_OK;
 }
 
-int list_destroy(list_t *list)
+int listDestroy(list_t *list)
 {
   list_node_t *next;
 
   for(list_node_t *ptr=list->head; ptr != NULL; ptr=next)
   {
     next = ptr->next;
-
     free(ptr);
   }
 
@@ -194,9 +179,9 @@ int list_destroy(list_t *list)
   return E_OK;
 }
 
-int list_insert_head(list_t *list, int key, void *element)
+int listInsertHead(list_t *list, int key, void *element)
 {
-  list_node_t *node = _create_list_node(key, element);
+  list_node_t *node = _createListNode(key, element);
 
   if(node == NULL)
     return E_FAIL;
@@ -211,9 +196,9 @@ int list_insert_head(list_t *list, int key, void *element)
   return E_OK;
 }
 
-int list_insert_tail(list_t *list, int key, void *element)
+int listInsertTail(list_t *list, int key, void *element)
 {
-  list_node_t *node = _create_list_node(key, element);
+  list_node_t *node = _createListNode(key, element);
 
   if(node == NULL)
     return E_FAIL;
@@ -229,7 +214,7 @@ int list_insert_tail(list_t *list, int key, void *element)
   return E_OK;
 }
 
-int list_find_first(list_t *list, int key, void **elemPtr)
+int listFindFirst(list_t *list, int key, void **elemPtr)
 {
   for(list_node_t *node=list->head; node != NULL; node = node->next)
   {
@@ -245,7 +230,7 @@ int list_find_first(list_t *list, int key, void **elemPtr)
   return E_FAIL;
 }
 
-int list_find_last(list_t *list, int key, void **elemPtr)
+int listFindLast(list_t *list, int key, void **elemPtr)
 {
   for(list_node_t *node=list->tail; node != NULL; node = node->prev)
   {
@@ -261,7 +246,53 @@ int list_find_last(list_t *list, int key, void **elemPtr)
   return E_FAIL;
 }
 
-int list_remove_first(list_t *list, int key)
+int listRemoveHead(list_t *list, void **elemPtr)
+{
+  list_node_t *prevHead = list->head;
+
+  if(prevHead)
+  {
+    list->head = prevHead->next;
+
+    if(list->head)
+      list->head->prev = NULL;
+    else
+      list->tail = NULL;
+
+    if(!elemPtr)
+      *elemPtr = prevHead->elem;
+
+    free(prevHead);
+    return E_OK;
+  }
+  else
+    return E_FAIL;
+}
+
+int listRemoveTail(list_t *list, void **elemPtr)
+{
+  list_node_t *prevTail = list->tail;
+
+  if(prevTail)
+  {
+    list->tail = prevTail->prev;
+
+    if(list->tail)
+      list->tail->next = NULL;
+    else
+      list->head = NULL;
+
+    if(!elemPtr)
+      *elemPtr = prevTail->elem;
+
+    free(prevTail);
+    return E_OK;
+  }
+  else
+    return E_FAIL;
+}
+
+int listRemoveFirst(list_t *list, int key, void **elemPtr)
 {
   for(list_node_t *node=list->head; node != NULL; node = node->next)
   {
@@ -276,16 +307,18 @@ int list_remove_first(list_t *list, int key)
       if(list->head == node || list->tail == node)
         list->head = list->tail = NULL;
 
+      if(!elemPtr)
+        *elemPtr = node->elem;
+
       free(node);
       return E_OK;
     }
   }
 
   return E_FAIL;
-
 }
 
-int list_remove_last(list_t *list, int key)
+int listRemoveLast(list_t *list, int key, void **elemPtr)
 {
   for(list_node_t *node=list->tail; node != NULL; node=node->prev)
   {
@@ -300,6 +333,9 @@ int list_remove_last(list_t *list, int key)
       if(list->head == node || list->tail == node)
         list->head = list->tail = NULL;
 
+      if(!elemPtr)
+        *elemPtr = node->elem;
+
       free(node);
       return E_OK;
     }
@@ -308,7 +344,7 @@ int list_remove_last(list_t *list, int key)
   return E_FAIL;
 }
 
-int list_remove_all(list_t *list, int key)
+int listRemoveAll(list_t *list, int key)
 {
   list_node_t *next;
 
@@ -334,33 +370,47 @@ int list_remove_all(list_t *list, int key)
   return E_OK;
 }
 
-int tree_init(tree_t *tree)
+tree_node_t *_createTreeNode(int key, void *elem)
+{
+  tree_node_t *node = malloc(sizeof(tree_node_t));
+
+  if(!node)
+    return NULL;
+
+  node->key = key;
+  node->elem = elem;
+  node->left = node->right = node->parent = NULL;
+
+  return node;
+}
+
+int treeInit(tree_t *tree)
 {
   tree->root = NULL;
   return E_OK;
 }
 
-void _tree_free_nodes(tree_node_t *node)
+void _treeFreeNodes(tree_node_t *node)
 {
   if(node == NULL)
     return;
   else
   {
-    _tree_free_nodes(node->left);
-    _tree_free_nodes(node->right);
+    _treeFreeNodes(node->left);
+    _treeFreeNodes(node->right);
     free(node);
   }
 }
 
-int tree_destroy(tree_t *tree)
+int treeDestroy(tree_t *tree)
 {
-  _tree_free_nodes(tree->root);
+  _treeFreeNodes(tree->root);
   tree->root = NULL;
 
   return E_OK;
 }
 
-void _attempt_rebalance(tree_t *tree, tree_node_t *node)
+void _attemptRebalance(tree_t *tree, tree_node_t *node)
 {
   tree_node_t *x, *y;
 
@@ -422,9 +472,9 @@ void _attempt_rebalance(tree_t *tree, tree_node_t *node)
   }
 }
 
-int tree_insert(tree_t *tree, int key, void *element)
+int treeInsert(tree_t *tree, int key, void *element)
 {
-  tree_node_t *node = _create_tree_node(key, element);
+  tree_node_t *node = _createTreeNode(key, element);
 
   if(node == NULL)
     return E_FAIL;
@@ -462,13 +512,13 @@ int tree_insert(tree_t *tree, int key, void *element)
         return E_FAIL;
     }
 
-    _attempt_rebalance(tree, node);
+    _attemptRebalance(tree, node);
   }
 
   return E_OK;
 }
 
-tree_node_t *_tree_find_node(tree_t *tree, int key)
+tree_node_t *_treeFindNode(tree_t *tree, int key)
 {
   tree_node_t *node=tree->root;
 
@@ -485,9 +535,9 @@ tree_node_t *_tree_find_node(tree_t *tree, int key)
   return node;
 }
 
-int tree_find(tree_t *tree, int key, void **elemPtr)
+int treeFind(tree_t *tree, int key, void **elemPtr)
 {
-  tree_node_t *node=_tree_find_node(tree, key);
+  tree_node_t *node=_treeFindNode(tree, key);
 
   if(node)
   {
@@ -499,9 +549,9 @@ int tree_find(tree_t *tree, int key, void **elemPtr)
     return E_FAIL;
 }
 
-int tree_remove(tree_t *tree, int key)
+int treeRemove(tree_t *tree, int key, void **elemPtr)
 {
-  tree_node_t *node=_tree_find_node(tree, key);
+  tree_node_t *node=_treeFindNode(tree, key);
 
   if(node)
   {
@@ -513,6 +563,9 @@ int tree_remove(tree_t *tree, int key)
         node->parent->left = NULL;
       else if(node->parent->right == node)
         node->parent->right = NULL;
+
+      if(elemPtr)
+        *elemPtr = node->elem;
 
       free(node);
     }
@@ -541,6 +594,9 @@ int tree_remove(tree_t *tree, int key)
         node->right->parent = node->parent;
       }
 
+      if(!elemPtr)
+        *elemPtr = node->elem;
+
       free(node);
     }
     else //has two children. replace node with in-order successor (leftmost child in right tree)
@@ -557,6 +613,9 @@ int tree_remove(tree_t *tree, int key)
         succ->parent->left = NULL;
       if(succ->parent->right == succ)
         succ->parent->right = NULL;
+
+      if(!succ)
+        *elemPtr = succ->elem;
 
       free(succ);
     }

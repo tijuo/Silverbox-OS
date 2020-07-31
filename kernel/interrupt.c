@@ -11,11 +11,10 @@
 
 static int handleKernelPageFault(int errorCode);
 
-pid_t IRQHandlers[NUM_IRQS];
-
 // The threads that are responsible for handling IRQs
-tcb_t *irqThreads[NUM_IRQS];
-pid_t irqPorts[NUM_IRQS];
+
+tcb_t *irqHandlers[NUM_IRQS];
+int pendingIrqBitmap[IRQ_BITMAP_COUNT];
 
 void endIRQ(int irqNum)
 {
@@ -25,30 +24,31 @@ void endIRQ(int irqNum)
 
 /** All interrupts will be sent to the registered port. */
 
-int registerInt(pid_t pid, int intNum)
+int registerIrq(tcb_t *thread, int irqNum)
 {
-  if(intNum < 0 || intNum > NUM_IRQS-1)
+  if(!isValidIRQ(irqNum))
     return E_RANGE;
-  else if(pid == NULL_PID)
+  if(thread == NULL)
     return E_INVALID_ARG;
-  else if(IRQHandlers[intNum] == NULL_PID)
+  else if(!irqHandlers[irqNum])
   {
-    kprintf("PID %d registered IRQ: 0x%x\n", pid, intNum);
+    kprintf("TID %d registered IRQ: 0x%x\n", thread->tid, irqNum);
 
-    IRQHandlers[intNum] = pid;
-    enableIRQ(intNum);
+    pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
+    irqHandlers[irqNum] = thread;
+    enableIRQ(irqNum);
     return E_OK;
   }
   else
     return E_FAIL;
 }
 
-int unregisterInt(int intNum)
+int unregisterIrq(int irqNum)
 {
-  if(intNum < 0 || intNum > NUM_IRQS-1)
+  if(!isValidIRQ(irqNum))
     return E_RANGE;
 
-  IRQHandlers[intNum] = NULL_PID;
+  irqHandlers[irqNum] = NULL;
   return E_OK;
 }
 
@@ -58,29 +58,29 @@ int unregisterInt(int intNum)
 
 void handleIRQ(int irqNum, ExecutionState *state)
 {
-  if(irqNum == 0)
+  if(irqNum == 0 && !irqHandlers[0])
     timerInt(state);
-  else if(irqNum == 7 && IRQHandlers[7] == NULL_PID)
+  else if(irqNum == 7 && !irqHandlers[7])
     sendEOI(); // Stops the spurious IRQ7
   else
   {
+    tcb_t *handler = irqHandlers[irqNum];
+
     sendEOI();
     disableIRQ(irqNum);
 
-    if(IRQHandlers[irqNum] == NULL_PID)
+    if(handler && handler->threadState == IRQ_WAIT)
+    {
+      pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
+      setPriority(handler, HIGHEST_PRIORITY);
+      handler->execState.eax = irqNum;
+      startThread(handler);
+    }
+    else
+    {
+      pendingIrqBitmap[irqNum / 32] |= (1 << (irqNum & 0x1F));
       return;
-
-    setPriority(getTcb(getPort(IRQHandlers[irqNum])->owner), HIGHEST_PRIORITY);
-
-    port_pair_t pair;
-
-    pair.local = NULL_PID;
-    pair.remote = IRQHandlers[irqNum];
-
-    int args[5] = { IRQ_MSG, irqNum, 0, 0, 0 };
-
-    if(sendMessage(irqThreads[irqNum], pair, 1, args) != 0)
-      kprintf("Failed to send IRQ%d message to port %d.\n", irqNum, pair.local);
+    }
   }
 }
 
@@ -223,9 +223,9 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
 
   if(tcb != NULL)
   {
-    if( tcb == init_server )
+    if( tcb == initPagerThread )
     {
-      kprintf("Exception for initial server. System Halted.\n");
+      kprintf("Exception for initial pager server. System Halted.\n");
       dump_regs( tcb, state, intNum, errorCode );
       __asm__("hlt\n");
       return;
@@ -243,14 +243,13 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
     return;
   }
 
-
-  if( tcb->exHandler == NULL_PID )
+  if( intNum != 14 && tcb->exHandler == NULL_PID )
   {
     kprintf("TID: %d has no exception handler. Releasing...\n", tcb->tid);
     dump_regs( tcb, state, intNum, errorCode );
     releaseThread(tcb);
   }
-  else if( getPort(tcb->exHandler)->owner == tcb->tid )
+  else if( getPort(tcb->exHandler)->owner == tcb )
   {
     kprintf("Oops! TID %d is its own exception handler! Releasing...\n", tcb->tid);
     dump_regs( tcb, state, intNum, errorCode );
@@ -258,13 +257,10 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
   }
   else
   {
-    port_pair_t pair;
-    pair.local = NULL_PID;
-    pair.remote = tcb->exHandler;
     int args[5] = { EXCEPTION_MSG, tcb->tid, intNum,
                     errorCode, intNum == 14 ? getCR2() : 0 };
 
-    if(sendMessage(tcb, pair, 1, args) != 0)
+    if(sendExceptionMessage(tcb, tcb->exHandler, args) != E_OK)
     {
       kprintf("Unable to send exception message to PID: %d\n", tcb->exHandler);
       releaseThread(tcb);

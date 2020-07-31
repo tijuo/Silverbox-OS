@@ -21,8 +21,8 @@ void resetScroll( void );
 void scrollUp( void );
 int scrollDown( void );
 void doNewLine( int *x, int *y );
-char *kitoa(int value, char *str, int base);
-char *klltoa(long long int value, char *str, int base);
+char *kitoa(int value, char *str, int base, int unSigned);
+//char *klltoa(long long int value, char *str, int base, int unSigned);
 void _putChar( char c, int x, int y, unsigned char attrib );
 void putChar( char c, int x, int y );
 void dump_regs( const tcb_t *thread, const ExecutionState *state, int intNum, int errorCode);
@@ -112,19 +112,22 @@ if( sx >= SCREEN_WIDTH )
 */
 }
 
-char *kitoa(int value, char *str, int base)
+char *kitoa(int value, char *str, int base, int unSigned)
 {
   unsigned int num = (unsigned int)value;
   size_t str_end=0;
+  int negative = !unSigned && (value & 0x80000000);
+
+  if(negative)
+    num = ~num + 1;
 
   if( !str )
     return NULL;
   else if( base >= 2 && base <= 36 )
   {
-    if( base == 10 && value < 0 )
-    {
+    if(negative)
       str[str_end++] = '-';
-    }
+
     do
     {
       unsigned int quot = base * (num / base);
@@ -149,6 +152,49 @@ char *kitoa(int value, char *str, int base)
   }
   return str;
 }
+
+/*
+char *klltoa(long long int value, char *str, int base, int unSigned)
+{
+  unsigned long long int num = (unsigned long long int)value;
+  size_t str_end=0;
+  int negative = !unSigned && (value & 0x8000000000000000ull);
+
+  if(negative)
+    num = ~num + 1;
+
+  if( !str )
+    return NULL;
+  else if( base >= 2 && base <= 36 )
+  {
+    if(negative)
+      str[str_end++] = '-';
+
+    do
+    {
+      unsigned long long int quot = base * (num / base);
+
+      str[str_end++] = _digits[num - quot];
+      num = quot / base;
+    } while( num );
+  }
+
+  str[str_end] = '\0';
+
+  if( str_end )
+  {
+    str_end--;
+
+    for( size_t i=0; i < str_end; i++, str_end-- )
+    {
+      char tmp = str[i];
+      str[i] = str[str_end];
+      str[str_end] = tmp;
+    }
+  }
+  return str;
+}
+*/
 
 /*
 char *klltoa(long long int value, char *str, int base)
@@ -432,11 +478,11 @@ void incSchedCount( void )
   if( currentThread )
   {
     kprintAt("            ", 2, 0);
-    kprintAt( kitoa((int)currentThread->tid, digits, 10), 2, 0 );
-    kprintAt( kitoa((int)currentThread->priority, digits, 10), 5, 0 );
+    kprintAt( kitoa((int)currentThread->tid, digits, 10, 0), 2, 0 );
+    kprintAt( kitoa((int)currentThread->priority, digits, 10, 0), 5, 0 );
     kprintAt( "        ", 30, 0 );
-    kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10), 8, 0 );
-    kprintAt( kitoa(*(int *)&currentThread->cr3, digits, 16), 30, 0 );
+    kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 8, 0 );
+    kprintAt( kitoa(*(int *)&currentThread->rootPageMap, digits, 16, 0), 30, 0 );
   }
 }
 
@@ -455,7 +501,7 @@ void incTimerCount( void )
   vidmem[0]++;
   vidmem[1] = 0x72;
 
-  kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10), 8, 0 );
+  kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 8, 0 );
 }
 
 /// Blanks the screen
@@ -516,7 +562,7 @@ void putChar( char c, int x, int y )
 void kprintf( const char *str, ... )
 {
   int longCounter=0;
-  int unSigned=0; // XXX: not implemented
+  int unSigned=0;
   int percent = 0;
   va_list args;
   char digits[12];
@@ -553,12 +599,12 @@ void kprintf( const char *str, ... )
              long long int arg = va_arg(args, long long int);
 
              if(arg >> 32)
-               kprintf(kitoa((int)(arg >> 32), digits, 16));
+               kprintf(kitoa((int)(arg >> 32), digits, 16, 0));
 
-             kprintf(kitoa((int)(arg & 0xFFFFFFFF), digits, 16));
+             kprintf(kitoa((int)(arg & 0xFFFFFFFF), digits, 16, 0));
            }
            else
-             kprintf(kitoa(va_arg(args, int), digits, 16));
+             kprintf(kitoa(va_arg(args, int), digits, 16, 0));
 
           longCounter = 0;
           unSigned = 0;
@@ -580,7 +626,7 @@ void kprintf( const char *str, ... )
             kprintf(klltoa(va_arg(args, long long int), digits, 10));
           else
 */
-          kprintf(kitoa(va_arg(args, int), digits, 10));
+          kprintf(kitoa(va_arg(args, int), digits, 10, unSigned));
 
           percent = 0;
           longCounter = 0;
@@ -645,11 +691,11 @@ void dump_state( const ExecutionState *execState, int intNum, int errorCode )
     kprintf("Software Interrupt %d", intNum);
   }
 
-  kprintf(" @ EIP: 0x%x", execState->user.eip);
+  kprintf(" @ EIP: 0x%x", execState->eip);
 
-  kprintf( "\nEAX: 0x%x EBX: 0x%x ECX: 0x%x EDX: 0x%x", execState->user.eax, execState->user.ebx, execState->user.ecx, execState->user.edx );
-  kprintf( "\nESI: 0x%x EDI: 0x%x EBP: 0x%x", execState->user.esi, execState->user.edi, execState->user.ebp );
-  kprintf( "\nCS: 0x%x", execState->user.cs );
+  kprintf( "\nEAX: 0x%x EBX: 0x%x ECX: 0x%x EDX: 0x%x", execState->eax, execState->ebx, execState->ecx, execState->edx );
+  kprintf( "\nESI: 0x%x EDI: 0x%x EBP: 0x%x", execState->esi, execState->edi, execState->ebp );
+  kprintf( "\nCS: 0x%x", execState->cs );
 
   if( intNum == 14 )
   {
@@ -658,11 +704,11 @@ void dump_state( const ExecutionState *execState, int intNum, int errorCode )
 
   kprintf( " error code: 0x%x\n", errorCode );
 
-  kprintf("EFLAGS: 0x%x ", execState->user.eflags);
+  kprintf("EFLAGS: 0x%x ", execState->eflags);
 
-  if( execState->user.cs == UCODE )
+  if( execState->cs == UCODE )
   {
-    kprintf("ESP: 0x%x User SS: 0x%x\n", execState->user.userEsp, execState->user.userSS);
+    kprintf("ESP: 0x%x User SS: 0x%x\n", execState->userEsp, execState->userSS);
   }
 }
 
@@ -740,13 +786,13 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
     kprintf("\n");
   }
 
-  kprintf( "Thread CR3: 0x%x Current CR3: 0x%x\n", *(unsigned *)&thread->cr3, getCR3() );
+  kprintf( "Thread CR3: 0x%x Current CR3: 0x%x\n", *(unsigned *)&thread->rootPageMap, getCR3() );
 
   if( !execState )
   {
     __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
 
-    if( !isReadable(*(dword *)stackFramePtr, thread->cr3) )
+    if( !isReadable(*(dword *)stackFramePtr, thread->rootPageMap) )
     {
       kprintf("Unable to dump the stack\n");
       return;
@@ -756,10 +802,10 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
   }
   else
   {
-    stackFramePtr = (addr_t)execState->user.ebp;
+    stackFramePtr = (addr_t)execState->ebp;
   }
 
-  dump_stack(stackFramePtr, thread->cr3);
+  dump_stack(stackFramePtr, thread->rootPageMap);
 }
 
 #endif /* DEBUG */

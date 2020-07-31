@@ -13,64 +13,109 @@ static pid_t getNewPID(void);
 tree_t portTree;
 static pid_t lastPID=0;
 
-void attachSendQueue(tcb_t *tcb, pid_t pid)
+/** Attach a thread to a port's send queue. The thread will then enter
+    the WAIT_FOR_RECV state until the recipient receives the message from
+    the thread.
+
+  @param tcb The thread to attach
+  @paarm port The queue's port to which the thread will be attached
+  @return E_OK on success. E_FAIL on failure.
+*/
+
+int attachSendQueue(tcb_t *sender, port_t *port)
 {
-  port_t *port = getPort(pid);
+  if( !port || (sender->threadState == READY && detachRunQueue(sender)) != E_OK )
+    return E_FAIL;
 
-  if(!port)
-    return;
+  if(queueEnqueue(&port->senderWaitQueue, sender->tid, sender) != E_OK)
+  {
+    attachRunQueue(sender);
+    return E_FAIL;
+  }
+  else
+  {
+    sender->threadState = WAIT_FOR_RECV;
+    sender->wait.port = port;
 
-  if( tcb->threadState == READY )
-    detachRunQueue( tcb );
-
-  tcb->threadState = WAIT_FOR_RECV;
-  tcb->waitPort = pid;
-
-  if(port->sendWaitTail != NULL_TID)
-    getTcb(port->sendWaitTail)->queue.next = tcb->tid;
-
-  tcb->queue.next = NULL_TID;
-  tcb->queue.prev = port->sendWaitTail;
-  port->sendWaitTail = tcb->tid;
+    return E_OK;
+  }
 }
 
-void attachReceiveQueue(tcb_t *tcb, pid_t pid)
-{
-  if( tcb->threadState == READY )
-    detachRunQueue( tcb );
+/** Attach a thread to a sender's receiver list. The receiving thread will
+    then enter the WAIT_FOR_SEND state until the sender sends a message to
+    the recipient.
 
-  tcb->threadState = WAIT_FOR_SEND;
-  tcb->waitPort = pid;
+  @param receive The thread that is waiting to receive a message from
+                 the sender.
+  @paarm sender The thread that the recipient is waiting to send a message.
+  @return E_OK on success. E_FAIL on failure.
+*/
+
+int attachReceiveQueue(tcb_t *recipient, tcb_t *sender)
+{
+  if( recipient->threadState == READY && detachRunQueue(recipient) != E_OK)
+    return E_FAIL;
+
+  if(sender
+     && queueEnqueue(&sender->receiverWaitQueue, recipient->tid,
+                     recipient) != E_OK)
+  {
+    attachRunQueue(recipient);
+    return E_FAIL;
+  }
+  else
+  {
+    recipient->threadState = WAIT_FOR_SEND;
+    recipient->wait.thread = sender;
+
+    return E_OK;
+  }
 }
 
-void detachSendQueue(tcb_t *tcb, pid_t pid)
+/** Remove a thread from a port's send queue. The thread will then be
+    reattached to the run queue.
+
+  @param tcb The thread to detach
+  @return E_OK on success. E_FAIL on failure.
+*/
+
+int detachSendQueue(tcb_t *sender)
 {
-  port_t *port = getPort(pid);
+  if(queueRemoveLast(&sender->wait.port->senderWaitQueue,
+                     sender->tid, NULL) != E_OK)
+  {
+    return E_FAIL;
+  }
+  else
+  {
+    sender->wait.port = NULL;
+    sender->threadState = READY;
 
-  if(!port)
-    return;
-
-  if(tcb->queue.prev != NULL_TID)
-    getTcb(tcb->queue.prev)->queue.next = tcb->queue.next;
-
-  if(tcb->queue.next != NULL_TID)
-    getTcb(tcb->queue.next)->queue.prev = tcb->queue.prev;
-
-  if(port->sendWaitTail == tcb->tid)
-    port->sendWaitTail = tcb->queue.prev;
-
-  tcb->queue.next = tcb->queue.prev = NULL_TID;
-  tcb->waitPort = NULL_PID;
-  tcb->threadState = READY;
-  attachRunQueue(tcb);
+    return attachRunQueue(sender) ? E_OK : E_FAIL;
+  }
 }
 
-void detachReceiveQueue(tcb_t *tcb, pid_t pid)
-{
-  tcb->waitPort = NULL_PID;
-  tcb->threadState = READY;
+/** Remove a thread from a sender's receiver list. The recipient will
+    then be reattached to the run queue.
 
-  attachRunQueue(tcb);
+  @param recipient The thread that will be removed from the receive queue
+  @return E_OK on success. E_FAIL on failure.
+*/
+
+int detachReceiveQueue(tcb_t *recipient)
+{
+  if(queueRemoveLast(&recipient->wait.thread->receiverWaitQueue,
+                     recipient->tid, NULL) != E_OK)
+  {
+    return E_FAIL;
+  }
+  else
+  {
+    recipient->wait.thread = NULL;
+    recipient->threadState = READY;
+
+    return attachRunQueue(recipient) ? E_OK : E_FAIL;
+  }
 }
 
 /**
@@ -82,91 +127,99 @@ void detachReceiveQueue(tcb_t *tcb, pid_t pid)
   @param tcb The TCB of the sender.
   @param portPair The local, remote pair of ports. Upper 16-bits
          is the local port, lower 16-bits is the remote port.
-  @param block Non-zero if a blocking send (i.e. wait until a receiver
-         receives from the local port). Otherwise, give up if no receivers
+  @param block Non-zero if a blocking send (i.e. wait until a recipient
+         receives from the local port). Otherwise, give up if no recipients
          are available.
-  @return 0 on success. -1 on failure. -2 on bad argument. -3 if no recipient is ready to receive (and not blocking).
+  @return E_OK on success. E_FAIL on failure. E_INVALID_ARG on bad argument.
+          E_BLOCK if no recipient is ready to receive (and not blocking).
 */
 
-/* XXX: sendMessage() and receiveMessage() won't work for kernel threads. */
-
-int sendMessage(tcb_t *tcb, port_pair_t portPair, int block,
-  int args[5])
+int sendMessage(tcb_t *sender, pid_t remotePid, int block)
 {
-  tcb_t *rec_thread;
-  port_t *remote, *local;
+  tcb_t *recipient;
+  port_t *remotePort = getPort(remotePid);
 
-  assert( tcb != NULL );
-  assert( tcb->threadState == RUNNING );
+  assert( sender != NULL );
+  assert( sender->threadState == RUNNING );
 
-  if(portPair.remote != NULL_PID)
-    remote = getPort(portPair.remote);
-  else
-    remote = NULL;
-
-  if(portPair.local != NULL_PID)
-    local = getPort(portPair.local);
-  else
-    local = NULL;
-
-  if(remote == NULL
-     || (local == NULL && portPair.local != NULL_PID)
-     || tcb->tid == remote->owner)
+  if(remotePort == NULL || sender == remotePort->owner)
   {
     kprintf("Invalid port.\n");
-    return -2;
-  }
-  else if(local != NULL && local->owner != tcb->tid)
-  {
-    kprintf("Thread doesn't own local port.\n");
-    return -1;
+    return E_INVALID_ARG;
   }
 
-  rec_thread = getTcb(remote->owner);
+  recipient = remotePort->owner;
 
-  /* This may cause problems if the receiver is receiving into a NULL
+  /* This may cause problems if the recipient is receiving into a NULL
      or non-mapped buffer */
 
   // If the recipient is waiting for a message from this sender or any sender
 
-  if(rec_thread->threadState == WAIT_FOR_SEND
-     && (rec_thread->waitPort == NULL_PID
-         || rec_thread->waitPort == portPair.local))
+  if(recipient->threadState == WAIT_FOR_SEND
+     && (recipient->wait.thread == NULL
+         || recipient->wait.thread == sender))
   {
-    if(likely(args == NULL))
-    {
-      rec_thread->execState.user.eax = tcb->execState.user.eax & 0xFFFF0000;
-      rec_thread->execState.user.ebx = (tcb->execState.user.ebx << 16)
-                               | (tcb->execState.user.ebx >> 16);
-      rec_thread->execState.user.ecx = tcb->execState.user.ecx;
-      rec_thread->execState.user.edx = tcb->execState.user.edx;
-      rec_thread->execState.user.esi = tcb->execState.user.esi;
-      rec_thread->execState.user.edi = tcb->execState.user.edi;
-    }
-    else
-    {
-      rec_thread->execState.user.eax = args[0] << 16;
-      rec_thread->execState.user.ebx = (portPair.remote << 16) | portPair.local;
-      rec_thread->execState.user.ecx = args[1];
-      rec_thread->execState.user.edx = args[2];
-      rec_thread->execState.user.esi = args[3];
-      rec_thread->execState.user.edi = (dword)args[4];
-    }
+    recipient->execState.eax = (int)sender->tid;
+    recipient->execState.ebx = sender->execState.ebx;
+    recipient->execState.ecx = sender->execState.ecx;
+    recipient->execState.edx = sender->execState.edx;
+    recipient->execState.esi = sender->execState.esi;
+    recipient->execState.edi = sender->execState.edi;
 
-    startThread(rec_thread);
-    rec_thread->execState.user.eax |= ESYS_OK;
+    detachReceiveQueue(recipient);
+    startThread(recipient);
   }
-  else if( !block )	// A timeout of 0 is indicates not to block
+  else if( !block )	// Recipient is not ready to receive, but we're not allowed to block, so return
   {
-    kprintf("send: Non-blocking. TID: %d\tEIP: 0x%x\n", tcb->tid, tcb->execState.user.eip);
-    kprintf("EIP: 0x%x\n", *(dword *)(tcb->execState.user.ebp + 4));
-    return -3;
+    kprintf("send: Non-blocking. TID: %d\tEIP: 0x%x\n", sender->tid, sender->execState.eip);
+    kprintf("EIP: 0x%x\n", *(dword *)(sender->execState.ebp + 4));
+    return E_BLOCK;
   }
   else	// Wait until the recipient is ready to receive the message
-    attachSendQueue(tcb, portPair.remote);
+    attachSendQueue(sender, remotePort);
 
-  return 0;
+  return E_OK;
 }
+
+int sendExceptionMessage(tcb_t *sender, pid_t remotePid, int args[5])
+{
+  port_t *remotePort = getPort(remotePid);
+
+  if(remotePort == NULL)
+    return E_FAIL;
+
+  tcb_t *recipient = remotePort->owner;
+
+  /* This may cause problems if the recipient is receiving into a NULL
+     or non-mapped buffer */
+
+  // If the recipient is waiting for a message from this sender or any sender
+
+  if(recipient->threadState == WAIT_FOR_SEND
+     && (recipient->wait.thread == NULL
+         || recipient->wait.thread == sender))
+  {
+    recipient->execState.eax = (int)NULL_TID;
+    recipient->execState.ebx = args[0];
+    recipient->execState.ecx = args[1];
+    recipient->execState.edx = args[2];
+    recipient->execState.esi = args[3];
+    recipient->execState.edi = args[4];
+
+    detachReceiveQueue(recipient);
+    startThread(recipient);
+  }
+  else  // Wait until the recipient is ready to receive the message
+  {
+    attachSendQueue(sender, remotePort);
+
+    for(int i=0; i < 5; i++)
+      sender->messageBuffer[i] = args[i];
+  }
+
+  return E_OK;
+}
+
 
 /**
   Synchronously receives a message from a thread.
@@ -174,99 +227,72 @@ int sendMessage(tcb_t *tcb, port_pair_t portPair, int block,
   If no message can be received, then wait for a message from sender
   unless indicated as non-blocking.
 
-  @param tcb The TCB of the recipient.
-  @param portPair The local, remote pair of ports. Upper 16-bits
-         is the local port, lower 16-bits is the remote port. A
-         NULL_PID for remote port indicates to receive from anyone.
+  @param recipient The recipient of the message.
+  @param port     The port on which the recipient is waiting for a message.
+  @param sender   The thread that the recipient expects to receive a message.
+                  NULL, if receiving from any sender.
   @param block Non-zero if a blocking receive (i.e. wait until a sender
          sends to the local port). Otherwise, give up if no senders
          are available.
-  @return 0 on success. -1 on failure. -2 on bad argument. -3 if no messages are pending to be received (and non-blocking).
+  @return E_OK on success. E_FAIL on failure. E_INVALID_ARG on bad argument.
+          E_BLOCK if no messages are pending to be received (and non-blocking).
 */
 
-int receiveMessage( tcb_t *tcb, port_pair_t portPair, int block )
+int receiveMessage( tcb_t *recipient, pid_t localPort, tid_t senderTid, int block )
 {
-  tcb_t *send_thread;
-  port_t *local, *remote;
+  tcb_t *sender = getTcb(senderTid);
+  port_t *port = getPort(localPort);
 
-  assert( tcb != NULL );
-  assert( tcb->threadState == RUNNING );
+  assert( recipient != NULL );
+  assert( recipient->threadState == RUNNING );
 
-  if(portPair.local != NULL_PID)
-    local = getPort(portPair.local);
-  else
-    local = NULL;
-
-  if(portPair.remote != NULL_PID)
-    remote = getPort(portPair.remote);
-  else
-    remote = NULL;
-
-  if(local == NULL
-     || (remote == NULL && portPair.remote != NULL_PID)
-     || (remote != NULL && tcb->tid == remote->owner))
+  if(!port || (recipient == sender))
   {
     kprintf("Invalid port.\n");
-    return -2;
+    return E_INVALID_ARG;
   }
-  else if(local->owner != tcb->tid)
+  else if(port->owner != recipient)
   {
     kprintf("Thread doesn't own local port.\n");
-    return -1;
+    return E_FAIL;
   }
 
-  if( remote == NULL ) // receive message from anyone
-    send_thread = getTcb(local->sendWaitTail);
-  else // receive message from particular port
+  if(!sender) // receive message from anyone
+    sender = queueGetTail(&port->senderWaitQueue);
+
+  if(sender && sender->wait.port == port)
   {
-    send_thread = getTcb(remote->owner);
-
-    if(!(send_thread && send_thread->threadState == WAIT_FOR_RECV &&
-       send_thread->waitPort == portPair.local))
+    if(sender->threadState == WAIT_FOR_RECV)
     {
-      send_thread = NULL;
+      recipient->execState.ecx = sender->execState.ecx;
+      recipient->execState.edx = sender->execState.edx;
+      recipient->execState.esi = sender->execState.esi;
+      recipient->execState.edi = sender->execState.edi;
+      recipient->execState.ebx = sender->execState.ebx;
+      sender->execState.eax = ESYS_OK;
+      startThread(sender);
+      return (int)sender->tid;
     }
-  }
-
-  if( send_thread != NULL )
-  {
-    tcb->execState.user.eax = send_thread->execState.user.eax & 0xFFFF0000;
-    tcb->execState.user.ecx = send_thread->execState.user.ecx;
-    tcb->execState.user.edx = send_thread->execState.user.edx;
-    tcb->execState.user.esi = send_thread->execState.user.esi;
-    tcb->execState.user.edi = send_thread->execState.user.edi;
-    tcb->execState.user.ebx = (portPair.local << 16) | (send_thread->execState.user.ebx >> 16);
-
-    if(send_thread->execState.user.eax == SYS_RPC
-       || send_thread->execState.user.eax == SYS_RPC_BLOCK)
+    else if(sender->threadState == PAUSED) // sender sent an exception
     {
-      port_pair_t senderPair;
-
-      senderPair.remote = portPair.local;
-      senderPair.local = portPair.remote;
-
-      if(receiveMessage(send_thread, senderPair,
-         send_thread->execState.user.eax == SYS_RPC_BLOCK) != 0)
-      {
-        send_thread->execState.user.eax = ESYS_FAIL;
-      }
-    }
-    else
-    {
-      startThread(send_thread);
-      send_thread->execState.user.eax = ESYS_OK;
+      recipient->execState.ebx = sender->messageBuffer[0];
+      recipient->execState.ecx = sender->messageBuffer[1];
+      recipient->execState.edx = sender->messageBuffer[2];
+      recipient->execState.esi = sender->messageBuffer[3];
+      recipient->execState.edi = sender->messageBuffer[4];
+      return (int)NULL_TID;
     }
   }
   else if( !block )
   {
-    kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", tcb->tid, tcb->execState.user.eip);
-    kprintf("EIP: 0x%x\n", *(dword *)(tcb->execState.user.ebp + 4));
-    return -3;
+    kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", recipient->tid, recipient->execState.eip);
+    kprintf("EIP: 0x%x\n", *(dword *)(recipient->execState.ebp + 4));
+    return E_BLOCK;
   }
   else // no one is waiting to send to this local port, so wait
-    attachReceiveQueue(tcb, portPair.remote);
+    attachReceiveQueue(recipient, sender);
 
-  return 0;
+  return (int)NULL_TID;
 }
 
 port_t *getPort(pid_t pid)
@@ -277,7 +303,7 @@ port_t *getPort(pid_t pid)
   {
     port_t *port=NULL;
 
-    if(tree_find(&portTree, (int)pid, (void **)&port) == E_OK)
+    if(treeFind(&portTree, (int)pid, (void **)&port) == E_OK)
       return port;
     else
       return NULL;
@@ -290,7 +316,7 @@ pid_t getNewPID(void)
 
   lastPID++;
 
-  for(i=1;(tree_find(&portTree, (int)lastPID, NULL) == E_OK && i < maxAttempts)
+  for(i=1;(treeFind(&portTree, (int)lastPID, NULL) == E_OK && i < maxAttempts)
       || !lastPID;
       lastPID += i*i);
 
@@ -302,15 +328,38 @@ pid_t getNewPID(void)
 
 port_t *createPort(void)
 {
+  return createPortWithPid(getNewPID());
+}
+
+port_t *createPortWithPid(pid_t pid)
+{
   port_t *port = malloc(sizeof(port_t));
 
   if(!port)
     return NULL;
 
-  port->pid = getNewPID();
-  port->owner = NULL_TID;
-  port->sendWaitTail = NULL_TID;
+  if(treeInsert(&portTree, pid, port) != E_OK)
+  {
+    free(port);
+    return NULL;
+  }
 
+  port->pid = pid;
+  port->owner = NULL;
+  queueInit(&port->senderWaitQueue);
 
   return port;
+}
+
+void releasePort(port_t *port)
+{
+  if(port)
+  {
+    treeRemove(&portTree, port->pid, NULL);
+
+    // XXX: notify any waiting threads
+
+    queueDestroy(&port->senderWaitQueue);
+    free(port);
+  }
 }
