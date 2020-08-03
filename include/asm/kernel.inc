@@ -3,7 +3,8 @@
 
 %include "asm/asm.inc"
 
-%define KERNEL_VIRT_START       0x80000000
+%define KERNEL_TCB_START	0xC0000000
+%define KERNEL_VIRT_START       0xC0800000
 %define KERNEL_PHYS_START       0x00100000
 %define KERNEL_CODE_SEL		0x08
 %define KERNEL_DATA_SEL		0x10

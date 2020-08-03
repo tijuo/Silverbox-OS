@@ -102,11 +102,10 @@ struct ConnectArgs
 int mapMem( void *phys, void *virt, int numPages, int flags );
 int allocatePages( void *address, int numPages );
 
-int registerDevice(pid_t pid, int major, int numDevices,
+int registerDevice(int major, int numDevices,
   unsigned long blockLen, int flags);
 
-int lookupDevMajor(unsigned char major, struct DeviceRecord *record,
-                    pid_t *pid);
+int lookupDevMajor(unsigned char major, struct DeviceRecord *record);
 
 int changeIoPerm( unsigned start, unsigned stop, int set );
 

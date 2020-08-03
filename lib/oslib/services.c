@@ -7,6 +7,7 @@
 #include <string.h>
 #include <os/dev_interface.h>
 #include <os/device.h>
+#include <os/syscalls.h>
 
 // Maps a physical address range to a virtual address range
 int mapMem( void *phys, void *virt, int numPages, int flags );
@@ -31,12 +32,11 @@ int registerName( const char *name, size_t len );
 tid_t lookupName( const char *name, size_t len );
 
 // Associates a name with a device
-int registerDevice(pid_t pid, int major, int numDevices,
+int registerDevice(int major, int numDevices,
   unsigned long blockLen, int flags);
 
 // Returns a device associated with a device major number
-int lookupDevMajor(unsigned char major, struct DeviceRecord *record,
-                    pid_t *pid);
+int lookupDevMajor(unsigned char major, struct DeviceRecord *record);
 
 int exec( char *filename, char *args );
 
@@ -72,7 +72,7 @@ int mapMem( void *phys, void *virt, int numPages, int flags )
                      numPages, flags };
   int out_args[5];
 
-  retval = sys_rpc(NULL_PID, INIT_SERVER, in_args, out_args, 1);
+  retval = sys_call(INIT_SERVER, in_args, out_args, 1);
   return retval < 0 ? retval : out_args[0];
 }
 
@@ -86,7 +86,7 @@ int mapTid( tid_t tid, rspid_t pool_id )
   int in_args[5] = { MAP_TID, (int)tid, (int)pool_id, 0, 0 };
   int out_args[5];
 
-  int retval = sys_rpc(NULL_PID, INIT_SERVER, in_args, out_args, 1);
+  int retval = sys_call(INIT_SERVER, in_args, out_args, 1);
   return retval < 0 ? NULL_TID : (tid_t)out_args[0];
 }
 
@@ -174,7 +174,7 @@ int registerName(const char *name, size_t len)
 
   strncpy((char *)&in_args[1], name, len);
 
-  int result = sys_rpc(NULL_PID, INIT_SERVER, in_args, out_args, 1);
+  int result = sys_call(INIT_SERVER, in_args, out_args, 1);
   return result < 0 ? result : out_args[0];
 }
 
@@ -188,31 +188,29 @@ tid_t lookupName( const char *name, size_t len )
 
   strncpy((char *)&in_args[1], name, len);
 
-  int result = sys_rpc(NULL_PID, INIT_SERVER, in_args, out_args, 1);
+  int result = sys_call(INIT_SERVER, in_args, out_args, 1);
   return result < 0 ? NULL_TID : (pid_t)out_args[0];
 }
 */
 
-int registerDevice(pid_t pid, int major, int numDevices,
-  unsigned long blockLen, int flags)
+int registerDevice(int major, int numDevices, unsigned long blockLen, int flags)
 {
   int in_args[5] = { DEV_REGISTER, major, numDevices, blockLen, flags };
   int out_args[5];
 
-  int result = sys_rpc(pid, INIT_SERVER, in_args, out_args, 1);
+  int result = sys_call(INIT_SERVER, in_args, out_args, 1);
   return result < 0 ? -1 : out_args[0];
 }
 
-int lookupDevMajor(unsigned char major, struct DeviceRecord *record,
-                    pid_t *pid)
+int lookupDevMajor(unsigned char major, struct DeviceRecord *record)
 {
-  if(record == NULL && pid == NULL)
+  if(record == NULL)
     return -1;
 
   int in_args[5] = { DEV_LOOKUP_MAJOR, major, 0, 0, 0 };
   int out_args[5];
 
-  int result = sys_rpc(*pid, INIT_SERVER, in_args, out_args, 1);
+  int result = sys_call(INIT_SERVER, in_args, out_args, 1);
 
   if(result == 0)
   {
@@ -222,9 +220,6 @@ int lookupDevMajor(unsigned char major, struct DeviceRecord *record,
       record->blockLen = (unsigned long)in_args[2];
       record->flags = in_args[3];
     }
-
-    if(pid)
-      *pid = (pid_t)in_args[0];
   }
 
   return result < 0 ? -1 : (result == NULL_PID ? -1 : 0);

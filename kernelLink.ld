@@ -4,8 +4,12 @@ SECTIONS
 {
   kPhysCode  = 0x00100000;
   kPhysStart = 0x00100000;
-  kVirtCode  = 0x80000000;
-  kVirtStart = 0x80000000;
+  kVirtCode  = 0xC0800000;
+  kVirtStart = 0xC0800000;
+  kTcbStart =  0xC0000000;
+  kTcbEnd    = kTcbStart + 64*65536;
+
+  kTcbTableSize   = kTcbEnd - kTcbStart;
 
   kVirtToPhys = kPhysStart - kVirtStart;
   kPhysToVirt = kVirtStart - kPhysStart;

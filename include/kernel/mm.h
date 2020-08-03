@@ -15,6 +15,7 @@
 /* FIXME: Changing any of these values may require changing
    the asm code */
 
+#define KERNEL_TCB_START	((addr_t)&kTcbStart)
 #define KERNEL_VSTART       	((addr_t)&kVirtStart)
 #define PHYSMEM_START       	((addr_t)&VPhysMemStart)
 #define KERNEL_START        	((addr_t)&kPhysStart)
@@ -31,7 +32,6 @@
 /* FIXME: Changing any of these values may require changing the
    asm code. */
 
-#define PAGER_TABLE		((addr_t)0x1000)
 #define TEMP_PAGEADDR           ((addr_t)0xC0000)
 #define LAPIC_VADDR             (TEMP_PAGEADDR + PAGE_SIZE)
 #define KERNEL_CLOCK		(LAPIC_VADDR + PAGE_SIZE)
@@ -39,8 +39,7 @@
 #define INVALID_VADDR       	((addr_t)0xFFFFFFFF)
 #define INVALID_ADDR        	((addr_t)0xFFFFFFFF)
 
-#define INIT_SERVER_STACK_TOP	((addr_t)KERNEL_VSTART)
-#define INIT_PAGER_STACK_TOP	((addr_t)KERNEL_VSTART)
+#define INIT_SERVER_STACK_TOP	((addr_t)KERNEL_TCB_START)
 
 /// Aligns an address to the next page boundary (if not already aligned)
 #define PAGE_ALIGN(addr)    ALIGN(PAGE_SIZE, addr)

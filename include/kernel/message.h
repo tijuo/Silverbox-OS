@@ -5,36 +5,27 @@
 #include <kernel/thread.h>
 #include <kernel/struct.h>
 
-struct Port
+struct PendingExceptionMessage
 {
-  struct ThreadControlBlock *owner;
-  pid_t pid;
-  queue_t senderWaitQueue;
-};
+  unsigned char subject;
+  unsigned char intNum;
+  tid_t who;
+  int errorCode;
+  int faultAddress;
+} __PACKED__;
 
-typedef struct Port port_t;
+typedef struct PendingExceptionMessage pem_t;
 
-typedef struct PortPair
-{
-  pid_t remote, local;
-} port_pair_t;
+HOT(int sendMessage(tcb_t *sender, tid_t recipientTid, int block, int call));
+HOT(int receiveMessage(tcb_t *recipient, tid_t senderTid, int block));
+int sendExceptionMessage(tcb_t * restrict sender, tid_t recipientTid,
+                         pem_t * restrict message);
 
-#define GET_PID(port)  (port == NULL ? NULL_PID : port->pid)
+int attachSendQueue(tcb_t *sender, tid_t recipient);
+int attachReceiveQueue(tcb_t *receiver, tid_t sender);
+int detachSendQueue(tcb_t *sender);
+int detachReceiveQueue(tcb_t *receiver);
 
-port_t *getPort(pid_t pid);
-port_t *createPort(void);
-port_t *createPortWithPid(pid_t pid);
-void releasePort(port_t *port);
-
-HOT(int sendMessage(struct ThreadControlBlock *sender, pid_t pid, int block));
-HOT(int receiveMessage(struct ThreadControlBlock *recipient, pid_t senderPid, tid_t senderTid, int block));
-int sendExceptionMessage(struct ThreadControlBlock *sender, pid_t remotePid, int args[5]);
-
-int attachSendQueue(struct ThreadControlBlock *sender, port_t *port);
-int attachReceiveQueue(struct ThreadControlBlock *receiver, struct ThreadControlBlock *sender);
-int detachSendQueue(struct ThreadControlBlock *sender);
-int detachReceiveQueue(struct ThreadControlBlock *receiver);
-
-extern tree_t portTree;
+extern pem_t *pendingMessageBuffer;
 
 #endif /* MESSAGE */

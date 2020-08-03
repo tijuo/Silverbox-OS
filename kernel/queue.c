@@ -73,7 +73,7 @@ tcb_t *timerEnqueue( tcb_t *thread, unsigned int time )
       {
         thread->queue.delta = time;
         thread->queue.next = NULL_TID;
-        ptr->queue.next = thread->tid;
+        ptr->queue.next = getTid(thread);
         timerQueue.tail = thread;
         break;
       }
@@ -85,9 +85,9 @@ tcb_t *timerEnqueue( tcb_t *thread, unsigned int time )
       if( prev == NULL )
         timerQueue.head = thread;
       else
-        prev->queue.next = thread->tid;
+        prev->queue.next = getTid(thread);
 
-      thread->queue.next = ptr->tid;
+      thread->queue.next = getTid(ptr);
       thread->queue.delta = time;
       ptr->queue.delta -= time;
 
@@ -165,7 +165,7 @@ tcb_t *timerDetach( tcb_t *thread )
 
     for(ptr=timerQueue.head; ptr != NULL; ptr=getTcb(ptr->queue.next))
     {
-      if(ptr->queue.next == thread->tid)
+      if(ptr->queue.next == getTid(thread))
       {
         ptr->queue.next = thread->queue.next;
         assert( thread->queue.next != NULL_TID );
@@ -220,11 +220,11 @@ tcb_t *enqueue( struct Queue *queue, tcb_t *thread )
   for( unsigned int level=0; level < NUM_RUN_QUEUES; level++ )
     assert( !isInQueue( &runQueues[level], thread ) );
 
-  thread->queue.prev = queue->tail->tid;
+  thread->queue.prev = getTid(queue->tail);
   thread->queue.next = NULL_TID;
 
   if( queue->tail )
-    queue->tail->queue.next = thread->tid;
+    queue->tail->queue.next = getTid(thread);
 
   queue->tail = thread;
 

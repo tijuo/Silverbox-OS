@@ -150,7 +150,7 @@ initPaging2:
   mov ebx, kLowPageTab
   mov edx, videoRamStart
   shr edx, 12
-  and edx, PAGE_SIZE-1
+  and edx, 1023
   lea ebx, [ebx+4*edx]
 
 .mapVideoRamLoop:
@@ -170,7 +170,7 @@ initPaging2:
   mov esi, kPhysStart
   mov edi, kVirtStart
   shr edi, 12
-  and edi, PAGE_SIZE - 1
+  and edi, 1023
   lea ebx, [ebx+edi*4]
   xor ecx, ecx
 
@@ -226,7 +226,7 @@ initPaging2:
 .map1to1Kernel:
   mov ecx, kPhysStart
   shr ecx, 12
-  and ecx, PAGE_SIZE - 1
+  and ecx, 1023
   lea ebx, [ebx+ecx*4]
 
   ; If a page table was needed for 1:1 kernel mapping, then

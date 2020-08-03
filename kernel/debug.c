@@ -116,7 +116,7 @@ char *kitoa(int value, char *str, int base, int unSigned)
 {
   unsigned int num = (unsigned int)value;
   size_t str_end=0;
-  int negative = !unSigned && (value & 0x80000000);
+  int negative = base == 10 && !unSigned && (value & 0x80000000);
 
   if(negative)
     num = ~num + 1;
@@ -478,7 +478,7 @@ void incSchedCount( void )
   if( currentThread )
   {
     kprintAt("            ", 2, 0);
-    kprintAt( kitoa((int)currentThread->tid, digits, 10, 0), 2, 0 );
+    kprintAt( kitoa((int)getTid(currentThread), digits, 10, 0), 2, 0 );
     kprintAt( kitoa((int)currentThread->priority, digits, 10, 0), 5, 0 );
     kprintAt( "        ", 30, 0 );
     kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 8, 0 );
@@ -761,13 +761,13 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
 {
   addr_t stackFramePtr;
 
-  kprintf( "Thread: 0x%x (TID: %d) ", thread, thread->tid);
+  kprintf( "Thread: 0x%x (TID: %d) ", thread, getTid(thread));
 
 /*
   if( ((addr_t)thread - (addr_t)tcbTable) % sizeof *thread == 0 &&
-      thread->tid >= INITIAL_TID )
+      getTid(thread) >= INITIAL_TID )
   {
-    kprintf("TID: %d ", thread->tid);
+    kprintf("TID: %d ", getTid(thread));
   }
   else
   {

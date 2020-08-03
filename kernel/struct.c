@@ -193,6 +193,10 @@ int listInsertHead(list_t *list, int key, void *element)
   }
 
   list->head = node;
+
+  if(!list->tail)
+    list->tail = node;
+
   return E_OK;
 }
 
@@ -210,6 +214,9 @@ int listInsertTail(list_t *list, int key, void *element)
   }
 
   list->tail = node;
+
+  if(!list->head)
+    list->head = node;
 
   return E_OK;
 }
@@ -259,7 +266,7 @@ int listRemoveHead(list_t *list, void **elemPtr)
     else
       list->tail = NULL;
 
-    if(!elemPtr)
+    if(elemPtr)
       *elemPtr = prevHead->elem;
 
     free(prevHead);
@@ -282,7 +289,7 @@ int listRemoveTail(list_t *list, void **elemPtr)
     else
       list->head = NULL;
 
-    if(!elemPtr)
+    if(elemPtr)
       *elemPtr = prevTail->elem;
 
     free(prevTail);
@@ -307,7 +314,7 @@ int listRemoveFirst(list_t *list, int key, void **elemPtr)
       if(list->head == node || list->tail == node)
         list->head = list->tail = NULL;
 
-      if(!elemPtr)
+      if(elemPtr)
         *elemPtr = node->elem;
 
       free(node);
@@ -333,7 +340,7 @@ int listRemoveLast(list_t *list, int key, void **elemPtr)
       if(list->head == node || list->tail == node)
         list->head = list->tail = NULL;
 
-      if(!elemPtr)
+      if(elemPtr)
         *elemPtr = node->elem;
 
       free(node);
@@ -594,7 +601,7 @@ int treeRemove(tree_t *tree, int key, void **elemPtr)
         node->right->parent = node->parent;
       }
 
-      if(!elemPtr)
+      if(elemPtr)
         *elemPtr = node->elem;
 
       free(node);
@@ -614,7 +621,7 @@ int treeRemove(tree_t *tree, int key, void **elemPtr)
       if(succ->parent->right == succ)
         succ->parent->right = NULL;
 
-      if(!succ)
+      if(elemPtr)
         *elemPtr = succ->elem;
 
       free(succ);

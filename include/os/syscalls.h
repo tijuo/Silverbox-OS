@@ -2,6 +2,7 @@
 #define OS_SYSCALLS
 
 #include <types.h>
+#include <oslib.h>
 
 #define SYSCALL_INT             0x40
 
@@ -9,100 +10,20 @@
 #define SYS_WAIT		1
 #define SYS_SEND		2
 #define SYS_RECEIVE		3
-#define SYS_MAP			4
-#define SYS_UNMAP		5
-#define SYS_CREATE_THREAD	6
-#define SYS_DESTROY_THREAD	7
-#define SYS_READ_THREAD		8
-#define SYS_UPDATE_THREAD	9
-#define SYS_CREATE_PORT		10
-#define SYS_DESTROY_PORT	11
-#define SYS_EOI			12
-#define SYS_IRQ_WAIT		13
-#define SYS_BIND_IRQ		14
-#define SYS_UNBIND_IRQ		15
-
-#define RES_MAPPING     0
-#define RES_IHANDLER    1
-#define RES_TCB         2
-#define RES_PORT	      3
-
-struct SyscallCreateTcbArgs
-{
-  addr_t entry;
-  paddr_t addrSpace;
-  addr_t stack;
-  pid_t exHandler;
-};
-
-struct SyscallCreateIHandlerArgs
-{
-  pid_t handler;
-  int intNum;
-};
-
-struct SyscallCreateMappingArgs
-{
-  paddr_t addrSpace;
-  int entry;
-  void *buffer;
-  int level;
-};
-
-struct SyscallCreatePortArgs
-{
-  pid_t port;
-};
-
-struct SyscallReadMappingArgs
-{
-  paddr_t addrSpace;
-  int entry;
-  void *buffer;
-  int level;
-};
-
-struct SyscallReadTcbArgs
-{
-  tid_t tid;
-  struct Tcb *tcb;
-};
-
-struct SyscallUpdateTcbArgs
-{
-  tid_t tid;
-  struct Tcb *tcb;
-};
-
-struct SyscallUpdateMappingArgs
-{
-  paddr_t addrSpace;
-  int entry;
-  void *buffer;
-  int level;
-};
-
-struct SyscallDestroyMappingArgs
-{
-  paddr_t addrSpace;
-  int entry;
-  int level;
-};
-
-struct SyscallDestroyPortArgs
-{
-  pid_t port;
-};
-
-struct SyscallDestroyIHandlerArgs
-{
-  int intNum;
-};
-
-struct SyscallDestroyTcbArgs
-{
-  tid_t tid;
-};
+#define SYS_SEND_WAIT		4
+#define SYS_RECEIVE_WAIT	5
+#define SYS_CALL		6
+#define SYS_CALL_WAIT		7
+#define SYS_MAP			8
+#define SYS_UNMAP		9
+#define SYS_CREATE_THREAD	10
+#define SYS_DESTROY_THREAD	11
+#define SYS_READ_THREAD		12
+#define SYS_UPDATE_THREAD	13
+#define SYS_EOI			14
+#define SYS_IRQ_WAIT		15
+#define SYS_BIND_IRQ		16
+#define SYS_UNBIND_IRQ		17
 
 #define PM_PRESENT              0x01
 #define PM_NOT_PRESENT          0
@@ -154,24 +75,21 @@ struct RegisterState
   dword userSs;
 };
 
-struct ThreadInfo
-{
-  tid_t tid;
-  pid_t exHandler;
-  int priority;
-  paddr_t addr_space;
-  struct RegisterState state;
-};
-
 void sys_exit(int code);
-int sys_send(pid_t out_port, pid_t recipient, const int args[5], int block);
-int sys_receive(pid_t in_port, pid_t *sender, int args[5], int block);
-int sys_create(int resource, void *arg);
-int sys_read(int resource, void *arg);
-int sys_update(int resource, void *arg);
-int sys_destroy(int resource, void *arg);
-int sys_rpc(pid_t client, pid_t server, const int in_args[5],
-            int out_args[5], int block);
+int sys_send(tid_t recipient, const int args[5], int block);
+int sys_call(tid_t recipient, const int inArgs[5], int *outArgs, int block);
+int sys_receive(tid_t sender, int *outArgs, int block);
 int sys_wait(unsigned int timeout);
+int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, int flags);
+int sys_unmap(u32 rootPmap, addr_t vaddr);
+int sys_create_thread(addr_t entry, u32 rootPmap, addr_t stackTop);
+int sys_destroy_thread(tid_t tid);
+int sys_read_thread(tid_t tid, thread_info_t *info);
+int sys_update_thread(tid_t tid, thread_info_t *info);
+int sys_bind_irq(tid_t tid, int irqNum);
+int sys_unbind_irq(int irqNum);
+int sys_eoi(int irqNum);
+int sys_wait_irq(int irqNum);
+int sys_poll_irq(int irqNum);
 
 #endif /* OS_SYSCALLS */

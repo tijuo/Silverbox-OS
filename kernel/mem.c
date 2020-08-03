@@ -9,82 +9,9 @@ addr_t heapEnd = NULL;
 paddr_t *freePageStack=(paddr_t *)PAGE_STACK;
 paddr_t *freePageStackTop;
 
-tree_t asTree;
-
-static asid_t lastASID=0;
-static asid_t getNewASID(void);
-
 bool tempMapped;
 
 static void freeUnusedHeapPages(void);
-
-static asid_t getNewASID(void)
-{
-  int i, maxAttempts=1000;
-
-  lastASID++;
-
-  for(i=1;(treeFind(&asTree, (int)lastASID, NULL) == E_OK && i < maxAttempts)
-      || !lastASID;
-      lastASID += i*i);
-
-  return i == maxAttempts ? NULL_ASID : lastASID;
-}
-
-asid_t createAddressSpace(paddr_t *addrSpace)
-{
-  asid_t asid = getNewASID();
-  paddr_t *frame = malloc(sizeof(paddr_t));
-
-  if(!frame)
-    return NULL_ASID;
-
-  *frame = allocPageFrame();
-
-  if(*frame == NULL_PADDR)
-  {
-    free(frame);
-    return NULL_ASID;
-  }
-
-  if(asid == NULL_ASID || treeInsert(&asTree, (int)asid, frame) != E_OK)
-  {
-    freePageFrame(*frame);
-    free(frame);
-    return NULL_ASID;
-  }
-  else
-  {
-    if(addrSpace)
-      *addrSpace = *frame;
-
-    return asid;
-  }
-}
-
-int releaseAddressSpace(asid_t asid)
-{
-  paddr_t *aspace;
-
-  if(treeRemove(&asTree, asid, (void **)&aspace) == E_OK)
-  {
-    freePageFrame(*aspace);
-    free(aspace);
-    return E_OK;
-  }
-  else
-    return E_FAIL;
-}
-
-paddr_t *getAddressSpace(asid_t asid)
-{
-  paddr_t *addrSpace;
-
-  if(asid == NULL_TID)
-    return (paddr_t *)NULL_PADDR;
-
-  return treeFind(&asTree, (int)asid, (void **)&addrSpace) == E_OK ? addrSpace : (paddr_t *)NULL_PADDR;
-}
 
 /** Allocate an available physical page frame.
     @return The physical address of a newly allocated page frame. NULL_PADDR, on failure.
@@ -187,11 +114,7 @@ void freeUnusedHeapPages(void)
 void *morecore(int amt)
 {
   if(amt == 0)
-  {
-    kprintf("morecore(0)\n");
-    kprintf("heapEnd: 0x%x\n", heapEnd);
     return (!heapEnd ? MFAIL : (void *)heapEnd);
-  }
 
   if(!heapEnd)
     heapEnd = KERNEL_HEAP_START;
@@ -222,9 +145,6 @@ void *morecore(int amt)
     else
       heapEnd += amt;
   }
-
-  kprintf("morecore(%d)\n", amt);
-  kprintf("prevHeapEnd: 0x%x heapEnd: 0x%x\n", prevHeapEnd, heapEnd);
 
   return (void *)prevHeapEnd;
 }

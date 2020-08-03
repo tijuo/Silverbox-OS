@@ -8,14 +8,12 @@ extern "C" {
 #include <types.h>
 #include <ipc.h>
 #include <os/mutex.h>
-#include <os/syscalls.h>
 
 #define INIT_EXHANDLER 		1
 #define INIT_SERVER		1
-#define	SYSCALL_INT		0x40
 
-#define EXCEPTION_MSG		0xFF00
-#define IRQ_MSG			0xFF01
+#define EXCEPTION_MSG		0xF0
+#define IRQ_MSG			0xF1
 
 #define PAGE_FAULT_MSG      	0x0E
 #define DIE_MSG		    	0xF1FE
@@ -97,9 +95,7 @@ struct PageMapRecord
 struct ExceptionInfo
 {
   tid_t tid;
-  unsigned int_num, error_code;
-  struct RegisterState state;
-  dword cr0, cr2, cr3, cr4;
+  unsigned int_num, error_code, faultAddress;
 };
 
 struct Tcb
@@ -107,7 +103,7 @@ struct Tcb
   int priority;
   int status;
   paddr_t addrSpace;
-  pid_t exHandler;
+  tid_t waitTid;
 
   struct State
   {

@@ -159,7 +159,7 @@ tcb_t *attachRunQueue( tcb_t *thread )
   if( thread->threadState != READY )
     return NULL;
 
-  if(queueEnqueue(&runQueues[thread->priority], thread->tid, thread) == E_OK)
+  if(queueEnqueue(&runQueues[thread->priority], getTid(thread), thread) == E_OK)
     return thread;
   else
     return NULL;
@@ -182,7 +182,7 @@ tcb_t *detachRunQueue( tcb_t *thread )
 
   assert( thread != NULL );
 
-  if(queueRemoveFirst(&runQueues[ thread->priority ], thread->tid,
+  if(queueRemoveFirst(&runQueues[ thread->priority ], getTid(thread),
                       NULL) == E_OK)
   {
     return thread;
@@ -234,11 +234,11 @@ void timerInt(ExecutionState *state)
       assert( wokenThread != NULL );
       assert( wokenThread->threadState != READY && wokenThread->threadState != RUNNING );
 
-      assert( queueFindFirst(&timerQueue, wokenThread->tid, NULL) == E_FAIL );
+      assert( queueFindFirst(&timerQueue, getTid(wokenThread), NULL) == E_FAIL );
 
       if( wokenThread->threadState == WAIT_FOR_SEND || wokenThread->threadState == WAIT_FOR_RECV )
       {
-        kprintf("SIGTMOUT to %d\n", wokenThread->tid);
+        kprintf("SIGTMOUT to %d\n", getTid(wokenThread));
         //sysRaise(wokenThread, SIGTMOUT, 0);
       }
       else

@@ -27,7 +27,6 @@
   X __attribute__((section(".ddata")))
 
 #define INIT_SERVER_FLAG	"initsrv="
-#define INIT_PAGER_FLAG "initpgr="
 
 static inline void switchContext( u32 addrSpace, ExecutionState state ) __attribute__((section(".dtext")));
 
@@ -50,7 +49,7 @@ static inline void switchContext( u32 addrSpace, ExecutionState state )
 extern tcb_t *initServerThread;
 extern paddr_t *freePageStack, *freePageStackTop;
 
-static tcb_t *DISC_CODE(loadElfExe( addr_t, pid_t, paddr_t, addr_t ));
+static tcb_t *DISC_CODE(loadElfExe( addr_t, paddr_t, addr_t ));
 static bool DISC_CODE(isValidElfExe( addr_t img ));
 static void DISC_CODE(initInterrupts( void ));
 static void DISC_CODE(initScheduler(void));
@@ -60,7 +59,6 @@ static int DISC_CODE(initMemory( multiboot_info_t *info ));
 static void DISC_CODE(setupGDT(void));
 static void DISC_CODE(stopInit(const char *));
 static void DISC_CODE(bootstrapInitServer(void));
-static void DISC_CODE(bootstrapInitPager(void));
 void DISC_CODE(init(multiboot_info_t * restrict));
 static void DISC_CODE(initPIC( void ));
 static int DISC_CODE(memcmp(const char *s1, const char *s2, register size_t n));
@@ -78,8 +76,8 @@ static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month
                           unsigned int minute, unsigned int second));
 */
 static addr_t DISC_DATA(initServerImg);
-static addr_t DISC_DATA(initPagerImg);
-static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * restrict info));
+static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * restrict info,
+                                     int isLargePage));
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
 static void DISC_CODE(initPageAllocator(multiboot_info_t * restrict info));
 static paddr_t DISC_DATA(lastKernelFreePage);
@@ -108,13 +106,22 @@ void readPhysMem(addr_t address, addr_t buffer, size_t len)
 }
 */
 
-bool isReservedPage(paddr_t addr, multiboot_info_t * restrict info)
+bool isReservedPage(paddr_t addr, multiboot_info_t * restrict info, int isLargePage)
 {
   unsigned int kernelStart = (unsigned int)&kPhysStart;
   unsigned int kernelLength = (unsigned int)&kSize;
+  paddr_t addrEnd;
 
-  addr = addr & ~(PAGE_SIZE-1);
-  paddr_t addrEnd = addr + PAGE_SIZE;
+  if(isLargePage)
+  {
+    addr = addr & ~(PAGE_TABLE_SIZE-1);
+    addrEnd = addr + PAGE_TABLE_SIZE;
+  }
+  else
+  {
+    addr = addr & ~(PAGE_SIZE-1);
+    addrEnd = addr + PAGE_SIZE;
+  }
 
   if(addr < (paddr_t)0x100000)
     return true;
@@ -222,25 +229,30 @@ void initPageAllocator(multiboot_info_t * restrict info)
 */
   size_t pageStackSize = sizeof(paddr_t)*(info->mem_upper) / (16 * 4);
   size_t largePageSize = LARGE_PAGE_SIZE;
-  size_t stackSizeLeft;
+  size_t stackSizeLeft, tcbSizeLeft;
 
   if(pageStackSize % PAGE_SIZE)
     pageStackSize += PAGE_SIZE - (pageStackSize & (PAGE_SIZE-1));
 
   stackSizeLeft = pageStackSize;
+  tcbSizeLeft = (size_t)&kTcbTableSize;
+
+  if(tcbSizeLeft % LARGE_PAGE_SIZE)
+    tcbSizeLeft += LARGE_PAGE_SIZE - (tcbSizeLeft & (LARGE_PAGE_SIZE-1));
 
   kprintf("Page Stack size: %d\n", pageStackSize);
+  kprintf("TCB Table size: %d\n", tcbSizeLeft);
 
   if(info->flags & MBI_FLAGS_MMAP)
   {
-    paddr_t largePages[32], pageTables[32];
-    unsigned int pageTableCount=0, largePageCount=0; // Number of addresses corresponding to page tables and large pages in each of the previous arrays
+    paddr_t largePages[32], pageTables[32], tcbPages[2];
+    unsigned int pageTableCount=0, largePageCount=0, tcbPageCount=0; // Number of addresses corresponding to page tables and large pages in each of the previous arrays
 
     unsigned int isPageStackMapped=0;
     unsigned int smallPageMapCount=0;
     addr_t mapPtr = (addr_t)freePageStack;
 
-    for(int isSmallPageSearch=0; isSmallPageSearch < 2; isSmallPageSearch++)
+    for(int pageSearchPhase=0; pageSearchPhase <= 2; pageSearchPhase++)
     {
       if(isPageStackMapped)
         break;
@@ -266,7 +278,31 @@ void initPageAllocator(multiboot_info_t * restrict info)
           if(baseAddr >= 0x100000000ull) // Ignore physical addresses greater than 4 GiB
             continue;
 
-          if(!isSmallPageSearch) // Looking for large page-sized memory
+          if(pageSearchPhase == 0)      // Look for large page-sized memory for tcb table
+          {
+            unsigned int tcbPagesSearched = 0;
+            extraSpace = mmap->base_addr_low & (largePageSize-1);
+
+            if(extraSpace != 0)
+              baseAddr += largePageSize - extraSpace;
+
+            while(tcbSizeLeft >= largePageSize
+                  && mmapLen >= extraSpace + (tcbPagesSearched+1)*largePageSize)
+            {
+              if(!isReservedPage(baseAddr + largePageSize * tcbPagesSearched, info, 1))
+              {
+                tcbPages[tcbPageCount] = baseAddr + largePageSize * tcbPagesSearched;
+                tcbSizeLeft -= largePageSize;
+
+                kMapPage(((addr_t)tcbTable + largePageSize*tcbPageCount), tcbPages[tcbPageCount],
+                         PAGING_RW | PAGING_SUPERVISOR | PAGING_4MB_PAGE | PAGING_GLOBAL);
+                tcbPageCount++;
+              }
+
+              tcbPagesSearched++;
+            }
+          }
+          else if(pageSearchPhase == 1) // Looking for large page-sized memory
           {
             unsigned int largePagesSearched = 0; // Number of 4 MiB pages found in this memory region
             extraSpace = mmap->base_addr_low & (largePageSize-1);
@@ -279,7 +315,7 @@ void initPageAllocator(multiboot_info_t * restrict info)
             while(stackSizeLeft >= largePageSize
                   && mmapLen >= extraSpace + (largePagesSearched+1)*largePageSize)
             {
-              if(!isReservedPage(baseAddr + largePageSize * largePagesSearched, info))
+              if(!isReservedPage(baseAddr + largePageSize * largePagesSearched, info, 1))
               {
                 largePages[largePageCount] = baseAddr + largePageSize * largePagesSearched;
                 stackSizeLeft -= largePageSize;
@@ -295,7 +331,7 @@ void initPageAllocator(multiboot_info_t * restrict info)
               largePagesSearched++;
             }
           }
-          else // Looking for small page-sized memory
+          else if(pageSearchPhase == 2)// Looking for small page-sized memory
           {
             unsigned int smallPagesSearched = 0; // Number of 4 KiB pages found in this memory region
             unsigned int pageTablesNeeded = 0;
@@ -309,7 +345,7 @@ void initPageAllocator(multiboot_info_t * restrict info)
             while(stackSizeLeft > 0
                   && mmapLen >= extraSpace + (pageTablesNeeded+smallPagesSearched+1)*PAGE_SIZE)
             {
-              if(isReservedPage(baseAddr + PAGE_SIZE * (smallPagesSearched+pageTablesNeeded), info))
+              if(isReservedPage(baseAddr + PAGE_SIZE * (smallPagesSearched+pageTablesNeeded), info, 0))
               {
                 smallPagesSearched++;
                 continue;
@@ -383,6 +419,21 @@ void initPageAllocator(multiboot_info_t * restrict info)
         {
           int found = 0;
 
+          // Is this address within the tcb table?
+
+          for(size_t i=0; i < tcbPageCount; i++)
+          {
+            if(paddr >= tcbPages[i] && paddr < tcbPages[i] + largePageSize)
+            {
+              found = 1;
+              paddr = tcbPages[i] + largePageSize;
+              break;
+            }
+          }
+
+          if(found)
+            continue;
+
           // Is this address within a large page?
 
           for(size_t i=0; i < largePageCount; i++)
@@ -415,7 +466,7 @@ void initPageAllocator(multiboot_info_t * restrict info)
 
           // Is this page reserved?
 
-          if(isReservedPage(paddr, info))
+          if(isReservedPage(paddr, info, 0))
           {
             paddr += PAGE_SIZE;
             continue;
@@ -863,7 +914,7 @@ bool isValidElfExe( addr_t img )
 
 }
 
-tcb_t *loadElfExe( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uStack )
+tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
 {
   elf_header_t image;
   elf_sheader_t sheader;
@@ -886,7 +937,7 @@ tcb_t *loadElfExe( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uStack
     return NULL;
   }
 
-  thread = createThread( (addr_t)image.entry, addrSpace, uStack, exHandler );
+  thread = createThread( (addr_t)image.entry, addrSpace, uStack );
 
   if( thread == NULL )
   {
@@ -938,7 +989,7 @@ tcb_t *loadElfExe( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uStack
 
       if( sheader.type == SHT_PROGBITS )
       {
-        kprintf("mapping PROGBITS 0x%x->0x%x\n", (sheader.addr + offset), ((addr_t)img + sheader.offset + offset));
+        //kprintf("mapping PROGBITS 0x%x->0x%x\n", (sheader.addr + offset), ((addr_t)img + sheader.offset + offset));
 
         if( !pte.present )
         {
@@ -961,7 +1012,7 @@ tcb_t *loadElfExe( addr_t img, pid_t exHandler, paddr_t addrSpace, addr_t uStack
         {
           page = allocPageFrame();
           clearPhysPage( page );
-          kprintf("mapping NOBITS 0x%x->0x%x\n", (sheader.addr + offset), page);
+          //kprintf("mapping NOBITS 0x%x->0x%x\n", (sheader.addr + offset), page);
 
           *(u32 *)&pte = page | PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW
               : PAGING_RO) | PAGING_PRES;
@@ -997,6 +1048,8 @@ void bootstrapInitServer(void)
   addr_t initServerStack = INIT_SERVER_STACK_TOP;
   paddr_t initServerPDir=NULL_PADDR;
   elf_header_t elf_header;
+  paddr_t stackPTab = allocPageFrame();
+  paddr_t stackPage = allocPageFrame();
 
   kprintf("Bootstrapping initial server...\n");
 
@@ -1011,8 +1064,32 @@ void bootstrapInitServer(void)
   }
   else
   {
-    if((initServerThread=loadElfExe(initServerImg, NULL_PID,
-             initServerPDir, initServerStack)) == NULL )
+    pde_t pde;
+    pte_t pte;
+
+    memset(&pde, 0, sizeof(pde_t));
+    memset(&pte, 0, sizeof(pte_t));
+
+    pde.base = (u32)stackPTab >> 12;
+    pde.rwPriv = pde.usPriv = pde.present = 1;
+
+    pte.base = (u32)stackPage >> 12;
+    pte.rwPriv = pte.usPriv = pte.present = 1;
+
+    if(stackPTab != NULL_PADDR)
+      clearPhysPage(stackPTab);
+
+    if((initServerThread=loadElfExe(initServerImg, initServerPDir,
+                                    initServerStack)) == NULL)
+    {
+      fail = 1;
+    }
+    else if(stackPTab == NULL_PADDR || stackPage == NULL_PADDR)
+      fail = 1;
+    else if(writePmapEntry(initServerPDir, PDE_INDEX(initServerStack-PAGE_SIZE),
+                           &pde) != E_OK ||
+            writePmapEntry(stackPTab, PTE_INDEX(initServerStack-PAGE_SIZE),
+                           &pte) != E_OK)
     {
       fail = 1;
     }
@@ -1029,87 +1106,14 @@ void bootstrapInitServer(void)
   {
     kprintf("Unable to start initial server.\n");
 
-    if(initServerPDir != NULL_PADDR)
-      freePageFrame(initServerPDir);
-  }
-}
-
-/**
-    Bootstraps the initial pager server and passes necessary boot data to it.
-*/
-
-void bootstrapInitPager(void)
-{
-  int fail=0;
-  addr_t initPagerStack = INIT_PAGER_STACK_TOP - PAGE_SIZE;
-  paddr_t initPagerPDir=NULL_PADDR, stackPage=NULL_PADDR,
-          stackPTab=NULL_PADDR;
-  elf_header_t elf_header;
-  int pdeEntry = PDE_INDEX(initPagerStack);
-  int pteEntry = PTE_INDEX(initPagerStack);
-  pde_t pde;
-  pte_t pte;
-
-  kprintf("Bootstrapping initial pager...\n");
-
-  peek(initPagerImg, &elf_header, sizeof elf_header);
-
-  if(!isValidElfExe( (addr_t)&elf_header ))
-    fail = 1;
-  else if((initPagerPDir = allocPageFrame()) == NULL_PADDR
-          || clearPhysPage(initPagerPDir) != E_OK)
-  {
-    fail = 1;
-  }
-  else if((stackPTab=allocPageFrame()) == NULL_PADDR
-          || clearPhysPage(stackPTab) != E_OK)
-    fail = 1;
-  else if((stackPage=allocPageFrame()) == NULL_PADDR)
-    fail = 1;
-
-  if(!fail)
-  {
-    *(u32 *)&pde = 0;
-    pde.base = (u32)(stackPTab >> 12);
-    pde.rwPriv = pde.usPriv = pde.present = 1;
-
-    *(u32 *)&pte = 0;
-    pte.base = (u32)(stackPage >> 12);
-    pte.rwPriv = pte.usPriv = pte.present = 1;
-
-    if((initPagerThread=loadElfExe(initPagerImg, NULL_PID,
-             initPagerPDir, initPagerStack+PAGE_SIZE)) == NULL )
-    {
-      fail = 1;
-    }
-    else if(writePmapEntry(initPagerPDir, pdeEntry, &pde) != E_OK
-       || clearPhysPage(stackPTab) != E_OK)
-    {
-      fail = 1;
-    }
-    else if(writePmapEntry(stackPTab, pteEntry, &pte) != E_OK)
-      fail = 1;
-    else
-    {
-      kprintf("Starting initial pager server... 0x%x\n", initPagerThread);
-
-      if(startThread(initPagerThread) != E_OK)
-        fail = 1;
-    }
-  }
-
-  if(fail)
-  {
-    kprintf("Unable to start initial pager server.\n");
-
-    if(initPagerPDir != NULL_PADDR)
-      freePageFrame(initPagerPDir);
+    if(stackPTab != NULL_PADDR)
+      freePageFrame(stackPTab);
 
     if(stackPage != NULL_PADDR)
       freePageFrame(stackPage);
 
-    if(stackPTab != NULL_PADDR)
-      freePageFrame(stackPTab);
+    if(initServerPDir != NULL_PADDR)
+      freePageFrame(initServerPDir);
   }
 }
 
@@ -1172,14 +1176,13 @@ void showCPU_Features(void)
 
 void initStructures(void)
 {
-  treeInit(&tcbTree);
-  treeInit(&portTree);
-  treeInit(&asTree);
+  memset(tcbTable, 0, (int)&kTcbTableSize);
 
   for(int i=LOWEST_PRIORITY; i <= HIGHEST_PRIORITY; i++)
     queueInit(&runQueues[i]);
 
   queueInit(&timerQueue);
+  pendingMessageBuffer = malloc(sizeof(pem_t)*MAX_THREADS);
 }
 
 /**
@@ -1193,9 +1196,8 @@ void init( multiboot_info_t * restrict info )
 //  memory_map_t *mmap;
   module_t *module;
   unsigned int i=0;
-  bool initServerFound=false, initPagerFound=false;
+  bool initServerFound=false;
   char *initServerStrPtr = NULL, *initServerStrEnd=NULL;
-  char *initPagerStrPtr = NULL, *initPagerStrEnd=NULL;
 
 #ifdef DEBUG
   init_serial();
@@ -1207,7 +1209,6 @@ void init( multiboot_info_t * restrict info )
 #endif
 
   initServerStrPtr = strstr( (char *)info->cmdline, INIT_SERVER_FLAG );
-  initPagerStrPtr = strstr( (char *)info->cmdline, INIT_PAGER_FLAG );
 
   /* Locate the initial server string (if it exists) */
 
@@ -1224,23 +1225,6 @@ void init( multiboot_info_t * restrict info )
     kprintf("Initial server not specified.\n");
     stopInit("No boot modules found.\nNo initial server to start.");
   }
-
-  /* Locate the initial pager string (if it exists) */
-
-  if( initPagerStrPtr )
-  {
-    initPagerStrPtr += (sizeof( INIT_PAGER_FLAG ) - 1);
-    initPagerStrEnd = strchr(initPagerStrPtr, ' ');
-
-    if( !initPagerStrEnd )
-      initPagerStrEnd = strchr(initPagerStrPtr, '\0');
-  }
-  else
-  {
-    kprintf("Initial pager server not specified.\n");
-    stopInit("No initial pager server to start.");
-  }
-
 
   if( info->flags & 1 )
     kprintf("Lower Memory: %d B Upper Memory: %d B\n", info->mem_lower << 10, info->mem_upper << 10);
@@ -1260,18 +1244,10 @@ void init( multiboot_info_t * restrict info )
       initServerImg = (addr_t)module->mod_start;
       initServerFound = true;
     }
-    else if( strncmp((char *)module->string, initPagerStrPtr,
-                     initPagerStrEnd-initPagerStrPtr) == 0 )
-    {
-      initPagerImg = (addr_t)module->mod_start;
-      initPagerFound = true;
-    }
   }
 
   if( !initServerFound )
     stopInit("Can't find initial server.");
-  if( !initPagerFound )
-    stopInit("Can't find initial pager server.");
 
   kprintf("%d run queues.\n", NUM_RUN_QUEUES);
 
@@ -1302,7 +1278,6 @@ void init( multiboot_info_t * restrict info )
 #endif /* DEBUG */
 
   bootstrapInitServer();
-  bootstrapInitPager();
 
   kprintf("\n0x%x bytes of discardable code.", (addr_t)EXT_PTR(kdData) - (addr_t)EXT_PTR(kdCode));
   kprintf(" 0x%x bytes of discardable data.\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdData));

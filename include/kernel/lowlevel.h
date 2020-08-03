@@ -216,6 +216,7 @@ extern const void * const kCode;
 extern const void * const kData;
 extern const void * const kBss;
 extern const void * const kEnd;
+extern const void * const kTcbStart;
 extern const void * const kPhysStart;
 extern const void * const kVirtStart;
 extern const void * const kdCode;
@@ -225,6 +226,7 @@ extern const void * const kVirtData;
 extern const void * const kPhysBss;
 extern const void * const kVirtBss;
 extern const void * const kSize;
+extern const void * const kTcbTableSize;
 
 extern const void * const kVirtPageStack;
 

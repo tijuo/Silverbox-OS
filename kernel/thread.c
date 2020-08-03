@@ -9,10 +9,13 @@
 #include <kernel/message.h>
 #include <kernel/error.h>
 #include <kernel/dlmalloc.h>
+#include <kernel/lowlevel.h>
 
-tcb_t *initServerThread, *initPagerThread;
+#define MAX_ATTEMPTS		1000
+
+tcb_t *initServerThread;
 tcb_t *currentThread;
-tree_t tcbTree;
+tcb_t *tcbTable=(tcb_t *)&kTcbStart;
 static tid_t lastTID=0;
 static tid_t getNewTID(void);
 
@@ -28,21 +31,23 @@ static tid_t getNewTID(void);
 int startThread( tcb_t *thread )
 {
   #if DEBUG
-  if( queueFindFirst(&timerQueue, thread->tid, NULL) == E_OK )
+  if( queueFindFirst(&timerQueue, getTid(thread), NULL) == E_OK )
     kprintf("Thread is in timer queue!\n");
   #endif /* DEBUG */
 
-  assert( queueFindFirst(&timerQueue, thread->tid, NULL) != E_OK );
+  assert( queueFindFirst(&timerQueue, getTid(thread), NULL) != E_OK );
 
   switch(thread->threadState)
   {
     case SLEEPING:
-      if(queueRemoveFirst(&timerQueue, thread->tid, NULL) != E_OK)
+      if(queueRemoveFirst(&timerQueue, getTid(thread), NULL) != E_OK)
         return E_FAIL;
+      thread->waitTid = NULL_TID;
       break;
     case WAIT_FOR_RECV:
       if(detachSendQueue(thread) != E_OK)
         return E_FAIL;
+      thread->waitTid = NULL_TID;
       break;
     case WAIT_FOR_SEND:
       if(detachReceiveQueue(thread) != E_OK)
@@ -55,7 +60,6 @@ int startThread( tcb_t *thread )
   }
 
   thread->threadState = READY;
-  thread->wait.port = NULL;
 
   return attachRunQueue( thread ) ? E_OK : E_FAIL;
 }
@@ -95,7 +99,7 @@ int sleepThread( tcb_t *thread, int msecs )
   timerDelta->delta = (msecs*HZ)/1000;
   timerDelta->thread = thread;
 
-  if(queueEnqueue(&timerQueue, thread->tid, timerDelta) != E_OK)
+  if(queueEnqueue(&timerQueue, getTid(thread), timerDelta) != E_OK)
     return E_FAIL;
   else
   {
@@ -139,36 +143,30 @@ int pauseThread( tcb_t *thread )
     @return The TCB of the newly created thread. NULL on failure.
 */
 
-tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t exHandler )
+tcb_t *createThread(addr_t threadAddr, paddr_t addrSpace, addr_t stack)
 {
   tcb_t * thread = NULL;
   u32 pentry;
-
-  #if DEBUG
-    if( exHandler == NULL_TID )
-      kprintf("createThread(): NULL exception handler.\n");
-  #endif /* DEBUG */
+  tid_t tid = getNewTID();
 
   if( threadAddr == NULL )
     RET_MSG(NULL, "NULL thread addr")
   else if((addrSpace & 0xFFF) != 0)
     RET_MSG(NULL, "Invalid address space address.")
+  else if(tid == NULL_TID)
+    RET_MSG(NULL, "Unable to create new threads.");
 
   if(addrSpace == NULL_PADDR)
     addrSpace = getCR3() & ~0x3FF;
 
-  thread = malloc(sizeof(tcb_t));
+  thread = getTcb(tid);
 
   if( thread == NULL )
     RET_MSG(NULL, "Couldn't allocate memory for a thread.")
 
-  thread->tid = getNewTID();
   thread->priority = NORMAL_PRIORITY;
-
   thread->rootPageMap = (dword)addrSpace;
-  thread->exHandler = exHandler;
-
-  thread->wait.port = NULL;
+  thread->waitTid = NULL_TID;
 
   memset(&thread->execState, 0, sizeof thread->execState);
 
@@ -179,12 +177,20 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
   thread->execState.userEsp = stack;
   thread->execState.userSS = UDATA;
 
-  thread->threadState = PAUSED;
+  thread->receiverWaitQueue = malloc(sizeof(queue_t));
 
-  if(queueInit(&thread->receiverWaitQueue) != E_OK
-     || treeInsert(&tcbTree, thread->tid, thread) != E_OK)
+  if(!thread->receiverWaitQueue
+     || queueInit(thread->receiverWaitQueue) != E_OK)
   {
-    free(thread);
+    return NULL;
+  }
+
+  thread->senderWaitQueue = malloc(sizeof(queue_t));
+
+  if(!thread->senderWaitQueue
+     || queueInit(thread->senderWaitQueue) != E_OK)
+  {
+    free(thread->receiverWaitQueue);
     return NULL;
   }
 
@@ -195,23 +201,23 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
 
   if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(PAGETAB), &pentry) != E_OK))
   {
-    treeRemove(&tcbTree, thread->tid, NULL);
-    free(thread);
+    free(thread->senderWaitQueue);
+    free(thread->receiverWaitQueue);
     return NULL;
   }
-
+/*
   else if(unlikely(writePmapEntry(addrSpace, PDE_INDEX(KERNEL_VSTART), &(((u32 *)PAGEDIR))[PDE_INDEX(KERNEL_VSTART)]) != E_OK))
   {
-    treeRemove(&tcbTree, thread->tid, NULL);
-    free(thread);
+    free(thread->senderWaitQueue);
+    free(thread->receiverWaitQueue);
     return NULL;
   }
-
+*/
 #if DEBUG
   if(unlikely(writePmapEntry(addrSpace, 0, (void *)PAGEDIR) != E_OK))
   {
-    treeRemove(&tcbTree, thread->tid, NULL);
-    free(thread);
+    free(thread->senderWaitQueue);
+    free(thread->receiverWaitQueue);
     return NULL;
   }
 #endif /* DEBUG */
@@ -219,35 +225,36 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
   // Copy any page tables in the kernel region of virtual memory from
   // the bootstrap address space to the thread's
 
-  size_t bufSize = 4*(1023-PDE_INDEX(KERNEL_VSTART));
+  size_t bufSize = 4*(1023-PDE_INDEX(KERNEL_TCB_START));
   void *buf = malloc(bufSize);
 
-  if(buf == NULL)
+  if(!buf)
   {
-    treeRemove(&tcbTree, thread->tid, NULL);
-    free(thread);
+    free(thread->senderWaitQueue);
+    free(thread->receiverWaitQueue);
     return NULL;
   }
 
-  if(peek(initKrnlPDir, buf, bufSize) != E_OK)
+  if(peek(initKrnlPDir+4*PDE_INDEX(KERNEL_TCB_START), buf, bufSize) != E_OK)
   {
-    treeRemove(&tcbTree, thread->tid, NULL);
-    free(thread);
+    free(thread->senderWaitQueue);
+    free(thread->receiverWaitQueue);
     free(buf);
-
     return NULL;
   }
 
-  if(poke(addrSpace, buf, bufSize) != E_OK)
+  if(poke(addrSpace+4*PDE_INDEX(KERNEL_TCB_START), buf, bufSize) != E_OK)
   {
-    treeRemove(&tcbTree, thread->tid, NULL);
-    free(thread);
+    free(thread->senderWaitQueue);
+    free(thread->receiverWaitQueue);
     free(buf);
-
     return NULL;
   }
 
   free(buf);
+
+  thread->threadState = PAUSED;
+
   return thread;
 }
 
@@ -255,19 +262,13 @@ tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t stack, pid_t e
     Destroys a thread and detaches it from all queues.
 
     @param thread The TCB of the thread to release.
-    @return 0 on success. -1 on failure.
+    @return E_OK on success. E_FAIL on failure.
 */
 
 int releaseThread( tcb_t *thread )
 {
-  #if DEBUG
-    tcb_t *retThread;
-  #endif
-
-  assert(thread->threadState != STOPPED);
-
-  if( thread->threadState == STOPPED )
-    return -1;
+  if( thread->threadState == INACTIVE )
+    return E_OK;
 
   /* If the thread is a sender waiting for a recipient, remove the
      sender from the recipient's wait queue. If the thread is a
@@ -279,108 +280,61 @@ int releaseThread( tcb_t *thread )
     /* Assumes that a ready/running thread can't be on the timer queue. */
 
     case READY:
-      if(queueRemoveFirst( &runQueues[thread->priority], thread->tid,
-        #if DEBUG
-          (void **)retThread
-        #else
-          NULL
-        #endif
-      ) != E_OK)
+      if(queueRemoveFirst(&runQueues[thread->priority], getTid(thread),
+                           NULL) != E_OK)
       {
         return E_FAIL;
       }
 
-      assert( retThread == thread );
       break;
     case WAIT_FOR_RECV:
-    case WAIT_FOR_SEND:
-    case SLEEPING:
-      if(queueRemoveFirst(&timerQueue, thread->tid,
-        #if DEBUG
-          (void **)&retThread
-        #else
-          NULL
-        #endif
-      ) != E_OK)
-      {
+      if(detachSendQueue(thread) != E_OK)
         return E_FAIL;
-      }
-
-      assert( retThread == thread );
+      break;
+    case WAIT_FOR_SEND:
+      if(detachReceiveQueue(thread) != E_OK)
+        return E_FAIL;
+      break;
+    case SLEEPING:
+      if(queueRemoveFirst(&timerQueue, getTid(thread), NULL) != E_OK)
+        return E_FAIL;
       break;
   }
 
-  // TODO:
-  // Find each port that this thread owns and notify the waiting
-  // senders that sending to that port failed.
+  /* Notify any threads waiting for a send/receive that the operation
+     failed. */
 
-/*
-  for(port_t *port=getPort((pid_t)1); port != getPort((pid_t)(MAX_PORTS-1)); 
-      port++)
+  for(tcb_t *t=NULL;
+      queuePop(thread->senderWaitQueue, (void *)&t) == E_OK; )
   {
-    if(port->owner == tid)
-    {
-      tcb_t *prevWaitTcb;
-
-      for(tcb_t *waitTcb=getTcb(port->sendWaitTail); waitTcb != NULL;
-          waitTcb=prevWaitTcb)
-      {
-        prevWaitTcb = getTcb(waitTcb->queue.prev);
-
-        waitTcb->threadState = READY;
-        attachRunQueue(waitTcb);
-      }
-    }
+    t->waitTid = NULL_TID;
+    t->execState.eax = E_FAIL;
+    startThread(t);
   }
-*/
 
-/*
-  if(thread->threadState == WAIT_FOR_RECV && thread->wait.port != NULL_PID)
+  for(tcb_t *t=NULL;
+      queuePop(thread->receiverWaitQueue, (void *)&t) == E_OK; )
   {
-    port_t *port = getPort(thread->wait.port);
-
-    if(port->sendWaitTail == thread->tid)
-      port->sendWaitTail = NULL_TID;
-    else
-    {
-      if(thread->queue.prev != NULL_TID)
-        getTcb(thread->queue.prev)->queue.next = thread->queue.next;
-
-      getTcb(thread->queue.next)->queue.prev = thread->queue.prev;
-    }
+    t->waitTid = NULL_TID;
+    t->execState.eax = E_FAIL;
+    startThread(t);
   }
-*/
-  free(thread);
-  return 0;
-}
 
-tcb_t *getTcb(tid_t tid)
-{
-  if(tid == NULL_TID)
-    return NULL;
-  else
-  {
-    tcb_t *tcb=NULL;
+  free(thread->receiverWaitQueue);
+  free(thread->senderWaitQueue);
 
-    if(treeFind(&tcbTree, (int)tid, (void **)&tcb) == E_OK)
-      return tcb;
-    else
-      return NULL;
-  }
+  thread->threadState = INACTIVE;
+  return E_OK;
 }
 
 tid_t getNewTID(void)
 {
-  int i, maxAttempts=1000;
+  unsigned int i;
 
   lastTID++;
 
-  for(i=1;(treeFind(&tcbTree, (int)lastTID, NULL) == E_OK && i < maxAttempts)
-      || !lastTID;
-      lastTID += i*i);
+  for(i=1; (getTcb(i)->threadState != INACTIVE && i < MAX_ATTEMPTS)
+      || !lastTID; lastTID += i*i);
 
-  if(i == maxAttempts)
-    return NULL_TID;
-  else
-    return lastTID;
+  return (i == MAX_ATTEMPTS ? NULL_TID : lastTID);
 }

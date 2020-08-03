@@ -16,6 +16,7 @@
 void _syscall(ExecutionState *state);
 static int sysReceive(ExecutionState *state);
 static int sysSend(ExecutionState *state);
+static int sysCall(ExecutionState *state);
 
 // Privileged call
 static int sysMap(ExecutionState *state);
@@ -25,9 +26,6 @@ static int sysCreateThread(ExecutionState *state);
 static int sysDestroyThread(ExecutionState *state);
 static int sysReadThread(ExecutionState *state);
 static int sysUpdateThread(ExecutionState *state);
-
-static int sysCreatePort(ExecutionState *state);
-static int sysDestroyPort(ExecutionState *state);
 
 // End of IRQ
 
@@ -62,14 +60,16 @@ int (*syscallTable[])(ExecutionState *) =
   sysWait,
   sysSend,
   sysReceive,
+  sysSend,
+  sysReceive,
+  sysCall,
+  sysCall,
   sysMap,
   sysUnmap,
   sysCreateThread,
   sysDestroyThread,
   sysReadThread,
   sysUpdateThread,
-  sysCreatePort,
-  sysDestroyPort,
   sysEoi,
   sysIrqWait,
   sysBindIrq,
@@ -78,20 +78,20 @@ int (*syscallTable[])(ExecutionState *) =
 
 static int sysMap(ExecutionState *state)
 {
-  asid_t asid = (asid_t)state->ebx;
+  u32 addrSpace = (u32)state->ebx;
   addr_t vAddr = (addr_t)state->ecx;
   pframe_t pframe = (pframe_t)state->edx;
   int flags = (int)state->esi;
 
-  if(currentThread->tid == INIT_PAGER_TID)
+  if(getTid(currentThread) == INIT_SERVER_TID)
   {
-    paddr_t *addrSpace;
     pde_t pde;
     pte_t pte;
 
-    addrSpace = getAddressSpace(asid);
+    if(addrSpace == NULL)
+      addrSpace = getCR3();
 
-    if(addrSpace == (paddr_t *)NULL_PADDR || readPmapEntry(*addrSpace, PDE_INDEX(vAddr), &pde) != E_OK)
+    if(readPmapEntry(addrSpace, PDE_INDEX(vAddr), &pde) != E_OK)
       return ESYS_FAIL;
 
     if(!pde.present)
@@ -119,7 +119,7 @@ static int sysMap(ExecutionState *state)
         clearPhysPage(addr);
       }
 
-      if(writePmapEntry(*addrSpace, PDE_INDEX(vAddr), &pde) != E_OK)
+      if(writePmapEntry(addrSpace, PDE_INDEX(vAddr), &pde) != E_OK)
       {
         if(!(flags & PM_LARGE_PAGE))
           freePageFrame(addr);
@@ -159,16 +159,18 @@ static int sysMap(ExecutionState *state)
 
 static int sysUnmap(ExecutionState *state)
 {
-  asid_t asid = (asid_t)state->ebx;
+  u32 addrSpace = (u32)state->ebx;
   addr_t addr = (addr_t)state->ecx;
 
-  if(currentThread->tid == INIT_PAGER_TID)
+  if(getTid(currentThread) == INIT_SERVER_TID)
   {
     pde_t pde;
     pte_t pte;
-    paddr_t *addrSpace = getAddressSpace(asid);
 
-    if(addrSpace == (paddr_t *)NULL_PADDR || readPmapEntry(*addrSpace, PDE_INDEX(addr), &pde) != E_OK)
+    if(addrSpace == NULL)
+      addrSpace = getCR3();
+
+    if(readPmapEntry(addrSpace, PDE_INDEX(addr), &pde) != E_OK)
       return ESYS_FAIL;
     else if(!pde.present)
       return ESYS_FAIL;
@@ -176,7 +178,7 @@ static int sysUnmap(ExecutionState *state)
     if(pde.pageSize)
     {
       pde.present = 0;
-      return writePmapEntry(*addrSpace, PDE_INDEX(addr), &pde) == E_OK ? ESYS_OK : ESYS_FAIL;
+      return writePmapEntry(addrSpace, PDE_INDEX(addr), &pde) == E_OK ? ESYS_OK : ESYS_FAIL;
     }
     else
     {
@@ -195,16 +197,16 @@ static int sysUnmap(ExecutionState *state)
 static int sysCreateThread(ExecutionState *state)
 {
   addr_t entry = (addr_t)state->ebx;
-  asid_t asid = (asid_t)state->ecx;
+  u32 addrSpace = (u32)state->ecx;
   addr_t stackTop = (addr_t)state->edx;
-  pid_t exHandler = (pid_t)state->esi;
 
-  if(currentThread->tid == INIT_SERVER_TID)
+  if(getTid(currentThread) == INIT_SERVER_TID)
   {
-    paddr_t *paddr = (asid == NULL_ASID) ? NULL : getAddressSpace(asid);
+    if(addrSpace == NULL)
+      addrSpace = getCR3();
 
-    tcb_t *newTcb = createThread(entry, paddr ? *paddr : NULL_PADDR, stackTop, exHandler);
-    return newTcb ? (int)newTcb->tid : ESYS_FAIL;
+    tcb_t *newTcb = createThread(entry, (paddr_t)addrSpace, stackTop);
+    return newTcb ? (int)getTid(newTcb) : ESYS_FAIL;
   }
   else
     return ESYS_PERM;
@@ -212,7 +214,7 @@ static int sysCreateThread(ExecutionState *state)
 
 static int sysDestroyThread(ExecutionState *state)
 {
-  if(currentThread->tid == INIT_SERVER_TID)
+  if(getTid(currentThread) == INIT_SERVER_TID)
   {
     tcb_t *tcb = getTcb((tid_t)state->ebx);
     return tcb && releaseThread(tcb) == E_OK ? ESYS_OK : ESYS_FAIL;
@@ -243,14 +245,7 @@ static int sysExit(ExecutionState *state)
 
   // XXX: send exit status to initial server
 
-  if(currentThread->exHandler == NULL_PID)
-    releaseThread(currentThread);
-  else
-  {
-    // XXX: send exit status to exception handler
-
-    currentThread->threadState = ZOMBIE;
-  }
+  currentThread->threadState = ZOMBIE;
 
   return ESYS_OK;
 }
@@ -260,7 +255,7 @@ static int sysBindIrq(ExecutionState *state)
   tcb_t *tcb = getTcb((tid_t)state->ebx);
   int irq = (int)state->ecx;
 
-  if(currentThread->tid == INIT_SERVER_TID)
+  if(getTid(currentThread) == INIT_SERVER_TID)
     return registerIrq(tcb, irq) == E_OK ? ESYS_OK : ESYS_FAIL;
   else
     return ESYS_PERM;
@@ -268,7 +263,7 @@ static int sysBindIrq(ExecutionState *state)
 
 static int sysUnbindIrq(ExecutionState *state)
 {
-  if(currentThread->tid == INIT_SERVER_TID)
+  if(getTid(currentThread) == INIT_SERVER_TID)
     return unregisterIrq((int)state->ebx) == E_OK ? ESYS_OK : ESYS_FAIL;
   else
     return ESYS_PERM;
@@ -355,63 +350,31 @@ static int sysIrqWait(ExecutionState *state)
   return ESYS_FAIL;
 }
 
-static int sysCreatePort(ExecutionState *state)
-{
-  pid_t requestedPid = (pid_t)state->ebx;
-  pid_t *outPid = (pid_t *)state->ecx;
-
-  port_t *port;
-
-  if(requestedPid == NULL_PID)
-  {
-    if(outPid)
-      port = createPort();
-    else
-      return ESYS_ARG;
-  }
-  else if(getPort(requestedPid) == NULL)
-    port = createPortWithPid(requestedPid);
-  else
-    return ESYS_FAIL;
-
-  if(port)
-  {
-    port->owner = currentThread;
-
-    if(outPid)
-      *outPid = port->pid;
-
-    return ESYS_OK;
-  }
-
-  return ESYS_FAIL;
-}
-
-static int sysDestroyPort(ExecutionState *state)
-{
-  port_t *port = getPort((pid_t)state->ebx);
-
-  if(port)
-  {
-    if(port->owner != currentThread)
-      return ESYS_PERM;
-    else
-    {
-      releasePort(port);
-      return ESYS_OK;
-    }
-  }
-
-  return ESYS_FAIL;
-}
-
-
 static int sysSend(ExecutionState *state)
 {
-  pid_t remotePort = (pid_t)state->ebx;
-  int blocking = (int)state->ecx;
+  tid_t remoteTid = (tid_t)(state->eax >> 16);
+  int isBlocking = (int)((state->eax & 0xFFFF) == SYS_SEND_WAIT);
 
-  switch(sendMessage(currentThread, remotePort, blocking))
+  switch(sendMessage(currentThread, remoteTid, isBlocking, 0))
+  {
+    case E_OK:
+      return ESYS_OK;
+    case E_INVALID_ARG:
+      return ESYS_ARG;
+    case -3:
+      return ESYS_NOTREADY;
+    case -1:
+    default:
+      return ESYS_FAIL;
+  }
+}
+
+static int sysCall(ExecutionState *state)
+{
+  tid_t remoteTid = (tid_t)(state->eax >> 16);
+  int isBlocking = (int)((state->eax & 0xFFFF) == SYS_CALL_WAIT);
+
+  switch(sendMessage(currentThread, remoteTid, isBlocking, 1))
   {
     case E_OK:
       return ESYS_OK;
@@ -454,11 +417,10 @@ static int sysWait(ExecutionState *state)
 
 int sysReceive(ExecutionState *state)
 {
-  pid_t localPort = (pid_t)state->ebx;
-  tid_t senderTid = (tid_t)state->ecx;
-  int blocking = (int)state->edx;
+  tid_t senderTid = (tid_t)(state->eax >> 16);
+  int isBlocking = (int)((state->eax & 0xFFFF) == SYS_RECEIVE_WAIT);
 
-  switch(receiveMessage(currentThread, localPort, senderTid, blocking))
+  switch(receiveMessage(currentThread, senderTid, isBlocking))
   {
     case E_OK:
       return ESYS_OK;
@@ -476,7 +438,7 @@ int sysReceive(ExecutionState *state)
 /*
 static int sysCreate(tcb_t *tcb, ...)
 {
-  if(tcb->tid != INIT_SERVER_TID)
+  if(getTid(tcb) != INIT_SERVER_TID)
     return ESYS_PERM;
 
   va_list vaargs;
@@ -560,7 +522,7 @@ static int sysCreate(tcb_t *tcb, ...)
 
 static int sysRead(tcb_t *tcb, ...)
 {
-  if(tcb->tid != INIT_SERVER_TID)
+  if(getTid(tcb) != INIT_SERVER_TID)
     return ESYS_PERM;
 
   va_list vaargs;
@@ -617,7 +579,7 @@ static int sysRead(tcb_t *tcb, ...)
 
 static int sysUpdate(tcb_t *tcb, ...)
 {
-  if(tcb->tid != INIT_SERVER_TID)
+  if(getTid(tcb) != INIT_SERVER_TID)
     return ESYS_PERM;
 
   va_list vaargs;
@@ -739,7 +701,7 @@ static int sysUpdate(tcb_t *tcb, ...)
 
 static int sysDestroy(tcb_t *tcb, ...)
 {
-  if(tcb->tid != INIT_SERVER_TID)
+  if(getTid(tcb) != INIT_SERVER_TID)
     return ESYS_PERM;
 
   va_list vaargs;
@@ -809,7 +771,7 @@ void _syscall( ExecutionState *execState )
   if((unsigned)execState->eax >= sizeof(syscallTable))
     retval = ESYS_BADCALL;
   else
-    retval =  syscallTable[(unsigned)execState->eax](execState);
+    retval = syscallTable[(unsigned)(execState->eax & 0xFFFF)](execState);
 
   execState->eax = (dword)retval;
 }

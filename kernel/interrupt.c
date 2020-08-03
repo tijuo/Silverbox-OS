@@ -32,7 +32,7 @@ int registerIrq(tcb_t *thread, int irqNum)
     return E_INVALID_ARG;
   else if(!irqHandlers[irqNum])
   {
-    kprintf("TID %d registered IRQ: 0x%x\n", thread->tid, irqNum);
+    kprintf("TID %d registered IRQ: 0x%x\n", getTid(thread), irqNum);
 
     pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
     irqHandlers[irqNum] = thread;
@@ -103,7 +103,7 @@ int handleKernelPageFault(int errorCode)
   pde = ADDR_TO_PDE(faultAddr);
 
   if(currentPDir != initKrnlPDir
-     && faultAddr >= KERNEL_VSTART && faultAddr < PAGETAB)
+     && faultAddr >= KERNEL_TCB_START && faultAddr < PAGETAB)
   {
     if(!pde->present)
     {
@@ -223,9 +223,9 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
 
   if(tcb != NULL)
   {
-    if( tcb == initPagerThread )
+    if( tcb == initServerThread )
     {
-      kprintf("Exception for initial pager server. System Halted.\n");
+      kprintf("Exception for initial server. System Halted.\n");
       dump_regs( tcb, state, intNum, errorCode );
       __asm__("hlt\n");
       return;
@@ -243,29 +243,14 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
     return;
   }
 
-  if( intNum != 14 && tcb->exHandler == NULL_PID )
+  pem_t message = { EXCEPTION_MSG, intNum, getTid(tcb),
+                    errorCode, intNum == 14 ? getCR2() : 0 };
+
+  if(sendExceptionMessage(tcb, INIT_SERVER_TID, &message) != E_OK)
   {
-    kprintf("TID: %d has no exception handler. Releasing...\n", tcb->tid);
-    dump_regs( tcb, state, intNum, errorCode );
-    releaseThread(tcb);
-  }
-  else if( getPort(tcb->exHandler)->owner == tcb )
-  {
-    kprintf("Oops! TID %d is its own exception handler! Releasing...\n", tcb->tid);
-    dump_regs( tcb, state, intNum, errorCode );
+    kprintf("Unable to send exception message to intial server\n");
     releaseThread(tcb);
   }
   else
-  {
-    int args[5] = { EXCEPTION_MSG, tcb->tid, intNum,
-                    errorCode, intNum == 14 ? getCR2() : 0 };
-
-    if(sendExceptionMessage(tcb, tcb->exHandler, args) != E_OK)
-    {
-      kprintf("Unable to send exception message to PID: %d\n", tcb->exHandler);
-      releaseThread(tcb);
-    }
-    else
-      pauseThread(tcb);
-  }
+    pauseThread(tcb);
 }
