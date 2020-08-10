@@ -2,6 +2,9 @@
 
 static void __gen_mt_numbers(void);
 
+unsigned int __mt_array[624];
+int __mt_index;
+
 int abs(int num)
 {
   return (num < 0 ? -num : num);

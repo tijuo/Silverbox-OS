@@ -56,10 +56,11 @@ int startThread( tcb_t *thread );
 int pauseThread( tcb_t *thread );
 int sysYield( tcb_t *thread );
 
+tid_t getTid(const tcb_t *tcb);
+tcb_t *getTcb(tid_t tid);
+
 extern tcb_t *initServerThread, *initPagerThread;
 extern tcb_t *currentThread;
 extern tcb_t *tcbTable;
 
-#define getTid(tcb)		(tcb ? (tcb - tcbTable) : NULL_TID)
-#define getTcb(tid)		(tid == NULL_TID ? NULL : &tcbTable[tid])
 #endif /* THREAD_H */

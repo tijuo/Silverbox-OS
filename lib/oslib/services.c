@@ -68,26 +68,40 @@ void handleConnection( struct Message *msg )
 int mapMem( void *phys, void *virt, int numPages, int flags )
 {
   int retval;
-  int in_args[5] = { MAP_MEM, (int)phys, (int)virt,
-                     numPages, flags };
-  int out_args[5];
 
-  retval = sys_call(INIT_SERVER, in_args, out_args, 1);
-  return retval < 0 ? retval : out_args[0];
+  msg_t inMsg =
+  { .subject = MAP_MEM,
+    .recipient = INIT_SERVER,
+    .data = {
+      .i32 = { (int)phys, (int)virt, (int)numPages, (int)flags, 0 }
+    }
+  };
+
+  msg_t outMsg;
+
+  retval = sys_call(&inMsg, &outMsg, 1);
+  return retval < 0 ? retval : outMsg.subject;
 }
 
 int allocatePages( void *address, int numPages )
 {
-  return mapMem((void *)NULL_PADDR, address, numPages, MEM_FLG_LAZY | MEM_FLG_ALLOC);
+  return mapMem((void *)NULL_PADDR, address, numPages, MEM_FLG_ALLOC);
 }
 
 int mapTid( tid_t tid, rspid_t pool_id )
 {
-  int in_args[5] = { MAP_TID, (int)tid, (int)pool_id, 0, 0 };
-  int out_args[5];
+  msg_t inMsg =
+  { .subject = MAP_TID,
+    .recipient = INIT_SERVER,
+    .data = {
+      .i32 = { (int)tid, (int)pool_id, 0, 0, 0 }
+    }
+  };
 
-  int retval = sys_call(INIT_SERVER, in_args, out_args, 1);
-  return retval < 0 ? NULL_TID : (tid_t)out_args[0];
+  msg_t outMsg;
+
+  int retval = sys_call(&inMsg, &outMsg, 1);
+  return retval < 0 ? -1 : outMsg.subject;
 }
 
 /*
@@ -195,11 +209,18 @@ tid_t lookupName( const char *name, size_t len )
 
 int registerDevice(int major, int numDevices, unsigned long blockLen, int flags)
 {
-  int in_args[5] = { DEV_REGISTER, major, numDevices, blockLen, flags };
-  int out_args[5];
+  msg_t inMsg =
+  { .subject = DEV_REGISTER,
+    .recipient = INIT_SERVER,
+    .data = {
+      .i32 = { (int)major, (int)numDevices, (int)blockLen, (int)flags, 0 }
+    }
+  };
 
-  int result = sys_call(INIT_SERVER, in_args, out_args, 1);
-  return result < 0 ? -1 : out_args[0];
+  msg_t outMsg;
+
+  int result = sys_call(&inMsg, &outMsg, 1);
+  return result < 0 ? -1 : outMsg.subject;
 }
 
 int lookupDevMajor(unsigned char major, struct DeviceRecord *record)
@@ -207,22 +228,29 @@ int lookupDevMajor(unsigned char major, struct DeviceRecord *record)
   if(record == NULL)
     return -1;
 
-  int in_args[5] = { DEV_LOOKUP_MAJOR, major, 0, 0, 0 };
-  int out_args[5];
+  msg_t inMsg =
+  { .subject = DEV_LOOKUP_MAJOR,
+    .recipient = INIT_SERVER,
+    .data = {
+      .i32 = { (int)major, 0, 0, 0, 0 }
+    }
+  };
 
-  int result = sys_call(INIT_SERVER, in_args, out_args, 1);
+  msg_t outMsg;
+
+  int result = sys_call(&inMsg, &outMsg, 1);
 
   if(result == 0)
   {
     if(record)
     {
-      record->numDevices = in_args[1];
-      record->blockLen = (unsigned long)in_args[2];
-      record->flags = in_args[3];
+      record->numDevices = outMsg.data.i32[1];
+      record->blockLen = (unsigned long)outMsg.data.i32[2];
+      record->flags = outMsg.data.i32[3];
     }
   }
 
-  return result < 0 ? -1 : (result == NULL_PID ? -1 : 0);
+  return result < 0 ? -1 : outMsg.subject;
 }
 
 /*

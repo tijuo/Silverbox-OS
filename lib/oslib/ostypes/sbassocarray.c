@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static unsigned long _hash_func( unsigned char *key, size_t keysize )
+static unsigned long _hash_func( const unsigned char *key, size_t keysize )
 {
   unsigned long hash = 0;
 
@@ -53,7 +53,7 @@ int sbAssocArrayCopy( const SBAssocArray *array, SBAssocArray *copy )
 
       copyPair->valid = 1;
     }
-    
+
   }
 
   return 0;
@@ -77,7 +77,7 @@ int sbAssocArrayCreate( SBAssocArray *array, size_t numBuckets )
   return 0;
 }
 
-/* XXX: Warning: Keys and Values are not freed */
+/* XXX: Warning: Values are not freed */
 
 int sbAssocArrayDelete( SBAssocArray *array )
 {
@@ -86,6 +86,14 @@ int sbAssocArrayDelete( SBAssocArray *array )
 
   if( array->buckets )
   {
+    for(size_t i=0; i < array->numBuckets; i++)
+    {
+      struct _KeyValPair *pair = &array->buckets[i];
+
+      if(pair->valid)
+        free(pair->pair.key);
+    }
+
     free(array->buckets);
     array->buckets = NULL;
   }
@@ -95,11 +103,11 @@ int sbAssocArrayDelete( SBAssocArray *array )
   return 0;
 }
 
-/* XXX: Warning: This assumes that the key will stay in memory. It does not
-   copy the key! */
+/* Warning: This assumes that the value will stay in memory. It does not
+   copy the value! */
 
-int sbAssocArrayInsert( SBAssocArray *array, void *key, size_t keysize, 
-                        void *value, size_t valsize )
+int sbAssocArrayInsert( SBAssocArray *array, const void *key, size_t keysize,
+                        const void *value, size_t valsize )
 {
   struct _KeyValPair *pair;
   unsigned i = 0;
@@ -184,7 +192,7 @@ int sbAssocArrayKeys( const SBAssocArray *array, SBKey **keys, size_t *numKeys )
   return 0;
 }
 
-int sbAssocArrayLookup( const SBAssocArray *array, void *key, size_t keysize, 
+int sbAssocArrayLookup( const SBAssocArray *array, const void *key, size_t keysize,
                         void **val, size_t *valsize )
 {
   struct _KeyValPair *pair;
@@ -231,7 +239,7 @@ int sbAssocArrayMerge( const SBAssocArray *array1, const SBAssocArray *array2,
   if( !array1 || !array2 || !newArray )
     return SBAssocArrayError;
 
-  if( sbAssocArrayCreate( newArray, 2 * (array1->numBuckets + 
+  if( sbAssocArrayCreate( newArray, 2 * (array1->numBuckets +
         array2->numBuckets) ) != 0 )
   {
     return SBAssocArrayFailed;
@@ -260,7 +268,7 @@ int sbAssocArrayMerge( const SBAssocArray *array1, const SBAssocArray *array2,
   return 0;
 }
 
-int sbAssocArrayRemove( SBAssocArray *array, void *key, size_t keysize,
+int sbAssocArrayRemove( SBAssocArray *array, const void *key, size_t keysize,
    void **value, size_t *valsize )
 {
   struct _KeyValPair *pair;

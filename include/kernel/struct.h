@@ -62,13 +62,13 @@ int treeRemove(tree_t *tree, int key, void **elemPtr);
 #define queuePush		listInsertHead
 #define queuePop		listRemoveHead
 
-#define listGetHead(l)		((l)->head->elem)
-#define listGetTail(l)		((l)->tail->elem)
+#define listGetHead(l)		({ __typeof__ (l) _l=(l); isListEmpty(_l) ? NULL : _l->head->elem; })
+#define listGetTail(l)		({ __typeof__ (l) _l=(l); isListEmpty(_l) ? NULL : _l->tail->elem; })
 
 #define queueGetHead(q)		listGetHead(q)
 #define queueGetTail(q)		listGetTail(q)
 
-#define treeGetRoot(t)		((t)->root->elem)
+#define treeGetRoot(t)		({ __typeof__ (t) _t=(t); isTreeEmpty(_t) ? NULL : _t->root->elem; })
 
 #define isListEmpty(l)		(!(l)->head || !(l)->tail)
 #define isQueueEmpty(q)		isListEmpty(q)

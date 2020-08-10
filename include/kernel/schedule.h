@@ -21,7 +21,7 @@ tcb_t *detachRunQueue( tcb_t *thread );
 int setPriority( tcb_t *thread, unsigned int level );
 
 HOT(tcb_t *schedule(void));
-HOT(void timerInt(ExecutionState *state));
+HOT(void timerInt(UNUSED_PARAM ExecutionState *state));
 HOT(void switchStacks(ExecutionState *state));
 
 extern queue_t runQueues[NUM_RUN_QUEUES], timerQueue;

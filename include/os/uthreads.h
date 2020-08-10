@@ -18,9 +18,9 @@
 #define READY_STATE			2
 #define PAUSED_STATE			3
 
-#define STACK_TOP                       0xF0000000
+#define STACK_TOP                       0xC0000000
 
-#define CALC_STACK_TOP(utid)          (STACK_TOP-utid*PAGE_SIZE)
+#define CALC_STACK_TOP(utid)          (STACK_TOP-(utid)*PAGE_SIZE)
 
 #define NUM_PRIORITIES          16
 

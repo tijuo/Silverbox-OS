@@ -1,3 +1,5 @@
+include ../prefix.inc
+
 #-fno-stack-protector stops the '__stack_chk_fail' problem
 # COPTFLAGS are the optimized flags
 
@@ -27,7 +29,7 @@ kernel.dbg: kernel.tmp
 	readelf -a $< > $@
 
 kernel.sym: kernel.dmp
-	$(PREFIX)/tools/extract_sym.pl $< > $@
+	$(SB_PREFIX)/tools/extract_sym.pl $< > $@
 
 kernel.tmp: $(OBJ) asm_objs
 	$(LD) $(LDFLAGS) *.o asm/*.o -o $@
@@ -40,7 +42,7 @@ kernel.gz: $(OBJ) asm_objs
 #	$(CC) -O2 -c $(CFLAGS) -I$(INC_DIR) $< -o $@
 
 install: kernel.gz
-	$(PREFIX)/tools/copy_files.sh -d /boot kernel.gz
+	$(SB_PREFIX)/tools/copy_files.sh -d /boot kernel.gz
 
 check:
 	splint +gnuextensions -nolib -standard  -I../include *.c

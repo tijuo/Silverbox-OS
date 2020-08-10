@@ -205,7 +205,7 @@ tcb_t *detachRunQueue( tcb_t *thread )
   @param thread The TCB of the current thread.
 */
 
-void timerInt(ExecutionState *state)
+void timerInt(UNUSED_PARAM ExecutionState *state)
 {
   tcb_t *wokenThread;
   timer_delta_t *timerDelta;

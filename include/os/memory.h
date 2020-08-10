@@ -4,6 +4,7 @@
 #include <types.h>
 
 #define HEAP_START 0x10000000
+#define HEAP_LIMIT 0xB0000000
 #define PAGE_SIZE  4096
 
 void *heapStart, *heapEnd;

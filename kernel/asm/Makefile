@@ -1,3 +1,4 @@
+include ../../prefix.inc
 include ../../Makefile.inc
 
 SRC	=entry.asm gdt.asm idt.asm cpu_state.asm inthand.asm io.asm \

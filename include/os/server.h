@@ -20,9 +20,9 @@ typedef struct ProtocolCallbackTable PCT;
 void server_loop(void);
 int __init_pct( PCT *pct, mid_t mid, struct MessageQueue *queue );
 PCT *__create_pct( mid_t mid, struct MessageQueue *queue );
-int __set_protocol_handler( PCT *pct, int hnum, 
+int __set_protocol_handler( PCT *pct, int hnum,
                      void (*fptr)(struct Message *) );
-int __get_protocol_handler( PCT *pct, int hnum, 
+int __get_protocol_handler( PCT *pct, int hnum,
                      void (**handler)(struct Message *) );
 int detachPCT( mid_t mbox );
 int attachPCT( PCT *pct );

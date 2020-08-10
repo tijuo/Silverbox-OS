@@ -1,21 +1,18 @@
 #include <os/region.h>
 
-bool reg_can_join( struct MemRegion *region1, struct MemRegion *region2 )
+bool regionCanJoin( const struct MemRegion *region1, const struct MemRegion *region2 )
 {
-  if ( reg_overlaps( region1, region2 ) || reg_is_adjacent( region1, region2 ) )
-    return true;
-  else
-    return false;
+  return regionDoesOverlap( region1, region2 ) || regionIsAdjacent( region1, region2 );
 }
 
-/* Joins region2 to region1 */
+/* Concatenates region 2 to region 1 storing the result in region 1. */
 
-int reg_join( struct MemRegion *region1, struct MemRegion *region2 )
+int regionJoin( struct MemRegion *region1, const struct MemRegion *region2 )
 {
-  unsigned int newStart;
+  addr_t newStart;
   size_t newLength;
 
-  if ( !reg_can_join( region1, region2 ) )
+  if ( !regionCanJoin( region1, region2 ) )
     return -1;
 
   if ( region1->start <= region2->start )
@@ -43,35 +40,27 @@ int reg_join( struct MemRegion *region1, struct MemRegion *region2 )
   return 0;
 }
 
-bool is_in_region( unsigned int addr, struct MemRegion *region )
+bool regionDoesContain( addr_t addr, const struct MemRegion *region )
 {
-  if ( addr >= region->start && addr < region->start + region->length )
-      return true;
-  else
-    return false;
+  return addr >= region->start && addr < region->start + region->length;
 }
 
-bool reg_overlaps( struct MemRegion *region1, struct MemRegion *region2 )
+bool regionDoesOverlap( const struct MemRegion *region1, const struct MemRegion *region2 )
 {
-  if ( is_in_region( region2->start, region1 ) || is_in_region( region1->start, region2 ) )
-    return true;
-  else
-    return false;
+  return regionDoesContain( region2->start, region1 ) || regionDoesContain( region1->start, region2 );
 }
 
-bool reg_is_adjacent( struct MemRegion *region1, struct MemRegion *region2 )
+/* Indicates whether one region ends exactly where the other region begins. */
+
+bool regionIsAdjacent( const struct MemRegion *region1, const struct MemRegion *region2 )
 {
-  if ( region1->start + region1->length == region2->start )
-    return true;
-  else if ( region2->start + region2->length == region1->start )
-    return true;
-  else
-    return false;
+  return region1->start + region1->length == region2->start
+         || region2->start + region2->length == region1->start;
 }
 
-void reg_swap( struct MemRegion *region1, struct MemRegion *region2 )
+void regionSwap( struct MemRegion *region1, struct MemRegion *region2 )
 {
-  unsigned int tStart;
+  addr_t tStart;
   size_t tLen;
 
   tStart = region2->start;

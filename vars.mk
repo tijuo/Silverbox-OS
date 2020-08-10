@@ -4,11 +4,11 @@
 .s.o:
 	$(AS) $(AFLAGS) $< -o $@
 
-lib/libc.a:
-	make -C $(PREFIX)/lib/ libc.a
+$(SB_PREFIX)/lib/libc.a:
+	make -C $(SB_PREFIX)/lib/ libc.a
 
-lib/libos.a:
-	make -C $(PREFIX)/lib/ libos.a
+$(SB_PREFIX)/libos.a:
+	make -C $(SB_PREFIX)/lib/ libos.a
 
 dep:
 	make depend

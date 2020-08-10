@@ -65,8 +65,8 @@ const void *));
 int rand(void);
 void srand(unsigned int seed);
 
-unsigned int __mt_array[624];
-int __mt_index;
+extern unsigned int __mt_array[624];
+extern int __mt_index;
 
 #ifdef __cplusplus
 }

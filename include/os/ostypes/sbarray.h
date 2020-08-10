@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-enum SBArrayValues { SBArrayError=-1, SBArrayNotFound=-2, SBArrayFailed=-3, 
+enum SBArrayValues { SBArrayError=-1, SBArrayNotFound=-2, SBArrayFailed=-3,
        SBArrayEmpty=-4 };
 
 struct _SBArrayElem
@@ -28,10 +28,10 @@ int sbArrayCount(const SBArray *array);
 int sbArrayCreate(SBArray *array);
 int sbArrayDelete(SBArray *array);
 int sbArrayElemAt(const SBArray *array, int pos, void **elem, size_t *size);
-int sbArrayFind(const SBArray *array, void *elem, size_t size);
-int sbArrayInsert(SBArray *array, int pos, void *ptr, size_t size);
+int sbArrayFind(const SBArray *array, const void *elem, size_t size);
+int sbArrayInsert(SBArray *array, int pos, const void *ptr, size_t size);
 int sbArrayPop(SBArray *array, void **ptr, size_t *size);
-int sbArrayPush(SBArray *array, void *ptr, size_t size);
+int sbArrayPush(SBArray *array, const void *ptr, size_t size);
 int sbArrayRemove(SBArray *array, int pos);
 int sbArraySlice(const SBArray *array, int start, int end, SBArray *newArray);
 

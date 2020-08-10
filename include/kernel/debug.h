@@ -8,8 +8,8 @@
 #define  VIDMEM_START   0xB8000u
 
 #define RET_MSG(ret, msg)	{ kprintf("<'%s' %s: %d> Ret: %d. %s\n", \
-				__FILE__, __func__, __LINE__, ret, msg); \
-				return ret; }
+				__FILE__, __func__, __LINE__, (ret), (msg)); \
+				return (ret); }
 
 #define DECL_CALL_COUNTER(fname)		extern unsigned int fname ## _counter;
 #define CALL_COUNTER(fname)			unsigned int fname ## _counter;
@@ -53,8 +53,9 @@ unsigned int getTimeDifference(void);
   stopTimeStamp();\
   ret = getTimeDifference();
 
-#define assert(exp)  if (exp) ; \
-        else printAssertMsg( #exp, __FILE__, __func__, __LINE__ )
+#define assert(exp)  { __typeof__ (exp) _exp=(exp); \
+                       if(_exp) ; \
+                       else printAssertMsg( #exp, __FILE__, __func__, __LINE__ ); }
 
 #else
 
@@ -77,7 +78,7 @@ unsigned int getTimeDifference(void);
 //#define _putChar(c, i, j, attr)
 //#define printString(str, x, y)
 //#define _printString(str, x, y, ...)
-#define initVideo() 
+#define initVideo()
 #define RET_MSG(x,y)	return x;
 #define CALL_COUNTER(ret_type, fname, arg)	ret_type fname(arg);
 #endif /* DEBUG */

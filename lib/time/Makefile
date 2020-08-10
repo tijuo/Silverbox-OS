@@ -1,3 +1,5 @@
+include ../../prefix.inc
+
 SRC     =time.c mktime.c gmtime.c asctime.c _time.c difftime.c\
 	ctime.c
 OBJ     =$(SRC:.c=.o)

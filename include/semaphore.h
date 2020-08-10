@@ -7,7 +7,7 @@ struct Semaphore
   int  value;
 };
 
-#define INIT_SEMAPHORE(x, addr, val)    static struct Semaphore x ## Lock = { addr, val }
+#define INIT_SEMAPHORE(x, addr, val)    static struct Semaphore (x) ## Lock = { (addr), (val) }
 
 #define SEM_AQUIRE(x, num)
 #define SEM_RELEASE(x, num)

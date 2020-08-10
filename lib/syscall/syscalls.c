@@ -1,54 +1,68 @@
 #include <os/syscalls.h>
 
-int sys_send(tid_t recipient, const int args[5], int block)
+int sys_send(const msg_t *msg, int block)
 {
   int retval;
 
   __asm__ __volatile__("int %1\n" : "=a"(retval)
                      : "i"(SYSCALL_INT),
-                       "a"((block ? SYS_SEND_WAIT : SYS_SEND) | (recipient << 16)),
-                       "b"(args[0]), "c"(args[1]), "d"(args[2]),
-                       "S"(args[3]), "D"(args[4]));
+                       "a"((block ? SYS_SEND_WAIT : SYS_SEND) | (msg->subject << 8) | (msg->recipient << 16)),
+                       "b"(msg->data.i32[0]), "c"(msg->data.i32[1]), "d"(msg->data.i32[2]),
+                       "S"(msg->data.i32[3]), "D"(msg->data.i32[4]));
 
-  return retval;
+  return (retval & 0xFF) == ESYS_OK ? ESYS_OK : retval;
 }
 
-int sys_call(tid_t recipient, const int inArgs[5], int *outArgs, int block)
+int sys_call(const msg_t *inMsg, msg_t *outMsg, int block)
 {
   int retval;
-  int args[5];
 
-  __asm__ __volatile__("int %6\n" : "=a"(retval),
-                       "=b"(args[0]),
-                       "=c"(args[1]), "=d"(args[2]),
-                       "=S"(args[3]), "=D"(args[4])
-                     : "i"(SYSCALL_INT),
-                       "a"((block ? SYS_CALL_WAIT : SYS_CALL) | (recipient << 16)),
-                       "b"(inArgs[0]), "c"(inArgs[1]), "d"(inArgs[2]),
-                       "S"(inArgs[3]), "D"(inArgs[4]));
+  if(outMsg)
+  {
+    __asm__ __volatile__("int %6\n" : "=a"(retval),
+                         "=b"(outMsg->data.i32[0]),
+                         "=c"(outMsg->data.i32[1]), "=d"(outMsg->data.i32[2]),
+                         "=S"(outMsg->data.i32[3]), "=D"(outMsg->data.i32[4])
+                       : "i"(SYSCALL_INT),
+                         "a"((block ? SYS_CALL_WAIT : SYS_CALL) | (inMsg->subject << 8) | (inMsg->recipient << 16)),
+                         "b"(inMsg->data.i32[0]), "c"(inMsg->data.i32[1]), "d"(inMsg->data.i32[2]),
+                         "S"(inMsg->data.i32[3]), "D"(inMsg->data.i32[4]));
 
-  if(outArgs)
-    *outArgs = *args;
+    outMsg->subject = (unsigned char)((retval >> 8) & 0xFF);
+    outMsg->sender  = (tid_t)((retval >> 16) & 0xFFFF);
+  }
+  else
+    __asm__ __volatile__("int %1\n" : "=a"(retval)
+                       : "i"(SYSCALL_INT),
+                         "a"((block ? SYS_CALL_WAIT : SYS_CALL) | (inMsg->subject << 8) | (inMsg->recipient << 16)),
+                         "b"(inMsg->data.i32[0]), "c"(inMsg->data.i32[1]), "d"(inMsg->data.i32[2]),
+                         "S"(inMsg->data.i32[3]), "D"(inMsg->data.i32[4]));
 
-  return retval;
+  return (retval & 0xFF) == ESYS_OK ? ESYS_OK : retval;
 }
 
-int sys_receive(tid_t sender, int *outArgs, int block)
+int sys_receive(msg_t *outMsg, int block)
 {
   int retval;
-  int args[5];
 
-  __asm__ __volatile__("int %6\n" : "=a"(retval),
-                       "=b"(args[0]),
-                       "=c"(args[1]), "=d"(args[2]),
-                       "=S"(args[3]), "=D"(args[4])
+  if(outMsg)
+  {
+    __asm__ __volatile__("int %6\n" : "=a"(retval),
+                       "=b"(outMsg->data.i32[0]),
+                       "=c"(outMsg->data.i32[1]), "=d"(outMsg->data.i32[2]),
+                       "=S"(outMsg->data.i32[3]), "=D"(outMsg->data.i32[4])
                      : "i"(SYSCALL_INT),
-                       "a"((block ? SYS_RECEIVE_WAIT : SYS_RECEIVE) | (sender << 16)));
+                       "a"((block ? SYS_RECEIVE_WAIT : SYS_RECEIVE) | (outMsg->recipient << 16)));
 
-  if(outArgs)
-    *outArgs = *args;
+    outMsg->sender = (tid_t)((retval >> 16) & 0xFFFF);
+    outMsg->subject = (unsigned char)((retval >> 8) & 0xFF);
+  }
+  else
+    __asm__ __volatile__("int %1\n" : "=a"(retval)
+                         : "i"(SYSCALL_INT),
+                           "a"((block ? SYS_RECEIVE_WAIT : SYS_RECEIVE) | (ANY_SENDER << 16)));
 
-  return retval;
+  return (retval & 0xFF) == ESYS_OK ? ESYS_OK : retval;
 }
 
 void sys_exit(int code)
@@ -68,7 +82,7 @@ int sys_wait(unsigned int timeout)
   return retval;
 }
 
-int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, int flags)
+int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, size_t numPages, int flags)
 {
   int retval;
 
@@ -76,19 +90,19 @@ int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, int flags)
                                 : "i"(SYSCALL_INT),
                                   "a"(SYS_MAP), "b"(rootPmap),
                                   "c"(vaddr), "d"(pframe),
-                                  "S"(flags));
+                                  "S"(numPages), "D"(flags));
 
   return retval;
 }
 
-int sys_unmap(u32 rootPmap, addr_t vaddr)
+int sys_unmap(u32 rootPmap, addr_t vaddr, size_t numPages)
 {
   int retval;
 
   __asm__ __volatile__("int %1" : "=a"(retval)
                                 : "i"(SYSCALL_INT),
                                   "a"(SYS_UNMAP), "b"(rootPmap),
-                                  "c"(vaddr));
+                                  "c"(vaddr), "d"(numPages));
 
   return retval;
 }
@@ -116,26 +130,26 @@ int sys_destroy_thread(tid_t tid)
   return retval;
 }
 
-int sys_read_thread(tid_t tid, thread_info_t *info)
+int sys_read_thread(tid_t tid, int flags, thread_info_t *info)
 {
   int retval;
 
   __asm__ __volatile__("int %1" : "=a"(retval)
                                 : "i"(SYSCALL_INT),
                                   "a"(SYS_READ_THREAD), "b"(tid),
-                                  "c"(info));
+                                  "c"(flags), "d"(info));
 
   return retval;
 }
 
-int sys_update_thread(tid_t tid, thread_info_t *info)
+int sys_update_thread(tid_t tid, int flags, thread_info_t *info)
 {
   int retval;
 
   __asm__ __volatile__("int %1" : "=a"(retval)
                                 : "i"(SYSCALL_INT),
                                   "a"(SYS_UPDATE_THREAD), "b"(tid),
-                                  "c"(info));
+                                  "c"(flags), "d"(info));
 
   return retval;
 }

@@ -6,11 +6,11 @@ all:    $(EXE)
 -include Makefile.inc ../Makefile.inc ../../Makefile.inc
 -include vars.mk ../vars.mk ../../vars.mk
 
-%.exe:  %.c $(PREFIX)/lib/libc.a $(PREFIX)/lib/libos.a
-	$(PREFIX)/tools/makec.sh $< $@
+%.exe:  %.c $(SB_PREFIX)/lib/libc.a $(SB_PREFIX)/lib/libos.a
+	$(SB_PREFIX)/tools/makec.sh $< $@
 
 install:$(EXE)
-	$(PREFIX)/tools/copy_files.sh $(EXE) -d $(INSTALL_DIR)
+	$(SB_PREFIX)/tools/copy_files.sh $(EXE) -d $(INSTALL_DIR)
 
 clean:
 	rm -f *.o

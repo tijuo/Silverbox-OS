@@ -18,7 +18,7 @@
 #define PTE_INDEX(a)		(((a) >> 12) & 0x3FF)
 #define PAGE_OFFSET(a)		((a) & 0xFFF)
 
-#define IDX_TO_VADDR(pde, pte, offset)  (((pde & 0x3FF) << 22) | ((pte & 0x3FF) << 12) | (offset & 0xFFF))
+#define IDX_TO_VADDR(pde, pte, offset)  ((((pde) & 0x3FF) << 22) | (((pte) & 0x3FF) << 12) | ((offset) & 0xFFF))
 
 #define PAGING_PRES		(1u << 0)
 #define PAGING_RW		(1u << 1)

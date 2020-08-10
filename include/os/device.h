@@ -41,7 +41,9 @@ struct Device
   unsigned long blockLen;
   int flags : 31;
   int used : 1;
-} devices[MAX_DEVICES];
+};
+
+extern struct Device devices[MAX_DEVICES];
 
 /*
 struct Filesystem

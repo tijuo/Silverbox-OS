@@ -1,3 +1,5 @@
+include ../../prefix.inc
+
 SRC	=clearerr.c do_printf.c feof.c ferror.c fflush.c fgetc.c fprintf.c \
         fputc.c fputs.c fseek.c ftell.c getc.c getchar.c gets.c perror.c \
         printf.c putc.c putchar.c puts.c rewind.c setvbuf.c sprintf.c \

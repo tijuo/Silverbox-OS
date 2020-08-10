@@ -153,14 +153,14 @@ int sbArrayElemAt(const SBArray *array, int pos, void **elem, size_t *size)
 
 // Returns the index of the first occurence of elem (if found)
 
-int sbArrayFind(const SBArray *array, void *elem, size_t size)
+int sbArrayFind(const SBArray *array, const void *elem, size_t size)
 {
   if( !array || size == 0 )
     return SBArrayError;
 
   for(unsigned i=0; i < (unsigned)array->nElems; i++)
   {
-    if( size == array->elems[i].size && 
+    if( size == array->elems[i].size &&
         memcmp(array->elems[i].ptr, elem, size) == 0 )
     {
       return (int)i;
@@ -172,7 +172,7 @@ int sbArrayFind(const SBArray *array, void *elem, size_t size)
 
 // Insert an element into a location in the array.
 
-int sbArrayInsert(SBArray *array, int pos, void *ptr, size_t size)
+int sbArrayInsert(SBArray *array, int pos, const void *ptr, size_t size)
 {
   int newSize;
 
@@ -253,7 +253,7 @@ int sbArrayPop(SBArray *array, void **ptr, size_t *size)
 
 // Pushes an element to the end of the array
 
-int sbArrayPush(SBArray *array, void *ptr, size_t size)
+int sbArrayPush(SBArray *array, const void *ptr, size_t size)
 {
   if( !array || !ptr || size == 0 )
     return SBArrayError;

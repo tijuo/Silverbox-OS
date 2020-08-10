@@ -6,7 +6,7 @@
 
 #define NUM_IRQS        	16
 #define IRQ_BITMAP_COUNT	((NUM_IRQS / 32)+(NUM_IRQS & 0x1F ? 1 : 0))
-#define isValidIRQ(irq)		(irq >= 0 && irq < NUM_IRQS)
+#define isValidIRQ(irq)		({ __typeof__ (irq) _irq=(irq); (_irq >= 0 && _irq < NUM_IRQS); })
 
 void handleIRQ(int irqNum, ExecutionState *state);
 void handleCPUException(int intNum, int errorCode, ExecutionState *state);

@@ -62,6 +62,14 @@ typedef unsigned short int pid_t;
   #define NULL ((void *)0)
 #endif
 
+#ifndef UNUSED_PARAM
+  #ifdef __GNUC__
+    #define UNUSED_PARAM	__attribute__ ((unused))
+  #else
+    #define UNUSED_PARAM
+  #endif  /* __GNUC__ */
+#endif /* UNUSED_PARAM */
+
 #ifdef __cplusplus
 }
 #endif

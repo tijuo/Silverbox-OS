@@ -13,10 +13,10 @@ struct _SBString
 
 typedef struct _SBString SBString;
 
-enum SBStringResults { SBStringError=-1, SBStringFailed=-2, 
+enum SBStringResults { SBStringError=-1, SBStringFailed=-2,
        SBStringNotFound=-3 };
 
-enum SBStringCompareResults { SBStringCompareError=-2, SBStringCompareLess=-1, 
+enum SBStringCompareResults { SBStringCompareError=-2, SBStringCompareLess=-1,
                    SBStringCompareEqual=0, SBStringCompareGreater=1 };
 
 int sbStringCharAt(const SBString *str, int index, int *c);

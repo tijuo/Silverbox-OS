@@ -42,17 +42,19 @@
 #define INIT_SERVER_STACK_TOP	((addr_t)KERNEL_TCB_START)
 
 /// Aligns an address to the next page boundary (if not already aligned)
-#define PAGE_ALIGN(addr)    ALIGN(PAGE_SIZE, addr)
+#define PAGE_ALIGN(addr)    ALIGN(PAGE_SIZE, (addr))
 
 /// Aligns an address to the next boundary (if not already aligned)
-#define ALIGN(mod, addr)    (((addr == ALIGN_DOWN(mod, addr)) ? (addr_t)addr : \
-                               ((addr_t)((ALIGN_DOWN(mod, addr)) + mod)) ))
+#define ALIGN(mod, addr)    ({ __typeof__ (mod) _mod=(mod); \
+                              __typeof__ (addr) _addr=(addr); \
+                              (((_addr == ALIGN_DOWN(_mod, _addr)) ? (addr_t)_addr : \
+                               ((addr_t)((ALIGN_DOWN(_mod, _addr)) + _mod)) )) })
 
 /// Aligns an address to the previous boundary (if not already aligned)
-#define ALIGN_DOWN(mod, addr) ((addr_t)( addr & ~(mod - 1) ))
+#define ALIGN_DOWN(mod, addr) ((addr_t)( (addr) & ~((mod) - 1) ))
 
 /// Temporarily maps a physical page into the current address space
-#define mapTemp( phys ) kMapPage((addr_t)(TEMP_PAGEADDR), phys, PAGING_RW)
+#define mapTemp( phys ) kMapPage((addr_t)(TEMP_PAGEADDR), (phys), PAGING_RW)
 
 /// Unmaps the temporary page
 #define unmapTemp() 	kUnmapPage((addr_t)(TEMP_PAGEADDR), NULL)
@@ -66,6 +68,8 @@ HOT(int kUnmapPage( addr_t virt, paddr_t *phys ));
 HOT(int kMapPageTable( addr_t virt, paddr_t phys, u32 flags ));
 HOT(int kUnmapPageTable( addr_t virt, paddr_t *phys ));
 HOT(addr_t unmapPage( addr_t virt, paddr_t addrSpace ));
+
+int initializeRootPmap(dword pmap);
 
 int peek( paddr_t, void *, size_t );
 int poke( paddr_t, void *, size_t );

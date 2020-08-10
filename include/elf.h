@@ -147,10 +147,11 @@
 #define DT_LOPROC		0x70000000
 #define DT_HIPROC		0x7FFFFFFF
 
-#define VALID_ELF(img)		(img->identifier[EI_MAG0]  == ELFMAG0)\
-				&& (img->identifier[EI_MAG1] == ELFMAG1)\
-                                && (img->identifier[EI_MAG1] == ELFMAG2)\
-				&& (img->identifier[EI_MAG3] == ELFMAG3)
+#define VALID_ELF(img)		({ __typeof__ (img) _img=(img); \
+                                  (_img->identifier[EI_MAG0]  == ELFMAG0) \
+				&& (_img->identifier[EI_MAG1] == ELFMAG1) \
+                                && (_img->identifier[EI_MAG1] == ELFMAG2) \
+				&& (_img->identifier[EI_MAG3] == ELFMAG3); })
 
 
 #define OK			0

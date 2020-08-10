@@ -1,3 +1,5 @@
+include ../../prefix.inc
+
 SRC     =errno.c
 OBJ     =$(SRC:.c=.o)
 OPT_FLG =-O2

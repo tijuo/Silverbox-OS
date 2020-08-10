@@ -7,8 +7,8 @@
 
 #include <oslib.h>
 
-#define MAJOR(x)		((x >> 8) & 0xFF)
-#define MINOR(x)		(x & 0xFF)
+#define MAJOR(x)		(((x) >> 8) & 0xFF)
+#define MINOR(x)		((x) & 0xFF)
 
 #define DEVICE_REQUEST		0
 #define DEVICE_RESPONSE		128

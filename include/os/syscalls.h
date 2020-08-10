@@ -49,14 +49,12 @@
 #define ESYS_NOTIMPL		-5
 #define ESYS_NOTREADY   -6
 
-struct PageMapping
-{
-  addr_t virt;
-  int level;
-  paddr_t frame;
-  unsigned int flags;
-  int status;
-};
+#define ANY_SENDER		NULL_TID
+
+#define TF_STATUS		1
+#define TF_PRIORITY		2
+#define TF_REG_STATE		4
+#define TF_PMAP			8
 
 struct RegisterState
 {
@@ -75,17 +73,33 @@ struct RegisterState
   dword userSs;
 };
 
+typedef struct
+{
+  unsigned char subject;
+  union
+  {
+    tid_t sender;
+    tid_t recipient;
+  };
+  union Payload
+  {
+    int i32[5];
+    short int i16[10];
+    char c8[20];
+  } data;
+} msg_t;
+
 void sys_exit(int code);
-int sys_send(tid_t recipient, const int args[5], int block);
-int sys_call(tid_t recipient, const int inArgs[5], int *outArgs, int block);
-int sys_receive(tid_t sender, int *outArgs, int block);
+int sys_send(const msg_t *msg, int block);
+int sys_call(const msg_t *inMsg, msg_t *outMsg, int block);
+int sys_receive(msg_t *msg, int block);
 int sys_wait(unsigned int timeout);
-int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, int flags);
-int sys_unmap(u32 rootPmap, addr_t vaddr);
+int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, size_t numPages, int flags);
+int sys_unmap(u32 rootPmap, addr_t vaddr, size_t numPages);
 int sys_create_thread(addr_t entry, u32 rootPmap, addr_t stackTop);
 int sys_destroy_thread(tid_t tid);
-int sys_read_thread(tid_t tid, thread_info_t *info);
-int sys_update_thread(tid_t tid, thread_info_t *info);
+int sys_read_thread(tid_t tid, int flags, thread_info_t *info);
+int sys_update_thread(tid_t tid, int flags, thread_info_t *info);
 int sys_bind_irq(tid_t tid, int irqNum);
 int sys_unbind_irq(int irqNum);
 int sys_eoi(int irqNum);

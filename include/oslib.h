@@ -14,6 +14,7 @@ extern "C" {
 
 #define EXCEPTION_MSG		0xF0
 #define IRQ_MSG			0xF1
+#define EXIT_MSG		0xF2
 
 #define PAGE_FAULT_MSG      	0x0E
 #define DIE_MSG		    	0xF1FE
@@ -22,8 +23,6 @@ extern "C" {
 #define NULL_PADDR          	((paddr_t)0xFFFFFFFFFFFFFFFFull)
 
 #define IRQ_ANY			-1
-
-#define KERNEL_MBOX_ID 		0
 
 #define REPLY_SUCCESS		0
 #define REPLY_FAIL		-2
@@ -70,6 +69,9 @@ typedef unsigned int	pframe_t;
 #define TCB_STATUS_WAIT_RECV           6u
 #define TCB_STATUS_ZOMBIE                  7u  // Thread is waiting to be released
 
+#define MAX(a,b)	({ __typeof__(a) _a=(a); __typeof__(b) _b=b; (_a > _b) ? _a : _b; })
+#define MIN(a,b)        ({ __typeof__(a) _a=(a); __typeof__(b) _b=b; (_a < _b) ? _a : _b; })
+
 struct MemInfo
 {
   addr_t virtCodeArea, physCodeArea;
@@ -102,7 +104,7 @@ struct Tcb
 {
   int priority;
   int status;
-  paddr_t addrSpace;
+  paddr_t rootPageMap;
   tid_t waitTid;
 
   struct State

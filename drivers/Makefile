@@ -1,3 +1,5 @@
+include ../prefix.inc
+
 SRC	=vidtest.c kbtest.c rdsktst.c memtst.c
 EXE	=$(SRC:.c=.exe)
 DIRS	=char block bus
@@ -9,8 +11,8 @@ DIRS	=char block bus
 
 all:    $(DIRS) $(EXE)
 
-%.exe:  %.c $(PREFIX)/lib/libc.a $(PREFIX)/lib/libos.a
-	$(PREFIX)/tools/makec.sh $< $@
+%.exe:  %.c $(SB_PREFIX)/lib/libc.a $(SB_PREFIX)/lib/libos.a
+	$(SB_PREFIX)/tools/makec.sh $< $@
 
 char:
 	make -C $@ all
@@ -26,7 +28,7 @@ fs:
 
 install:
 	for i in $(DIRS); do make -C $$i install; done
-	$(PREFIX)/tools/copy_files.sh $(EXE)
+	$(SB_PREFIX)/tools/copy_files.sh $(EXE)
 
 clean:
 	for i in $(DIRS); do make -C $$i clean; done

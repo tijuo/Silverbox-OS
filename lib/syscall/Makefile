@@ -1,3 +1,5 @@
+include ../../prefix.inc
+
 SRC     =syscalls.c
 OBJ     =$(SRC:.c=.o)
 OPT_FLG =-O0

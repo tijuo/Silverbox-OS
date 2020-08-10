@@ -1,3 +1,5 @@
+include ../../prefix.inc
+
 SRC     =strings.c sbrk.c region.c bitmap.c elf.c \
 	services.c
 

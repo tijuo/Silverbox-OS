@@ -24,12 +24,20 @@
 #define DEV_UNREGISTER		16
 #define EXEC			17
 
+#define MAP_REGION		18
+#define UNMAP_REGION		19
+#define CREATE_PORT		20
+#define LISTEN_PORT		21
+#define DESTROY_PORT		22
+#define SEND_MESSAGE		23
+#define RECEIVE_MESSAGE		24
+
+
 #define GEN_REPLY_TYPE		0x80000000
 #define SHARE_MEM_REQ		0xFFF0
-#define EXIT_MSG		0xFFFF
 
 #define	MEM_FLG_RO		0x01		// Read only
-#define MEM_FLG_LAZY		0x02		// Map in pages only when they are accessed
+#define MEM_FLG_EAGER		0x02		// Map in pages immediately (instead of only when they are accessed)
 #define MEM_FLG_ALLOC		0x04		// Do not perform a phys->virt mapping (implies read-write)
 #define MEM_FLG_COW		0x08		// Mark as copy-on-write(implies read-only)
 

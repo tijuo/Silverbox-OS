@@ -1,5 +1,7 @@
 #include <errno.h>
 
+volatile int errno;
+
 const char * const _errno_reasons[80] = {
 "No error.",
 "Argument list too long.",
@@ -80,5 +82,5 @@ const char * const _errno_reasons[80] = {
 "Connection timed out.",
 "Text file busy.",
 "Operation would block.",
-"Cross-device link." 
+"Cross-device link."
 };

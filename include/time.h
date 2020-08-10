@@ -7,7 +7,7 @@
 
 #define CLOCKS_PER_SEC		TICKS_PER_SEC
 
-#define _isleap(year)	((((year) % 4 == 0) && ((year) % 100 != 0)) || (year) % 400 == 0)
+#define _isleap(year)	({ __typeof__ (year) _year=(year); (((_year % 4 == 0) && (_year % 100 != 0)) || _year % 400 == 0); })
 
 typedef u64 time_t;
 typedef u64 clock_t;

@@ -125,9 +125,6 @@ char *kitoa(int value, char *str, int base, int unSigned)
     return NULL;
   else if( base >= 2 && base <= 36 )
   {
-    if(negative)
-      str[str_end++] = '-';
-
     do
     {
       unsigned int quot = base * (num / base);
@@ -135,6 +132,9 @@ char *kitoa(int value, char *str, int base, int unSigned)
       str[str_end++] = _digits[num - quot];
       num = quot / base;
     } while( num );
+
+    if(negative)
+      str[str_end++] = '-';
   }
 
   str[str_end] = '\0';
@@ -776,7 +776,7 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
 */
 //  if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
 //  {
-    execState = (ExecutionState *)&thread->execState;
+//    execState = (ExecutionState *)&thread->execState;
 //  }
 
   dump_state(execState, intNum, errorCode);

@@ -58,7 +58,7 @@ static int DISC_CODE(initMemory( multiboot_info_t *info ));
 //int DISC_CODE(add_gdt_entry(int sel, dword base, dword limit, int flags));
 static void DISC_CODE(setupGDT(void));
 static void DISC_CODE(stopInit(const char *));
-static void DISC_CODE(bootstrapInitServer(void));
+static void DISC_CODE(bootstrapInitServer(multiboot_info_t *info));
 void DISC_CODE(init(multiboot_info_t * restrict));
 static void DISC_CODE(initPIC( void ));
 static int DISC_CODE(memcmp(const char *s1, const char *s2, register size_t n));
@@ -1042,7 +1042,7 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
     Bootstraps the initial server and passes necessary boot data to it.
 */
 
-void bootstrapInitServer(void)
+void bootstrapInitServer(multiboot_info_t *info)
 {
   int fail=0;
   addr_t initServerStack = INIT_SERVER_STACK_TOP;
@@ -1050,6 +1050,7 @@ void bootstrapInitServer(void)
   elf_header_t elf_header;
   paddr_t stackPTab = allocPageFrame();
   paddr_t stackPage = allocPageFrame();
+  int stackData[2] = { (int)info, (int)lastKernelFreePage };
 
   kprintf("Bootstrapping initial server...\n");
 
@@ -1080,7 +1081,7 @@ void bootstrapInitServer(void)
       clearPhysPage(stackPTab);
 
     if((initServerThread=loadElfExe(initServerImg, initServerPDir,
-                                    initServerStack)) == NULL)
+                                    initServerStack-sizeof(stackData))) == NULL)
     {
       fail = 1;
     }
@@ -1095,6 +1096,7 @@ void bootstrapInitServer(void)
     }
     else
     {
+      poke(stackPage + PAGE_SIZE - sizeof(stackData), stackData, sizeof(stackData));
       kprintf("Starting initial server... 0x%x\n", initServerThread);
 
       if(startThread(initServerThread) != E_OK)
@@ -1277,7 +1279,7 @@ void init( multiboot_info_t * restrict info )
   testATA();
 #endif /* DEBUG */
 
-  bootstrapInitServer();
+  bootstrapInitServer(info);
 
   kprintf("\n0x%x bytes of discardable code.", (addr_t)EXT_PTR(kdData) - (addr_t)EXT_PTR(kdCode));
   kprintf(" 0x%x bytes of discardable data.\n", (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdData));

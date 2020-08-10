@@ -8,11 +8,11 @@ all: $(OUTPUT)
 -include ../../Makefile.inc ../Makefile.inc
 -include ../../vars.mk ../vars.mk
 
-$(OUTPUT): $(OBJ) $(PREFIX)/lib/libc.a $(PREFIX)/lib/libos.a
-	$(PREFIX)/tools/makec.sh $(SRC) $(OUTPUT)
+$(OUTPUT): $(OBJ) $(SB_PREFIX)/lib/libc.a $(SB_PREFIX)/lib/libos.a
+	$(SB_PREFIX)/tools/makec.sh $(SRC) $(OUTPUT)
 
 install: $(OUTPUT)
-	$(PREFIX)/tools/copy_files.sh $(OUTPUT) -d $(INSTALL_DIR)
+	$(SB_PREFIX)/tools/copy_files.sh $(OUTPUT) -d $(INSTALL_DIR)
 
 clean:
 	for i in $(DIRS); do make -C $$i clean; done

@@ -1,3 +1,5 @@
+include prefix.inc
+
 .PHONY:  kernel lib drivers apps all clean install depend dep
 
 .SILENT :

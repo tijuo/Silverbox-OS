@@ -27,6 +27,45 @@ bool isReadable( addr_t addr, paddr_t pdir );
 bool isWritable( addr_t addr, paddr_t pdir );
 */
 
+int initializeRootPmap(dword pmap)
+{
+ // Map the page directory, kernel space, and first page table
+ // into the new address space
+
+  u32 pentry = (u32)pmap | PAGING_RW | PAGING_PRES;
+
+  // recursively map the page map to itself
+
+  if(writePmapEntry(pmap, PDE_INDEX(PAGETAB), &pentry) != E_OK)
+    return E_FAIL;
+#if DEBUG
+
+  // map the first page table
+
+  if(writePmapEntry(pmap, 0, (void *)PAGEDIR) != E_OK)
+    return E_FAIL;
+#endif /* DEBUG */
+
+  // Copy any page tables in the kernel region of virtual memory from
+  // the bootstrap address space to the thread's address space
+
+  size_t bufSize = 4*(1023-PDE_INDEX(KERNEL_TCB_START));
+  void *buf = malloc(bufSize);
+
+  if(!buf)
+    return E_FAIL;
+  else if(peek(initKrnlPDir+4*PDE_INDEX(KERNEL_TCB_START), buf, bufSize) != E_OK
+     || poke(pmap+4*PDE_INDEX(KERNEL_TCB_START), buf, bufSize) != E_OK)
+  {
+    free(buf);
+    return E_FAIL;
+  }
+
+  free(buf);
+
+  return E_OK;
+}
+
 /**
   Zero out a page frame.
 

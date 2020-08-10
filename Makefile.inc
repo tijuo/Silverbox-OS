@@ -1,11 +1,7 @@
-# Set PREFIX to the path of the source dir (this one)
-
-PREFIX	=/media/Silverbox-OS
-
-INC_DIR=$(PREFIX)/include
+INC_DIR=$(SB_PREFIX)/include
 CC	=i686-elf-gcc
 AS	=i686-elf-as
-AS_I=nasm
+AS_I	=nasm
 LD	=i686-elf-ld
 AR	=i686-elf-ar
 AFLAGS	=--32
@@ -24,7 +20,7 @@ CMOREFLG=-Wall -Wextra -Wshadow -Wpointer-arith -Wsign-compare \
 	-Wsystem-headers -Wstrict-prototypes \
 	-Wunused-function -Wmissing-prototypes \
 	-Wmissing-declarations -Wimplicit -Wimplicit-int \
-  	-Wno-address-of-packed-member -Wno-expansion-to-defined
+	-Wno-address-of-packed-member -Wno-expansion-to-defined
 DEF_PHONY=all clean depend dep install
 
 #.SILENT :

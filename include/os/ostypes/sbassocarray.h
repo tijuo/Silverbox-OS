@@ -7,7 +7,7 @@ struct _SBPair
 {
   void *key;
   size_t keysize;
-  void *value;
+  const void *value;
   size_t valsize;
 };
 
@@ -41,20 +41,20 @@ struct _SBAssocArray
 
 typedef struct _SBAssocArray SBAssocArray;
 
-enum SBAssocArrayStatus { SBAssocArrayError=-1, SBAssocArrayFailed=-2, 
+enum SBAssocArrayStatus { SBAssocArrayError=-1, SBAssocArrayFailed=-2,
                           SBAssocArrayNotFound=-3, SBAssocArrayFull=-4 };
 
 int sbAssocArrayCopy( const SBAssocArray *array, SBAssocArray *copy );
 int sbAssocArrayCreate( SBAssocArray *array, size_t numBuckets );
 int sbAssocArrayDelete( SBAssocArray *array );
-int sbAssocArrayInsert( SBAssocArray *array, void *key, size_t keysize, 
-                        void *value, size_t valsize );
+int sbAssocArrayInsert( SBAssocArray *array, const void *key, size_t keysize,
+                        const void *value, size_t valsize );
 int sbAssocArrayKeys( const SBAssocArray *array, SBKey **keys, size_t *numKeys );
-int sbAssocArrayLookup( const SBAssocArray *array, void *key, size_t keysize, 
+int sbAssocArrayLookup( const SBAssocArray *array, const void *key, size_t keysize,
                         void **val, size_t *valsize );
 int sbAssocArrayMerge( const SBAssocArray *array1, const SBAssocArray *array2,
                        SBAssocArray *newArray );
-int sbAssocArrayRemove( SBAssocArray *array, void *key, size_t keysize,
+int sbAssocArrayRemove( SBAssocArray *array, const void *key, size_t keysize,
                         void **value, size_t *valsize );
 
 #endif /* SB_ASSOC_ARRAY_H */

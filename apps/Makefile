@@ -1,7 +1,6 @@
-include ../Makefile.inc
-include ../vars.mk
+include ../prefix.inc
 
-DIRS	=init_server shell
+DIRS	=init
 
 .PHONY:	$(DIRS) $(DEF_PHONY)
 
@@ -25,3 +24,7 @@ clean:
 	rm -f *.dbg
 	rm -f *.exe
 	for i in $(DIRS); do make -C $$i clean; done
+
+include ../Makefile.inc
+include ../vars.mk
+
