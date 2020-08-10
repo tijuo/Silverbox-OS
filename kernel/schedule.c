@@ -54,8 +54,11 @@ tcb_t *schedule(void)
 
   for( priority=HIGHEST_PRIORITY; priority >= priorityLimit; priority-- )
   {
-    if( queueDequeue(&runQueues[priority], (void **)&newThread) == E_OK )
+    if( !isQueueEmpty(&runQueues[priority])
+        && queueDequeue(&runQueues[priority], (void **)&newThread) == E_OK )
+    {
       break;
+    }
   }
 
   if(!newThread && !oldThread)

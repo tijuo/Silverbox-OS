@@ -57,8 +57,11 @@ struct AddrSpace *removeAddrSpace(paddr_t physAddr)
 
 int attachTid(struct AddrSpace *addrSpace, tid_t tid)
 {
-  if(!addrSpace || tid == NULL_TID )
+  if(tid == NULL_TID)
     return -1;
+
+  if(!addrSpace)
+    addrSpace = &initsrvAddrSpace;
 
   return sbAssocArrayInsert(&tidMap, &tid, sizeof tid, addrSpace, sizeof *addrSpace) == 0 ? 0 : -1;
 }

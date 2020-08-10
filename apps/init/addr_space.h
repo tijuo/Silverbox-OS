@@ -98,4 +98,8 @@ bool doesOverlap(const struct AddrSpace *addrSpace, const struct MemRegion *regi
 int setMapping(struct AddrSpace *addrSpace, addr_t virt, const page_t *page);
 int removeMapping(struct AddrSpace *addrSpace, addr_t virt);
 
+extern struct AddrSpace initsrvAddrSpace;
+extern SBAssocArray tidMap;     // tid -> AddrSpace
+extern SBAssocArray addrSpaces; // phys addr -> AddrSpace
+
 #endif /* ADDR_SPACE_H */

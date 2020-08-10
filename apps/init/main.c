@@ -17,8 +17,10 @@ void print(const char *);
 void printInt(int);
 void printHex(int);
 int initPageStack(multiboot_info_t *info, addr_t lastFreeKernelPage);
-static int loadElfExec(module_t *module);
+static int loadElfExe(module_t *module);
 static void handleMessage(msg_t *msg);
+
+extern void (*idle)(void);
 
 char *_digits = "0123456789abcdefghijklmnopqrntuvwxyz";
 
@@ -166,11 +168,6 @@ int initPageStack(multiboot_info_t *info, addr_t lastFreeKernelPage)
           for( ; freePage >= mmapBase && freePage < mmapBase + mmapLen; freePage += PAGE_SIZE, freePageCount++);
         else
         {
-          printInt(pagesNeeded);
-          print(" pages needed.\n");
-          printInt(pagesLeft);
-          print(" pages left.\n");
-
           if(sys_map(NULL, ptr, (pframe_t)(freePage >> 12), pagesNeeded, PM_READ_WRITE) != ESYS_OK)
           {
             print("Unable to allocate memory for free page stack.\n");
@@ -246,7 +243,7 @@ static void handleMessage(msg_t *msg)
   }
 }
 
-static int loadElfExec(module_t *module)
+static int loadElfExe(module_t *module)
 {
   unsigned phtab_count;
   elf_header_t *image;
@@ -356,28 +353,65 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
 
   if(initPageStack(info, lastFreeKernelPage) != 0)
     print("Unable to initialize the free page stack.\n");
-  else
-    print("Free page stack initialized.\n");
+
+  thread_info_t inInfo;
+
+  sys_read_thread(NULL_TID, TF_PMAP, &inInfo);
+
+  sbAssocArrayCreate(&tidMap, 2);
+  sbAssocArrayCreate(&addrSpaces, 2);
+
+  initAddrSpace(&initsrvAddrSpace, inInfo.rootPageMap);
+  addAddrSpace(&initsrvAddrSpace);
+
+  thread_info_t threadInfo =
+  {
+    .status = TCB_STATUS_READY
+  };
+
+  tid_t idleTid = sys_create_thread((addr_t)&idle, NULL, 0x00);
+
+  if(idleTid == NULL_TID)
+  {
+    print("Unable to create thread\n");
+    return 1;
+  }
+
+  if(attachTid(NULL, idleTid) != 0)
+  {
+    print("Unable to attach idle thread ");
+    printInt(idleTid);
+    print("\n");
+    return 1;
+  }
+  else if(sys_update_thread(idleTid, TF_STATUS, &threadInfo) != ESYS_OK)
+  {
+    print("Unable to start idle thread\n");
+    return 1;
+  }
 
   multiboot_info_t multibootStruct;
   module_t module;
 
   peek((addr_t)info, &multibootStruct, sizeof multibootStruct);
 
-  for(unsigned i=0; i < multibootStruct.mods_count; i++)
+  // XXX: assume the first module is the initial server (and skip it)
+
+  for(unsigned i=1; i < multibootStruct.mods_count; i++)
   {
-    peek(addr_t)multibootStruct.mods_addr + i*sizeof(module_t), &module, sizeof(module_t));
+    peek((addr_t)multibootStruct.mods_addr + i*sizeof(module_t), &module, sizeof(module_t));
+    loadElfExe(&module);
   }
 
-/*
   while(1)
   {
     msg_t msg =
     {
       .recipient = ANY_SENDER
     };
+    int code;
 
-    if(sys_receive(&msg, 1) >= 0)
+    if((code=sys_receive(&msg, 1)) == ESYS_OK)
     {
       print("Received a message from ");
 
@@ -393,6 +427,9 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
 
       handleMessage(&msg);
     }
+    else
+      print("sys_receive() failed with code: "), printInt(code), print("\n");
   }
-*/
+
+  return -1;
 }

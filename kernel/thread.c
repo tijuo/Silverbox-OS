@@ -292,7 +292,7 @@ tid_t getNewTID(void)
 
   lastTID++;
 
-  for(i=1; (getTcb(i)->threadState != INACTIVE && i < MAX_ATTEMPTS)
+  for(i=1; (getTcb(lastTID)->threadState != INACTIVE && i < MAX_ATTEMPTS)
       || !lastTID; lastTID += i*i);
 
   return (i == MAX_ATTEMPTS ? NULL_TID : lastTID);

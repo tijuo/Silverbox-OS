@@ -99,8 +99,6 @@ static int sysMap(ExecutionState *state)
     for(; numPages--; vAddr += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE : PAGE_SIZE,
                       pframe += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE / PAGE_SIZE : 1)
     {
-      kprintf("sysMap(): Mapping 0x%x -> 0x%x\n", vAddr, pframe << 12);
-
       if(readPmapEntry(addrSpace, PDE_INDEX(vAddr), &pde) != E_OK)
         return ESYS_FAIL;
 
@@ -234,7 +232,7 @@ static int sysCreateThread(ExecutionState *state)
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
     if(addrSpace == NULL)
-      addrSpace = getCR3();
+      addrSpace = getCR3() & ~0xFFF;
 
     tcb_t *newTcb = createThread(entry, (paddr_t)addrSpace, stackTop);
     return newTcb ? (int)getTid(newTcb) : ESYS_FAIL;
@@ -262,7 +260,7 @@ static int sysReadThread(ExecutionState *state)
 
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
-    tcb_t *tcb = getTcb(tid);
+    tcb_t *tcb = tid == NULL_TID ? currentThread : getTcb(tid);
 
     if(!tcb)
       return ESYS_ARG;
@@ -316,7 +314,10 @@ static int sysUpdateThread(ExecutionState *state)
 
     if(flags & TF_STATUS)
     {
-      info->status = tcb->threadState;
+      tcb->threadState = info->status;
+
+      if(info->status == READY)
+        attachRunQueue(tcb);
 
       if(tcb->threadState == WAIT_FOR_SEND || tcb->threadState == WAIT_FOR_RECV)
         info->waitTid = tcb->waitTid;
@@ -345,6 +346,8 @@ static int sysUpdateThread(ExecutionState *state)
 
     if(flags & TF_PRIORITY)
       setPriority(tcb, info->priority);
+
+    return ESYS_OK;
   }
   else
     return ESYS_PERM;

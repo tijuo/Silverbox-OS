@@ -1,4 +1,5 @@
 [global _start]
+[global idle]
 [extern main]
 
 %define SYS_EXIT	0
@@ -10,3 +11,6 @@ _start:
   mov  ebx, eax
   mov  eax, SYS_EXIT
   int 0x40
+
+idle:
+  jmp idle
