@@ -16,8 +16,8 @@ struct PendingExceptionMessage
 
 typedef struct PendingExceptionMessage pem_t;
 
-HOT(int sendMessage(tcb_t *sender, tid_t recipientTid, int block, int call));
-HOT(int receiveMessage(tcb_t *recipient, tid_t senderTid, int block));
+HOT(int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int block, int call));
+HOT(int receiveMessage(tcb_t *recipient, ExecutionState *state, tid_t senderTid, int block));
 int sendExceptionMessage(tcb_t * restrict sender, tid_t recipientTid,
                          pem_t * restrict message);
 

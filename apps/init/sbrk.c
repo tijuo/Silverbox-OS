@@ -2,7 +2,7 @@
 #include <os/syscalls.h>
 #include "phys_mem.h"
 
-#define MIN_INCREMENT	4*PAGE_SIZE
+#define MIN_INCREMENT	8*PAGE_SIZE
 #define MFAIL                ((void*)-1)
 
 /* XXX: This doesn't unmap memory due to negative increments. */
@@ -53,7 +53,7 @@ void *sbrk( int increment )
       prevHeap = (void *)((addr_t)prevHeap + PAGE_SIZE - ((addr_t)prevHeap & (PAGE_SIZE-1)));
 
     for(; addr < (addr_t)heapEnd; addr += PAGE_SIZE)
-      sys_map(NULL, addr, (pframe_t)(allocPhysPage() >> 12), 1, PM_READ_WRITE);
+      sys_map(NULL, addr, (pframe_t)(allocPhysPage() >> 12), 1/*((addr_t)heapEnd-addr) / PAGE_SIZE*/, PM_READ_WRITE);
   }
 
   return prevHeap;

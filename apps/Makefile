@@ -1,6 +1,6 @@
 include ../prefix.inc
 
-DIRS	=init
+DIRS	=init sender receiver
 
 .PHONY:	$(DIRS) $(DEF_PHONY)
 
@@ -14,6 +14,7 @@ shell:
 	make -C $@ all
 
 install: $(DIRS)
+	for i in $(DIRS); do make -C $$i install; done
 
 depend:
 	for i in $(DIRS); do make -C $$i depend; done

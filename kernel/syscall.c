@@ -275,16 +275,32 @@ static int sysReadThread(ExecutionState *state)
 
     if(flags & TF_REG_STATE)
     {
-      info->state.eax = tcb->execState.eax;
-      info->state.ebx = tcb->execState.ebx;
-      info->state.ecx = tcb->execState.ecx;
-      info->state.edx = tcb->execState.edx;
-      info->state.esi = tcb->execState.esi;
-      info->state.edi = tcb->execState.edi;
-      info->state.esp = tcb->execState.userEsp;
-      info->state.ebp = tcb->execState.ebp;
-      info->state.eflags = tcb->execState.eflags;
-      info->state.eip = tcb->execState.eip;
+      if(tcb == currentThread)
+      {
+        info->state.eax = state->eax;
+        info->state.ebx = state->ebx;
+        info->state.ecx = state->ecx;
+        info->state.edx = state->edx;
+        info->state.esi = state->esi;
+        info->state.edi = state->edi;
+        info->state.esp = state->userEsp;
+        info->state.ebp = state->ebp;
+        info->state.eflags = state->eflags;
+        info->state.eip = state->eip;
+      }
+      else
+      {
+        info->state.eax = tcb->execState.eax;
+        info->state.ebx = tcb->execState.ebx;
+        info->state.ecx = tcb->execState.ecx;
+        info->state.edx = tcb->execState.edx;
+        info->state.esi = tcb->execState.esi;
+        info->state.edi = tcb->execState.edi;
+        info->state.esp = tcb->execState.userEsp;
+        info->state.ebp = tcb->execState.ebp;
+        info->state.eflags = tcb->execState.eflags;
+        info->state.eip = tcb->execState.eip;
+      }
     }
 
     if(flags & TF_PMAP)
@@ -292,6 +308,8 @@ static int sysReadThread(ExecutionState *state)
 
     if(flags & TF_PRIORITY)
       info->priority = tcb->priority;
+
+    return ESYS_OK;
   }
   else
     return ESYS_PERM;
@@ -307,10 +325,10 @@ static int sysUpdateThread(ExecutionState *state)
 
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
-    tcb_t *tcb = getTcb(tid);
+    tcb_t *tcb = tid == NULL_TID ? currentThread : getTcb(tid);
 
     if(!tcb)
-      return ESYS_ARG;
+      return ESYS_FAIL;
 
     if(flags & TF_STATUS)
     {
@@ -325,16 +343,32 @@ static int sysUpdateThread(ExecutionState *state)
 
     if(flags & TF_REG_STATE)
     {
-      tcb->execState.eax = info->state.eax;
-      tcb->execState.ebx = info->state.eax;
-      tcb->execState.ecx = info->state.eax;
-      tcb->execState.edx = info->state.eax;
-      tcb->execState.esi = info->state.eax;
-      tcb->execState.edi = info->state.eax;
-      tcb->execState.userEsp = info->state.esp;
-      tcb->execState.ebp = info->state.ebp;
-      tcb->execState.eflags = info->state.eflags;
-      tcb->execState.eip = info->state.eip;
+      if(tcb == currentThread)
+      {
+        state->eax = info->state.eax;
+        state->ebx = info->state.eax;
+        state->ecx = info->state.eax;
+        state->edx = info->state.eax;
+        state->esi = info->state.eax;
+        state->edi = info->state.eax;
+        state->userEsp = info->state.esp;
+        state->ebp = info->state.ebp;
+        state->eflags = info->state.eflags;
+        state->eip = info->state.eip;
+      }
+      else
+      {
+        tcb->execState.eax = info->state.eax;
+        tcb->execState.ebx = info->state.eax;
+        tcb->execState.ecx = info->state.eax;
+        tcb->execState.edx = info->state.eax;
+        tcb->execState.esi = info->state.eax;
+        tcb->execState.edi = info->state.eax;
+        tcb->execState.userEsp = info->state.esp;
+        tcb->execState.ebp = info->state.ebp;
+        tcb->execState.eflags = info->state.eflags;
+        tcb->execState.eip = info->state.eip;
+      }
     }
 
     if(flags & TF_PMAP)
@@ -474,7 +508,7 @@ static int sysSend(ExecutionState *state)
   tid_t remoteTid = (tid_t)(state->eax >> 16);
   int isBlocking = (int)((state->eax & 0xFF) == SYS_SEND_WAIT);
 
-  switch(sendMessage(currentThread, remoteTid, isBlocking, 0))
+  switch(sendMessage(currentThread, state, remoteTid, isBlocking, 0))
   {
     case E_OK:
       return ESYS_OK;
@@ -493,7 +527,7 @@ static int sysCall(ExecutionState *state)
   tid_t remoteTid = (tid_t)(state->eax >> 16);
   int isBlocking = (int)((state->eax & 0xFF) == SYS_CALL_WAIT);
 
-  switch(sendMessage(currentThread, remoteTid, isBlocking, 1))
+  switch(sendMessage(currentThread, state ,remoteTid, isBlocking, 1))
   {
     case E_OK:
       return ESYS_OK;
@@ -539,7 +573,7 @@ int sysReceive(ExecutionState *state)
   tid_t senderTid = (tid_t)(state->eax >> 16);
   int isBlocking = (int)((state->eax & 0xFF) == SYS_RECEIVE_WAIT);
 
-  switch(receiveMessage(currentThread, senderTid, isBlocking))
+  switch(receiveMessage(currentThread, state, senderTid, isBlocking))
   {
     case E_OK:
       return ESYS_OK;
@@ -554,333 +588,6 @@ int sysReceive(ExecutionState *state)
   return ESYS_FAIL;
 }
 
-/*
-static int sysCreate(tcb_t *tcb, ...)
-{
-  if(getTid(tcb) != INIT_SERVER_TID)
-    return ESYS_PERM;
-
-  va_list vaargs;
-  va_start(vaargs, tcb);
-
-  int resource = va_arg(vaargs, int);
-  void *argBuffer = va_arg(vaargs, void *);
-
-  va_end(vaargs);
-
-  switch(resource)
-  {
-    case RES_MAPPING:
-    {
-      struct SyscallCreateMappingArgs *args = (struct SyscallCreateMappingArgs *)argBuffer;
-
-      if(likely(writePmapEntry(args->addrSpace,args->entry,args->buffer) == 0))
-        return ESYS_OK;
-      else
-        return ESYS_FAIL;
-    }
-    case RES_IHANDLER:
-    {
-      struct SyscallCreateIHandlerArgs *args = (struct SyscallCreateIHandlerArgs *)argBuffer;
-
-      if(likely(registerIrq(args->handler, args->irqNum) == 0))
-        return ESYS_OK;
-      else
-        return ESYS_FAIL;
-    }
-    case RES_TCB:
-    {
-      struct SyscallCreateTcbArgs *args = (struct SyscallCreateTcbArgs *)argBuffer;
-
-      if(unlikely(args == NULL))
-        return ESYS_ARG;
-
-      tcb_t *newTcb = createThread(args->entry, args->addrSpace,
-                   args->stack, args->exHandler);
-
-      if(unlikely(newTcb == NULL))
-        return ESYS_FAIL;
-      else if(unlikely(queueEnqueue(&runQueues[newTcb->priority], newTcb->tid, newTcb) != E_OK))
-      {
-        releaseThread(newTcb);
-        return ESYS_FAIL;
-      }
-      else
-        return ESYS_OK;
-    }
-    case RES_PORT:
-    {
-      struct SyscallCreatePortArgs *args = (struct SyscallCreatePortArgs *)argBuffer;
-      port_t *port;
-
-      if(args->port == NULL_PID)
-      {
-        port = createPort();
-        return port ? port->pid : ESYS_FAIL;
-      }
-      else
-      {
-      	port = getPort(args->port);
-
-      	if(!port)
-          return ESYS_FAIL;
-      	else
-      	{
-          port->owner = tcb;
-
-          return ESYS_OK;
-        }
-      }
-    }
-    default:
-      return ESYS_NOTIMPL;
-  }
-
-  return ESYS_FAIL;
-}
-
-static int sysRead(tcb_t *tcb, ...)
-{
-  if(getTid(tcb) != INIT_SERVER_TID)
-    return ESYS_PERM;
-
-  va_list vaargs;
-  va_start(vaargs, tcb);
-
-  int resource = va_arg(vaargs, int);
-  void *argBuffer = va_arg(vaargs, void *);
-
-  va_end(vaargs);
-
-  switch(resource)
-  {
-    case RES_MAPPING:
-    {
-      struct SyscallReadMappingArgs *args = (struct SyscallReadMappingArgs *)argBuffer;
-
-      if(likely(readPmapEntry(args->addrSpace, args->entry, args->buffer) == 0))
-        return ESYS_OK;
-      else
-        return ESYS_FAIL;
-    }
-    case RES_TCB:
-    {
-      struct SyscallReadTcbArgs *args = (struct SyscallReadTcbArgs *)argBuffer;
-
-      tcb_t *targetTcb = getTcb(args->tid);
-
-      if(!targetTcb)
-        return ESYS_FAIL;
-
-      args->tcb->addrSpace = targetTcb->rootPageMap;
-      args->tcb->status = targetTcb->threadState;
-      args->tcb->exHandler = targetTcb->exHandler;
-      args->tcb->priority = targetTcb->priority;
-      args->tcb->state.eax = targetTcb->execState.eax;
-      args->tcb->state.ebx = targetTcb->execState.ebx;
-      args->tcb->state.ecx = targetTcb->execState.ecx;
-      args->tcb->state.edx = targetTcb->execState.edx;
-      args->tcb->state.esi = targetTcb->execState.esi;
-      args->tcb->state.edi = targetTcb->execState.edi;
-      args->tcb->state.ebp = targetTcb->execState.ebp;
-      args->tcb->state.esp = targetTcb->execState.userEsp;
-      args->tcb->state.eip = targetTcb->execState.eip;
-      args->tcb->state.eflags = targetTcb->execState.eflags;
-
-      return ESYS_OK;
-    }
-    default:
-      return ESYS_NOTIMPL;
-  }
-
-  return ESYS_FAIL;
-}
-
-static int sysUpdate(tcb_t *tcb, ...)
-{
-  if(getTid(tcb) != INIT_SERVER_TID)
-    return ESYS_PERM;
-
-  va_list vaargs;
-  va_start(vaargs, tcb);
-
-  int resource = va_arg(vaargs, int);
-  void *argBuffer = va_arg(vaargs, void *);
-
-  va_end(vaargs);
-
-  switch(resource)
-  {
-    case RES_MAPPING:
-    {
-      struct SyscallUpdateMappingArgs *args = (struct SyscallUpdateMappingArgs *)argBuffer;
-
-      if(likely(writePmapEntry(args->addrSpace, args->entry, args->buffer) == 0))
-        return ESYS_OK;
-      else
-        return ESYS_FAIL;
-    }
-    case RES_TCB:
-    {
-      struct SyscallUpdateTcbArgs *args = (struct SyscallUpdateTcbArgs *)argBuffer;
-      tcb_t *targetTcb = getTcb(args->tid);
-
-      if(!targetTcb)
-        return ESYS_FAIL;
-
-      switch(args->tcb->status)
-      {
-        case RUNNING:
-        case SLEEPING:
-        case WAIT_FOR_SEND:
-        case WAIT_FOR_RECV:
-          return ESYS_FAIL;
-      }
-
-//    Don't update cr3 via sys_update
-//      args->tcb->rootPageMap = tcb->rootPageMap;
-
-      targetTcb->exHandler = args->tcb->exHandler;
-
-      if(targetTcb->threadState != args->tcb->status)
-      {
-        switch(targetTcb->threadState)
-        {
-          case READY:
-            if(detachRunQueue(targetTcb) != E_OK)
-              return ESYS_FAIL;
-            break;
-          case WAIT_FOR_SEND:
-            if(detachReceiveQueue(targetTcb, targetTcb->waitPort) != E_OK)
-              return ESYS_FAIL;
-            break;
-          case WAIT_FOR_RECV:
-            if(detachSendQueue(targetTcb, targetTcb->waitPort) != E_OK)
-              return ESYS_FAIL;
-            break;
-          case SLEEPING:
-            if(queueRemoveLast(&timerQueue, targetTcb->tid, NULL) != E_OK)
-              return ESYS_FAIL;
-            break;
-          default:
-            break;
-        }
-
-        targetTcb->priority = args->tcb->priority;
-
-        switch(args->tcb->priority)
-        {
-          case DEAD:
-            releaseThread(targetTcb);
-            return ESYS_OK;
-          case ZOMBIE:
-            targetTcb->threadState = ZOMBIE;
-            break;
-          case READY:
-            startThread(targetTcb);
-            break;
-          case PAUSED:
-            pauseThread(targetTcb);
-            break;
-          default:
-            return ESYS_FAIL;
-        }
-      }
-      else
-      {
-        if(targetTcb->threadState == READY)
-        {
-          detachRunQueue(targetTcb);
-          targetTcb->priority = args->tcb->priority;
-          attachRunQueue(targetTcb);
-        }
-        else
-          targetTcb->priority = args->tcb->priority;
-      }
-
-      targetTcb->execState.eax = args->tcb->state.eax;
-      targetTcb->execState.ebx = args->tcb->state.ebx;
-      targetTcb->execState.ecx = args->tcb->state.ecx;
-      targetTcb->execState.edx = args->tcb->state.edx;
-      targetTcb->execState.esi = args->tcb->state.esi;
-      targetTcb->execState.edi = args->tcb->state.edi;
-      targetTcb->execState.ebp = args->tcb->state.ebp;
-      targetTcb->execState.userEsp = args->tcb->state.esp;
-      targetTcb->execState.eip = args->tcb->state.eip;
-      targetTcb->execState.eflags = args->tcb->state.eflags;
-
-      return ESYS_OK;
-    }
-    default:
-      return ESYS_NOTIMPL;
-  }
-
-  return ESYS_NOTIMPL;
-}
-
-static int sysDestroy(tcb_t *tcb, ...)
-{
-  if(getTid(tcb) != INIT_SERVER_TID)
-    return ESYS_PERM;
-
-  va_list vaargs;
-  va_start(vaargs, tcb);
-
-  int resource = va_arg(vaargs, int);
-  void *argBuffer = va_arg(vaargs, void *);
-
-  va_end(vaargs);
-
-  switch(resource)
-  {
-    case RES_MAPPING:
-    {
-      int entry = 0;
-      struct SyscallDestroyMappingArgs *args = (struct SyscallDestroyMappingArgs *)argBuffer;
-
-      if(likely(writePmapEntry(args->addrSpace,args->entry,&entry) == 0))
-        return ESYS_OK;
-      else
-        return ESYS_FAIL;
-    }
-    case RES_IHANDLER:
-    {
-      struct SyscallDestroyIHandlerArgs *args = (struct SyscallDestroyIHandlerArgs *)argBuffer;
-      port_t *irqHandler = getPort(irqHandlers[args->irqNum]);
-
-      if(args->irqNum < 0 || args->irqNum >= NUM_IRQS || !irqHandler || irqHandler->owner != tcb)
-        return ESYS_FAIL;
-      else
-      {
-        unregisterIrq(args->irqNum);
-        return ESYS_OK;
-      }
-    }
-    case RES_TCB:
-    {
-      // release all owned ports
-      return ESYS_NOTIMPL;
-    }
-    case RES_PORT:
-    {
-      struct SyscallDestroyPortArgs *args = (struct SyscallDestroyPortArgs *)argBuffer;
-      port_t *port;
-
-      if(treeRemove(&portTree, args->port, (void **)&port) != E_OK)
-        return ESYS_FAIL;
-      else
-      {
-        free(port);
-        return ESYS_OK;
-      }
-    }
-    default:
-      return ESYS_NOTIMPL;
-  }
-
-  return ESYS_NOTIMPL;
-}
-*/
 // Handles a system call
 
 void _syscall( ExecutionState *execState )
@@ -901,7 +608,7 @@ void _syscall( ExecutionState *execState )
       if(retval != ESYS_OK)
         execState->eax = (dword)retval;
       else
-        execState->eax |= ESYS_OK;
+        execState->eax = (execState->eax & 0xFFFFFF00) | ESYS_OK;
       break;
     default:
       execState->eax = (dword)retval;

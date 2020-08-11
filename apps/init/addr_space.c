@@ -13,7 +13,7 @@ void initAddrSpace(struct AddrSpace *addrSpace, paddr_t physAddr)
 {
   addrSpace->physAddr = physAddr;
   sbArrayCreate(&addrSpace->memoryRegions);
-  sbAssocArrayCreate(&addrSpace->addressMap, 2);
+  sbAssocArrayCreate(&addrSpace->addressMap, 128);
 }
 
 void destroyAddrSpace(struct AddrSpace *addrSpace)

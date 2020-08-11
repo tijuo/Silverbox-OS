@@ -131,7 +131,8 @@ initPaging2:
   rep stosd
 
   mov ebx, kLowPageTab
-  mov ecx, 1		; Skip the first page (leave it as not present to catch NULL dereferences)
+  add ebx, 4
+  mov ecx, 0x1000		; Skip the first page (leave it as not present to catch NULL dereferences)
 
 .mapLowMemLoop:
   cmp ecx, videoRamStart

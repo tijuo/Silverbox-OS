@@ -7,7 +7,7 @@
 $(SB_PREFIX)/lib/libc.a:
 	make -C $(SB_PREFIX)/lib/ libc.a
 
-$(SB_PREFIX)/libos.a:
+$(SB_PREFIX)/lib/libos.a:
 	make -C $(SB_PREFIX)/lib/ libos.a
 
 dep:

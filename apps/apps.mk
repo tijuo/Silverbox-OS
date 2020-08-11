@@ -1,17 +1,17 @@
+include ../../prefix.inc
+
 OBJ     =$(SRC:.c=.o)
-INSTALL_DIR=programs/
+INSTALL_DIR=sbos/programs/
 
 all: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
 	make install
 
--include ../../Makefile.inc ../Makefile.inc
--include ../../vars.mk ../vars.mk
-
 $(OUTPUT): $(OBJ) $(SB_PREFIX)/lib/libc.a $(SB_PREFIX)/lib/libos.a
 	$(SB_PREFIX)/tools/makec.sh $(SRC) $(OUTPUT)
 
 install: $(OUTPUT)
+	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
 	$(SB_PREFIX)/tools/copy_files.sh $(OUTPUT) -d $(INSTALL_DIR)
 
 clean:
@@ -20,3 +20,7 @@ clean:
 	rm -f *.dbg
 	rm -f *.dmp
 	rm -f $(OUTPUT)
+
+-include ../../Makefile.inc ../Makefile.inc
+-include ../../vars.mk ../vars.mk
+

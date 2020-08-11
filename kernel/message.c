@@ -28,7 +28,7 @@ int attachSendQueue(tcb_t *sender, tid_t recipientTid)
   {
     return E_FAIL;
   }
-  else if(queuePush(recipient->senderWaitQueue, getTid(sender), sender) == E_OK)
+  else if(queueEnqueue(recipient->senderWaitQueue, getTid(sender), sender) == E_OK)
   {
     sender->threadState = WAIT_FOR_RECV;
     sender->waitTid = recipientTid;
@@ -58,7 +58,7 @@ int attachReceiveQueue(tcb_t *recipient, tid_t senderTid)
     return E_FAIL;
 
   if(sender
-     && queuePush(sender->receiverWaitQueue, getTid(recipient),
+     && queueEnqueue(sender->receiverWaitQueue, getTid(recipient),
                      recipient) != E_OK)
   {
     attachRunQueue(recipient);
@@ -104,8 +104,9 @@ int detachReceiveQueue(tcb_t *recipient)
 {
   tcb_t *sender = getTcb(recipient->waitTid);
 
-  if(sender && queueRemoveLast(sender->receiverWaitQueue,
+  if((sender && queueRemoveLast(sender->receiverWaitQueue,
                      getTid(recipient), NULL) == E_OK)
+     || (!sender && recipient->waitTid == NULL_TID))
   {
     recipient->waitTid = NULL_TID;
     recipient->threadState = PAUSED;
@@ -132,7 +133,7 @@ int detachReceiveQueue(tcb_t *recipient)
           E_BLOCK if no recipient is ready to receive (and not blocking).
 */
 
-int sendMessage(tcb_t *sender, tid_t recipientTid, int block, int call)
+int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int block, int call)
 {
   tid_t senderTid = getTid(sender);
   tcb_t *recipient;
@@ -158,12 +159,12 @@ int sendMessage(tcb_t *sender, tid_t recipientTid, int block, int call)
     if(startThread(recipient) != E_OK)
       return E_FAIL;
 
-    recipient->execState.eax = (dword)((senderTid << 16) | (sender->execState.eax & 0xFF00)) | ESYS_OK;
-    recipient->execState.ebx = sender->execState.ebx;
-    recipient->execState.ecx = sender->execState.ecx;
-    recipient->execState.edx = sender->execState.edx;
-    recipient->execState.esi = sender->execState.esi;
-    recipient->execState.edi = sender->execState.edi;
+    recipient->execState.eax = (dword)((senderTid << 16) | (state->eax & 0xFF00)) | ESYS_OK;
+    recipient->execState.ebx = state->ebx;
+    recipient->execState.ecx = state->ecx;
+    recipient->execState.edx = state->edx;
+    recipient->execState.esi = state->esi;
+    recipient->execState.edi = state->edi;
 
     return E_OK;
   }
@@ -227,7 +228,7 @@ int sendExceptionMessage(tcb_t * restrict sender, tid_t recipientTid,
           E_BLOCK if no messages are pending to be received (and non-blocking).
 */
 
-int receiveMessage( tcb_t *recipient, tid_t senderTid, int block )
+int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, int block )
 {
   tcb_t *sender = getTcb(senderTid);
   tid_t recipientTid = getTid(recipient);
@@ -242,18 +243,23 @@ int receiveMessage( tcb_t *recipient, tid_t senderTid, int block )
   }
 
   if(!sender && !isQueueEmpty(recipient->senderWaitQueue)) // receive message from anyone
-    sender = queueGetTail(recipient->senderWaitQueue);
+  {
+    if(queueDequeue(recipient->senderWaitQueue, (void *)&sender) != E_OK)
+      return E_FAIL;
+    //sender = queueGetTail(recipient->senderWaitQueue);
+    senderTid = getTid(sender);
+  }
 
   if(sender && sender->waitTid == recipientTid)
   {
     if(sender->threadState == WAIT_FOR_RECV)
     {
-      recipient->execState.eax = (senderTid << 16) | (sender->execState.eax & 0xFF00) | ESYS_OK;
-      recipient->execState.ebx = sender->execState.ebx;
-      recipient->execState.ecx = sender->execState.ecx;
-      recipient->execState.edx = sender->execState.edx;
-      recipient->execState.esi = sender->execState.esi;
-      recipient->execState.edi = sender->execState.edi;
+      state->eax = (senderTid << 16) | (sender->execState.eax & 0xFF00);
+      state->ebx = sender->execState.ebx;
+      state->ecx = sender->execState.ecx;
+      state->edx = sender->execState.edx;
+      state->esi = sender->execState.esi;
+      state->edi = sender->execState.edi;
 
       if((sender->execState.eax & 0xFF) == SYS_CALL_WAIT)
       {
@@ -267,19 +273,21 @@ int receiveMessage( tcb_t *recipient, tid_t senderTid, int block )
     {
       pem_t *message = &pendingMessageBuffer[senderTid];
 
-      recipient->execState.eax = (dword)((KERNEL_TID << 16) | (message->subject << 8)) | ESYS_OK;
-      recipient->execState.ebx = (dword)message->intNum;
-      recipient->execState.ecx = (dword)message->errorCode;
-      recipient->execState.edx = (dword)message->faultAddress;
-      recipient->execState.esi = (dword)message->who;
+      state->eax = (dword)((KERNEL_TID << 16) | (message->subject << 8));
+      state->ebx = (dword)message->intNum;
+      state->ecx = (dword)message->errorCode;
+      state->edx = (dword)message->faultAddress;
+      state->esi = (dword)message->who;
     }
+    else
+      return E_FAIL;
 
     return E_OK;
   }
   else if( !block )
   {
-    kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", recipientTid, recipient->execState.eip);
-    kprintf("EIP: 0x%x\n", *(dword *)(recipient->execState.ebp + 4));
+    kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", recipientTid, state->eip);
+    kprintf("EIP: 0x%x\n", *(dword *)(state->ebp + 4));
     return E_BLOCK;
   }
   else // no one is waiting to send to this local port, so wait

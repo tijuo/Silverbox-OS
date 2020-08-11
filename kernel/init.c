@@ -1245,6 +1245,7 @@ void init( multiboot_info_t * restrict info )
     {
       initServerImg = (addr_t)module->mod_start;
       initServerFound = true;
+      break;
     }
   }
 

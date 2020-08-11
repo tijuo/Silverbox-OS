@@ -5,8 +5,8 @@
 source `dirname $0`/set_variables.sh
 
 C_STUB="cstart"
-SIG="_sig"
-SIG2="_sig2"
+#SIG="_sig"
+#SIG2="_sig2"
 CFLAGS="-O0 -Wall -m32 -std=gnu99 -fno-builtin -nostdlib -ffreestanding -nostartfiles -nodefaultlibs"
 ASFLAGS="-O0 -f elf"
 
@@ -15,7 +15,7 @@ INCLUDES="$SB_PREFIX/include/ $SB_PREFIX/drivers/include/"
 EXIT_ON_WARN=1
 TOOLS="$SB_PREFIX/tools"
 LIBS="$SB_PREFIX/lib/"
-LIBGCC=`gcc --print-libgcc-file-name`
+LIBGCC=`i686-elf-gcc --print-libgcc-file-name`
 GCCLIBS=`dirname $LIBGCC`
 LDFLAGS="-melf_i386 --exclude-libs ALL -T $SB_PREFIX/cLink.ld --static -L$LIBS -L$GCCLIBS -( -lc -los -lgcc -)"
 
@@ -29,21 +29,21 @@ fi
     echo "Missing $C_STUB.c"
     exit 1
   fi
-  gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $TOOLS/$C_STUB.c -o $TOOLS/$C_STUB.o
+  i686-elf-gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $TOOLS/$C_STUB.c -o $TOOLS/$C_STUB.o
 #fi
 
-if ! [ -f "$TOOLS/$SIG2.asm" ]; then
-    echo "Missing $SIG2.asm"
-    exit 1
-  fi
-  nasm $ASFLAGS $TOOLS/$SIG2.asm -o $TOOLS/$SIG2.o
+#if ! [ -f "$TOOLS/$SIG2.asm" ]; then
+#    echo "Missing $SIG2.asm"
+#    exit 1
+#  fi
+#  nasm $ASFLAGS $TOOLS/$SIG2.asm -o $TOOLS/$SIG2.o
 
 #if ! [ -f "$TOOLS/$SIG.o" ]; then
-  if ! [ -f "$TOOLS/$SIG.c" ]; then
-    echo "Missing $SIG.c"
-    exit 1
-  fi
-  gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $TOOLS/$SIG.c -o $TOOLS/$SIG.o
+#  if ! [ -f "$TOOLS/$SIG.c" ]; then
+#    echo "Missing $SIG.c"
+#    exit 1
+#  fi
+#  gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $TOOLS/$SIG.c -o $TOOLS/$SIG.o
 #fi
 
 files="`echo $* | cut --complement -d ' ' -f $#`"
@@ -65,5 +65,5 @@ for name in $files; do
   fi
 done
 
-gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $files
-ld $obj $TOOLS/{$C_STUB,$SIG,$SIG2}.o $LDFLAGS -o $output
+i686-elf-gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $files
+i686-elf-ld $obj $TOOLS/$C_STUB.o $LDFLAGS -o $output

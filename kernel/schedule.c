@@ -57,6 +57,7 @@ tcb_t *schedule(void)
     if( !isQueueEmpty(&runQueues[priority])
         && queueDequeue(&runQueues[priority], (void **)&newThread) == E_OK )
     {
+      assert(newThread != NULL);
       break;
     }
   }
@@ -82,7 +83,10 @@ tcb_t *schedule(void)
     }
   }
   else
+  {
+    assert(oldThread != NULL);
     newThread = oldThread;
+  }
 
   incSchedCount();
 
@@ -96,7 +100,7 @@ void switchStacks(ExecutionState *state)
 {
   tcb_t *oldTcb = currentThread;
 
-  if(oldTcb && oldTcb->threadState != RUNNING)
+  if((oldTcb && (oldTcb->threadState != RUNNING || !oldTcb->quantaLeft)))
   {
     tcb_t *newTcb = schedule();
 

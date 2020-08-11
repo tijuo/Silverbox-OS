@@ -7,8 +7,8 @@
 
 #define PAGE_SIZE       4096
 
-char *physMap = (char *)0x200000;
-addr_t *freePageStack = (addr_t *)0xC00000, *freePageStackTop;
+char *physMap = (char *)0x800000;
+addr_t *freePageStack = (addr_t *)0x1000000, *freePageStackTop;
 static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys);
 
 addr_t allocPhysPage(void)
@@ -51,25 +51,21 @@ int peek( addr_t phys, void *buffer, size_t bytes )
 
 static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys)
 {
-  size_t offset, bytes;
+  size_t offset=(size_t)(phys & (PAGE_SIZE - 1));
+  size_t numPages = 1 + (((phys+len) & ~(PAGE_SIZE-1)) - (phys & ~(PAGE_SIZE-1))) / PAGE_SIZE;
 
-  if(len > 0x200000) // XXX: because of the address used for pageMap, we're unable to access more than 2 MB
+  if(len > 0x800000) // Unable to handle larger sizes due to location of physMap
     return -1;
 
-  for( size_t i=0; len; phys += bytes, i += bytes, len -= bytes )
-  {
-    offset = (size_t)(phys & (PAGE_SIZE - 1));
-    bytes = (len > PAGE_SIZE - offset) ? PAGE_SIZE - offset : len;
+  if(sys_map(NULL, (addr_t)physMap, phys >> 12, numPages, PM_READ_WRITE) != ESYS_OK)
+    return -1;
 
-    sys_map(NULL, (addr_t)physMap, phys >> 12, 1, PM_READ_WRITE);
+  if( readPhys )
+    memcpy(buffer, (void *)(physMap + offset), len);
+  else
+    memcpy((void *)(physMap + offset), buffer, len);
 
-    if( readPhys )
-      memcpy( (void *)((addr_t)buffer + i), (void *)(physMap + offset), bytes);
-    else
-      memcpy( (void *)(physMap + offset), (void *)((addr_t)buffer + i), bytes);
-
-    sys_unmap(NULL, (addr_t)physMap, 1);
-  }
+  sys_unmap(NULL, (addr_t)physMap, numPages);
 
   return 0;
 }

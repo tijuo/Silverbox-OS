@@ -150,7 +150,7 @@
 #define VALID_ELF(img)		({ __typeof__ (img) _img=(img); \
                                   (_img->identifier[EI_MAG0]  == ELFMAG0) \
 				&& (_img->identifier[EI_MAG1] == ELFMAG1) \
-                                && (_img->identifier[EI_MAG1] == ELFMAG2) \
+                                && (_img->identifier[EI_MAG2] == ELFMAG2) \
 				&& (_img->identifier[EI_MAG3] == ELFMAG3); })
 
 

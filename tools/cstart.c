@@ -1,10 +1,9 @@
 #include <oslib.h>
 #include <os/mutex.h>
-#include <os/signal.h>
+#include <os/syscalls.h>
 
 extern int main(int, char **);
 
-void __dummy_sig_handler(int signal, int code);
 /*
 struct StartArgs
 {
@@ -27,7 +26,7 @@ void printC( char c )
   static int i=0;
 
   while(mutex_lock(&print_lock))
-    __yield();
+    sys_wait(0);
 
   if( c == '\n' )
     i += 160 - (i % 160);
@@ -62,28 +61,15 @@ void printHex( int n )
   print(toHexString(n));
 }
 
-void __dummy_sig_handler(int signal, int code)
-{
-}
-
 void _start( /*struct StartArgs *start_args*/ )
 {
   int retVal;
 
   /* Init stuff here */
 
-//  _init_out_queue();
-//  _init_pct_table();
-
-  set_signal_handler( &__dummy_sig_handler );
-  __set_sig_handler( _default_sig_handler );
-
-//  if( start_args != NULL )
-//    retVal = main(start_args->argc, start_args->argv);
-//  else
     retVal = main(0, NULL);
 
   /* Cleanup stuff here */
 
-  __exit( retVal );
+  sys_exit( retVal );
 }

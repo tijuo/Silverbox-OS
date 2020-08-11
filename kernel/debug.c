@@ -814,6 +814,11 @@ void abort(void);
 
 void abort(void)
 {
-  kprintf("Debug Error: abort() has been called.");
+  addr_t stackFramePtr;
+
+  kprintf("Debug Error: abort() has been called.\n");
+  __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
+  dump_stack(stackFramePtr, getCR3());
+
   __asm__("hlt");
 }

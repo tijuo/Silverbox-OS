@@ -25,7 +25,7 @@
 
 #define KVIRT_TO_PHYS(x)	((x) - (KERNEL_VSTART-KERNEL_START))
 
-#define KERNEL_HEAP_START     ((addr_t)0xA0000000)
+#define KERNEL_HEAP_START     ((addr_t)0xD0000000)
 #define MIN_AMT               (4*PAGE_SIZE)
 #define KERNEL_HEAP_LIMIT     ((addr_t)0xF0000000)
 

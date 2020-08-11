@@ -2,14 +2,14 @@
 
 void *memcpy(void *dest, const void *src, size_t num)
 {
-  char *_dest=dest, *_src=(char *)src;
+  char *_dest=(char *)dest, *_src=(char *)src;
 
   if( src == NULL || dest == NULL )
     return NULL;
 
   while( num )
   {
-    *_dest++ = *_src++;
+    *(_dest++) = *(_src++);
     num--;
   }
 

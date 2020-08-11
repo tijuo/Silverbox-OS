@@ -1,6 +1,7 @@
 #include <kernel/struct.h>
 #include <kernel/error.h>
 #include <kernel/dlmalloc.h>
+#include <kernel/debug.h>
 
 /*
 static unsigned long _hash_func( unsigned char *key, size_t keysize )
@@ -186,6 +187,8 @@ int listInsertHead(list_t *list, int key, void *element)
   if(node == NULL)
     return E_FAIL;
 
+  assert(element != NULL);
+
   if(list->head != NULL && list->tail != NULL)
   {
     list->head->prev = node;
@@ -206,6 +209,8 @@ int listInsertTail(list_t *list, int key, void *element)
 
   if(node == NULL)
     return E_FAIL;
+
+  assert(element != NULL);
 
   if(list->head != NULL && list->tail != NULL)
   {
@@ -268,6 +273,7 @@ int listRemoveHead(list_t *list, void **elemPtr)
 
     if(elemPtr)
       *elemPtr = prevHead->elem;
+    assert(prevHead->elem);
 
     free(prevHead);
     return E_OK;
@@ -292,6 +298,7 @@ int listRemoveTail(list_t *list, void **elemPtr)
     if(elemPtr)
       *elemPtr = prevTail->elem;
 
+    assert(prevTail->elem);
     free(prevTail);
     return E_OK;
   }
@@ -317,6 +324,7 @@ int listRemoveFirst(list_t *list, int key, void **elemPtr)
       if(elemPtr)
         *elemPtr = node->elem;
 
+assert(node->elem);
       free(node);
       return E_OK;
     }
@@ -342,7 +350,7 @@ int listRemoveLast(list_t *list, int key, void **elemPtr)
 
       if(elemPtr)
         *elemPtr = node->elem;
-
+assert(node->elem);
       free(node);
       return E_OK;
     }

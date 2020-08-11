@@ -216,11 +216,14 @@ static void handleMessage(msg_t *msg)
         printInt(msg->data.i32[1]);
         break;
       default:
+        print("Unhandled message with subject: "), printHex(msg->subject), print("\n");
         break;
     }
   }
   else
   {
+    print("Received message with subject: "), printHex(msg->subject), print(" from "), printInt(msg->sender), print("\n");
+
     switch(msg->data.c8[0])
     {
       case MAP_REGION:
@@ -246,29 +249,36 @@ static void handleMessage(msg_t *msg)
 static int loadElfExe(module_t *module)
 {
   unsigned phtab_count;
-  elf_header_t *image;
+  elf_header_t *image=NULL;
   elf_pheader_t *pheader;
   tid_t tid;
   int fail=0;
   addr_t stackTop = (addr_t)0xC0000000;
   size_t modSize = module->mod_end-module->mod_start;
 
-  if(!module|| !(image=malloc(modSize)))
+  if(!module)
     return -1;
 
-  for(size_t offset=0; offset < modSize; offset += 0x200000u)
+  image = malloc(modSize);
+
+  if(!image)
+    return -1;
+
+  if(peek(module->mod_start, (void *)image, modSize) != ESYS_OK)
   {
-    if(peek(module->mod_start+offset, (void *)((unsigned int)image + offset),
-            MIN(modSize-offset, 0x200000u)) != ESYS_OK)
-    {
+    if(image)
       free(image);
-      return -1;
-    }
+
+    return -1;
   }
 
   if(!isValidElfExe(image))
   {
     print("Not a valid ELF executable.\n");
+
+    if(image)
+      free(image);
+
     return -1;
   }
 
@@ -323,7 +333,8 @@ static int loadElfExe(module_t *module)
 
     tid = sys_create_thread((addr_t)image->entry, pmap, stackTop);
 
-    if(tid == NULL_TID || attachTid(addrSpace, tid) != 0 || sys_update_thread(tid, TF_STATUS, &threadInfo) != 0)
+    if(tid == NULL_TID || attachTid(addrSpace, tid) != 0
+       || sys_update_thread(tid, TF_STATUS, &threadInfo) != ESYS_OK)
       fail = 1;
   }
 
@@ -341,8 +352,14 @@ static int loadElfExe(module_t *module)
     if(pmap)
       freePhysPage(pmap);
 
+    if(image)
+      free(image);
+
     return -1;
   }
+
+  if(image)
+    free(image);
 
   return 0;
 }
@@ -358,8 +375,8 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
 
   sys_read_thread(NULL_TID, TF_PMAP, &inInfo);
 
-  sbAssocArrayCreate(&tidMap, 2);
-  sbAssocArrayCreate(&addrSpaces, 2);
+  sbAssocArrayCreate(&tidMap, 512);
+  sbAssocArrayCreate(&addrSpaces, 512);
 
   initAddrSpace(&initsrvAddrSpace, inInfo.rootPageMap);
   addAddrSpace(&initsrvAddrSpace);
@@ -371,20 +388,8 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
 
   tid_t idleTid = sys_create_thread((addr_t)&idle, NULL, 0x00);
 
-  if(idleTid == NULL_TID)
-  {
-    print("Unable to create thread\n");
-    return 1;
-  }
-
-  if(attachTid(NULL, idleTid) != 0)
-  {
-    print("Unable to attach idle thread ");
-    printInt(idleTid);
-    print("\n");
-    return 1;
-  }
-  else if(sys_update_thread(idleTid, TF_STATUS, &threadInfo) != ESYS_OK)
+  if(idleTid == NULL_TID || attachTid(NULL, idleTid) != 0
+     || sys_update_thread(idleTid, TF_STATUS, &threadInfo) != ESYS_OK)
   {
     print("Unable to start idle thread\n");
     return 1;
@@ -400,7 +405,9 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
   for(unsigned i=1; i < multibootStruct.mods_count; i++)
   {
     peek((addr_t)multibootStruct.mods_addr + i*sizeof(module_t), &module, sizeof(module_t));
-    loadElfExe(&module);
+
+    if(loadElfExe(&module) != 0)
+      print("Unable to load elf module "), printInt(i), print("\n");
   }
 
   while(1)
@@ -428,7 +435,10 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
       handleMessage(&msg);
     }
     else
+    {
       print("sys_receive() failed with code: "), printInt(code), print("\n");
+      sys_wait(0);
+    }
   }
 
   return -1;

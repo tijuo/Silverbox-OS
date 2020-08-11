@@ -95,7 +95,13 @@ int handleKernelPageFault(int errorCode)
   pde_t mappedPde, *pde;
   u32 currentPDir = getCR3() & ~0x3FF;
 
-  kprintf("Handling heap page fault at 0x%x\n", faultAddr);
+  if(faultAddr < 0x1000)
+  {
+    kprintf("Error: NULL page access.\n");
+    return E_FAIL;
+  }
+
+  kprintf("Page fault at 0x%x\n", faultAddr);
 
   if(faultAddr >= PAGETAB)
     return E_FAIL;
@@ -230,8 +236,8 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
       __asm__("hlt\n");
       return;
     }
-    else
-      dump_regs( tcb, state, intNum, errorCode );
+//    else
+//      dump_regs( tcb, state, intNum, errorCode );
   }
   #endif
 
@@ -243,14 +249,20 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
     return;
   }
 
-  pem_t message = { EXCEPTION_MSG, intNum, getTid(tcb),
-                    errorCode, intNum == 14 ? getCR2() : 0 };
+  pem_t message = {
+    .subject = EXCEPTION_MSG,
+    .intNum = intNum,
+    .who    = getTid(tcb),
+    .errorCode = errorCode,
+    .faultAddress = intNum == 14 ? getCR2() : 0 };
 
   if(sendExceptionMessage(tcb, INIT_SERVER_TID, &message) != E_OK)
   {
     kprintf("Unable to send exception message to intial server\n");
+    dump_regs( tcb, state, intNum, errorCode );
+
     releaseThread(tcb);
   }
-  else
-    pauseThread(tcb);
+//  else
+//    pauseThread(tcb);
 }

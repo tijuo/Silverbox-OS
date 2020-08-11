@@ -210,6 +210,8 @@ tcb_t *createThread(addr_t entryAddr, paddr_t rootPmap, addr_t stack)
     RET_MSG(NULL, "Unable to initialize message queues.");
   }
 
+  kprintf("Created new thread at 0x%x\n", thread);
+
   thread->threadState = PAUSED;
   return thread;
 }
@@ -223,6 +225,8 @@ tcb_t *createThread(addr_t entryAddr, paddr_t rootPmap, addr_t stack)
 
 int releaseThread( tcb_t *thread )
 {
+  kprintf("Releasing thread 0x%x\n", thread);
+
   if( thread->threadState == INACTIVE )
     return E_OK;
 
