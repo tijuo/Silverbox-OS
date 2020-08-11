@@ -3,7 +3,9 @@
 
 #include <types.h>
 
-#define HEAP_START 0x10000000
+extern void *__end;
+
+#define HEAP_START (&__end)
 #define HEAP_LIMIT 0xB0000000
 #define PAGE_SIZE  4096
 

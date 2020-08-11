@@ -7,8 +7,8 @@
 
 #define PAGE_SIZE       4096
 
-char *physMap = (char *)0x800000;
-addr_t *freePageStack = (addr_t *)0x1000000, *freePageStackTop;
+char *physMap = (char *)0x200000;
+addr_t *freePageStack = (addr_t *)0xBF800000, *freePageStackTop;
 static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys);
 
 addr_t allocPhysPage(void)
@@ -54,7 +54,7 @@ static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys)
   size_t offset=(size_t)(phys & (PAGE_SIZE - 1));
   size_t numPages = 1 + (((phys+len) & ~(PAGE_SIZE-1)) - (phys & ~(PAGE_SIZE-1))) / PAGE_SIZE;
 
-  if(len > 0x800000) // Unable to handle larger sizes due to location of physMap
+  if(len > 0xE00000) // Unable to handle larger sizes due to location of physMap
     return -1;
 
   if(sys_map(NULL, (addr_t)physMap, phys >> 12, numPages, PM_READ_WRITE) != ESYS_OK)

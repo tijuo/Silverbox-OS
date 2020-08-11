@@ -2,7 +2,7 @@ OUTPUT_FORMAT("elf32-i386")
 ENTRY(_start)
 SECTIONS
 {
-  virtual = 0x400000;
+  virtual = 0x1000000;
 
   .text virtual : {
     __code = .;
@@ -23,6 +23,7 @@ SECTIONS
     __bss = .;
     *(.bss)
     *(.common)
+    . = ALIGN(4096);
   }
-    __end = .;
+  __end = .;
 }

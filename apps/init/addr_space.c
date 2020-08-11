@@ -5,6 +5,7 @@
 struct AddrSpace initsrvAddrSpace;
 SBAssocArray tidMap;     // tid -> AddrSpace
 SBAssocArray addrSpaces; // phys addr -> AddrSpace
+page_t *pageTable;
 
 /* Initializes an address space and its tables. The physical
    address is the address of the page directory. */
@@ -31,15 +32,15 @@ int addAddrSpace(struct AddrSpace *addrSpace)
         sizeof addrSpace->physAddr, addrSpace, sizeof *addrSpace) == 0 ? 0 : -1;
 }
 
-struct AddrSpace *lookupPhysAddr(paddr_t physAddr)
+struct AddrSpace *lookupPageMap(paddr_t physAddr)
 {
   struct AddrSpace *addrSpace;
 
   if( physAddr == NULL_PADDR )
     return &initsrvAddrSpace;
 
-  return sbAssocArrayLookup(&addrSpaces, (void *)&physAddr, sizeof(void *),
-        (void **)&addrSpace, NULL) < 0 ? NULL : addrSpace;
+  return sbAssocArrayLookup(&addrSpaces, (void *)&physAddr, sizeof physAddr,
+        (void **)&addrSpace, NULL) != 0 ? NULL : addrSpace;
 }
 
 struct AddrSpace *removeAddrSpace(paddr_t physAddr)
@@ -109,6 +110,11 @@ int attachAddrRegion(struct AddrSpace *addrSpace, const struct AddrRegion *addrR
 
 bool findAddress(const struct AddrSpace *addrSpace, addr_t addr)
 {
+  return getRegion(addrSpace, addr) != NULL ? true : false;
+}
+
+struct AddrRegion *getRegion(const struct AddrSpace *addrSpace, addr_t addr)
+{
   struct AddrRegion *addr_region;
 
   if(!addrSpace)
@@ -117,13 +123,13 @@ bool findAddress(const struct AddrSpace *addrSpace, addr_t addr)
   for( int i=0; i < sbArrayCount(&addrSpace->memoryRegions); i++ )
   {
     if( sbArrayElemAt(&addrSpace->memoryRegions, i, (void **)&addr_region, NULL) != 0 )
-      return false;
+      return NULL;
 
     if( regionDoesContain((unsigned int)addr, &addr_region->virtRegion) )
-      return true;
+      return addr_region;
   }
 
-  return false;
+  return NULL;
 }
 
 /* Checks to see if there's a region that overlaps another region in an address space */
@@ -159,15 +165,20 @@ int setMapping(struct AddrSpace *addrSpace, addr_t virt, const page_t *page)
   if(!addrSpace)
     addrSpace = &initsrvAddrSpace;
 
-  addr_t *key = malloc(sizeof(addr_t));
-
-  if(!key)
-    return -1;
-
-  *key = virt;
-
-  return (sbAssocArrayInsert(&addrSpace->addressMap, key, sizeof *key,
+  return (sbAssocArrayInsert(&addrSpace->addressMap, &virt, sizeof virt,
                         page, sizeof *page) == 0) ? 0 : -1;
+}
+
+int getMapping(struct AddrSpace *addrSpace, addr_t virt, page_t **page)
+{
+  virt &= ~(PAGE_SIZE - 1);
+
+  if(!addrSpace)
+    addrSpace = &initsrvAddrSpace;
+
+  return (sbAssocArrayLookup(&addrSpace->addressMap, &virt, sizeof virt,
+                        (void **)page, NULL) == 0) ? 0 : -1;
+
 }
 
 // Remove a mapping from a virtual address to a page

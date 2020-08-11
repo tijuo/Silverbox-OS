@@ -15,6 +15,8 @@
 				   addresses to any physical addresses. */
 #define REG_ZERO	16	// Clear an address range before mapping it.
 #define REG_NOEXEC	32	// Do not allow code execution on memory range
+#define REG_DOWN	64	// Grow region down instead of up (for stacks)
+#define REG_GUARD	128
 
 #define REG_RESD	0xF0000000 // Range is reserved and shouldn't be accessed. For internal use only.
 
@@ -34,6 +36,7 @@
 #define PAGE_WT			2	// write-through
 #define PAGE_WB			4	// write-back
 #define PAGE_NO_SWAP		8	// Unswappable page
+#define PAGE_RESD		16	// Reserved page
 
 /* A page can either exist in memory or on disk. Pages can originate in RAM or disk.
    Pages can be swapped from RAM to disk upon low memory conditions. */
@@ -87,7 +90,7 @@ struct Executable
 void initAddrSpace(struct AddrSpace *addrSpace, paddr_t physAddr);
 void destroyAddrSpace(struct AddrSpace *addrSpace);
 int addAddrSpace(struct AddrSpace *addrSpace);
-struct AddrSpace *lookupPhysAddr(paddr_t physAddr);
+struct AddrSpace *lookupPageMap(paddr_t physAddr);
 struct AddrSpace *removeAddrSpace(paddr_t physAddr);
 int attachTid(struct AddrSpace *addrSpace, tid_t tid);
 int detachTid(tid_t tid);
@@ -96,10 +99,13 @@ int attachAddrRegion(struct AddrSpace *addrSpace, const struct AddrRegion *addrR
 bool findAddress(const struct AddrSpace *addrSpace, addr_t addr);
 bool doesOverlap(const struct AddrSpace *addrSpace, const struct MemRegion *region);
 int setMapping(struct AddrSpace *addrSpace, addr_t virt, const page_t *page);
+int getMapping(struct AddrSpace *addrSpace, addr_t virt, page_t **page);
 int removeMapping(struct AddrSpace *addrSpace, addr_t virt);
+struct AddrRegion *getRegion(const struct AddrSpace *addrSpace, addr_t addr);
 
 extern struct AddrSpace initsrvAddrSpace;
 extern SBAssocArray tidMap;     // tid -> AddrSpace
 extern SBAssocArray addrSpaces; // phys addr -> AddrSpace
+extern page_t *pageTable;
 
 #endif /* ADDR_SPACE_H */

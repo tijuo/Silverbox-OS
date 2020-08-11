@@ -2,7 +2,7 @@
 #include <os/syscalls.h>
 #include "phys_mem.h"
 
-#define MIN_INCREMENT	8*PAGE_SIZE
+#define MIN_INCREMENT	4*PAGE_SIZE
 #define MFAIL                ((void*)-1)
 
 /* XXX: This doesn't unmap memory due to negative increments. */
@@ -34,10 +34,10 @@ void *sbrk( int increment )
   }
   else if(increment > 0
           && ((addr_t)heapEnd + increment > HEAP_LIMIT
-              || (addr_t)heapEnd + increment < HEAP_START))
+              || (addr_t)heapEnd + increment < (addr_t)HEAP_START))
   {
     heapEnd = (void *)HEAP_LIMIT;
-    heapSize = HEAP_LIMIT - HEAP_START;
+    heapSize = (size_t)HEAP_LIMIT - (size_t)HEAP_START;
   }
   else
   {
