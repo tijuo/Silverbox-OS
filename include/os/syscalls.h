@@ -3,6 +3,7 @@
 
 #include <types.h>
 #include <oslib.h>
+#include <os/msg/message.h>
 
 #define SYSCALL_INT             0x40
 
@@ -38,16 +39,16 @@
 #define PM_LARGE_PAGE           0x80
 #define PM_INVALIDATE           0x80000000
 
-#define PRIV_SUPER		0
-#define PRIV_PAGER		1
+#define PRIV_SUPER			0
+#define PRIV_PAGER			1
 
-#define ESYS_OK			     0
-#define ESYS_ARG		    -1
-#define ESYS_FAIL		    -2
-#define ESYS_PERM		    -3
-#define ESYS_BADCALL		-4
-#define ESYS_NOTIMPL		-5
-#define ESYS_NOTREADY   -6
+#define ESYS_OK			     	 0
+#define ESYS_ARG		    	-1
+#define ESYS_FAIL		    	-2
+#define ESYS_PERM		    	-3
+#define ESYS_BADCALL		    	-4
+#define ESYS_NOTIMPL		    	-5
+#define ESYS_NOTREADY               	-6
 
 #define ANY_SENDER		NULL_TID
 
@@ -56,38 +57,19 @@
 #define TF_REG_STATE		4
 #define TF_PMAP			8
 
-struct RegisterState
+typedef struct Tcb
 {
-  dword edi;
-  dword esi;
-  dword ebp;
-  dword ebx;
-  dword edx;
-  dword ecx;
-  dword eax;
+  int priority;
+  int status;
+  paddr_t rootPageMap;
+  tid_t waitTid;
 
-  dword eip;
-  dword cs;
-  dword eflags;
-  dword userEsp;
-  dword userSs;
-};
-
-typedef struct
-{
-  unsigned char subject;
-  union
+  struct State
   {
-    tid_t sender;
-    tid_t recipient;
-  };
-  union Payload
-  {
-    int i32[5];
-    short int i16[10];
-    char c8[20];
-  } data;
-} msg_t;
+    dword eax, ebx, ecx, edx, ebp, esp, edi, esi;
+    dword eip, eflags;
+  } state;
+} thread_info_t;
 
 void sys_exit(int code);
 int sys_send(const msg_t *msg, int block);
@@ -96,7 +78,7 @@ int sys_receive(msg_t *msg, int block);
 int sys_wait(unsigned int timeout);
 int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, size_t numPages, int flags);
 int sys_unmap(u32 rootPmap, addr_t vaddr, size_t numPages);
-int sys_create_thread(addr_t entry, u32 rootPmap, addr_t stackTop);
+tid_t sys_create_thread(tid_t tid, addr_t entry, u32 rootPmap, addr_t stackTop);
 int sys_destroy_thread(tid_t tid);
 int sys_read_thread(tid_t tid, int flags, thread_info_t *info);
 int sys_update_thread(tid_t tid, int flags, thread_info_t *info);

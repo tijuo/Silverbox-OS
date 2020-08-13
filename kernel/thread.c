@@ -12,23 +12,11 @@
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
 
-#define MAX_ATTEMPTS		1000
-
 tcb_t *initServerThread;
 tcb_t *currentThread;
 tcb_t *tcbTable=(tcb_t *)&kTcbStart;
-static tid_t lastTID=0;
-static tid_t getNewTID(void);
-
-tid_t getTid(const tcb_t *tcb)
-{
-  return (tcb ? (tcb - tcbTable) : NULL_TID);
-}
-
-tcb_t *getTcb(tid_t tid)
-{
-  return (tid == NULL_TID ? NULL : &tcbTable[tid]);
-}
+static int lastTid=GET_TID_START;
+static tid_t getNewTid(void);
 
 /** Starts a non-running thread
 
@@ -51,7 +39,6 @@ int startThread( tcb_t *thread )
     case SLEEPING:
       if(queueRemoveFirst(&timerQueue, getTid(thread), NULL) != E_OK)
         return E_FAIL;
-      thread->waitTid = NULL_TID;
       break;
     case WAIT_FOR_RECV:
       if(detachSendQueue(thread) != E_OK)
@@ -61,6 +48,7 @@ int startThread( tcb_t *thread )
     case WAIT_FOR_SEND:
       if(detachReceiveQueue(thread) != E_OK)
         return E_FAIL;
+      thread->waitTid = NULL_TID;
       break;
     case RUNNING:
       return E_FAIL;
@@ -99,6 +87,12 @@ int sleepThread( tcb_t *thread, int msecs )
 
   if( thread->threadState == READY && detachRunQueue( thread ) != E_OK)
     return E_FAIL;
+
+  if(msecs == 0)
+  {
+    thread->quantaLeft = 0;
+    return E_OK;
+  }
 
   timer_delta_t *timerDelta = malloc(sizeof(timer_delta_t));
 
@@ -152,17 +146,17 @@ int pauseThread( tcb_t *thread )
     @return The TCB of the newly created thread. NULL on failure.
 */
 
-tcb_t *createThread(addr_t entryAddr, paddr_t rootPmap, addr_t stack)
+tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t stack)
 {
   tcb_t * thread = NULL;
-  tid_t tid = getNewTID();
+  tid_t tid = (desiredTid == NULL_TID ? getNewTid() : desiredTid);
 
   if(!entryAddr)
     RET_MSG(NULL, "NULL entry addr")
   else if((rootPmap & 0xFFF) != 0)
     RET_MSG(NULL, "Invalid root page map address.")
   else if(tid == NULL_TID)
-    RET_MSG(NULL, "Unable to create new threads.");
+    RET_MSG(NULL, "Unable to create new thread.");
 
   if(rootPmap == NULL_PADDR)
     rootPmap = getCR3() & ~0x3FF;
@@ -171,8 +165,8 @@ tcb_t *createThread(addr_t entryAddr, paddr_t rootPmap, addr_t stack)
 
   thread = getTcb(tid);
 
-  if( !thread )
-    RET_MSG(NULL, "Unable allocate memory for a thread.")
+  if( thread->threadState != INACTIVE )
+    RET_MSG(NULL, "Thread is already active.")
 
   thread->priority = NORMAL_PRIORITY;
   thread->rootPageMap = (dword)rootPmap;
@@ -290,14 +284,15 @@ int releaseThread( tcb_t *thread )
   return E_OK;
 }
 
-tid_t getNewTID(void)
+tid_t getNewTid(void)
 {
-  unsigned int i;
+  int prevTid=lastTid++;
 
-  lastTID++;
+  do
+  {
+    if(lastTid == MAX_THREADS)
+      lastTid = GET_TID_START;
+  } while(lastTid != prevTid && getTcb(lastTid)->threadState != INACTIVE);
 
-  for(i=1; (getTcb(lastTID)->threadState != INACTIVE && i < MAX_ATTEMPTS)
-      || !lastTID; lastTID += i*i);
-
-  return (i == MAX_ATTEMPTS ? NULL_TID : lastTID);
+  return (tid_t)(lastTid == prevTid ? NULL_TID : lastTid);
 }

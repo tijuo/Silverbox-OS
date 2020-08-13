@@ -8,7 +8,185 @@
 #include <os/dev_interface.h>
 #include <os/device.h>
 #include <os/syscalls.h>
+#include <os/msg/message.h>
+#include <os/msg/init.h>
 
+addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags);
+addr_t unmapMem(addr_t addr, size_t length);
+pid_t createPort(pid_t port, int flags);
+pid_t destroyPort(pid_t port);
+int registerDriver(int major, int numDevices, int type, size_t blockSize);
+int unregisterDriver(int major);
+
+addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags)
+{
+  msg_t msg =
+  {
+    .subject = MAP_MEM,
+    .recipient = INIT_SERVER_TID
+  };
+
+  msg_t replyMsg;
+  struct MapRequest *request = (struct MapRequest *)&msg.data;
+  struct MapReply *reply = (struct MapReply *)&replyMsg.data;
+
+  request->addr = addr;
+  request->device = device;
+  request->length = length;
+  request->offset = offset;
+  request->flags = flags;
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+          && replyMsg.subject == REPLY_OK) ? reply->addr : NULL;
+}
+
+addr_t unmapMem(addr_t addr, size_t length)
+{
+  msg_t msg =
+  {
+    .subject = UNMAP_MEM,
+    .recipient = INIT_SERVER_TID
+  };
+
+  msg_t replyMsg;
+  struct UnmapRequest *request = (struct UnmapRequest *)&msg.data;
+
+  request->addr = addr;
+  request->length = length;
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+}
+
+pid_t createPort(pid_t pid, int flags)
+{
+  msg_t msg =
+  {
+    .subject = CREATE_PORT,
+    .recipient = INIT_SERVER_TID
+  };
+
+  msg_t replyMsg;
+  struct CreatePortRequest *request = (struct CreatePortRequest *)&msg.data;
+  struct CreatePortReply *reply = (struct CreatePortReply *)&replyMsg.data;
+
+  request->pid = pid;
+  request->flags = flags;
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+           && replyMsg.subject == REPLY_OK) ? reply->pid : NULL_PID;
+}
+
+pid_t destroyPort(pid_t port)
+{
+  msg_t msg =
+  {
+    .subject = DESTROY_PORT,
+    .recipient = INIT_SERVER_TID
+  };
+
+  msg_t replyMsg;
+  struct DestroyPortRequest *request = (struct DestroyPortRequest *)&msg.data;
+
+  request->port = port;
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+}
+
+int registerServer(int type)
+{
+  msg_t msg =
+  {
+    .subject = REGISTER_SERVER,
+    .recipient = INIT_SERVER_TID
+  };
+
+  msg_t replyMsg;
+  struct RegisterServerRequest *request = (struct RegisterServerRequest *)&msg.data;
+
+  request->type = type;
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+}
+
+int unregisterServer(void)
+{
+  msg_t msg =
+  {
+    .subject = UNREGISTER_SERVER,
+    .recipient = INIT_SERVER_TID
+  };
+
+  msg_t replyMsg;
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+}
+
+int registerName(const char *name)
+{
+  msg_t msg =
+  {
+    .subject = REGISTER_NAME,
+    .recipient = INIT_SERVER_TID,
+  };
+
+  if(!name)
+    return -1;
+
+  msg_t replyMsg;
+  struct RegisterNameRequest *request = (struct RegisterNameRequest *)&msg.data;
+
+  strncpy(request->name, name, sizeof request->name);
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+}
+
+tid_t lookupName(const char *name)
+{
+  msg_t msg =
+  {
+    .subject = LOOKUP_NAME,
+    .recipient = INIT_SERVER_TID
+  };
+
+  if(!name)
+    return -1;
+
+  msg_t replyMsg;
+  struct LookupNameRequest *request = (struct LookupNameRequest *)&msg.data;
+  struct LookupNameReply *reply = (struct LookupNameReply *)&msg.data;
+
+  strncpy(request->name, name, sizeof request->name);
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+           && replyMsg.subject == REPLY_OK) ? reply->tid : NULL_TID;
+}
+
+int unregisterName(const char *name)
+{
+  msg_t msg =
+  {
+    .subject = UNREGISTER_NAME,
+    .recipient = INIT_SERVER_TID
+  };
+
+  if(!name)
+    return -1;
+
+  msg_t replyMsg;
+  struct UnregisterNameRequest *request = (struct UnregisterNameRequest *)&msg.data;
+
+  strncpy(request->name, name, sizeof request->name);
+
+  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
+           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+}
+
+/*
 // Maps a physical address range to a virtual address range
 int mapMem( void *phys, void *virt, int numPages, int flags );
 
@@ -39,6 +217,7 @@ int registerDevice(int major, int numDevices,
 int lookupDevMajor(unsigned char major, struct DeviceRecord *record);
 
 int exec( char *filename, char *args );
+*/
 
 /*
 int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
@@ -65,6 +244,7 @@ void handleConnection( struct Message *msg )
 }
 */
 
+/*
 int mapMem( void *phys, void *virt, int numPages, int flags )
 {
   int retval;
@@ -103,6 +283,7 @@ int mapTid( tid_t tid, rspid_t pool_id )
   int retval = sys_call(&inMsg, &outMsg, 1);
   return retval < 0 ? -1 : outMsg.subject;
 }
+*/
 
 /*
 int createShmem( shmid_t shmid, unsigned pages, struct MemRegion *region,
@@ -207,6 +388,7 @@ tid_t lookupName( const char *name, size_t len )
 }
 */
 
+/*
 int registerDevice(int major, int numDevices, unsigned long blockLen, int flags)
 {
   msg_t inMsg =
@@ -252,7 +434,7 @@ int lookupDevMajor(unsigned char major, struct DeviceRecord *record)
 
   return result < 0 ? -1 : outMsg.subject;
 }
-
+*/
 /*
 int lookupDevName( const char *name, size_t name_len, struct Device *device )
 {

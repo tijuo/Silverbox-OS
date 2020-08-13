@@ -446,7 +446,7 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
   kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
 
   if( currentThread )
-    dump_regs((tcb_t *)currentThread, &currentThread->execState, 0, 0);
+    dump_regs((tcb_t *)currentThread, &currentThread->execState, -1, 0);
 
   if( badAssertHlt )
   {
@@ -477,12 +477,11 @@ void incSchedCount( void )
 
   if( currentThread )
   {
-    kprintAt("            ", 2, 0);
-    kprintAt( kitoa((int)getTid(currentThread), digits, 10, 0), 2, 0 );
-    kprintAt( kitoa((int)currentThread->priority, digits, 10, 0), 5, 0 );
-    kprintAt( "        ", 30, 0 );
-    kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 8, 0 );
-    kprintAt( kitoa(*(int *)&currentThread->rootPageMap, digits, 16, 0), 30, 0 );
+    kprintAt("tid:       pri:     quant:     cr3:         ", 2, 0);
+    kprintAt( kitoa((int)getTid(currentThread), digits, 10, 0), 7, 0 );
+    kprintAt( kitoa((int)currentThread->priority, digits, 10, 0), 18, 0 );
+    kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 28, 0 );
+    kprintAt( kitoa(currentThread->rootPageMap, digits, 16, 0), 37, 0 );
   }
 }
 
@@ -501,7 +500,8 @@ void incTimerCount( void )
   vidmem[0]++;
   vidmem[1] = 0x72;
 
-  kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 8, 0 );
+  kprintAt( "   ", 28, 0);
+  kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 28, 0 );
 }
 
 /// Blanks the screen
@@ -788,7 +788,7 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
 
   kprintf( "Thread CR3: 0x%x Current CR3: 0x%x\n", *(unsigned *)&thread->rootPageMap, getCR3() );
 
-  if( !execState )
+  if( !execState || intNum == -1)
   {
     __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
 

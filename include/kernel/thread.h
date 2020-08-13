@@ -20,8 +20,10 @@
 
 #define NUM_PROCESSORS   	1u
 
-#define	INITIAL_TID		((tid_t)1u)
-#define INIT_SERVER_TID		INITIAL_TID
+#define GET_TID_START		1024u
+
+#define getTid(tcb)		({ __typeof__ (tcb) _tcb=(tcb); (_tcb ? (_tcb - tcbTable) : NULL_TID); })
+#define getTcb(tid)		({ __typeof__ (tid) _tid=(tid); (_tid == NULL_TID ? NULL : &tcbTable[_tid]); })
 
 /* This assumes a uniprocessor system */
 
@@ -48,16 +50,13 @@ typedef struct TimerDelta
   tcb_t *thread;
 } timer_delta_t;
 
-tcb_t *createThread( addr_t threadAddr, paddr_t addrSpace, addr_t uStack );
+tcb_t *createThread( tid_t desiredTid, addr_t threadAddr, paddr_t addrSpace, addr_t uStack );
 int releaseThread( tcb_t *thread );
 
 int sleepThread( tcb_t *thread, int msecs );
 int startThread( tcb_t *thread );
 int pauseThread( tcb_t *thread );
 int sysYield( tcb_t *thread );
-
-tid_t getTid(const tcb_t *tcb);
-tcb_t *getTcb(tid_t tid);
 
 extern tcb_t *initServerThread, *initPagerThread;
 extern tcb_t *currentThread;

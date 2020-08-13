@@ -8,6 +8,8 @@
 #include <kernel/paging.h>
 #include <kernel/interrupt.h>
 #include <kernel/error.h>
+#include <os/msg/kernel.h>
+#include <os/msg/init.h>
 
 static int handleKernelPageFault(int errorCode);
 
@@ -101,7 +103,7 @@ int handleKernelPageFault(int errorCode)
     return E_FAIL;
   }
 
-  kprintf("Page fault at 0x%x\n", faultAddr);
+  //kprintf("Page fault at 0x%x\n", faultAddr);
 
   if(faultAddr >= PAGETAB)
     return E_FAIL;
@@ -120,7 +122,7 @@ int handleKernelPageFault(int errorCode)
       else
       {
         // If found, map it in this address space
-        if(mappedPde.present && currentPDir != initKrnlPDir)
+        if(mappedPde.present)
         {
           if(writePmapEntry((paddr_t)currentPDir, PDE_INDEX(faultAddr), &mappedPde) != E_OK)
             fail = 1;
@@ -256,6 +258,13 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
     .errorCode = errorCode,
     .faultAddress = intNum == 14 ? getCR2() : 0 };
 
+/*
+  if(state->cs == 0x08)
+  {
+    kprintf("Exception in kernel:\n");
+    dump_regs( tcb, state, intNum, errorCode );
+  }
+*/
   if(sendExceptionMessage(tcb, INIT_SERVER_TID, &message) != E_OK)
   {
     kprintf("Unable to send exception message to intial server\n");
@@ -263,6 +272,4 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
 
     releaseThread(tcb);
   }
-//  else
-//    pauseThread(tcb);
 }

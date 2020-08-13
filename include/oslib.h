@@ -12,10 +12,6 @@ extern "C" {
 #define INIT_EXHANDLER 		1
 #define INIT_SERVER		1
 
-#define EXCEPTION_MSG		0xF0
-#define IRQ_MSG			0xF1
-#define EXIT_MSG		0xF2
-
 #define PAGE_FAULT_MSG      	0x0E
 #define DIE_MSG		    	0xF1FE
 #define ALIVE_MSG	    	0xA1B2
@@ -23,10 +19,6 @@ extern "C" {
 #define NULL_PADDR          	((paddr_t)0xFFFFFFFFFFFFFFFFull)
 
 #define IRQ_ANY			-1
-
-#define REPLY_SUCCESS		0
-#define REPLY_FAIL		-2
-#define REPLY_ERROR		-1
 
 #define MFL_REQUEST		0x00
 #define MFL_REPLY		0x80
@@ -100,38 +92,11 @@ struct ExceptionInfo
   unsigned int_num, error_code, faultAddress;
 };
 
-struct Tcb
-{
-  int priority;
-  int status;
-  paddr_t rootPageMap;
-  tid_t waitTid;
-
-  struct State
-  {
-    dword eax, ebx, ecx, edx, ebp, esp, edi, esi;
-    dword eip, eflags;
-  } state;
-};
-
-typedef struct Tcb thread_info_t;
-
 struct ExitMsg
 {
   tid_t tid;
   int code;
 };
-
-typedef struct
-{
-  long arg[10];
-} SyscallArgs;
-
-//#define SAVE_REGS() asm __volatile__("push %ebx\n" "push %esi\n" "push %edi\n")
-
-//#define RESTORE_REGS() asm __volatile__("pop %edi\n" "pop %esi\n" "pop %ebx\n")
-
-//void _sysenter( int callNum, struct SysCallArgs *args );
 
 char *strdup(const char *str);
 char *strndup(const char *str, size_t n);

@@ -12,6 +12,8 @@
 #include <kernel/interrupt.h>
 #include <oslib.h>
 #include <os/syscalls.h>
+#include <os/msg/kernel.h>
+#include <os/msg/init.h>
 
 void _syscall(ExecutionState *state);
 static int sysReceive(ExecutionState *state);
@@ -225,16 +227,17 @@ static int sysUnmap(ExecutionState *state)
 
 static int sysCreateThread(ExecutionState *state)
 {
-  addr_t entry = (addr_t)state->ebx;
-  u32 addrSpace = (u32)state->ecx;
-  addr_t stackTop = (addr_t)state->edx;
+  tid_t desiredTid = (tid_t)state->ebx;
+  addr_t entry = (addr_t)state->ecx;
+  u32 addrSpace = (u32)state->edx;
+  addr_t stackTop = (addr_t)state->esi;
 
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
     if(addrSpace == NULL)
       addrSpace = getCR3() & ~0xFFF;
 
-    tcb_t *newTcb = createThread(entry, (paddr_t)addrSpace, stackTop);
+    tcb_t *newTcb = createThread(desiredTid, entry, (paddr_t)addrSpace, stackTop);
     return newTcb ? (int)getTid(newTcb) : ESYS_FAIL;
   }
   else
@@ -514,9 +517,9 @@ static int sysSend(ExecutionState *state)
       return ESYS_OK;
     case E_INVALID_ARG:
       return ESYS_ARG;
-    case -3:
+    case E_BLOCK:
       return ESYS_NOTREADY;
-    case -1:
+    case E_FAIL:
     default:
       return ESYS_FAIL;
   }
@@ -527,15 +530,15 @@ static int sysCall(ExecutionState *state)
   tid_t remoteTid = (tid_t)(state->eax >> 16);
   int isBlocking = (int)((state->eax & 0xFF) == SYS_CALL_WAIT);
 
-  switch(sendMessage(currentThread, state ,remoteTid, isBlocking, 1))
+  switch(sendMessage(currentThread, state, remoteTid, isBlocking, 1))
   {
     case E_OK:
       return ESYS_OK;
     case E_INVALID_ARG:
       return ESYS_ARG;
-    case -3:
+    case E_BLOCK:
       return ESYS_NOTREADY;
-    case -1:
+    case E_FAIL:
     default:
       return ESYS_FAIL;
   }
@@ -581,6 +584,7 @@ int sysReceive(ExecutionState *state)
       return ESYS_ARG;
     case E_BLOCK:
       return ESYS_NOTREADY;
+    case E_FAIL:
     default:
       return ESYS_FAIL;
   }

@@ -8,25 +8,34 @@ int main(void)
 {
   msg_t msg =
   {
-    .sender = 3,
+    .sender = ANY_SENDER,
   };
 
-  if(sys_receive(&msg, 1) == ESYS_OK)
+  while(1)
   {
-    print("Received a message with subject "), printInt(msg.subject), print(" from "), printInt(msg.sender), print("\n");
-
-    for(int i=0; i < 5; i++)
+    if(sys_receive(&msg, 1) == ESYS_OK)
     {
-      print("0x");
-      printHex(msg.data.i32[i]);
-       print(" ");
+      print("receiver: Received a message with subject "), printInt(msg.subject), print(" from "), printInt(msg.sender), print("\n");
+
+      if(msg.sender == 1026)
+      {
+        for(int i=0; i < 5; i++)
+        {
+          print("0x");
+          printHex(msg.data.i32[i]);
+          print(" ");
+        }
+        print("\n");
+        break;
+      }
+      else
+        msg.sender = ANY_SENDER;
     }
-    print("\n");
-  }
-  else
-  {
-    print("Error. Unable to receive message");
-    return 1;
+    else
+    {
+      print("Error. Unable to receive message");
+      return 1;
+    }
   }
 
   return 0;

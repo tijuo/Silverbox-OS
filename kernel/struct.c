@@ -273,7 +273,6 @@ int listRemoveHead(list_t *list, void **elemPtr)
 
     if(elemPtr)
       *elemPtr = prevHead->elem;
-    assert(prevHead->elem);
 
     free(prevHead);
     return E_OK;
@@ -298,7 +297,6 @@ int listRemoveTail(list_t *list, void **elemPtr)
     if(elemPtr)
       *elemPtr = prevTail->elem;
 
-    assert(prevTail->elem);
     free(prevTail);
     return E_OK;
   }
@@ -324,7 +322,6 @@ int listRemoveFirst(list_t *list, int key, void **elemPtr)
       if(elemPtr)
         *elemPtr = node->elem;
 
-assert(node->elem);
       free(node);
       return E_OK;
     }
@@ -350,7 +347,7 @@ int listRemoveLast(list_t *list, int key, void **elemPtr)
 
       if(elemPtr)
         *elemPtr = node->elem;
-assert(node->elem);
+
       free(node);
       return E_OK;
     }

@@ -107,16 +107,17 @@ int sys_unmap(u32 rootPmap, addr_t vaddr, size_t numPages)
   return retval;
 }
 
-int sys_create_thread(addr_t entry, u32 rootPmap, addr_t stackTop)
+tid_t sys_create_thread(tid_t tid, addr_t entry, u32 rootPmap, addr_t stackTop)
 {
   int retval;
 
   __asm__ __volatile__("int %1" : "=a"(retval)
                                 : "i"(SYSCALL_INT),
-                                  "a"(SYS_CREATE_THREAD), "b"(entry),
-                                  "c"(rootPmap), "d"(stackTop));
+                                  "a"(SYS_CREATE_THREAD), "b"(tid),
+                                  "c"(entry),
+                                  "d"(rootPmap), "S"(stackTop));
 
-  return retval;
+  return (tid_t)retval;
 }
 
 int sys_destroy_thread(tid_t tid)

@@ -36,7 +36,7 @@ kernel.tmp: $(OBJ) asm_objs
 
 kernel.gz: $(OBJ) asm_objs
 	$(LD) $(LDFLAGS) -s -S *.o asm/*.o -o kernel && \
-	gzip -k kernel
+	gzip -k -f kernel
 
 #memory.o: memory.c
 #	$(CC) -O2 -c $(CFLAGS) -I$(INC_DIR) $< -o $@

@@ -88,16 +88,21 @@ tcb_t *schedule(void)
     newThread = oldThread;
   }
 
-  incSchedCount();
-
   newThread->threadState = RUNNING;
   newThread->quantaLeft = newThread->priority + 1;
+
+  incSchedCount();
 
   return newThread;
 }
 
 void switchStacks(ExecutionState *state)
 {
+  // No need to switch stacks if going back into kernel code
+
+  if(state->cs == KCODE)
+    return;
+
   tcb_t *oldTcb = currentThread;
 
   if((oldTcb && (oldTcb->threadState != RUNNING || !oldTcb->quantaLeft)))
@@ -217,10 +222,10 @@ void timerInt(UNUSED_PARAM ExecutionState *state)
   tcb_t *wokenThread;
   timer_delta_t *timerDelta;
 
-  incTimerCount();
-
   if( currentThread && currentThread->quantaLeft )
     currentThread->quantaLeft--;
+
+  incTimerCount();
 
   if(!isQueueEmpty(&timerQueue))
   {
@@ -231,7 +236,7 @@ void timerInt(UNUSED_PARAM ExecutionState *state)
 
     for(; !isQueueEmpty(&timerQueue) && timerDelta->delta == 0; )
     {
-      assert( queuePop(&timerQueue, (void **)&timerDelta) == E_OK );
+      queuePop(&timerQueue, (void **)&timerDelta);
 
       wokenThread = timerDelta->thread;
 

@@ -4,7 +4,7 @@ int main(void)
 {
   msg_t msg =
   {
-    .recipient = 4,
+    .recipient = 1027,
     .subject = 69,
     .data =
     {
@@ -12,7 +12,7 @@ int main(void)
     }
   };
 
-  sys_wait(1000);
+  sys_wait(500);
 
   if(sys_send(&msg, 1) == ESYS_OK)
     return 0;

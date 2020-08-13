@@ -20,7 +20,7 @@ void *sbrk( int increment )
   {
     heapStart = heapEnd = prevHeap = (void *)HEAP_START;
 
-    if( allocatePages((void *)heapStart, 1 ) < 0 )
+    if( mapMem((addr_t) heapStart, 0, PAGE_SIZE, 0, 0) != 0 )
     {
       errno = -ENOMEM;
       return (void *)-1;
@@ -37,7 +37,7 @@ void *sbrk( int increment )
 
   if( pages > 0 )
   {
-    if( allocatePages( (void *)(((unsigned)prevHeap & ~(PAGE_SIZE - 1)) + PAGE_SIZE), pages ) < 0 )
+    if( mapMem((addr_t)(((unsigned)prevHeap & ~(PAGE_SIZE - 1)) + PAGE_SIZE), 0, PAGE_SIZE*pages, 0, 0) != 0 )
     {
       errno = -ENOMEM;
       return (void *)-1;

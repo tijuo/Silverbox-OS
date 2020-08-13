@@ -16,6 +16,7 @@
 #include <oslib.h>
 #include <kernel/dlmalloc.h>
 #include <kernel/error.h>
+#include <os/msg/init.h>
 
 #include <kernel/io.h>
 #include <os/variables.h>
@@ -937,7 +938,7 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
     return NULL;
   }
 
-  thread = createThread( (addr_t)image.entry, addrSpace, uStack );
+  thread = createThread( INIT_SERVER_TID, (addr_t)image.entry, addrSpace, uStack );
 
   if( thread == NULL )
   {
@@ -1185,6 +1186,26 @@ void initStructures(void)
 
   queueInit(&timerQueue);
   pendingMessageBuffer = malloc(sizeof(pem_t)*MAX_THREADS);
+
+  // Map every page table in the kernel's region of memory. This will be copied
+  // whenever a new address space is created, so that the kernel will be present
+  // in each.
+
+  for( addr_t addr=(addr_t)KERNEL_TCB_START; addr < PAGETAB; addr += PAGE_TABLE_SIZE )
+  {
+    pde_t *pdePtr = ADDR_TO_PDE(addr);
+
+    if(!pdePtr->present)
+    {
+      paddr_t phys = allocPageFrame();
+
+      clearPhysPage(phys);
+      pdePtr->base = (u32)phys >> 12;
+      pdePtr->rwPriv = 1;
+      pdePtr->usPriv = 0;
+      pdePtr->present = 1;
+    }
+  }
 }
 
 /**

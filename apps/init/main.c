@@ -9,6 +9,9 @@
 #include "pager.h"
 #include <os/elf.h>
 #include <os/services.h>
+#include <os/msg/message.h>
+#include <os/msg/init.h>
+#include <os/msg/kernel.h>
 
 #define STACK_TOP		0xC0000000
 
@@ -21,7 +24,7 @@ void printHex(int);
 int initPageStack(multiboot_info_t *info, addr_t lastFreeKernelPage);
 static int loadElfExe(module_t *module);
 static void handleMessage(msg_t *msg);
-tid_t createNewThread(addr_t entry, addr_t pageMap, addr_t stackTop);
+tid_t createNewThread(tid_t desiredTid, addr_t entry, addr_t pageMap, addr_t stackTop);
 
 extern void (*idle)(void);
 int startThread(tid_t tid);
@@ -200,10 +203,11 @@ static void handleMessage(msg_t *msg)
     {
       case EXCEPTION_MSG:
       {
-        addr_t faultAddr = msg->data.i32[2];
-        tid_t tid = msg->data.i32[3];
-        int intNum = msg->data.i32[0];
-        int errorCode = msg->data.i32[1];
+        struct ExceptionMessage *exMessage = (struct ExceptionMessage *)&msg->data;
+        addr_t faultAddr = exMessage->faultAddress;
+        tid_t tid = exMessage->who;
+        int intNum = exMessage->intNum;
+        int errorCode = exMessage->errorCode;
 /*
         print("Exception ");
         printInt(intNum);
@@ -214,14 +218,12 @@ static void handleMessage(msg_t *msg)
 */
         if(intNum == 14)
         {
-/*
-          print(" Fault address: 0x");
-          printHex(faultAddr);
-          print("\n");
-*/
           if(!(errorCode & 0x4))
           {
-            print("Illegal access to supervisor memory.\n");
+          print(" Fault address: 0x");
+          printHex(faultAddr);
+
+            print(" Illegal access to supervisor memory.\n");
             break;
           }
 
@@ -279,14 +281,18 @@ static void handleMessage(msg_t *msg)
           else
             print("Fault address not found in mapping.\n");
         }
+        print("\n");
         break;
       }
       case EXIT_MSG:
+      {
+        struct ExitMessage *exitMsg = (struct ExitMessage *)&msg->data;
         print("TID ");
-        printInt(msg->data.i32[3]);
+        printInt(exitMsg->who);
         print(" exited with status code: ");
-        printInt(msg->data.i32[1]);
+        printInt(exitMsg->statusCode);
         break;
+       }
       default:
         print("Unhandled message with subject: "), printHex(msg->subject), print("\n");
         break;
@@ -294,17 +300,15 @@ static void handleMessage(msg_t *msg)
   }
   else
   {
-    print("Received message with subject: "), printHex(msg->subject), print(" from "), printInt(msg->sender), print("\n");
+    print("init: Received message with subject: "), printHex(msg->subject), print(" from "), printInt(msg->sender), print("\n");
 
     switch(msg->data.c8[0])
     {
-      case MAP_REGION:
+      case MAP_MEM:
         break;
-      case UNMAP_REGION:
+      case UNMAP_MEM:
         break;
       case CREATE_PORT:
-        break;
-      case LISTEN_PORT:
         break;
       case DESTROY_PORT:
         break;
@@ -312,16 +316,26 @@ static void handleMessage(msg_t *msg)
         break;
       case RECEIVE_MESSAGE:
         break;
+      case REGISTER_SERVER:
+        break;
+      case UNREGISTER_SERVER:
+        break;
+      case REGISTER_NAME:
+        break;
+      case LOOKUP_NAME:
+        break;
+      case UNREGISTER_NAME:
+        break;
       default:
         break;
     }
   }
 }
 
-tid_t createNewThread(addr_t entry, addr_t pageMap, addr_t stackTop)
+tid_t createNewThread(tid_t desiredTid, addr_t entry, addr_t pageMap, addr_t stackTop)
 {
   struct AddrSpace *addrSpace = lookupPageMap(pageMap);
-  tid_t tid = sys_create_thread(entry, pageMap, stackTop);
+  tid_t tid = sys_create_thread(desiredTid, entry, pageMap, stackTop);
 
   if(tid == NULL_TID || attachTid(addrSpace, tid) != 0)
     return NULL_TID;
@@ -411,7 +425,7 @@ static int loadElfExe(module_t *module)
 
   if(!fail)
   {
-    tid = createNewThread((addr_t)image->entry, pmap, stackTop);
+    tid = createNewThread(NULL_TID, (addr_t)image->entry, pmap, stackTop);
 
     if(tid == NULL_TID)
       fail = 1;
@@ -488,7 +502,7 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
   initAddrSpace(&initsrvAddrSpace, inInfo.rootPageMap);
   addAddrSpace(&initsrvAddrSpace);
 
-  tid_t idleTid = createNewThread((addr_t)&idle, NULL, 0x00);
+  tid_t idleTid = createNewThread(NULL_TID, (addr_t)&idle, NULL, 0x00);
 
   if(idleTid == NULL_TID || startThread(idleTid) != 0)
   {

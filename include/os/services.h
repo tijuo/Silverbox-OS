@@ -7,30 +7,34 @@
 #include <os/vfs.h>
 
 #define MAP_MEM			1
-#define REGISTER_NAME		2
-#define LOOKUP_NAME		3
-#define LOOKUP_TID		4
-#define MAP_TID			5
-#define CREATE_SHM		6
-#define ATTACH_SHM_REG		7
-#define DETACH_SHM_REG		8
-#define DELETE_SHM		9
-#define CONNECT_REQ		10
-#define UNREGISTER_NAME		11
-#define CHANGE_IO_PERM		12
-#define DEV_REGISTER            13
-#define DEV_LOOKUP_MAJOR        14
-#define DEV_LOOKUP_NAME         15
-#define DEV_UNREGISTER		16
-#define EXEC			17
+#define UNMAP_MEM		2
+#define REGISTER_SERVER		3
+#define UNREGISTER_SERVER	4
 
-#define MAP_REGION		18
-#define UNMAP_REGION		19
-#define CREATE_PORT		20
-#define LISTEN_PORT		21
-#define DESTROY_PORT		22
-#define SEND_MESSAGE		23
-#define RECEIVE_MESSAGE		24
+#define REGISTER_NAME		9
+#define LOOKUP_NAME		10
+//#define LOOKUP_TID		4
+//#define MAP_TID			5
+//#define CREATE_SHM		6
+//#define ATTACH_SHM_REG		7
+//#define DETACH_SHM_REG		8
+//#define DELETE_SHM		9
+//#define CONNECT_REQ		10
+#define UNREGISTER_NAME		11
+//#define CHANGE_IO_PERM		12
+//#define DEV_REGISTER            13
+//#define DEV_LOOKUP_MAJOR        14
+//#define DEV_LOOKUP_NAME         15
+//#define DEV_UNREGISTER		16
+//#define EXEC			17
+
+//#define MAP_REGION		18
+//#define UNMAP_REGION		19
+#define CREATE_PORT		5
+//#define LISTEN_PORT		21
+#define DESTROY_PORT		6
+#define SEND_MESSAGE		7
+#define RECEIVE_MESSAGE		8
 
 
 #define GEN_REPLY_TYPE		0x80000000
@@ -107,16 +111,27 @@ struct ConnectArgs
 } __PACKED__;
 */
 
-int mapMem( void *phys, void *virt, int numPages, int flags );
-int allocatePages( void *address, int numPages );
+addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags);
+addr_t unmapMem(addr_t addr, size_t length);
+pid_t createPort(pid_t port, int flags);
+pid_t destroyPort(pid_t port);
+int registerServer(int type);
+int unregisterServer(void);
+int registerName(const char *name);
+tid_t lookupName(const char *name);
+int unregisterName(const char *name);
 
+//int mapMem( void *phys, void *virt, int numPages, int flags );
+//int allocatePages( void *address, int numPages );
+
+/*
 int registerDevice(int major, int numDevices,
   unsigned long blockLen, int flags);
 
 int lookupDevMajor(unsigned char major, struct DeviceRecord *record);
 
 int changeIoPerm( unsigned start, unsigned stop, int set );
-
+*/
 //int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
 //int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
 
