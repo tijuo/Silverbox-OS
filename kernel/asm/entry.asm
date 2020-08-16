@@ -92,7 +92,7 @@ EXPORT start
   call   init
   jmp idle
 
-videoRamStart equ 0xA0000
+videoRamStart equ 0xB8000
 videoBiosStart equ 0xC0000
 
 initPaging2:

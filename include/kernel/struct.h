@@ -7,29 +7,29 @@ struct ListNode
   void *elem;
   struct ListNode *next, *prev;
 };
-
+/*
 struct TreeNode
 {
   int key;
   void *elem;
   struct TreeNode *left, *right, *parent;
 };
-
+*/
 typedef struct ListNode list_node_t;
-typedef struct TreeNode tree_node_t;
+//typedef struct TreeNode tree_node_t;
 
 struct List
 {
   list_node_t *head, *tail;
 };
-
+/*
 struct Tree
 {
   tree_node_t *root;
 };
-
+*/
 typedef struct List list_t;
-typedef struct Tree tree_t;
+//typedef struct Tree tree_t;
 
 int listInit(list_t *list);
 int listDestroy(list_t *list);
@@ -43,12 +43,13 @@ int listRemoveAll(list_t *list, int key);
 int listRemoveHead(list_t *list, void **elemPtr);
 int listRemoveTail(list_t *list, void **elemPtr);
 
+/*
 int treeInit(tree_t *tree);
 int treeDestroy(tree_t *tree);
 int treeInsert(tree_t *tree, int key, void *element);
 int treeFind(tree_t *tree, int key, void **elemPtr);
 int treeRemove(tree_t *tree, int key, void **elemPtr);
-
+*/
 #define queue_t			list_t
 #define queueInit		listInit
 #define queueEnqueue		listInsertHead

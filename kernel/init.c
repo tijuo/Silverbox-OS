@@ -10,7 +10,6 @@
 #include <kernel/paging.h>
 #include <kernel/memory.h>
 #include <kernel/mm.h>
-#include <kernel/rtc.h>
 #include <kernel/pit.h>
 #include <kernel/pic.h>
 #include <oslib.h>
@@ -60,7 +59,7 @@ static int DISC_CODE(initMemory( multiboot_info_t *info ));
 static void DISC_CODE(setupGDT(void));
 static void DISC_CODE(stopInit(const char *));
 static void DISC_CODE(bootstrapInitServer(multiboot_info_t *info));
-void DISC_CODE(init(multiboot_info_t * restrict));
+void DISC_CODE(init(multiboot_info_t *));
 static void DISC_CODE(initPIC( void ));
 static int DISC_CODE(memcmp(const char *s1, const char *s2, register size_t n));
 static int DISC_CODE(strncmp(const char * restrict, const char * restrict, size_t num));
@@ -68,9 +67,8 @@ static int DISC_CODE(strncmp(const char * restrict, const char * restrict, size_
 static char *DISC_CODE(strstr(const char * restrict, const char * restrict));
 static char *DISC_CODE(strchr(const char * restrict, int));
 static void DISC_CODE(showCPU_Features(void));
-static void DISC_CODE(showMBInfoFlags(multiboot_info_t * restrict));
-//static void DISC_CODE(init_clock(void));
-static void DISC_CODE(initStructures(void));
+static void DISC_CODE(showMBInfoFlags(multiboot_info_t *));
+static void DISC_CODE(initStructures(multiboot_info_t *));
 /*
 static unsigned DISC_CODE(bcd2bin(unsigned num));
 static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month, unsigned int day, unsigned int hour,
@@ -179,7 +177,7 @@ bool isReservedPage(paddr_t addr, multiboot_info_t * restrict info, int isLargeP
   }
 }
 
-void initPageAllocator(multiboot_info_t * restrict info)
+void initPageAllocator(multiboot_info_t *info)
 {
   const memory_map_t *mmap;
 
@@ -198,8 +196,6 @@ void initPageAllocator(multiboot_info_t * restrict info)
      3. Repeat until all available page frames are added to the page
         frame stack.
   */
-
-  // Assumes PAE is enabled
 
 /*      kprintf("Multiboot MMAP base: 0x%x Multiboot MMAP length: 0x%x\n", info->mmap_addr, info->mmap_length);
 
@@ -229,7 +225,6 @@ void initPageAllocator(multiboot_info_t * restrict info)
      }
 */
   size_t pageStackSize = sizeof(paddr_t)*(info->mem_upper) / (16 * 4);
-  size_t largePageSize = LARGE_PAGE_SIZE;
   size_t stackSizeLeft, tcbSizeLeft;
 
   if(pageStackSize % PAGE_SIZE)
@@ -238,8 +233,8 @@ void initPageAllocator(multiboot_info_t * restrict info)
   stackSizeLeft = pageStackSize;
   tcbSizeLeft = (size_t)&kTcbTableSize;
 
-  if(tcbSizeLeft % LARGE_PAGE_SIZE)
-    tcbSizeLeft += LARGE_PAGE_SIZE - (tcbSizeLeft & (LARGE_PAGE_SIZE-1));
+  if(tcbSizeLeft % largePageSize)
+    tcbSizeLeft += largePageSize - (tcbSizeLeft & (largePageSize-1));
 
   kprintf("Page Stack size: %d\n", pageStackSize);
   kprintf("TCB Table size: %d\n", tcbSizeLeft);
@@ -715,107 +710,6 @@ int initMemory( multiboot_info_t * restrict info )
 
   return 0;
 }
-/*
-#define UNIX_EPOCH          1970u
-#define CENTURY_START       2000u
-
-static int is_leap( unsigned int year )
-{
-  return ( ((year % 4u) == 0 && (year % 100u) != 0) ||
-      (year % 400u) == 0 );
-}
-
-unsigned int bcd2bin(unsigned int num)
-{
-  return (num & 0x0Fu) + 10 * ((num & 0xF0u) >> 4) + 100 * ((num & 0xF00u) >> 8)
-    + 1000 * ((num & 0xF000u) >> 12);
-}
-
-unsigned long long mktime(unsigned int year, unsigned int month,
-    unsigned int day, unsigned int hour, unsigned int minute, unsigned int second)
-{
-  unsigned long long elapsed = 0ull;
-  unsigned int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-  unsigned int i;
-
-  kprintf("mktime: %d %d %d %d %d %d\n", year, month, day, hour, minute, second);
-
-  elapsed += second * 1024ull;
-  elapsed += minute * 1024ull * 60ull;
-  elapsed += hour * 1024ull * 60ull * 60ull;
-  elapsed += day * 1024ull * 60ull * 60ull * 24ull;
-
-  for(i=0; i < month; i++)
-    elapsed += month_days[i] * 1024ull * 60ull * 60ull * 24ull;
-
-  if( is_leap(CENTURY_START+year) && month > 1u )
-    elapsed += 1024ull * 60ull * 60ull * 24ull;
-
-  for(i=UNIX_EPOCH; i < CENTURY_START + year; i++)
-    elapsed += (is_leap(i) ? 366ull : 365ull) * 60ull * 60ull * 24ull * 1024ull;
-
-  return elapsed;
-}
-
-void init_clock()
-{
-  unsigned int year, month, day, hour, minute, second;
-  unsigned long long *time = (unsigned long long *)KERNEL_CLOCK;
-  unsigned int bcd, _24hr;
-  unsigned char status_b;
-
-  addIDTEntry( irq8Handler, IRQ8, INT_GATE | KCODE );
-
-  outByte( RTC_INDEX, RTC_STATUS_B );
-  status_b = inByte( RTC_DATA );
-
-  if( status_b & RTC_BINARY )
-    bcd = 0;
-  else
-    bcd = 1;
-
-  if( status_b & RTC_24_HR )
-    _24hr = 1;
-  else
-    _24hr = 0;
-
-  outByte( RTC_INDEX, RTC_STATUS_B );
-  outByte( RTC_DATA, status_b | RTC_PERIODIC );
-
-  kprintf("Enabling IRQ 8\n");
-  enableIRQ(8);
-
-  outByte( RTC_INDEX, RTC_SECOND ); // second
-  second = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
-
-  outByte( RTC_INDEX, RTC_MINUTE ); // minute
-  minute = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
-
-  outByte( RTC_INDEX, RTC_HOUR ); // hour
-  hour = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
-
-  if( !_24hr )
-  {
-    hour--;
-
-    if( hour & 0x80 )
-      hour = 12 + (hour & 0x7F);
-    else
-      hour = (hour & 0x7F);
-  }
-
-  outByte( RTC_INDEX, RTC_DAY ); // day
-  day = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA )) - 1;
-
-  outByte( RTC_INDEX, RTC_MONTH ); // month
-  month = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA )) - 1;
-
-  outByte( RTC_INDEX, RTC_YEAR ); // century year (00-99)
-  year = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
-
-  *time = mktime(year, month, day, hour, minute, second);
-}
-*/
 
 void initTimer( void )
 {
@@ -1136,7 +1030,7 @@ void bootstrapInitServer(multiboot_info_t *info)
 #define MBI_FLAGS_GFX_TAB	(1u << 11) /* Grahphics table is available */
 #endif /* 0 */
 
-void showMBInfoFlags( multiboot_info_t * restrict info )
+void showMBInfoFlags( multiboot_info_t *info )
 {
   const char *names[] = { "MEM", "BOOT_DEV", "CMDLINE", "MODS", "SYMTAB", "SHDR",
                           "MMAP", "DRIVES", "CONFIG", "BOOTLDR", "APM_TAB", "GFX_TAB" };
@@ -1177,15 +1071,10 @@ void showCPU_Features(void)
 }
 #endif /* DEBUG */
 
-void initStructures(void)
+void initStructures(multiboot_info_t *info)
 {
-  memset(tcbTable, 0, (int)&kTcbTableSize);
-
-  for(int i=LOWEST_PRIORITY; i <= HIGHEST_PRIORITY; i++)
-    queueInit(&runQueues[i]);
-
-  queueInit(&timerQueue);
-  pendingMessageBuffer = malloc(sizeof(pem_t)*MAX_THREADS);
+  kprintf("Initializing free page allocator.\n");
+  initPageAllocator(info);
 
   // Map every page table in the kernel's region of memory. This will be copied
   // whenever a new address space is created, so that the kernel will be present
@@ -1206,6 +1095,23 @@ void initStructures(void)
       pdePtr->present = 1;
     }
   }
+
+  memset(tcbTable, 0, (int)&kTcbTableSize);
+
+  for(int i=LOWEST_PRIORITY; i <= HIGHEST_PRIORITY; i++)
+    queueInit(&runQueues[i]);
+
+  queueInit(&timerQueue);
+  pendingMessageBuffer = (pem_t *)freePageStackTop;
+
+  for(addr_t addr=(addr_t)pendingMessageBuffer; addr < (addr_t)(pendingMessageBuffer + MAX_THREADS); addr += PAGE_SIZE)
+  {
+    pte_t *pte = ADDR_TO_PTE(addr);
+
+    if(!pte->present)
+      kMapPage(addr, allocPageFrame(), PAGING_SUPERVISOR | PAGING_RW);
+  }
+//malloc(sizeof(pem_t)*MAX_THREADS);
 }
 
 /**
@@ -1214,13 +1120,14 @@ void initStructures(void)
     @param info The multiboot structure passed by the bootloader.
 */
 
-void init( multiboot_info_t * restrict info )
+void init( multiboot_info_t *info )
 {
 //  memory_map_t *mmap;
   module_t *module;
   unsigned int i=0;
   bool initServerFound=false;
   char *initServerStrPtr = NULL, *initServerStrEnd=NULL;
+  pte_t *pte;
 
 #ifdef DEBUG
   init_serial();
@@ -1283,23 +1190,13 @@ void init( multiboot_info_t * restrict info )
   kprintf("Initializing interrupt handling.\n");
   initInterrupts();
 
-  kprintf("Initializing free page allocator.\n");
-  initPageAllocator(info);
-
   kprintf("Initializing data structures.\n");
-  initStructures();
+  initStructures(info);
 
 //  enable_apic();
 //  init_apic_timer();
   kprintf("Initializing scheduler.\n");
   initScheduler();
-
-#if 0
-  kprintf("Initializing clock.\n");
-  init_clock();
-  kprintf("Initializing ATA.\n");
-  testATA();
-#endif /* DEBUG */
 
   bootstrapInitServer(info);
 
@@ -1316,7 +1213,7 @@ void init( multiboot_info_t * restrict info )
 
   // Release the pages for the TSS IO permission bitmap
 
-  pte_t *pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap));
+  pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap));
 
   freePageFrame((paddr_t)(pte->base << 12));
 
@@ -1330,6 +1227,30 @@ void init( multiboot_info_t * restrict info )
   *(dword *)EXT_PTR(tssEsp0) = (dword)kernelStackTop;
 
   schedule();
+
+  for(addr_t addr=(addr_t)0x0000; addr < (addr_t)largePageSize; addr += PAGE_SIZE)
+  {
+    if(addr == 0x90000)
+      addr = (addr_t)0xA0000;
+
+#if DEBUG
+
+    if(addr == 0xB8000)
+    {
+      addr = (addr_t)0xC0000;
+      continue;
+    }
+#endif /* DEBUG */
+
+    pte = ADDR_TO_PTE(addr);
+
+    if(pte->present)
+    {
+      pte->present = 0;
+      invalidatePage(addr);
+    }
+  }
+
 
   switchContext( initServerThread->rootPageMap, initServerThread->execState );
   stopInit("Error: Context switch failed.");

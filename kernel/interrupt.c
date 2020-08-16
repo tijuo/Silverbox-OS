@@ -28,27 +28,23 @@ void endIRQ(int irqNum)
 
 int registerIrq(tcb_t *thread, int irqNum)
 {
-  if(!isValidIRQ(irqNum))
-    return E_RANGE;
-  if(thread == NULL)
-    return E_INVALID_ARG;
-  else if(!irqHandlers[irqNum])
-  {
-    kprintf("TID %d registered IRQ: 0x%x\n", getTid(thread), irqNum);
+  assert(thread != NULL);
+  assert(isValidIRQ(irqNum));
 
-    pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
-    irqHandlers[irqNum] = thread;
-    enableIRQ(irqNum);
-    return E_OK;
-  }
-  else
+  if(irqHandlers[irqNum])
     return E_FAIL;
+
+  kprintf("TID %d registered IRQ: 0x%x\n", getTid(thread), irqNum);
+
+  pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
+  irqHandlers[irqNum] = thread;
+  enableIRQ(irqNum);
+  return E_OK;
 }
 
 int unregisterIrq(int irqNum)
 {
-  if(!isValidIRQ(irqNum))
-    return E_RANGE;
+  assert(isValidIRQ(irqNum));
 
   irqHandlers[irqNum] = NULL;
   return E_OK;
@@ -60,6 +56,8 @@ int unregisterIrq(int irqNum)
 
 void handleIRQ(int irqNum, ExecutionState *state)
 {
+  assert(state != NULL);
+
   if(irqNum == 0 && !irqHandlers[0])
     timerInt(state);
   else if(irqNum == 7 && !irqHandlers[7])
@@ -79,10 +77,7 @@ void handleIRQ(int irqNum, ExecutionState *state)
       startThread(handler);
     }
     else
-    {
       pendingIrqBitmap[irqNum / 32] |= (1 << (irqNum & 0x1F));
-      return;
-    }
   }
 }
 
@@ -91,11 +86,11 @@ int handleKernelPageFault(int errorCode)
   if(errorCode & (PAGING_ERR_PRES | PAGING_ERR_USER))
     return E_PERM;
 
-  addr_t faultAddr = (addr_t)getCR2();
-  paddr_t tableFrame=NULL_PADDR, pageFrame=NULL_PADDR;
-  int fail = 0;
-  pde_t mappedPde, *pde;
-  u32 currentPDir = getCR3() & ~0x3FF;
+  addr_t faultAddr=(addr_t)getCR2();
+  paddr_t pageFrame=NULL_PADDR;
+  int fail=0;
+  pde_t pde;
+  pte_t pte;
 
   if(faultAddr < 0x1000)
   {
@@ -108,103 +103,35 @@ int handleKernelPageFault(int errorCode)
   if(faultAddr >= PAGETAB)
     return E_FAIL;
 
-  pde = ADDR_TO_PDE(faultAddr);
-
-  if(currentPDir != initKrnlPDir
-     && faultAddr >= KERNEL_TCB_START && faultAddr < PAGETAB)
-  {
-    if(!pde->present)
-    {
-      // Try to find the PDE in the bootstrap page directory
-
-      if(readPmapEntry(initKrnlPDir, PDE_INDEX(faultAddr), &mappedPde) != E_OK)
-        fail = 1;
-      else
-      {
-        // If found, map it in this address space
-        if(mappedPde.present)
-        {
-          if(writePmapEntry((paddr_t)currentPDir, PDE_INDEX(faultAddr), &mappedPde) != E_OK)
-            fail = 1;
-          else
-            return E_OK;
-        }
-      }
-    }
-  }
-
   if(!fail && faultAddr >= KERNEL_HEAP_START && faultAddr <= KERNEL_HEAP_LIMIT)
   {
-    // If the page table isn't mapped yet, map it.
-
-    if(!pde->present)
+    if(IS_ERROR(readPmapEntry(NULL_PADDR, PDE_INDEX(faultAddr), &pde))
+    || IS_ERROR(readPmapEntry((paddr_t)(pde.base << 12), PDE_INDEX(faultAddr), &pte)))
     {
-    /* create a new page table and map it in this address space and in
-       the bootstrap page directory. */
-      tableFrame = allocPageFrame();
-
-      if(tableFrame == NULL_PADDR)
-        fail = 1;
-      else
-      {
-        pde_t newPde;
-
-        newPde.base = (u32)(tableFrame >> 12);
-        newPde.rwPriv = 1;
-        newPde.usPriv = 0;
-        newPde.present = 1;
-
-        clearPhysPage(tableFrame);
-
-        // Copy the new page table to the bootstrap page directory
-        if(writePmapEntry(initKrnlPDir, PDE_INDEX(faultAddr), &newPde) != E_OK)
-          fail = 1;
-        else if(initKrnlPDir != currentPDir
-                && kMapPageTable(faultAddr, tableFrame,
-                                 PAGING_RW | PAGING_SUPERVISOR) != E_OK)
-        {
-          kprintf("Unable to map page table.\n");
-          fail = 1;
-        }
-      }
+      fail = 1;
     }
-
-    pte_t *pte = ADDR_TO_PTE(faultAddr);
-
-    if(!pte->present)
+    else if(!pte.present)
     {
       pageFrame = allocPageFrame();
 
       if(pageFrame == NULL_PADDR)
         fail = 1;
-      else
+      else if(IS_ERROR(kMapPage(faultAddr, pageFrame, PAGING_RW | PAGING_SUPERVISOR)))
       {
-        if(kMapPage(faultAddr, pageFrame, PAGING_RW | PAGING_SUPERVISOR) != E_OK)
-        {
-          kprintf("Unable to map page.\n");
-          freePageFrame(pageFrame);
-          fail = 1;
-        }
+        kprintf("Unable to map page: %x -> %x.\n", faultAddr, pageFrame << 12);
+        freePageFrame(pageFrame);
+        fail = 1;
       }
     }
-
-    if(!fail && (pte->usPriv || (!pte->rwPriv && (errorCode & PAGING_ERR_WRITE))))
+    else if(pte.usPriv || (!pte.rwPriv && (errorCode & PAGING_ERR_WRITE)))
     {
-      if(pte->usPriv)
+      if(pte.usPriv)
         kprintf("Page is marked as user.\n");
 
-      if(!pte->rwPriv)
+      if(!pte.rwPriv && (errorCode & PAGING_ERR_WRITE))
         kprintf("Page is marked as read-only (but a write access was performed).\n");
 
       return E_PERM;
-    }
-
-    if(fail)
-    {
-      if(pageFrame != NULL_PADDR)
-        freePageFrame(pageFrame);
-
-      return E_FAIL;
     }
   }
   else
@@ -212,6 +139,9 @@ int handleKernelPageFault(int errorCode)
     kprintf("Fault address lies outside of heap range.\n");
     return E_RANGE;
   }
+
+  if(fail)
+    return E_FAIL;
 
   return E_OK;
 }
@@ -222,9 +152,11 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
 {
   tcb_t *tcb = currentThread;
 
+  assert(state);
+
   // Handle page faults due to non-present pages in kernel heap
 
-  if(intNum == 14 && handleKernelPageFault(errorCode) == E_OK)
+  if(intNum == 14 && !IS_ERROR(handleKernelPageFault(errorCode)))
     return;
 
   #if DEBUG
@@ -265,7 +197,7 @@ void handleCPUException(int intNum, int errorCode, ExecutionState *state)
     dump_regs( tcb, state, intNum, errorCode );
   }
 */
-  if(sendExceptionMessage(tcb, INIT_SERVER_TID, &message) != E_OK)
+  if(IS_ERROR(sendExceptionMessage(tcb, INIT_SERVER_TID, &message)))
   {
     kprintf("Unable to send exception message to intial server\n");
     dump_regs( tcb, state, intNum, errorCode );

@@ -6,6 +6,9 @@
 #include <os/region.h>
 #include <os/vfs.h>
 
+#define SERVER_GENERIC		1
+#define SERVER_DEVICE		2
+
 #define MAP_MEM			1
 #define UNMAP_MEM		2
 #define REGISTER_SERVER		3

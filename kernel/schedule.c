@@ -55,7 +55,7 @@ tcb_t *schedule(void)
   for( priority=HIGHEST_PRIORITY; priority >= priorityLimit; priority-- )
   {
     if( !isQueueEmpty(&runQueues[priority])
-        && queueDequeue(&runQueues[priority], (void **)&newThread) == E_OK )
+        && !IS_ERROR(queueDequeue(&runQueues[priority], (void **)&newThread)) )
     {
       assert(newThread != NULL);
       break;
@@ -98,6 +98,7 @@ tcb_t *schedule(void)
 
 void switchStacks(ExecutionState *state)
 {
+  assert(state != NULL);
   // No need to switch stacks if going back into kernel code
 
   if(state->cs == KCODE)
@@ -137,8 +138,8 @@ int setPriority( tcb_t *thread, unsigned int level )
   assert( thread != NULL );
   assert( level < NUM_PRIORITIES );
 
-  if( thread == NULL || level >= NUM_PRIORITIES )
-    return -1;
+  if(thread->priority == level)
+    return E_DONE;
 
   if( thread->threadState == READY )
     detachRunQueue( thread );
@@ -151,7 +152,7 @@ int setPriority( tcb_t *thread, unsigned int level )
   if( level < currentThread->priority && currentThread->threadState == RUNNING )
     currentThread->threadState = READY;
 
-  return 0;
+  return E_OK;
 }
 
 /**
@@ -171,10 +172,8 @@ tcb_t *attachRunQueue( tcb_t *thread )
   if( thread->threadState != READY )
     return NULL;
 
-  if(queueEnqueue(&runQueues[thread->priority], getTid(thread), thread) == E_OK)
-    return thread;
-  else
-    return NULL;
+  return (IS_ERROR(queueEnqueue(&runQueues[thread->priority], getTid(thread),
+              thread)) ? NULL : thread);
 }
 
 /**
@@ -189,18 +188,8 @@ tcb_t *detachRunQueue( tcb_t *thread )
   assert( thread != NULL );
   assert( thread->priority < NUM_PRIORITIES );
 
-  if(thread == NULL || thread->threadState == RUNNING)
-    return NULL;
-
-  assert( thread != NULL );
-
-  if(queueRemoveFirst(&runQueues[ thread->priority ], getTid(thread),
-                      NULL) == E_OK)
-  {
-    return thread;
-  }
-  else
-    return NULL;
+  return (IS_ERROR(queueRemoveFirst(&runQueues[ thread->priority ],
+                   getTid(thread), NULL)) ? NULL : thread);
 }
 
 /**

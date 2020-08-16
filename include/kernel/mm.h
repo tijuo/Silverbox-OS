@@ -94,10 +94,4 @@ void freePageFrame(paddr_t frame);
 
 void *morecore(int amt);
 
-typedef unsigned int asid_t;
-extern tree_t asTree;
-asid_t createAddressSpace(paddr_t *addrSpace);
-int releaseAddressSpace(asid_t asid);
-paddr_t *getAddressSpace(asid_t asid);
-
 #endif

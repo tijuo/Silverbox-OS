@@ -3,8 +3,8 @@
 
 #include <types.h>
 
-#define REPLY_OK		0
-#define REPLY_FAIL		1
+#define RESPONSE_OK		0
+#define RESPONSE_FAIL		1
 
 typedef struct
 {

@@ -26,9 +26,9 @@ addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags)
     .recipient = INIT_SERVER_TID
   };
 
-  msg_t replyMsg;
+  msg_t responseMsg;
   struct MapRequest *request = (struct MapRequest *)&msg.data;
-  struct MapReply *reply = (struct MapReply *)&replyMsg.data;
+  struct MapResponse *response = (struct MapResponse *)&responseMsg.data;
 
   request->addr = addr;
   request->device = device;
@@ -36,8 +36,8 @@ addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags)
   request->offset = offset;
   request->flags = flags;
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-          && replyMsg.subject == REPLY_OK) ? reply->addr : NULL;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+          && responseMsg.subject == RESPONSE_OK) ? response->addr : NULL;
 }
 
 addr_t unmapMem(addr_t addr, size_t length)
@@ -48,14 +48,14 @@ addr_t unmapMem(addr_t addr, size_t length)
     .recipient = INIT_SERVER_TID
   };
 
-  msg_t replyMsg;
+  msg_t responseMsg;
   struct UnmapRequest *request = (struct UnmapRequest *)&msg.data;
 
   request->addr = addr;
   request->length = length;
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 pid_t createPort(pid_t pid, int flags)
@@ -66,15 +66,15 @@ pid_t createPort(pid_t pid, int flags)
     .recipient = INIT_SERVER_TID
   };
 
-  msg_t replyMsg;
+  msg_t responseMsg;
   struct CreatePortRequest *request = (struct CreatePortRequest *)&msg.data;
-  struct CreatePortReply *reply = (struct CreatePortReply *)&replyMsg.data;
+  struct CreatePortResponse *response = (struct CreatePortResponse *)&responseMsg.data;
 
   request->pid = pid;
   request->flags = flags;
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-           && replyMsg.subject == REPLY_OK) ? reply->pid : NULL_PID;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? response->pid : NULL_PID;
 }
 
 pid_t destroyPort(pid_t port)
@@ -85,13 +85,13 @@ pid_t destroyPort(pid_t port)
     .recipient = INIT_SERVER_TID
   };
 
-  msg_t replyMsg;
+  msg_t responseMsg;
   struct DestroyPortRequest *request = (struct DestroyPortRequest *)&msg.data;
 
   request->port = port;
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 int registerServer(int type)
@@ -102,13 +102,13 @@ int registerServer(int type)
     .recipient = INIT_SERVER_TID
   };
 
-  msg_t replyMsg;
+  msg_t responseMsg;
   struct RegisterServerRequest *request = (struct RegisterServerRequest *)&msg.data;
 
   request->type = type;
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 int unregisterServer(void)
@@ -119,10 +119,10 @@ int unregisterServer(void)
     .recipient = INIT_SERVER_TID
   };
 
-  msg_t replyMsg;
+  msg_t responseMsg;
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 int registerName(const char *name)
@@ -136,13 +136,13 @@ int registerName(const char *name)
   if(!name)
     return -1;
 
-  msg_t replyMsg;
+  msg_t responseMsg;
   struct RegisterNameRequest *request = (struct RegisterNameRequest *)&msg.data;
 
   strncpy(request->name, name, sizeof request->name);
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 tid_t lookupName(const char *name)
@@ -156,14 +156,14 @@ tid_t lookupName(const char *name)
   if(!name)
     return -1;
 
-  msg_t replyMsg;
+  msg_t responseMsg;
   struct LookupNameRequest *request = (struct LookupNameRequest *)&msg.data;
-  struct LookupNameReply *reply = (struct LookupNameReply *)&msg.data;
+  struct LookupNameResponse *response = (struct LookupNameResponse *)&msg.data;
 
   strncpy(request->name, name, sizeof request->name);
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-           && replyMsg.subject == REPLY_OK) ? reply->tid : NULL_TID;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? response->tid : NULL_TID;
 }
 
 int unregisterName(const char *name)
@@ -177,13 +177,13 @@ int unregisterName(const char *name)
   if(!name)
     return -1;
 
-  msg_t replyMsg;
+  msg_t responseMsg;
   struct UnregisterNameRequest *request = (struct UnregisterNameRequest *)&msg.data;
 
   strncpy(request->name, name, sizeof request->name);
 
-  return (sys_call(&msg, &replyMsg, 1) == ESYS_OK
-           && replyMsg.subject == REPLY_OK) ? 0 : -1;
+  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 /*
@@ -476,7 +476,7 @@ int lookupDevName( const char *name, size_t name_len, struct Device *device )
 int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo )
 {
   struct RegisterNameReq *devReq;
-  volatile struct DevMgrReply *reply;
+  volatile struct DevMgrResponse *response;
   volatile struct Message msg;
 
   header = (struct GenericMsgHeader *)msg.data;
@@ -500,13 +500,13 @@ int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo )
   if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
     return -1;
 
-  return reply->reply_status;
+  return response->response_status;
 }
 
 int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs )
 {
   struct NameLookupReq *req;
-  volatile struct DevMgrReply *reply;
+  volatile struct DevMgrResponse *response;
   volatile struct Message msg;
 
   header = (struct GenericMsgHeader *)msg.data;
@@ -528,10 +528,10 @@ int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs )
   if( receiveMsg( INIT_SERVER, (struct Message *)&msg, MSG_TIMEOUT ) < 0 )
     return -1;
 
-  if( reply->reply_status == REPLY_SUCCESS )
-    *fs = reply->entry.fs;
+  if( response->response_status == RESPONSE_SUCCESS )
+    *fs = response->entry.fs;
 
-  return reply->reply_status;
+  return response->response_status;
 }
 
 

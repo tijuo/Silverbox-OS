@@ -35,6 +35,11 @@ paddr_t allocPageFrame(void)
     kprintf("allocPageFrame(): Free page stack is empty!\n");
   }
 
+#if DEBUG
+  if(freePageStackTop != freePageStack)
+    assert(((*(freePageStackTop-1)) & (PAGE_SIZE-1)) == 0);
+#endif /* DEBUG */
+
   return (freePageStackTop == freePageStack) ? NULL_PADDR : *--freePageStackTop;
 }
 
@@ -53,6 +58,8 @@ void freePageFrame(paddr_t frame)
 void freeUnusedHeapPages(void)
 {
   addr_t addr=heapEnd;
+  pde_t pde;
+  pte_t pte;
 
   // Align address to the next page boundary, if unaligned
 
@@ -61,19 +68,25 @@ void freeUnusedHeapPages(void)
 
   // Unmap and free any present pages that are still mapped past the end of heap
 
-  while(addr < KERNEL_HEAP_LIMIT)
+  for(int first=1; addr < KERNEL_HEAP_LIMIT; )
   {
-    pde_t *pde = ADDR_TO_PDE(addr);
-
-    if(pde->present)
+    if((((addr & (PAGE_TABLE_SIZE-1)) == 0) || first) && IS_ERROR(readPmapEntry(NULL_PADDR, addr, &pde)))
     {
-      pte_t *pte = ADDR_TO_PTE(addr);
+      addr = (addr & ~(PAGE_TABLE_SIZE-1)) + PAGE_TABLE_SIZE;
+      continue;
+    }
 
-      if(pte->present)
+    first = 0;
+
+    if(pde.present && !IS_ERROR(readPmapEntry((paddr_t)(pde.base << 12), addr, &pte)))
+    {
+      if(pte.present)
       {
-        freePageFrame((paddr_t)(pte->base << 12));
-        pte->base = 0;
-        pte->present = 0;
+        freePageFrame((paddr_t)(pte.base << 12));
+        pte.base = 0;
+        pte.present = 0;
+
+        invalidatePage(addr);
       }
 
       addr += PAGE_SIZE;
@@ -81,28 +94,6 @@ void freeUnusedHeapPages(void)
     else // If an entire page table is marked as not-present, then assume that all PTEs are invalid (and thus have no allocated pages). Skip searching through it
       addr += PAGE_TABLE_SIZE - (addr & (PAGE_TABLE_SIZE - 1));
   }
-
-  /*
-  // Do not unmap and free any empty page tables. They'll still be
-  // mapped in other address spaces.
-
-  addr = heapEnd;
-
-  if((addr & (PAGE_TABLE_SIZE-1)) != 0)
-    addr += PAGE_TABLE_SIZE - (addr & (PAGE_TABLE_SIZE - 1));
-
-  for(; addr < KERNEL_HEAP_LIMIT; addr += PAGE_TABLE_SIZE)
-  {
-    pde_t *pde = ADDR_TO_PDE(addr);
-
-    if(pde->present)
-    {
-      freePageFrame((paddr_t)(pde->base << 12));
-      pde->base = 0;
-      pde->present = 0;
-    }
-  }
-  */
 }
 
 /** Extend/shrink the kernel heap by a set amount.

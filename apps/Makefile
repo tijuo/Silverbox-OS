@@ -1,6 +1,6 @@
 include ../prefix.inc
 
-DIRS	=init sender receiver
+DIRS	=init sender receiver rtc
 
 .PHONY:	$(DIRS) $(DEF_PHONY)
 

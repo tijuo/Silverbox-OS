@@ -50,6 +50,8 @@ int startThread( tcb_t *thread )
         return E_FAIL;
       thread->waitTid = NULL_TID;
       break;
+    case READY:
+      return E_DONE;
     case RUNNING:
       return E_FAIL;
     default:
@@ -74,7 +76,7 @@ int startThread( tcb_t *thread )
 int sleepThread( tcb_t *thread, int msecs )
 {
   if( thread->threadState == SLEEPING )
-    RET_MSG(1, "Already sleeping!")//return -1;
+    return E_DONE;
   else if( msecs >= (1 << 16) || msecs < 1)
     RET_MSG(E_INVALID_ARG, "Invalid sleep interval");
 
@@ -85,7 +87,7 @@ int sleepThread( tcb_t *thread, int msecs )
     return E_FAIL;
   }
 
-  if( thread->threadState == READY && detachRunQueue( thread ) != E_OK)
+  if( thread->threadState == READY && !detachRunQueue( thread ))
     return E_FAIL;
 
   if(msecs == 0)
@@ -118,7 +120,7 @@ int pauseThread( tcb_t *thread )
   switch( thread->threadState )
   {
     case READY:
-      if(detachRunQueue( thread ) != E_OK)
+      if(!detachRunQueue( thread ))
         return E_FAIL;
       else
       {

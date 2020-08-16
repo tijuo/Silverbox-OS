@@ -7,6 +7,8 @@
 #include <oslib.h>
 #include <string.h>
 
+size_t largePageSize=LARGE_PAGE_SIZE;
+
 static int readPDE( unsigned entryNum, pde_t *pde, paddr_t pdir );
 static int readPTE( addr_t virt, pte_t *pte, paddr_t pdir );
 
@@ -145,6 +147,9 @@ bool isWritable( addr_t addr, paddr_t pdir )
 
 int readPmapEntry(paddr_t pbase, int entry, void *buffer)
 {
+  if(pbase == NULL_PADDR)
+    pbase = (paddr_t)(getCR3() & ~0x3FF);
+
   return peek(pbase+sizeof(pmap_t)*entry, buffer, sizeof(pmap_t));
 }
 
@@ -162,6 +167,9 @@ int readPmapEntry(paddr_t pbase, int entry, void *buffer)
 
 int writePmapEntry(paddr_t pbase, int entry, void *buffer)
 {
+  if(pbase == NULL_PADDR)
+    pbase = (paddr_t)(getCR3() & ~0x3FF);
+
   return poke(pbase+sizeof(pmap_t)*entry, buffer, sizeof(pmap_t));
 }
 

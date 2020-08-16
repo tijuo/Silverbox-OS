@@ -19,7 +19,7 @@ struct MapRequest
   int flags;
 } __PACKED__;
 
-struct MapReply
+struct MapResponse
 {
   addr_t addr;   // the address to the newly mapped memory
 } __PACKED__;
@@ -36,7 +36,7 @@ struct CreatePortRequest
   int flags;
 } __PACKED__;
 
-struct CreatePortReply
+struct CreatePortResponse
 {
   pid_t pid;
 } __PACKED__;
@@ -80,7 +80,7 @@ struct LookupNameRequest
   char name[20];
 } __PACKED__;
 
-struct LookupNameReply
+struct LookupNameResponse
 {
   tid_t tid;
 } __PACKED__;

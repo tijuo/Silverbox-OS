@@ -3,6 +3,7 @@
 
 #define PAGE_SIZE		0x1000
 #define LARGE_PAGE_SIZE   	0x400000
+#define PAE_LARGE_PAGE_SIZE	0x200000
 #define PAGE_TABLE_SIZE	  	0x400000
 
 #define PAGETAB			0xFFC00000
@@ -120,5 +121,7 @@ typedef struct {
 typedef struct {
   pte_t entries[1024];
 } __PACKED__ ptab_t;
+
+extern size_t largePageSize;
 
 #endif /* PAGING_H */

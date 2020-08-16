@@ -141,10 +141,10 @@ int htable_get(const htable_t *htable, void *key, size_t keysize,
 */
 
 static list_node_t *_createListNode(int key, void *elem);
-static tree_node_t *_createTreeNode(int key, void *elem);
-static tree_node_t *_treeFindNode(tree_t *tree, int key);
-static void _attemptRebalance(tree_t *tree, tree_node_t *node);
-static void _treeFreeNodes(tree_node_t *node);
+//static tree_node_t *_createTreeNode(int key, void *elem);
+//static tree_node_t *_treeFindNode(tree_t *tree, int key);
+//static void _attemptRebalance(tree_t *tree, tree_node_t *node);
+//static void _treeFreeNodes(tree_node_t *node);
 
 list_node_t *_createListNode(int key, void *elem)
 {
@@ -382,6 +382,7 @@ int listRemoveAll(list_t *list, int key)
   return E_OK;
 }
 
+/*
 tree_node_t *_createTreeNode(int key, void *elem)
 {
   tree_node_t *node = malloc(sizeof(tree_node_t));
@@ -639,3 +640,4 @@ int treeRemove(tree_t *tree, int key, void **elemPtr)
   else
     return E_FAIL;
 }
+*/

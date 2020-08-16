@@ -24,6 +24,8 @@ Bits:
        7  - 1=time update in progress, 0=time/date available
 */
 
+#define RTC_A_UPDATING            0x80
+
 #define RTC_STATUS_B        0x0b
 
 /* RTC Status Register B

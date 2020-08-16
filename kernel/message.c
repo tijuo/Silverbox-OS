@@ -25,9 +25,9 @@ int attachSendQueue(tcb_t *sender, tid_t recipientTid)
 
   assert(sender);
 
-  if(!recipient || (sender->threadState == READY && detachRunQueue(sender)) != E_OK )
+  if(!recipient || (sender->threadState == READY && !detachRunQueue(sender)))
     return E_FAIL;
-  else if(queueEnqueue(recipient->senderWaitQueue, getTid(sender), sender) == E_OK)
+  else if(!IS_ERROR(queueEnqueue(recipient->senderWaitQueue, getTid(sender), sender)))
   {
     sender->threadState = WAIT_FOR_RECV;
     sender->waitTid = recipientTid;
@@ -55,12 +55,12 @@ int attachReceiveQueue(tcb_t *recipient, tid_t senderTid)
 
   assert(recipient);
 
-  if( recipient->threadState == READY && detachRunQueue(recipient) != E_OK)
+  if(recipient->threadState == READY && !detachRunQueue(recipient))
     return E_FAIL;
 
   if(sender
-     && queueEnqueue(sender->receiverWaitQueue, getTid(recipient),
-                     recipient) != E_OK)
+     && IS_ERROR(queueEnqueue(sender->receiverWaitQueue, getTid(recipient),
+                     recipient)))
   {
     attachRunQueue(recipient);
     return E_FAIL;
@@ -85,8 +85,8 @@ int detachSendQueue(tcb_t *sender)
   assert(sender);
   tcb_t *recipient = getTcb(sender->waitTid);
 
-  if((recipient && queueRemoveLast(recipient->senderWaitQueue,
-                     getTid(sender), NULL) == E_OK))
+  if((recipient && !IS_ERROR(queueRemoveLast(recipient->senderWaitQueue,
+                     getTid(sender), NULL))))
   {
     sender->waitTid = NULL_TID;
     sender->threadState = PAUSED;
@@ -107,8 +107,8 @@ int detachReceiveQueue(tcb_t *recipient)
   assert(recipient);
   tcb_t *sender = getTcb(recipient->waitTid);
 
-  if((sender && queueRemoveLast(sender->receiverWaitQueue,
-                     getTid(recipient), NULL) == E_OK)
+  if((sender && !IS_ERROR(queueRemoveLast(sender->receiverWaitQueue,
+                     getTid(recipient), NULL)))
      || (!sender && recipient->waitTid == NULL_TID))
   {
     recipient->waitTid = NULL_TID;
@@ -148,7 +148,7 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
     return E_INVALID_ARG;
 
   if(recipient->threadState == INACTIVE)
-    return E_FAIL;
+    return E_INVALID_ARG;
 
   // If the recipient is waiting for a message from this sender or any sender
 
@@ -156,13 +156,11 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
      && (recipient->waitTid == ANY_SENDER
          || recipient->waitTid == senderTid))
   {
-    if(detachReceiveQueue(recipient) != E_OK)
+    if(IS_ERROR(detachReceiveQueue(recipient)))
       return E_FAIL;
-
-    if(call && attachReceiveQueue(sender, recipientTid) != E_OK)
+    else if(call && IS_ERROR(attachReceiveQueue(sender, recipientTid)))
       return E_FAIL;
-
-    if(startThread(recipient) != E_OK)
+    else if(IS_ERROR(startThread(recipient)))
       return E_FAIL;
 
     recipient->execState.eax = (dword)((senderTid << 16) | (state->eax & 0xFF00) | ESYS_OK);
@@ -177,7 +175,10 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
   else if( !block )	// Recipient is not ready to receive, but we're not allowed to block, so return
     return E_BLOCK;
   else	// Wait until the recipient is ready to receive the message
-    attachSendQueue(sender, getTid(recipient));
+  {
+    if(IS_ERROR(attachSendQueue(sender, getTid(recipient))))
+      return E_FAIL;
+  }
 
   return E_OK;
 }
@@ -196,8 +197,11 @@ int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
   if(recipient->threadState == WAIT_FOR_SEND
      && (recipient->waitTid == ANY_SENDER || recipient->waitTid == senderTid))
   {
-    if(detachReceiveQueue(recipient) != E_OK || startThread(recipient) != E_OK)
+    if(IS_ERROR(detachReceiveQueue(recipient))
+       || IS_ERROR(startThread(recipient)))
+    {
       return E_FAIL;
+    }
 
     recipient->execState.eax = (dword)((KERNEL_TID << 16) | (message->subject << 8) | ESYS_OK);
     recipient->execState.ebx = (dword)message->who;
@@ -207,7 +211,9 @@ int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
   }
   else  // Wait until the recipient is ready to receive the message
   {
-    attachSendQueue(sender, recipientTid);
+    if(IS_ERROR(attachSendQueue(sender, recipientTid)))
+      return E_FAIL;
+
     pendingMessageBuffer[senderTid] = *message;
   }
 
@@ -256,7 +262,7 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
 
   if(sender && sender->waitTid == recipientTid)
   {
-    if(detachSendQueue(sender) != E_OK)
+    if(IS_ERROR(detachSendQueue(sender)))
       return E_FAIL;
 
     if(sender->threadState == WAIT_FOR_RECV)
@@ -268,9 +274,12 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
       state->esi = sender->execState.esi;
       state->edi = sender->execState.edi;
 
-      if((sender->execState.eax & 0xFF) == SYS_CALL_WAIT && attachReceiveQueue(sender, recipientTid) != E_OK)
+      if((sender->execState.eax & 0xFF) == SYS_CALL_WAIT
+         && IS_ERROR(attachReceiveQueue(sender, recipientTid)))
+      {
         return E_FAIL;
-      else if(startThread(sender) != E_OK)
+      }
+      else if(IS_ERROR(startThread(sender)))
         return E_FAIL;
     }
     else if(sender->threadState == PAUSED) // sender sent an exception/exit message
@@ -294,7 +303,10 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
     return E_BLOCK;
   }
   else // no one is waiting to send to this local port, so wait
-    attachReceiveQueue(recipient, senderTid);
+  {
+    if(IS_ERROR(attachReceiveQueue(recipient, senderTid)))
+      return E_FAIL;
+  }
 
   return E_OK;
 }
