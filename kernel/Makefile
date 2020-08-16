@@ -10,14 +10,11 @@ include ../vars.mk
 
 SRC     =init.c paging.c thread.c schedule.c interrupt.c \
         debug.c pic.c message.c syscall.c mem.c \
-	malloc.c struct.c
+	kmalloc.c struct.c
 
 OBJ     =$(SRC:.c=.o)
 LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL
-OPT_FLG =-DLACKS_UNISTD_H -DLACKS_FCNTL_H -DLACKS_SYS_PARAM_H -DLACKS_SYS_MMAN_H \
--DLACKS_STRINGS_H -DMORECORE="morecore" \
--DLACKS_SCHED_H -DLACKS_TIME_H -DNO_MALLINFO=1 -DNO_MALLOC_STATS=1 \
--DHAVE_MMAP=0 -DMALLOC_FAILURE_ACTION="" -DDEBUG
+OPT_FLG =-O0
 
 asm_objs:
 	make -C asm/ all

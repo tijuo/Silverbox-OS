@@ -5,12 +5,7 @@
 #include <kernel/multiboot.h>
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
-#include <kernel/dlmalloc.h>
 #include <kernel/struct.h>
-
-#define NULL_ASID	((asid_t)0)
-
-#define MFAIL                ((void*)(MAX_SIZE_T))
 
 /* FIXME: Changing any of these values may require changing
    the asm code */
@@ -26,7 +21,6 @@
 #define KVIRT_TO_PHYS(x)	((x) - (KERNEL_VSTART-KERNEL_START))
 
 #define KERNEL_HEAP_START     ((addr_t)0xD0000000)
-#define MIN_AMT               (4*PAGE_SIZE)
 #define KERNEL_HEAP_LIMIT     ((addr_t)0xF0000000)
 
 /* FIXME: Changing any of these values may require changing the
@@ -91,7 +85,5 @@ extern paddr_t *freePageStack, *freePageStackTop;
 
 paddr_t allocPageFrame(void);
 void freePageFrame(paddr_t frame);
-
-void *morecore(int amt);
 
 #endif

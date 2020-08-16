@@ -61,5 +61,6 @@ int sysYield( tcb_t *thread );
 extern tcb_t *initServerThread, *initPagerThread;
 extern tcb_t *currentThread;
 extern tcb_t *tcbTable;
+extern addr_t heapEnd;
 
 #endif /* THREAD_H */

@@ -8,3 +8,4 @@
 *.gz
 *.save*
 *.img
+kernel/kernel

@@ -13,7 +13,6 @@
 #include <kernel/pit.h>
 #include <kernel/pic.h>
 #include <oslib.h>
-#include <kernel/dlmalloc.h>
 #include <kernel/error.h>
 #include <os/msg/init.h>
 
@@ -1111,7 +1110,6 @@ void initStructures(multiboot_info_t *info)
     if(!pte->present)
       kMapPage(addr, allocPageFrame(), PAGING_SUPERVISOR | PAGING_RW);
   }
-//malloc(sizeof(pem_t)*MAX_THREADS);
 }
 
 /**

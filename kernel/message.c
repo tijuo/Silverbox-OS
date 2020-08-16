@@ -6,7 +6,6 @@
 #include <os/syscalls.h>
 #include <kernel/message.h>
 #include <kernel/error.h>
-#include <kernel/dlmalloc.h>
 
 /** Attach a thread to a port's send queue. The thread will then enter
     the WAIT_FOR_RECV state until the recipient receives the message from

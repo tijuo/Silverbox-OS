@@ -1,7 +1,7 @@
 #include <kernel/struct.h>
 #include <kernel/error.h>
-#include <kernel/dlmalloc.h>
 #include <kernel/debug.h>
+#include <kernel/kmalloc.h>
 
 /*
 static unsigned long _hash_func( unsigned char *key, size_t keysize )
@@ -26,7 +26,7 @@ static unsigned long _hash_func( unsigned char *key, size_t keysize )
 
 htable_t *htable_create( size_t numBuckets )
 {
-  htable_t *htable = malloc(sizeof(htable_t);
+  htable_t *htable = kmalloc(sizeof(htable_t);
 
   if(!htable)
     return NULL;
@@ -35,7 +35,7 @@ htable_t *htable_create( size_t numBuckets )
 
   if( !htable->buckets )
   {
-    free(htable);
+    kfree(htable, sizeof *htable);
     return NULL;
   }
   else
@@ -55,7 +55,7 @@ void htable_destroy( htable_t *htable )
 
   if( htable->buckets )
   {
-    free(htable->buckets);
+    kfree(htable->buckets, sizeof *htable->buckets);
     htable->buckets = NULL;
   }
 
@@ -86,7 +86,7 @@ int htable_insert( htable_t *htable, void *key, size_t keysize,
 
     if( !pair->valid )
     {
-      pair->pair.key = malloc(keysize);
+      pair->pair.key = kmalloc(keysize);
 
       if( !pair->pair.key )
         return E_FAIL;
@@ -148,7 +148,7 @@ static list_node_t *_createListNode(int key, void *elem);
 
 list_node_t *_createListNode(int key, void *elem)
 {
-  list_node_t *node = malloc(sizeof(list_node_t));
+  list_node_t *node = kmalloc(sizeof(list_node_t));
 
   if(!node)
     return NULL;
@@ -173,7 +173,7 @@ int listDestroy(list_t *list)
   for(list_node_t *ptr=list->head; ptr != NULL; ptr=next)
   {
     next = ptr->next;
-    free(ptr);
+    kfree(ptr, sizeof *ptr);
   }
 
   list->head = list->tail = NULL;
@@ -274,7 +274,7 @@ int listRemoveHead(list_t *list, void **elemPtr)
     if(elemPtr)
       *elemPtr = prevHead->elem;
 
-    free(prevHead);
+    kfree(prevHead, sizeof *prevHead);
     return E_OK;
   }
   else
@@ -297,7 +297,7 @@ int listRemoveTail(list_t *list, void **elemPtr)
     if(elemPtr)
       *elemPtr = prevTail->elem;
 
-    free(prevTail);
+    kfree(prevTail, sizeof *prevTail);
     return E_OK;
   }
   else
@@ -322,7 +322,7 @@ int listRemoveFirst(list_t *list, int key, void **elemPtr)
       if(elemPtr)
         *elemPtr = node->elem;
 
-      free(node);
+      kfree(node, sizeof *node);
       return E_OK;
     }
   }
@@ -348,7 +348,7 @@ int listRemoveLast(list_t *list, int key, void **elemPtr)
       if(elemPtr)
         *elemPtr = node->elem;
 
-      free(node);
+      kfree(node, sizeof *node);
       return E_OK;
     }
   }
@@ -375,7 +375,7 @@ int listRemoveAll(list_t *list, int key)
       if(list->head == node || list->tail == node)
         list->head = list->tail = NULL;
 
-      free(node);
+      kfree(node, sizeof *node);
     }
   }
 
@@ -385,7 +385,7 @@ int listRemoveAll(list_t *list, int key)
 /*
 tree_node_t *_createTreeNode(int key, void *elem)
 {
-  tree_node_t *node = malloc(sizeof(tree_node_t));
+  tree_node_t *node = kmalloc(sizeof(tree_node_t));
 
   if(!node)
     return NULL;
@@ -411,7 +411,7 @@ void _treeFreeNodes(tree_node_t *node)
   {
     _treeFreeNodes(node->left);
     _treeFreeNodes(node->right);
-    free(node);
+    kfree(node, sizeof *node);
   }
 }
 
@@ -580,7 +580,7 @@ int treeRemove(tree_t *tree, int key, void **elemPtr)
       if(elemPtr)
         *elemPtr = node->elem;
 
-      free(node);
+      kfree(node, sizeof *node);
     }
     else if((node->left && !node->right) || (!node->left && node->right)) // has one child. replace node with child and delete it
     {
@@ -610,7 +610,7 @@ int treeRemove(tree_t *tree, int key, void **elemPtr)
       if(elemPtr)
         *elemPtr = node->elem;
 
-      free(node);
+      kfree(node, sizeof *node);
     }
     else //has two children. replace node with in-order successor (leftmost child in right tree)
     {
@@ -630,7 +630,7 @@ int treeRemove(tree_t *tree, int key, void **elemPtr)
       if(elemPtr)
         *elemPtr = succ->elem;
 
-      free(succ);
+      kfree(succ, sizeof *succ);
     }
 
     // XXX: Now, the tree needs to be rebalanced, if necessary for each ancestor

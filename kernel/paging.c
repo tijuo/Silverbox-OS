@@ -52,18 +52,13 @@ int initializeRootPmap(dword pmap)
   // the bootstrap address space to the thread's address space
 
   size_t bufSize = 4*(1023-PDE_INDEX(KERNEL_TCB_START));
-  void *buf = malloc(bufSize);
+  char buf[bufSize];
 
-  if(!buf)
-    return E_FAIL;
-  else if(peek(initKrnlPDir+4*PDE_INDEX(KERNEL_TCB_START), buf, bufSize) != E_OK
-     || poke(pmap+4*PDE_INDEX(KERNEL_TCB_START), buf, bufSize) != E_OK)
+  if(peek(initKrnlPDir+4*PDE_INDEX(KERNEL_TCB_START), (void *)buf, bufSize) != E_OK
+     || poke(pmap+4*PDE_INDEX(KERNEL_TCB_START), (void *)buf, bufSize) != E_OK)
   {
-    free(buf);
     return E_FAIL;
   }
-
-  free(buf);
 
   return E_OK;
 }

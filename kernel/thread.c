@@ -8,7 +8,7 @@
 #include <oslib.h>
 #include <kernel/message.h>
 #include <kernel/error.h>
-#include <kernel/dlmalloc.h>
+#include <kernel/kmalloc.h>
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
 
@@ -96,7 +96,7 @@ int sleepThread( tcb_t *thread, int msecs )
     return E_OK;
   }
 
-  timer_delta_t *timerDelta = malloc(sizeof(timer_delta_t));
+  timer_delta_t *timerDelta = kmalloc(sizeof(timer_delta_t));
 
   if(!timerDelta)
     return E_FAIL;
@@ -183,8 +183,8 @@ tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t
   thread->execState.userEsp = stack;
   thread->execState.userSS = UDATA;
 
-  thread->receiverWaitQueue = malloc(sizeof(queue_t));
-  thread->senderWaitQueue = malloc(sizeof(queue_t));
+  thread->receiverWaitQueue = kmalloc(sizeof(queue_t));
+  thread->senderWaitQueue = kmalloc(sizeof(queue_t));
 
   if(!thread->receiverWaitQueue
      || queueInit(thread->receiverWaitQueue) != E_OK
@@ -194,13 +194,13 @@ tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t
     if(thread->receiverWaitQueue)
     {
       queueDestroy(thread->receiverWaitQueue);
-      free(thread->receiverWaitQueue);
+      kfree(thread->receiverWaitQueue, sizeof *thread->receiverWaitQueue );
     }
 
     if(thread->senderWaitQueue)
     {
       queueDestroy(thread->senderWaitQueue);
-      free(thread->senderWaitQueue);
+      kfree(thread->senderWaitQueue, sizeof *thread->senderWaitQueue);
     }
 
     RET_MSG(NULL, "Unable to initialize message queues.");
@@ -279,8 +279,8 @@ int releaseThread( tcb_t *thread )
   queueDestroy(thread->receiverWaitQueue);
   queueDestroy(thread->senderWaitQueue);
 
-  free(thread->receiverWaitQueue);
-  free(thread->senderWaitQueue);
+  kfree(thread->receiverWaitQueue, sizeof *thread->receiverWaitQueue);
+  kfree(thread->senderWaitQueue, sizeof *thread->senderWaitQueue);
 
   thread->threadState = INACTIVE;
   return E_OK;
