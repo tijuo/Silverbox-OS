@@ -16,9 +16,12 @@ typedef struct
   };
   union Payload
   {
+    unsigned int u32[5];
+    unsigned short int u16[10];
+    unsigned char u8[20];
     int i32[5];
     short int i16[10];
-    char c8[20];
+    char i8[20];
   } data;
 } msg_t;
 

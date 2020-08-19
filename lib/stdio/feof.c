@@ -2,8 +2,5 @@
 
 int feof(FILE *fp)
 {
-  if( fp == NULL )
-    return 0;
-  else 
-    return (fp->eof == 1);
+  return (!fp) ? 0 : (fp->eof);
 }

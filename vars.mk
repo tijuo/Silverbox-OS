@@ -4,6 +4,9 @@
 .s.o:
 	$(AS) $(AFLAGS) $< -o $@
 
+.cc.o:
+	$(CPP) $(OPT_FLG) -c $(CPPFLAGS) -I$(INC_DIR) $< -o $@
+
 $(SB_PREFIX)/lib/libc.a:
 	make -C $(SB_PREFIX)/lib/ libc.a
 

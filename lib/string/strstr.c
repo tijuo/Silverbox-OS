@@ -1,22 +1,35 @@
 #include <string.h>
 
-char *strstr(const char* cs, const char* ct) 
+char *strstr(const char* haystack, const char* needle)
 {
-  const char *start = (const char *)ct;
+  const char *needleStart = (const char *)needle;
+  const char *haystackStart = haystack;
 
-  while(*cs)
+  if(haystack)
   {
-    while(*ct)
+    while(*haystack)
     {
-      if( *cs == *ct )
-        return (char *)cs;
-      else
-        ct++;
-    }
+      while(*needle)
+      {
+        if( *haystack == *needle )
+        {
+          haystack++;
+          needle++;
+        }
+        else
+          break;
+      }
 
-    cs++;
-    ct = start;
+      if(!*needle)
+        return (char *)haystackStart;
+      else
+      {
+        haystack = haystackStart + 1;
+        needle = needleStart;
+      }
+    }
   }
+
   return NULL;
 }
 

@@ -1,8 +1,8 @@
 include ../../prefix.inc
 
-SRC     =receive.c
+SRC     =receive.cc
 
 OUTPUT	=receiver.exe
 INSTALL_DIR=programs/
 
-include ../apps.mk
+include ../apps_cpp.mk

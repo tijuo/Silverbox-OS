@@ -17,6 +17,13 @@ typedef struct Block block_t;
 
 block_t *freeBlockHead;
 
+/**
+  Allocate a block of memory on the kernel heap.
+
+  @param size The size of the block of memory to be allocated.
+  @return A pointer to the new block of memory, upon success. NULL, on error.
+*/
+
 void *kmalloc(size_t size)
 {
   block_t *block;
@@ -56,6 +63,13 @@ void *kmalloc(size_t size)
 
   return &block->data;
 }
+
+/**
+  Release a block of memory from the kernel heap.
+
+  @param p The pointer to the allocated block of memory.
+  @param size The size of the allocated block.
+*/
 
 void kfree(void *p, UNUSED_PARAM size_t size)
 {

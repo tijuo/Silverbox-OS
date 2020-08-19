@@ -71,6 +71,11 @@ typedef struct Tcb
   } state;
 } thread_info_t;
 
+#ifdef __cplusplus
+extern "C" {
+#else
+#endif /* __cplusplus */
+
 void sys_exit(int code);
 int sys_send(const msg_t *msg, int block);
 int sys_call(const msg_t *inMsg, msg_t *outMsg, int block);
@@ -88,4 +93,8 @@ int sys_eoi(int irqNum);
 int sys_wait_irq(int irqNum);
 int sys_poll_irq(int irqNum);
 
+#ifdef __cplusplus
+};
+#else
+#endif /* __cplusplus */
 #endif /* OS_SYSCALLS */

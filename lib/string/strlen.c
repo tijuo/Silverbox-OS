@@ -2,16 +2,13 @@
 
 size_t strlen(const char *string)
 {
-  register size_t i=0;
+  const char *start=string;
 
-  if( string == NULL )
-    return 0;
-
-  while( *string )
+  if( string )
   {
-    i++;
-    string++;
+    while( *string )
+      string++;
   }
 
-  return i;
+  return string-start;
 }

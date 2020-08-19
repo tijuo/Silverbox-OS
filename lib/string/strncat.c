@@ -8,7 +8,7 @@ char *strncat(char *dest, const char *src, size_t num)
 
   while(*src && num)
   {
-    *dest++ = *src++;
+    *(dest++) = *(src++);
     num--;
   }
 

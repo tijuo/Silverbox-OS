@@ -41,5 +41,5 @@ SECTIONS
     *(.common)
     . = ALIGN(4096);
   }
-    end = .;
+    __end = .;
 }

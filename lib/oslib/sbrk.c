@@ -3,6 +3,9 @@
 #include <os/services.h>
 #include <errno.h>
 
+size_t heapSize;
+void *heapStart, *heapEnd;
+
 //extern void mapVirt( void *virt, int pages );
 
 extern void print(char *str);

@@ -25,11 +25,8 @@ void destroyAddrSpace(struct AddrSpace *addrSpace)
 
 int addAddrSpace(struct AddrSpace *addrSpace)
 {
-  if( !addrSpace )
-    return -1;
-
-  return sbAssocArrayInsert(&addrSpaces, (void *)&addrSpace->physAddr,
-        sizeof addrSpace->physAddr, addrSpace, sizeof *addrSpace) == 0 ? 0 : -1;
+  return (addrSpace && sbAssocArrayInsert(&addrSpaces, (void *)&addrSpace->physAddr,
+        sizeof addrSpace->physAddr, addrSpace, sizeof *addrSpace) == 0) ? 0 : -1;
 }
 
 struct AddrSpace *lookupPageMap(paddr_t physAddr)
@@ -47,24 +44,21 @@ struct AddrSpace *removeAddrSpace(paddr_t physAddr)
 {
   struct AddrSpace *addrSpace;
 
-  if( physAddr == NULL_PADDR )
-    return NULL;
-
-  return sbAssocArrayRemove(&addrSpaces, (addr_t *)&physAddr, sizeof physAddr,
-        (void **)&addrSpace, NULL) < 0 ? NULL : addrSpace;
+  return (physAddr == NULL_PADDR
+    || sbAssocArrayRemove(&addrSpaces, (addr_t *)&physAddr, sizeof physAddr,
+                          (void **)&addrSpace, NULL) < 0) ? NULL : addrSpace;
 }
 
 /* attachTid() associates a TID to an address space. */
 
 int attachTid(struct AddrSpace *addrSpace, tid_t tid)
 {
-  if(tid == NULL_TID)
-    return -1;
-
   if(!addrSpace)
     addrSpace = &initsrvAddrSpace;
 
-  return sbAssocArrayInsert(&tidMap, &tid, sizeof tid, addrSpace, sizeof *addrSpace) == 0 ? 0 : -1;
+  return (tid != NULL_TID
+          && sbAssocArrayInsert(&tidMap, &tid, sizeof tid, addrSpace,
+                                sizeof *addrSpace) == 0) ? 0 : -1;
 }
 
 int detachTid(tid_t tid)
@@ -76,11 +70,8 @@ struct AddrSpace *lookupTid(tid_t tid)
 {
   struct AddrSpace *addrSpace;
 
-  if(tid == NULL_TID)
-    return NULL;
-
-  return sbAssocArrayLookup(&tidMap, &tid, sizeof tid,
-                            (void **)&addrSpace, NULL) != 0 ? NULL : addrSpace;
+  return (tid == NULL_TID || sbAssocArrayLookup(&tidMap, &tid, sizeof tid,
+                            (void **)&addrSpace, NULL) != 0) ? NULL : addrSpace;
 }
 
 /* Virtual addresses are allocated to an address space by using
@@ -123,9 +114,8 @@ struct AddrRegion *getRegion(const struct AddrSpace *addrSpace, addr_t addr)
   for( int i=0; i < sbArrayCount(&addrSpace->memoryRegions); i++ )
   {
     if( sbArrayElemAt(&addrSpace->memoryRegions, i, (void **)&addr_region, NULL) != 0 )
-      return NULL;
-
-    if( regionDoesContain((unsigned int)addr, &addr_region->virtRegion) )
+      break;
+    else if( regionDoesContain((unsigned int)addr, &addr_region->virtRegion) )
       return addr_region;
   }
 
@@ -141,16 +131,15 @@ bool doesOverlap(const struct AddrSpace *addrSpace, const struct MemRegion *regi
   if( !addrSpace )
     addrSpace = &initsrvAddrSpace;
 
-  if( !region )
-    return false;
-
-  for( int i=0; i < sbArrayCount(&addrSpace->memoryRegions); i++ )
+  if( region )
   {
-    if( sbArrayElemAt(&addrSpace->memoryRegions, i, (void **)&addr_region, NULL) != 0 )
-      return false;
-
-    if( regionDoesOverlap(region, &addr_region->virtRegion) )
-      return true;
+    for( int i=0; i < sbArrayCount(&addrSpace->memoryRegions); i++ )
+    {
+      if( sbArrayElemAt(&addrSpace->memoryRegions, i, (void **)&addr_region, NULL) != 0 )
+        break;
+      else if( regionDoesOverlap(region, &addr_region->virtRegion) )
+        return true;
+    }
   }
 
   return false;

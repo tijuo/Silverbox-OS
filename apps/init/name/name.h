@@ -33,4 +33,8 @@ int _registerDevice(int major, struct Device *device);
 struct Device * _unregisterDevice(unsigned char major);
 struct Device *lookupDeviceMajor(int major);
 
+void registerName(msg_t *request, msg_t *response);
+void lookupName(msg_t *request, msg_t *response);
+void unregisterName(msg_t *request, msg_t *response);
+
 #endif /* NAME_H */

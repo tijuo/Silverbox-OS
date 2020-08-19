@@ -2,13 +2,11 @@
 
 void *memchr(const void *buffer, int c, size_t num)
 {
-  unsigned i;
+  size_t i;
   unsigned char *buff = (unsigned char *)buffer;
 
-  for(i=0; (i < num) && (buff[i] != c); i++);
+  for(i=0; i < num && *buff != c; i++, buff++);
 
-  if(buff[i] != c)
-    return NULL;
-  else
-    return (void *)buff;
+
+  return (i == num ? NULL : buff);
 }

@@ -3,10 +3,6 @@
 
 #include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct { int quot; int rem; } div_t;
 typedef struct { long quot; long rem; } ldiv_t;
 typedef struct { long long quot; long long rem; } lldiv_t;
@@ -15,6 +11,10 @@ typedef struct { long long quot; long long rem; } lldiv_t;
 #define	EXIT_FAILURE	1
 
 #define RAND_MAX	0xFFFFFFFFUL
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int abs(int num);
 long labs(long n);
@@ -69,7 +69,7 @@ extern unsigned int __mt_array[624];
 extern int __mt_index;
 
 #ifdef __cplusplus
-}
+};
 #endif
 
 #endif /* STDLIB_H */

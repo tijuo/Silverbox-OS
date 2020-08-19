@@ -5,7 +5,7 @@
 #include <kernel/multiboot.h>
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
-#include <kernel/struct.h>
+#include <kernel/list.h>
 
 /* FIXME: Changing any of these values may require changing
    the asm code */

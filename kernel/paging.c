@@ -29,6 +29,14 @@ bool isReadable( addr_t addr, paddr_t pdir );
 bool isWritable( addr_t addr, paddr_t pdir );
 */
 
+/**
+  Set up a new page map to be used as an address space for a thread. Inserts the
+  kernel page mappings and the recursive map.
+
+  @param pmap The address of the page map
+  @return E_OK, on success. E_FAIL, on error.
+*/
+
 int initializeRootPmap(dword pmap)
 {
  // Map the page directory, kernel space, and first page table
@@ -83,6 +91,7 @@ int clearPhysPage( paddr_t phys )
 
 /**
     Can data be read from some virtual address in a particular address space?
+
     @param addr The virtual address to be tested.
     @param pdir The physical address of the address space
     @return true if address is readable. false, otherwise.
@@ -103,6 +112,7 @@ bool isReadable( addr_t addr, paddr_t pdir )
 
 /**
     Can data be written to some virtual address in a particular address space?
+
     @param addr The virtual address to be tested.
     @param pdir The physical address of the address space
     @return true if address is writable. false, otherwise.
@@ -132,7 +142,9 @@ bool isWritable( addr_t addr, paddr_t pdir )
   Read an arbitrary entry from a generic page map in some address space.
   (A page directory is considered to be a level 2 page map, a page table
    is a level 1 page map.)
-  @param pbase The base physical address of the page map
+
+  @param pbase The base physical address of the page map. NULL_PADDR,
+         if the current page map is to be used.
   @param entry The page map entry to be read.
   @param buffer The memory buffer to which the entry data will be written.
   @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the
@@ -152,7 +164,8 @@ int readPmapEntry(paddr_t pbase, int entry, void *buffer)
   Write an arbitrary entry to a generic page map in some address space.
   (A page directory is considered to be a level 2 page map, a page table
    is a level 1 page map.)
-  @param pbase The base physical address of the page map
+  @param pbase The base physical address of the page map. NULL_PADDR
+         if the current page map is to be used.
   @param entry The page map entry to be written.
   @param buffer The memory buffer from which the entry data will be read.
   @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the

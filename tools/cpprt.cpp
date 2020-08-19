@@ -1,7 +1,7 @@
 #ifdef __cplusplus
 #include <cpp.h>
 
-extern "C" 
+extern "C"
 {
   /* After a global object has been constructed, this function will be automatically
      called to set up a destructor. */
@@ -9,7 +9,7 @@ extern "C"
   int __cxa_atexit(void (*f)(void *), void *p, void *d)
   {
 
-          if (iObject >= 32) 
+          if (iObject >= 32)
             return -1;
 
           object[iObject].f = f;

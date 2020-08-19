@@ -10,7 +10,7 @@ include ../vars.mk
 
 SRC     =init.c paging.c thread.c schedule.c interrupt.c \
         debug.c pic.c message.c syscall.c mem.c \
-	kmalloc.c struct.c
+	kmalloc.c list.c
 
 OBJ     =$(SRC:.c=.o)
 LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL

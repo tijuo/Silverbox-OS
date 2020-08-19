@@ -47,6 +47,7 @@
 #define MEM_FLG_EAGER		0x02		// Map in pages immediately (instead of only when they are accessed)
 #define MEM_FLG_ALLOC		0x04		// Do not perform a phys->virt mapping (implies read-write)
 #define MEM_FLG_COW		0x08		// Mark as copy-on-write(implies read-only)
+#define MEM_FLG_IO		0x10		// Map IO memory instead
 
 struct GenericReq
 {

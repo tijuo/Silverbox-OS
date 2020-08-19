@@ -2,10 +2,10 @@ OUTPUT_FORMAT("elf32-i386")
 ENTRY(start)
 SECTIONS
 {
-  virtual = 0x400000;
+  __virtual = 0x400000;
 
-  .text virtual : {
-    code = .;
+  .text __virtual : {
+    __code = .;
     *(.text)
     *(.gnu.linkonce.t.*)
     *(.gnu.linkonce.r.*)
@@ -27,7 +27,7 @@ SECTIONS
   }
   
   .data . : {
-    data = .;
+    __data = .;
     *(.rdata)
     *(.data)
     *(.gnu.linkonce.d.*)
@@ -35,11 +35,11 @@ SECTIONS
   }
 
   .bss . : {
-    bss = .;
+    __bss = .;
     *(.bss)
     *(.gnu.linkonce.b.*)
     *(.common)
     . = ALIGN(4096);
   }
-    end = .;
+  __end = .;
 }

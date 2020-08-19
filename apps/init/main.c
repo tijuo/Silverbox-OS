@@ -301,8 +301,9 @@ static void handleMessage(msg_t *msg)
   else
   {
     print("init: Received message with subject: "), printHex(msg->subject), print(" from "), printInt(msg->sender), print("\n");
+    msg_t responseMsg;
 
-    switch(msg->data.c8[0])
+    switch(msg->subject)
     {
       case MAP_MEM:
         break;
@@ -321,14 +322,19 @@ static void handleMessage(msg_t *msg)
       case UNREGISTER_SERVER:
         break;
       case REGISTER_NAME:
+        registerName(msg, &responseMsg);
         break;
       case LOOKUP_NAME:
+        lookupName(msg, &responseMsg);
         break;
       case UNREGISTER_NAME:
+        unregisterName(msg, &responseMsg);
         break;
       default:
         break;
     }
+
+    sys_send(&responseMsg, 0);
   }
 }
 

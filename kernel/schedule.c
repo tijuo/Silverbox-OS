@@ -25,10 +25,6 @@ tcb_t *detachRunQueue( tcb_t *thread );
   threads are CPU-bound. If a thread uses up too much of its time slice, then its
   priority level is decreased.
 
-  @todo Add a way to increase the priority level of threads if it uses very little of
-        its time slice.
-
-  @param thread The TCB of the current thread.
   @return A pointer to the TCB of the newly scheduled thread on success. NULL on failure.
 */
 
@@ -96,6 +92,13 @@ tcb_t *schedule(void)
   return newThread;
 }
 
+/**
+  Switch to a new stack (and thus perform a context switch to a new thread),
+  if necessary.
+
+  @param The saved execution state of the processor.
+*/
+
 void switchStacks(ExecutionState *state)
 {
   assert(state != NULL);
@@ -122,7 +125,7 @@ void switchStacks(ExecutionState *state)
 }
 
 /**
-    Adjusts the priority level of a thread.
+    Adjust the priority level of a thread.
 
     If the thread is already on a run queue, then it will
     be detached from its current run queue and attached to the
@@ -130,7 +133,7 @@ void switchStacks(ExecutionState *state)
 
     @param thread The thread of a TCB.
     @param level The new priority level.
-    @return 0 on success. -1 on failure.
+    @return E_OK on success. E_FAIL on failure. E_DONE if priority would remain unchanged.
 */
 
 int setPriority( tcb_t *thread, unsigned int level )
@@ -141,13 +144,13 @@ int setPriority( tcb_t *thread, unsigned int level )
   if(thread->priority == level)
     return E_DONE;
 
-  if( thread->threadState == READY )
+  if(thread->threadState == READY)
     detachRunQueue( thread );
 
   thread->priority = level;
 
-  if( thread->threadState == READY )
-    attachRunQueue( thread );
+  if( thread->threadState == READY && !attachRunQueue(thread))
+    return E_FAIL;
 
   if( level < currentThread->priority && currentThread->threadState == RUNNING )
     currentThread->threadState = READY;
@@ -203,7 +206,7 @@ tcb_t *detachRunQueue( tcb_t *thread )
   @note Since this is an interrupt handler, there should not be too much
         code here and it should execute quickly.
 
-  @param thread The TCB of the current thread.
+  @param state The saved execution state of the processor.
 */
 
 void timerInt(UNUSED_PARAM ExecutionState *state)

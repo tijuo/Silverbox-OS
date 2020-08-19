@@ -2,13 +2,13 @@
 
 char *strchr(const char *s, int c)
 {
-  if(s == NULL)
-    return NULL;
+  if(s != NULL)
+  {
+    for( ; *s && *s != c; s++ );
 
-  for( ; *s && *s != c; s++ );
+    if(*s == c)
+      return (char *)s;
+  }
 
-  if( *s == c )
-    return (char *)s;
-  else
-    return NULL;
+  return NULL;
 }

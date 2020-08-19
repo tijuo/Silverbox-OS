@@ -1,13 +1,3 @@
-/* $Id: strcspn.c 262 2006-11-16 07:34:57Z solar $ */
-
-/* Release $Name$ */
-
-/* strcspn( const char *, const char * )
-
-   This file is part of the Public Domain C Library (PDCLib).
-   Permission is granted to use, modify, and / or redistribute at will.
-*/
-
 #include <string.h>
 
 size_t strcspn( const char * s1, const char * s2 )

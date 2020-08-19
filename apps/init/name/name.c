@@ -93,3 +93,19 @@ struct Device *lookupDeviceMajor(int major)
   else
     return dev;
 }
+
+void registerName(msg_t *request, msg_t *response)
+{
+
+}
+
+void lookupName(msg_t *request, msg_t *response)
+{
+
+}
+
+void unregisterName(msg_t *request, msg_t *response)
+{
+
+}
+

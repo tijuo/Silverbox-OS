@@ -32,7 +32,7 @@ char    *strtok_r(char *, const char *, char **);
 size_t   strxfrm(char *, const char *, size_t);
 
 #ifdef __cplusplus
-}
+};
 #endif  /* __cplusplus */
 
 #endif

@@ -4,14 +4,14 @@ char *strrchr(const char *s, int c)
 {
   char *addr = NULL;
 
-  if(s == NULL)
-    return NULL;
-
-  while( *s != '\0' )
+  if(s)
   {
-    if( *s == (char)c )
-      addr = (char *)s;
-    s++;
+    while(*s)
+    {
+      if(*s == c)
+        addr = (char *)s;
+      s++;
+    }
   }
 
   return addr;

@@ -4,7 +4,7 @@
 #include <types.h>
 #include <kernel/mm.h>
 #include <kernel/lowlevel.h>
-#include <kernel/struct.h>
+#include <kernel/list.h>
 
 #define MAX_THREADS		65536
 

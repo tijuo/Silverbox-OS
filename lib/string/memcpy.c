@@ -2,17 +2,14 @@
 
 void *memcpy(void *dest, const void *src, size_t num)
 {
-  char *_dest=(char *)dest, *_src=(char *)src;
+  register char *_dest=(char *)dest, *_src=(char *)src;
 
-  if( src == NULL || dest == NULL )
-    return NULL;
-
-  while( num )
+  if( src != NULL && dest != NULL )
   {
-    *(_dest++) = *(_src++);
-    num--;
+    while( num-- )
+      *(_dest++) = *(_src++);
   }
 
-  return (void *)dest;
+  return dest;
 }
 

@@ -11,7 +11,8 @@ bool tempMapped;
 
 static void freeUnusedHeapPages(void);
 
-/** Allocate an available physical page frame.
+/** Allocate an available 4 KB physical page frame.
+
     @return The physical address of a newly allocated page frame. NULL_PADDR, on failure.
 **/
 
@@ -41,7 +42,8 @@ paddr_t allocPageFrame(void)
   return (freePageStackTop == freePageStack) ? NULL_PADDR : *--freePageStackTop;
 }
 
-/** Release a page frame.
+/** Release a 4 KB page frame.
+
     @param frame The physical address of the page frame to be released
 **/
 
@@ -52,6 +54,11 @@ void freePageFrame(paddr_t frame)
   if(freePageStackTop == NULL)
     *freePageStackTop++ = frame & ~(PAGE_SIZE - 1);
 }
+
+/**
+  Attempt to release any physical page frames that have been allocated for heap use that
+  are not being used.
+*/
 
 void freeUnusedHeapPages(void)
 {

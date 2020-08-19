@@ -3,7 +3,7 @@
 
 #include <oslib.h>
 #include <kernel/thread.h>
-#include <kernel/struct.h>
+#include <kernel/list.h>
 
 struct PendingExceptionMessage
 {

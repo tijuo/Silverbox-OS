@@ -1,9 +1,6 @@
 #ifndef OSLIB_H
 #define OSLIB_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <types.h>
 #include <ipc.h>
@@ -97,6 +94,10 @@ struct ExitMsg
   tid_t tid;
   int code;
 };
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 char *strdup(const char *str);
 char *strndup(const char *str, size_t n);

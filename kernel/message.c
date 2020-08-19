@@ -7,16 +7,16 @@
 #include <kernel/message.h>
 #include <kernel/error.h>
 
-/** Attach a thread to a port's send queue. The thread will then enter
+pem_t *pendingMessageBuffer;
+
+/** Attach a sending thread to a recipient's send queue. The sender will then enter
     the WAIT_FOR_RECV state until the recipient receives the message from
     the thread.
 
-  @param tcb The thread to attach
-  @paarm port The queue's port to which the thread will be attached
+  @param sender The thread to attach.
+  @paarm recipientTid The tid of the recipient to which the sender will be attached.
   @return E_OK on success. E_FAIL on failure.
 */
-
-pem_t *pendingMessageBuffer;
 
 int attachSendQueue(tcb_t *sender, tid_t recipientTid)
 {
@@ -38,13 +38,13 @@ int attachSendQueue(tcb_t *sender, tid_t recipientTid)
   return E_FAIL;
 }
 
-/** Attach a thread to a sender's receiver list. The receiving thread will
+/** Attach a recipient to a sender's receive quee. The receiving thread will
     then enter the WAIT_FOR_SEND state until the sender sends a message to
     the recipient.
 
-  @param receive The thread that is waiting to receive a message from
-                 the sender.
-  @paarm sender The thread that the recipient is waiting to send a message.
+  @param recipient The thread that is waiting to receive a message from
+                   a sender.
+  @paarm senderTid The tid of the thread that the recipient is waiting to send a message.
   @return E_OK on success. E_FAIL on failure.
 */
 
@@ -73,9 +73,9 @@ int attachReceiveQueue(tcb_t *recipient, tid_t senderTid)
   }
 }
 
-/** Remove a thread from a receiver's send queue.
+/** Remove a sender from its recipient's send queue.
 
-  @param tcb The thread to detach
+  @param sender The sender to be detached.
   @return E_OK on success. E_FAIL on failure.
 */
 
@@ -95,9 +95,9 @@ int detachSendQueue(tcb_t *sender)
   return E_FAIL;
 }
 
-/** Remove a thread from a sender's receiver list.
+/** Remove a recipient from its sender's receive queue.
 
-  @param recipient The thread that will be removed from the receive queue
+  @param recipient The recipient that will be detached.
   @return E_OK on success. E_FAIL on failure.
 */
 
@@ -119,17 +119,17 @@ int detachReceiveQueue(tcb_t *recipient)
 }
 
 /**
-  Synchronously sends a message from the current thread to the recipient thread.
+  Synchronously send a message from a sender thread to a recipient thread.
 
   If the recipient is not ready to receive the message, then wait unless
   non-blocking.
 
-  @param sender The TCB of the sender.
-  @param recipientTid The TID of the thread that will receive the message
+  @param sender The sending thread.
+  @param state The saved execution state of the processor while the thread was in user-mode.
+  @param recipientTid The TID of the recipient thread.
   @param block Non-zero if a blocking send (i.e. wait until a recipient
-         receives from the local port). Otherwise, give up if no recipients
-         are available.
-  @param call 1 if the sender expects to receive a message from the recipient
+         receives). Otherwise, give up if no recipients are available.
+  @param call non-zero if the sender expects to receive a message from the recipient
               as a reply. 0, otherwise.
   @return E_OK on success. E_FAIL on failure. E_INVALID_ARG on bad argument.
           E_BLOCK if no recipient is ready to receive (and not blocking).
@@ -182,6 +182,19 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
   return E_OK;
 }
 
+/**
+  Send a message originating from the kernel to a recipient.
+
+  If the recipient is not ready to receive the message, then save the message
+  in the pending message buffer, until the recipient is ready.
+
+  @param sender The sender thread.
+  @param recipientTid The TID of the recipient thread.
+  @param message The kernel message to be sent.
+  @return E_OK on success. E_FAIL on failure. E_INVALID_ARG on bad argument.
+          E_BLOCK if no recipient is ready to receive (and not blocking).
+*/
+
 int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
                          pem_t * message)
 {
@@ -223,18 +236,14 @@ int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
 
 
 /**
-  Synchronously receives a message from a thread.
-
-  If no message can be received, then wait for a message from sender
-  unless indicated as non-blocking.
+  Synchronously receive a message from a thread. If no message can be received, then wait
+  for a message from the sender unless indicated as non-blocking.
 
   @param recipient The recipient of the message.
-  @param port     The port on which the recipient is waiting for a message.
-  @param sender   The thread that the recipient expects to receive a message.
-                  NULL, if receiving from any sender.
+  @param senderTid The tid of the sender that the recipient expects to receive a message.
+                   ANY_SENDER, if receiving from any sender.
   @param block Non-zero if a blocking receive (i.e. wait until a sender
-         sends to the local port). Otherwise, give up if no senders
-         are available.
+         sends). Otherwise, give up if no senders are available.
   @return E_OK on success. E_FAIL on failure. E_INVALID_ARG on bad argument.
           E_BLOCK if no messages are pending to be received (and non-blocking).
 */

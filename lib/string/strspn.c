@@ -1,30 +1,34 @@
 #include <string.h>
 
-size_t strspn(const char* cs, const char* ct)
+size_t strspn(const char *s, const char *accept)
 {
   size_t num = 0;
-  const char *start = (const char *)ct;
+  const char *start = (const char *)accept;
 
-  while(*cs)
+  if(!accept)
+    return strlen(s);
+
+  while(*s)
   {
-    while(*ct)
+    while(*accept)
     {
-      if( *cs == *ct )
+      if(*s == *accept)
       {
         num++;
         break;
       }
       else
-        ct++;
+        accept++;
     }
 
-    if(!*ct)
+    if(!*accept)
       return num;
     else
     {
-      cs++;
-      ct = start;
+      s++;
+      accept = start;
     }
   }
+
   return num;
 }
