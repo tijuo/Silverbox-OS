@@ -9,7 +9,9 @@ int fclose(FILE *stream)
   fflush(stream);
 
   if( !stream->user_buf )
+  {
     free(stream->buffer);
+  }
 
   free(stream);
 

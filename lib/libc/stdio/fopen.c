@@ -73,6 +73,7 @@ FILE *fopen(char *filename, char *mode)
   file->file_len = (size_t)attrib.size;
   file->buffer_len = BUFSIZ;
   file->buf_mode = _IOFBF;
+  file->orientation = NO_ORI;
 
   return file;
 }

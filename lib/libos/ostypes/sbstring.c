@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-char sbStringCharAt(const sbstring_t *str, size_t index)
+char sbStringCharAt(sbstring_t *str, size_t index)
 {
   if(!str || index >= str->length)
     return '\0';
@@ -10,7 +10,7 @@ char sbStringCharAt(const sbstring_t *str, size_t index)
   return str->data[index];
 }
 
-sbstring_t *sbStringConcat(sbstring_t *str, const sbstring_t *addend)
+sbstring_t *sbStringConcat(sbstring_t *str, sbstring_t *addend)
 {
   void *buf;
 
@@ -36,7 +36,7 @@ sbstring_t *sbStringConcat(sbstring_t *str, const sbstring_t *addend)
   return str;
 }
 
-sbstring_t *sbStringCopy(const sbstring_t *str, sbstring_t *newStr)
+sbstring_t *sbStringCopy(sbstring_t *str, sbstring_t *newStr)
 {
   if(!str || !newStr)
     return NULL;
@@ -51,12 +51,12 @@ sbstring_t *sbStringCopy(const sbstring_t *str, sbstring_t *newStr)
   return newStr;
 }
 
-sbstring_t *sbStringCreate(sbstring_t *sbString, const char *str)
+sbstring_t *sbStringCreate(sbstring_t *sbString, char *str)
 {
   return sbStringCreateN(sbString, str, strlen(str));
 }
 
-sbstring_t *sbStringCreateN(sbstring_t *sbString, const char *str, size_t len)
+sbstring_t *sbStringCreateN(sbstring_t *sbString, char *str, size_t len)
 {
   if(!sbString)
     return NULL;
@@ -76,7 +76,7 @@ sbstring_t *sbStringCreateN(sbstring_t *sbString, const char *str, size_t len)
   return sbString;
 }
 
-int sbStringCompare(const sbstring_t *str1, const sbstring_t *str2)
+int sbStringCompare(sbstring_t *str1, sbstring_t *str2)
 {
   size_t i=0;
 
@@ -115,7 +115,7 @@ int sbStringDelete(sbstring_t *sbString)
   return 0;
 }
 
-int sbStringFind(const sbstring_t *haystack, const sbstring_t *needle)
+int sbStringFind(sbstring_t *haystack, sbstring_t *needle)
 {
   if(!haystack || !needle || needle->length > haystack->length)
     return SB_FAIL;
@@ -132,7 +132,7 @@ int sbStringFind(const sbstring_t *haystack, const sbstring_t *needle)
   return SB_NOT_FOUND;
 }
 
-int sbStringFindChar(const sbstring_t *sbString, int c)
+int sbStringFindChar(sbstring_t *sbString, int c)
 {
   if(!sbString)
     return SB_FAIL;
@@ -146,7 +146,7 @@ int sbStringFindChar(const sbstring_t *sbString, int c)
   return SB_NOT_FOUND;
 }
 
-size_t sbStringLength(const sbstring_t *str)
+size_t sbStringLength(sbstring_t *str)
 {
   if(!str)
     return 0;
@@ -154,7 +154,7 @@ size_t sbStringLength(const sbstring_t *str)
   return str->length;
 }
 
-sbarray_t *sbStringSplit(const sbstring_t *sbString, const sbstring_t *delimiter,
+sbarray_t *sbStringSplit(sbstring_t *sbString, sbstring_t *delimiter,
                   int limit, sbarray_t *array)
 {
   int start=0, end=0;
@@ -191,7 +191,7 @@ sbarray_t *sbStringSplit(const sbstring_t *sbString, const sbstring_t *delimiter
 
       while(sbArrayCount(array))
       {
-        sbArrayPop(array, (const void **)&str);
+        sbArrayPop(array, (void **)&str);
         sbStringDelete(str);
       }
 
@@ -216,7 +216,7 @@ sbarray_t *sbStringSplit(const sbstring_t *sbString, const sbstring_t *delimiter
 
 // start (inclusive), end (non-inclusive)
 
-sbstring_t *sbStringSubString(const sbstring_t *sbString, int start, int end, 
+sbstring_t *sbStringSubString(sbstring_t *sbString, int start, int end, 
                       sbstring_t *newString)
 {
   if(!sbString || !newString)
@@ -246,7 +246,7 @@ sbstring_t *sbStringSubString(const sbstring_t *sbString, int start, int end,
   return newString;
 }
 
-char *sbStringToCString(const sbstring_t *sbString)
+char *sbStringToCString(sbstring_t *sbString)
 {
   char *str;
 

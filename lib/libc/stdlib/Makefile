@@ -1,6 +1,6 @@
 include ../../../prefix.inc
 
-SRC     =strtol.c malloc.c algo.c abort.c
+SRC     =strtol.c malloc.c algo.c abort.c itoa.c
 OBJ     =$(SRC:.c=.o)
 OPT_FLG =-O2 -DLACKS_UNISTD_H -DLACKS_FCNTL_H -DLACKS_SYS_PARAM_H -DLACKS_SYS_MMAN_H \
 -DLACKS_STRINGS_H -DLACKS_SCHED_H -DLACKS_TIME_H \

@@ -3,11 +3,11 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
-static void shiftArray(const void **ptr, int nElems, int shift);
+static void shiftArray(void **ptr, int nElems, int shift);
 static int adjustArrayCapacity(sbarray_t *array);
-static int getPosition(const sbarray_t *array, int pos);
+static int getPosition(sbarray_t *array, int pos);
 
-static int getPosition(const sbarray_t *array, int pos)
+static int getPosition(sbarray_t *array, int pos)
 {
   if(pos == POS_START)
     pos = 0;
@@ -17,7 +17,7 @@ static int getPosition(const sbarray_t *array, int pos)
   return pos;
 }
 
-static void shiftArray(const void **ptr, int nElems, int shift)
+static void shiftArray(void **ptr, int nElems, int shift)
 {
   if( shift > 0 )
   {
@@ -33,7 +33,7 @@ static void shiftArray(const void **ptr, int nElems, int shift)
 
 static int adjustArrayCapacity(sbarray_t *array)
 {
-  const void **result;
+  void **result;
   int prev_capacity = array->capacity;
 
   if( array->nElems == array->capacity )
@@ -65,12 +65,12 @@ int sbArrayClear(sbarray_t *array)
   return 0;
 }
 
-sbarray_t *sbArrayCopy(const sbarray_t *array, sbarray_t *newArray)
+sbarray_t *sbArrayCopy(sbarray_t *array, sbarray_t *newArray)
 {
   if( !array || !newArray )
     return NULL;
 
-  newArray->elems = (const void **)malloc(array->capacity * sizeof(void *));
+  newArray->elems = (void **)malloc(array->capacity * sizeof(void *));
 
   if( !newArray->elems )
   {
@@ -86,7 +86,7 @@ sbarray_t *sbArrayCopy(const sbarray_t *array, sbarray_t *newArray)
   return newArray;
 }
 
-size_t sbArrayCount(const sbarray_t *array)
+size_t sbArrayCount(sbarray_t *array)
 {
   return !array ? 0 : (size_t)array->nElems;
 }
@@ -99,7 +99,7 @@ int sbArrayCreate(sbarray_t *array)
   array->nElems = 0;
   array->capacity = 5;
 
-  array->elems = (const void **)malloc(array->capacity * sizeof(void *));
+  array->elems = (void **)malloc(array->capacity * sizeof(void *));
 
   if( !array->elems )
   {
@@ -122,7 +122,7 @@ void sbArrayDelete(sbarray_t *array)
   array->nElems = 0;
 }
 
-int sbArrayGet(const sbarray_t *array, int pos, const void **elem)
+int sbArrayGet(sbarray_t *array, int pos, void **elem)
 {
   if( !array )
     return SB_FAIL;
@@ -140,7 +140,7 @@ int sbArrayGet(const sbarray_t *array, int pos, const void **elem)
 
 // Returns the index of the first occurence of elem (if found)
 
-int sbArrayFind(const sbarray_t *array, const void *elem)
+int sbArrayFind(sbarray_t *array, void *elem)
 {
   if(!array)
     return SB_FAIL;
@@ -156,7 +156,7 @@ int sbArrayFind(const sbarray_t *array, const void *elem)
 
 // Insert an element into a location in the array.
 
-int sbArrayInsert(sbarray_t *array, int pos, const void *ptr)
+int sbArrayInsert(sbarray_t *array, int pos, void *ptr)
 {
   int newSize;
 
@@ -169,10 +169,10 @@ int sbArrayInsert(sbarray_t *array, int pos, const void *ptr)
 
   if( newSize >= array->capacity )
   {
-    const void **newElems;
+    void **newElems;
 
     array->capacity = (3*newSize)/2;
-    newElems = (const void **)realloc(array->elems, array->capacity * sizeof(void *));
+    newElems = (void **)realloc(array->elems, array->capacity * sizeof(void *));
 
     if(!newElems)
       return SB_FAIL;
@@ -190,7 +190,7 @@ int sbArrayInsert(sbarray_t *array, int pos, const void *ptr)
 
 // Pops an element from the end of the array
 
-int sbArrayPop(sbarray_t *array, const void **ptr)
+int sbArrayPop(sbarray_t *array, void **ptr)
 {
   if( !array )
     return SB_FAIL;
@@ -198,7 +198,7 @@ int sbArrayPop(sbarray_t *array, const void **ptr)
     return SB_EMPTY;
 
   if( ptr )
-    *ptr = (const void **)array->elems[--array->nElems];
+    *ptr = (void **)array->elems[--array->nElems];
 
   adjustArrayCapacity(array);
 
@@ -207,7 +207,7 @@ int sbArrayPop(sbarray_t *array, const void **ptr)
 
 // Pushes an element to the end of the array
 
-int sbArrayPush(sbarray_t *array, const void *ptr)
+int sbArrayPush(sbarray_t *array, void *ptr)
 {
   if(!array || !ptr || array->nElems == INT_MAX || adjustArrayCapacity(array) < 0)
     return SB_FAIL;
@@ -236,7 +236,7 @@ int sbArrayRemove(sbarray_t *array, int pos)
 /* Returns the subarray in an array between positions 'start' (inclusive)
    and 'end' (non-inclusive) */
 
-int sbArraySlice(const sbarray_t *array, int start, int end, sbarray_t *newArray)
+int sbArraySlice(sbarray_t *array, int start, int end, sbarray_t *newArray)
 {
   if( !array || !newArray )
     return SB_FAIL;

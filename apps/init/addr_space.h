@@ -74,8 +74,8 @@ struct AddrRegion
 struct AddrSpace
 {
   paddr_t physAddr;        // physical address of the hardware root page map (page directory)
-  SBArray memoryRegions;   // AddrRegion[]
-  SBAssocArray addressMap; // virt(addr_t) -> page_t
+  sbarray_t memoryRegions;   // AddrRegion[]
+  sbhash_t addressMap; // virt(addr_t) -> page_t
 };
 
 struct Executable
@@ -91,21 +91,21 @@ void initAddrSpace(struct AddrSpace *addrSpace, paddr_t physAddr);
 void destroyAddrSpace(struct AddrSpace *addrSpace);
 int addAddrSpace(struct AddrSpace *addrSpace);
 struct AddrSpace *lookupPageMap(paddr_t physAddr);
-struct AddrSpace *removeAddrSpace(paddr_t physAddr);
+int removeAddrSpace(paddr_t physAddr);
 int attachTid(struct AddrSpace *addrSpace, tid_t tid);
 int detachTid(tid_t tid);
 struct AddrSpace *lookupTid(tid_t tid);
-int attachAddrRegion(struct AddrSpace *addrSpace, const struct AddrRegion *addrRegion);
-bool findAddress(const struct AddrSpace *addrSpace, addr_t addr);
-bool doesOverlap(const struct AddrSpace *addrSpace, const struct MemRegion *region);
-int setMapping(struct AddrSpace *addrSpace, addr_t virt, const page_t *page);
+int attachAddrRegion(struct AddrSpace *addrSpace, struct AddrRegion *addrRegion);
+bool findAddress(struct AddrSpace *addrSpace, addr_t addr);
+bool doesOverlap(struct AddrSpace *addrSpace, struct MemRegion *region);
+int setMapping(struct AddrSpace *addrSpace, addr_t virt, page_t *page);
 int getMapping(struct AddrSpace *addrSpace, addr_t virt, page_t **page);
 int removeMapping(struct AddrSpace *addrSpace, addr_t virt);
-struct AddrRegion *getRegion(const struct AddrSpace *addrSpace, addr_t addr);
+struct AddrRegion *getRegion(struct AddrSpace *addrSpace, addr_t addr);
 
 extern struct AddrSpace initsrvAddrSpace;
-extern SBAssocArray tidMap;     // tid -> AddrSpace
-extern SBAssocArray addrSpaces; // phys addr -> AddrSpace
+extern sbhash_t tidMap;     // tid -> AddrSpace
+extern sbhash_t addrSpaces; // phys addr -> AddrSpace
 extern page_t *pageTable;
 
 #endif /* ADDR_SPACE_H */

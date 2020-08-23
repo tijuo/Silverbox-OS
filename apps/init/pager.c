@@ -4,6 +4,8 @@
 #include <os/syscalls.h>
 #include "pager.h"
 
+extern void print(const char *);
+
 // XXX: this may also have to record the pages that should be mapped as well (including device pages)
 
 int mapRegion(struct AddrSpace *addrSpace, addr_t virt, paddr_t phys, size_t pages, int flags)

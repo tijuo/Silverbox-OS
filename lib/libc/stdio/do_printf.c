@@ -38,7 +38,7 @@
 #define LENGTH_INTMAX_T		7
 #define LENGTH_PTRDIFF_T	8
 
-extern int itoa(int c, char *buf, int base);
+extern char *itoa(int c, char *buf, int base);
 
 static int isFlagChar(int c);
 static int isLengthChar(int c);

@@ -10,9 +10,13 @@
 #define FOPEN_MAX		16
 
 // Buffer modes
-#define _IOFBF			1
-#define _IOLBF			2
-#define _IONBF			3
+#define _IOFBF			1		// Fully-buffered
+#define _IOLBF			2		// Line-buffered
+#define _IONBF			3		// Non-buffered
+
+#define NO_ORI			0		// No orientation
+#define BYTE_ORI		1		// Byte oriented
+#define WIDE_ORI		2		// Wide oriented
 
 #define L_tmpnam
 
@@ -24,7 +28,7 @@
 #define SEEK_END	1
 #define SEEK_SET	2
 
-#define TMP_MAX
+#define TMP_MAX		30
 
 #define ACCESS_RD		1
 #define ACCESS_WR		2
@@ -39,6 +43,7 @@ struct _STDIO_FILE
   unsigned error     : 1;
   unsigned user_buf  : 1;
   unsigned is_device : 1;
+  unsigned orientation : 2;
   char filename[FILENAME_MAX];
   size_t filename_len;
   size_t file_pos;

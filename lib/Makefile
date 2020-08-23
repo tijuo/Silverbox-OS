@@ -4,7 +4,9 @@ DIRS=libos libc
 
 .PHONY:	$DIRS all dep depend clean
 
-all: libc.a libos.a
+all:
+	make libc.a
+	make libos.a
 	cp libos/libos.a .
 	cp libc/libc.a .
 

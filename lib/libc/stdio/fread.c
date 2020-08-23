@@ -5,19 +5,10 @@ int fread(void *ptr, size_t size, size_t count, FILE *stream)
 {
   int bytes_read = 0;
 
-  if( !stream || !ptr )
+  if( !stream || !ptr || feof(stream))
     return EOF;
 
-  if( feof(stream) )
-    return EOF;
-
-  if( !stream->buffer )
-  {
-    stream->error = 1;
-    return EOF;
-  }
-
-  if( !(stream->access & ACCESS_RD) )
+  if( !stream->buffer || !(stream->access & ACCESS_RD))
   {
     stream->error = 1;
     return EOF;

@@ -15,7 +15,6 @@
 
 #define STACK_TOP		0xC0000000
 
-char *itoa(int, char *, int, int);
 void printC(char);
 void printN(const char *, int);
 void print(const char *);
@@ -28,49 +27,6 @@ tid_t createNewThread(tid_t desiredTid, addr_t entry, addr_t pageMap, addr_t sta
 
 extern void (*idle)(void);
 int startThread(tid_t tid);
-
-char *_digits = "0123456789abcdefghijklmnopqrntuvwxyz";
-
-char *itoa(int value, char *str, int base, int unSigned)
-{
-  unsigned int num = (unsigned int)value;
-  size_t str_end=0;
-  int negative = base == 10 && !unSigned && (value & 0x80000000);
-
-  if(negative)
-    num = ~num + 1;
-
-  if( !str )
-    return NULL;
-  else if( base >= 2 && base <= 36 )
-  {
-    do
-    {
-      unsigned int quot = base * (num / base);
-
-      str[str_end++] = _digits[num - quot];
-      num = quot / base;
-    } while( num );
-
-    if(negative)
-      str[str_end++] = '-';
-  }
-
-  str[str_end] = '\0';
-
-  if( str_end )
-  {
-    str_end--;
-
-    for( size_t i=0; i < str_end; i++, str_end-- )
-    {
-      char tmp = str[i];
-      str[i] = str[str_end];
-      str[str_end] = tmp;
-    }
-  }
-  return str;
-}
 
 void printC( char c )
 {
@@ -107,13 +63,13 @@ void print( const char *str )
 void printInt( int n )
 {
   char s[11];
-  print(itoa(n, s, 10, 0));
+  print(itoa(n, s, 10));
 }
 
 void printHex( int n )
 {
   char s[9];
-  print(itoa(n, s, 16, 1));
+  print(itoa(n, s, 16));
 }
 
 int initPageStack(multiboot_info_t *info, addr_t lastFreeKernelPage)
@@ -322,13 +278,13 @@ static void handleMessage(msg_t *msg)
       case UNREGISTER_SERVER:
         break;
       case REGISTER_NAME:
-        registerName(msg, &responseMsg);
+        //registerName(msg, &responseMsg);
         break;
       case LOOKUP_NAME:
-        lookupName(msg, &responseMsg);
+        //lookupName(msg, &responseMsg);
         break;
       case UNREGISTER_NAME:
-        unregisterName(msg, &responseMsg);
+        //unregisterName(msg, &responseMsg);
         break;
       default:
         break;
@@ -502,8 +458,8 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
     pageTable[i].flags = pageTable[i].isOnDisk = pageTable[i].isDiskPage = pageTable[i].isDirty = 0;
   }
 
-  sbAssocArrayCreate(&tidMap, 512);
-  sbAssocArrayCreate(&addrSpaces, 512);
+  sbHashCreate(&tidMap, 512);
+  sbHashCreate(&addrSpaces, 512);
 
   initAddrSpace(&initsrvAddrSpace, inInfo.rootPageMap);
   addAddrSpace(&initsrvAddrSpace);

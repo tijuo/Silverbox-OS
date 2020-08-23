@@ -5,6 +5,9 @@
 #define MIN_INCREMENT	4*PAGE_SIZE
 #define MFAIL                ((void*)-1)
 
+void *heapStart, *heapEnd;
+size_t heapSize;
+
 /* XXX: This doesn't unmap memory due to negative increments. */
 
 void *sbrk( int increment )

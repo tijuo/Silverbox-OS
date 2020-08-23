@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-static unsigned long _hash_func(const char *key, size_t keysize)
+static unsigned long _hash_func(void *key, size_t keysize)
 {
   unsigned long htable = 0;
+  unsigned char *_key = (unsigned char *)key;
 
   for(size_t i=0; i < keysize; i++)
   {
-    htable += (unsigned char)key[i];
+    htable += _key[i];
     htable += (htable << 10);
     htable ^= (htable >> 6);
   }
@@ -20,7 +21,7 @@ static unsigned long _hash_func(const char *key, size_t keysize)
   return htable;
 }
 
-sbhash_t *sbHashCopy(const sbhash_t *htable, sbhash_t *copy)
+sbhash_t *sbHashCopy(sbhash_t *htable, sbhash_t *copy)
 {
   struct KeyValuePair *pair, *copyPair;
 
@@ -73,7 +74,7 @@ void sbHashDestroy(sbhash_t *htable)
   return;
 }
 
-int sbHashInsert(sbhash_t *htable, const char *key, const void *value)
+int sbHashInsert(sbhash_t *htable, void *key, void *value)
 {
   struct KeyValuePair *pair;
   size_t hashIndex;
@@ -99,7 +100,7 @@ int sbHashInsert(sbhash_t *htable, const char *key, const void *value)
   return SB_FULL;
 }
 
-size_t sbHashKeys(const sbhash_t *htable, const char **keys)
+size_t sbHashKeys(sbhash_t *htable, void **keys)
 {
   size_t keyCount=0;
   struct KeyValuePair *pair;
@@ -123,7 +124,7 @@ size_t sbHashKeys(const sbhash_t *htable, const char **keys)
   return keyCount;
 }
 
-int sbHashLookup(const sbhash_t *htable, const void *key, const void **val)
+int sbHashLookup(sbhash_t *htable, void *key, void **val)
 {
   struct KeyValuePair *pair;
   size_t hashIndex;
@@ -140,7 +141,7 @@ int sbHashLookup(const sbhash_t *htable, const void *key, const void **val)
     if(pair->valid && pair->key == key)
     {
       if(val)
-        *(const void **)val = pair->value;
+        *(void **)val = pair->value;
 
       return 0;
     }
@@ -152,7 +153,7 @@ int sbHashLookup(const sbhash_t *htable, const void *key, const void **val)
 /* Since these hash tables are of fixed size, two arrays can be
    merged together to form a larger one. */
 
-int sbHashMerge(sbhash_t *htable1, const sbhash_t *htable2)
+int sbHashMerge(sbhash_t *htable1, sbhash_t *htable2)
 {
   if(!htable1)
     return SB_FAIL;
@@ -165,7 +166,7 @@ int sbHashMerge(sbhash_t *htable1, const sbhash_t *htable2)
 
       if(pair->valid)
       {
-        const void *elem;
+        void *elem;
 
         if(sbHashLookup(htable1, pair->key, &elem) != 0)
         {
@@ -181,7 +182,7 @@ int sbHashMerge(sbhash_t *htable1, const sbhash_t *htable2)
   return 0;
 }
 
-int sbHashRemove(sbhash_t *htable, const void *key)
+int sbHashRemove(sbhash_t *htable, void *key)
 {
   struct KeyValuePair *pair;
   size_t hashIndex;
