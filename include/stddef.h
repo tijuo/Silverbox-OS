@@ -1,6 +1,10 @@
 #ifndef STDDEF_H
 #define STDDEF_H
 
+#include <stdbool.h>
+#include <limits.h>
+#include <float.h>
+
 #ifndef NULL
   #define NULL	   0
 #endif

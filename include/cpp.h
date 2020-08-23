@@ -3,22 +3,23 @@
 
 #ifdef __cplusplus
 
+#define NUM_OBJECTS		128
+
 extern "C"
 {
-        int __cxa_atexit(void (*f)(void *), void *p, void *d);
-        void __cxa_finalize(void *d);
+  int __cxa_atexit(void (*func)(void *), void *arg, void *dsoHandle);
+  void __cxa_finalize(void *dsoHandle);
 };
 
-struct object
+struct Object
 {
-        void (*f)(void*);
-        void *p;
-        void *d;
-} object[32];
+  void (*destructor)(void*);
+  void *arg;
+  void *dsoHandle;
+};
 
-unsigned int iObject = 0;
-
-void *__dso_handle = 0;
+extern unsigned int numObjects;
+extern void *__dso_handle;
 
 #endif /* __cplusplus */
 

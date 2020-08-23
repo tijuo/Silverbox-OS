@@ -68,8 +68,11 @@ void srand(unsigned int seed);
 extern unsigned int __mt_array[624];
 extern int __mt_index;
 
+char *itoa(int num, char *buf, int base);
+char *utoa(unsigned int num, char *buf, int base);
+
 #ifdef __cplusplus
-};
+}
 #endif
 
 #endif /* STDLIB_H */

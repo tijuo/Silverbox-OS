@@ -19,7 +19,7 @@
 #define FS_COMPRESS	0x100
 #define FS_ENCRYPT	0x200
 
-typedef SBArray SBFilePath;
+typedef sbarray_t SBFilePath;
 
 struct FileAttributes
 {
@@ -34,7 +34,7 @@ struct MountEntry
 {
   int device;
   struct VFS_Filesystem *fs;
-  SBString path;
+  sbstring_t path;
   int flags;
 };
 
@@ -92,13 +92,13 @@ struct MountArgs
 
 struct FSOps
 {
-  int (*createDir)( SBString *, SBFilePath * );
+  int (*createDir)( sbstring_t *, SBFilePath * );
   int (*list)( unsigned short, SBFilePath *, struct VfsListArgs *, struct FileAttributes ** );
-  int (*createFile)( SBString *, SBFilePath * );
+  int (*createFile)( sbstring_t *, SBFilePath * );
   int (*read)( unsigned short, SBFilePath *, struct VfsReadArgs *, char ** );
   int (*write)( SBFilePath *, char *, size_t );
   int (*remove)( SBFilePath * );
-  int (*link)( SBString *, SBFilePath * ); // Creates a hard link
+  int (*link)( sbstring_t *, SBFilePath * ); // Creates a hard link
   int (*unlink)( SBFilePath * );
   int (*getAttributes)( unsigned short, SBFilePath *, struct VfsGetAttribArgs *, struct FileAttributes ** );
   int (*setAttributes)( SBFilePath *, struct FileAttributes * );

@@ -1,21 +1,26 @@
 #ifdef __cplusplus
 #include <cpp.h>
 
+struct Object objects[NUM_OBJECTS];
+
+unsigned int numObjects = 0;
+void *__dso_handle = 0;
+
 extern "C"
 {
   /* After a global object has been constructed, this function will be automatically
      called to set up a destructor. */
 
-  int __cxa_atexit(void (*f)(void *), void *p, void *d)
+  int __cxa_atexit(void (*func)(void *), void *arg, void *dsoHandle)
   {
 
-          if (iObject >= 32)
+          if (numObjects >= NUM_OBJECTS)
             return -1;
 
-          object[iObject].f = f;
-          object[iObject].p = p;
-          object[iObject].d = d;
-          iObject++;
+          objects[numObjects].destructor = func;
+          objects[numObjects].arg = arg;
+          objects[numObjects].dsoHandle = dsoHandle;
+          numObjects++;
 
           return 0;
   }
@@ -23,30 +28,30 @@ extern "C"
   /* This is called on program termination. The objects' destructors
      are called. */
 
-  inline void __cxa_finalize(void *d)
+  inline void __cxa_finalize(void *dsoHandle)
   {
-          unsigned int i = iObject;
+          unsigned int i = numObjects;
 
-          if( !d )
+          if( !dsoHandle )
           {
             while(i--)
             {
-              --iObject;
+              --numObjects;
 
-              if( object[iObject].f )
-                object[iObject].f(object[iObject].p);
+              if( objects[numObjects].destructor )
+                objects[numObjects].destructor(objects[numObjects].arg);
             }
             return;
           }
 
           while(i--)
           {
-            --iObject;
+            --numObjects;
 
-            if( object[iObject].f == d )
+            if( objects[numObjects].destructor == dsoHandle )
             {
-              object[iObject].f(object[iObject].p);
-              object[iObject].f = 0;
+              objects[numObjects].destructor(objects[numObjects].arg);
+              objects[numObjects].destructor = 0;
             }
           }
   }

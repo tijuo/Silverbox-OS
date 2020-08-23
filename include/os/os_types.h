@@ -3,14 +3,14 @@
 
 #include <os/ostypes/sbarray.h>
 #include <os/ostypes/sbstring.h>
-#include <os/ostypes/sbassocarray.h>
+#include <os/ostypes/sbhash.h>
 
 /* enum SBObjectType { SB_ARRAY, SB_STRING, SB_ASSOC_ARRAY, SB_RANGE };*/
 
 struct _SBRange
 {
   int start;
-  int length;
+  size_t length;
 };
 
 typedef struct _SBRange SBRange;

@@ -1,51 +1,28 @@
 ARFLAGS =rs
 
-LIBCDIRS=ctype string stdlib errno stdio time
-LIBOSDIR=syscall oslib
+DIRS=libos libc
 
-.PHONY:	$(LIBCDIRS) $(LIBOSDIR) all dep depend clean
+.PHONY:	$DIRS all dep depend clean
 
 all: libc.a libos.a
-
-ctype:
-	make -C $@ all
-
-string:
-	make -C $@ all
-
-oslib:
-	make -C $@ all
-
-syscall:
-	make -C $@ all
-
-stdlib:
-	make -C $@ all
-
-errno:
-	make -C $@ all
-
-stdio:
-	make -C $@ all
-
-time:
-	make -C $@ all
+	cp libos/libos.a .
+	cp libc/libc.a .
 
 install:
 
-libc.a: $(LIBCDIRS)
-	for dir in $(LIBCDIRS); do $(AR) $(ARFLAGS) $@ $$dir/*.o; done
+libc.a:
+	make -C libc all
 
-libos.a:$(LIBOSDIR)
-	for dir in $(LIBOSDIR); do $(AR) $(ARFLAGS) $@ $$dir/*.o; done
+libos.a:
+	make -C libos all
 
 dep:
-	make depend
+	for i in $(DIRS); do make -C $$i depend; done
 
 depend:
-	for i in $(LIBOSDIR) $(LIBCDIRS); do make -C $$i depend; done
+	for i in $(DIRS); do make -C $$i depend; done
 
 clean:
 	rm -f *.a
-	for i in $(LIBOSDIR) $(LIBCDIRS); do make -C $$i clean; done
+	for i in $(DIRS); do make -C $$i clean; done
 	rm -rf *.o

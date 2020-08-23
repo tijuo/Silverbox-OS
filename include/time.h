@@ -25,6 +25,10 @@ struct tm
   int tm_isdst;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 clock_t clock(void);
 time_t time(time_t *);
 double difftime(time_t,time_t);
@@ -35,5 +39,9 @@ char *ctime(const time_t *);
 struct tm *gmtime(const time_t *);
 struct tm *localtime(const time_t *);
 size_t strftime(char *, size_t, const char *, const struct tm *);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* TIME_H */

@@ -58,6 +58,10 @@ extern FILE _std_files[3];
 #define stdout  (&_std_files[1])
 #define stderr   (&_std_files[2])
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 void clearerr(FILE *stream);
 int fclose(FILE *stream);
 int feof(FILE *fp);
@@ -85,5 +89,9 @@ int setvbuf(FILE *stream, char *buf, int mode, size_t size);
 int vprintf(const char *format, va_list ap);
 int vsprintf(char *str, const char *format, va_list ap);
 int vfprintf(FILE *stream, const char *format, va_list ap);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* STDIO_H */

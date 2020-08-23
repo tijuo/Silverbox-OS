@@ -1,15 +1,15 @@
 #ifndef CTYPE_H
 #define CTYPE_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
-
 #ifdef __GNUC__
 #define _PURE(x)	(x) __attribute__((pure))
 #else
 #define _PURE(x)	(x)
 #endif /* __GNUC__ */
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
 
 int _PURE(isalnum(int c));
 int _PURE(isalpha(int c));
