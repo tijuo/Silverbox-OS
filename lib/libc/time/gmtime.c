@@ -1,16 +1,19 @@
 #include <time.h>
+#include <errno.h>
 
 extern struct tm __timestruct;
 
-const int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-
+static const int month_days[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
 
 struct tm *gmtime(const time_t *timer)
 {
   time_t t;
 
   if( timer == NULL )
+  {
+    errno = EFAULT;
     return NULL;
+  }
 
   t = *timer;
 

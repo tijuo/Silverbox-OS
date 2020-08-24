@@ -6,9 +6,11 @@
 #include <os/device.h>
 #include <os/os_types.h>
 #include <os/vfs.h>
+#include <os/ostypes/sbhash.h>
+#include <os/msg/message.h>
+#include <os/msg/init.h>
 
 #define MAX_NAME_RECS	256
-#define MAX_NAME_LEN	18
 
 union _NameEntry
 {
@@ -21,20 +23,17 @@ enum _NameType { THREAD, DEVICE,  FS };
 
 struct NameRecord
 {
-  char name[MAX_NAME_LEN];
-  size_t name_len;
-  enum _NameType name_type;
+  char name[MAX_NAME_LEN+1];
+  enum _NameType nameType;
   union _NameEntry entry;
 };
 
-SBAssocArray threadNames, deviceNames, fsNames, deviceTable, fsTable;
-
 int _registerDevice(int major, struct Device *device);
-struct Device * _unregisterDevice(unsigned char major);
+struct Device * _unregisterDevice(int major);
 struct Device *lookupDeviceMajor(int major);
 
-void registerName(msg_t *request, msg_t *response);
-void lookupName(msg_t *request, msg_t *response);
-void unregisterName(msg_t *request, msg_t *response);
+void nameRegister(msg_t *request, msg_t *response);
+void nameLookup(msg_t *request, msg_t *response);
+void nameUnregister(msg_t *request, msg_t *response);
 
 #endif /* NAME_H */

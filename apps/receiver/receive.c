@@ -1,16 +1,14 @@
 #include <os/mutex.h>
 #include <os/syscalls.h>
 #include <oslib.h>
-#include <vector>
 
-mutex_t print_lock=0;
+extern void print(const char *);
+extern void printN(const char *, int);
+extern void printInt(int);
+extern void printHex(int);
+extern void printC(char);
 
-void print(const char *);
-void printN(const char *, int);
-void printInt(int);
-void printHex(int);
-void printC(char);
-
+/*
 void printC( char c )
 {
   char volatile *vidmem = (char *)(0xB8000 + 160 * 4);
@@ -30,7 +28,7 @@ void printC( char c )
   mutex_unlock(&print_lock);
 }
 
-void printN( char *str, int n )
+void printN( const char *str, int n )
 {
   for( int i=0; i < n; i++, str++ )
     printC(*str);
@@ -51,6 +49,7 @@ void printHex( int n )
 {
   print(toHexString(n));
 }
+*/
 
 int main(int argc, char *argv[])
 {
@@ -60,8 +59,6 @@ int main(int argc, char *argv[])
     .sender = ANY_SENDER,
     .data = {}
   };
-
-  std::vector v = std::vector();
 
   while(1)
   {

@@ -9,6 +9,7 @@
 #define SERVER_TYPE_DRIVER
 #define SERVER_TYPE_FS
 #define SERVER_TYPE_PAGER
+#define MAX_NAME_LEN			20
 
 struct MapRequest
 {
@@ -67,17 +68,17 @@ struct RegisterServerRequest
 
 struct RegisterNameRequest
 {
-  char name[20];
+  char name[MAX_NAME_LEN];
 } __PACKED__;
 
 struct UnregisterNameRequest
 {
-  char name[20];
+  char name[MAX_NAME_LEN];
 } __PACKED__;
 
 struct LookupNameRequest
 {
-  char name[20];
+  char name[MAX_NAME_LEN];
 } __PACKED__;
 
 struct LookupNameResponse

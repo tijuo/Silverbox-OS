@@ -7,7 +7,7 @@ all: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
 	make install
 
-$(OUTPUT): $(OBJ) $(SB_PREFIX)/lib/libc.a $(SB_PREFIX)/lib/libos.a
+$(OUTPUT): $(OBJ) $(SB_PREFIX)/lib/libc/libc.a $(SB_PREFIX)/lib/libos/libos.a
 	$(SB_PREFIX)/tools/makecpp.sh $(SRC) $(OUTPUT)
 
 install: $(OUTPUT)

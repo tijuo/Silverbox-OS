@@ -104,7 +104,7 @@ char *strndup(const char *str, size_t n);
 char *strappend(const char *str, const char *add);
 char *toHexString( unsigned int num );
 char *toIntString( int num );
-//char *toOctalString( unsigned int num );
+char *toOctalString( unsigned int num );
 /*
 int fatGetAttributes( const char *path, unsigned short devNum, struct FileAttributes *attrib );
 int fatGetDirList( const char *path, unsigned short devNum, struct FileAttributes *attrib,

@@ -15,8 +15,8 @@ CFLAGS="-O0 -m32 -Wall -std=gnu99 -fno-builtin -nostdlib -ffreestanding"
 INCLUDES="$SB_PREFIX/include/ $SB_PREFIX/drivers/include/"
 EXIT_ON_WARN=1
 TOOLS="$SB_PREFIX/tools"
-LIBS="$SB_PREFIX/lib"
-LDFLAGS="-melf_i386 --exclude-libs ALL --static -L$LIBS -( -lc -los -) -T $SB_PREFIX/cppLink.ld"
+LIBS="$SB_PREFIX/lib/libc/ $SB_PREFIX/lib/libos/"
+LDFLAGS="-melf_i386 --exclude-libs ALL --static -( -lc -los -) -T $SB_PREFIX/cppLink.ld"
 
 if [ $# -lt 2 ]; then
   echo "usage: $0 infile-1 [ infile-2 ... infile-n ] output"
@@ -68,4 +68,4 @@ for name in $files; do
 done
 
 $CPP -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CPPFLAGS $files
-$LD $TOOLS/{$CPP_STUB,$CPP_RT}.o $obj $LDFLAGS -o $output
+$LD $TOOLS/{$CPP_STUB,$CPP_RT}.o $obj `for l in $LIBS; do echo -n "-L $l "; done` $LDFLAGS -o $output

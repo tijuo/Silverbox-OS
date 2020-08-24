@@ -1,14 +1,14 @@
 include ../../prefix.inc
 
-OBJ     =$(SRC:.c=.o)
-INSTALL_DIR=sbos/programs/
+OBJ     =$(SRC:.cc=.o)
+INSTALL_DIR=sbos/servers/
 
 all: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
 	make install
 
 $(OUTPUT): $(OBJ) $(SB_PREFIX)/lib/libc/libc.a $(SB_PREFIX)/lib/libos/libos.a
-	$(SB_PREFIX)/tools/makec.sh $(SRC) $(OUTPUT)
+	$(SB_PREFIX)/tools/makecpp.sh $(SRC) $(OUTPUT)
 
 install: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp

@@ -12,8 +12,13 @@
 #include <os/msg/message.h>
 #include <os/msg/init.h>
 #include <os/msg/kernel.h>
+#include "name/name.h"
 
 #define STACK_TOP		0xC0000000
+
+extern sbhash_t threadNames, deviceNames, fsNames, deviceTable, fsTable;
+
+sbhash_t serverTable; // "tid" -> ServerEntry
 
 void printC(char);
 void printN(const char *, int);
@@ -27,10 +32,17 @@ tid_t createNewThread(tid_t desiredTid, addr_t entry, addr_t pageMap, addr_t sta
 
 extern void (*idle)(void);
 int startThread(tid_t tid);
+int setPriority(tid_t tid, int priority);
+
+struct ServerEntry
+{
+  tid_t tid;
+  int type;
+};
 
 void printC( char c )
 {
-  char volatile *vidmem = (char volatile *)(0xB8000 + 160 * 4);
+  char volatile *vidmem = (char volatile *)(0xB8000 + 160 * 2);
   static int i=0;
 
   if( c == '\n' )
@@ -174,10 +186,11 @@ static void handleMessage(msg_t *msg)
 */
         if(intNum == 14)
         {
+//          print(" Fault address: 0x");
+//          printHex(faultAddr);
+
           if(!(errorCode & 0x4))
           {
-          print(" Fault address: 0x");
-          printHex(faultAddr);
 
             print(" Illegal access to supervisor memory.\n");
             break;
@@ -237,7 +250,7 @@ static void handleMessage(msg_t *msg)
           else
             print("Fault address not found in mapping.\n");
         }
-        print("\n");
+//        print("\n");
         break;
       }
       case EXIT_MSG:
@@ -250,13 +263,12 @@ static void handleMessage(msg_t *msg)
         break;
        }
       default:
-        print("Unhandled message with subject: "), printHex(msg->subject), print("\n");
+        print("Unhandled message with subject: "), printInt(msg->subject), print("\n");
         break;
     }
   }
   else
   {
-    print("init: Received message with subject: "), printHex(msg->subject), print(" from "), printInt(msg->sender), print("\n");
     msg_t responseMsg;
 
     switch(msg->subject)
@@ -274,21 +286,55 @@ static void handleMessage(msg_t *msg)
       case RECEIVE_MESSAGE:
         break;
       case REGISTER_SERVER:
+      {
+        struct ServerEntry *entry = malloc(sizeof(struct ServerEntry));
+        struct RegisterServerRequest *request = (struct RegisterServerRequest *)&msg->data;
+        char *key = malloc(6);
+
+        entry->tid = msg->sender;
+        entry->type = request->type;
+
+        itoa(msg->sender, key, 10);
+
+        if(!entry || sbHashInsert(&serverTable, key, entry) != 0)
+          responseMsg.subject = RESPONSE_FAIL;
+        else
+          responseMsg.subject = RESPONSE_OK;
         break;
+      }
       case UNREGISTER_SERVER:
+      {
+        struct ServerEntry *entry;
+        char key[6];
+        char *storedKey;
+
+        itoa(msg->sender, key, 10);
+
+        if(!entry || sbHashRemovePair(&serverTable, key, &storedKey, (void **)&entry) != 0)
+          responseMsg.subject = RESPONSE_FAIL;
+        else
+        {
+          free(storedKey);
+          free(entry);
+          responseMsg.subject = RESPONSE_OK;
+        }
         break;
+      }
       case REGISTER_NAME:
-        //registerName(msg, &responseMsg);
+        nameRegister(msg, &responseMsg);
         break;
       case LOOKUP_NAME:
-        //lookupName(msg, &responseMsg);
+        nameLookup(msg, &responseMsg);
         break;
       case UNREGISTER_NAME:
-        //unregisterName(msg, &responseMsg);
+        nameUnregister(msg, &responseMsg);
         break;
       default:
+        responseMsg.subject = RESPONSE_FAIL;
         break;
     }
+
+    responseMsg.recipient = msg->sender;
 
     sys_send(&responseMsg, 0);
   }
@@ -435,6 +481,16 @@ int startThread(tid_t tid)
   return sys_update_thread(tid, TF_STATUS, &threadInfo) == ESYS_OK ? 0 : -1;
 }
 
+int setPriority(tid_t tid, int priority)
+{
+  thread_info_t threadInfo =
+  {
+    .priority = priority
+  };
+
+  return sys_update_thread(tid, TF_PRIORITY, &threadInfo) == ESYS_OK ? 0 : -1;
+}
+
 int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
 {
   print("init server started.\n");
@@ -458,15 +514,20 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
     pageTable[i].flags = pageTable[i].isOnDisk = pageTable[i].isDiskPage = pageTable[i].isDirty = 0;
   }
 
-  sbHashCreate(&tidMap, 512);
-  sbHashCreate(&addrSpaces, 512);
+  sbHashCreate(&addrSpaces, 4096);
+  sbHashCreate(&threadNames, 4096);
+  sbHashCreate(&deviceNames, 512);
+  sbHashCreate(&fsNames, 128);
+  sbHashCreate(&deviceTable, 512);
+  sbHashCreate(&fsTable, 128);
+  sbHashCreate(&serverTable, 1024);
 
   initAddrSpace(&initsrvAddrSpace, inInfo.rootPageMap);
   addAddrSpace(&initsrvAddrSpace);
 
   tid_t idleTid = createNewThread(NULL_TID, (addr_t)&idle, NULL, 0x00);
 
-  if(idleTid == NULL_TID || startThread(idleTid) != 0)
+  if(idleTid == NULL_TID || setPriority(idleTid, 0) != 0 || startThread(idleTid) != 0)
   {
     print("Unable to start idle thread\n");
     return 1;
@@ -491,7 +552,7 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
   {
     msg_t msg =
     {
-      .recipient = ANY_SENDER
+      .sender = ANY_SENDER
     };
     int code;
 

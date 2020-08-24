@@ -19,23 +19,7 @@ CFLAGS  =-m32 -std=gnu99 -static -nostdlib \
 	-I$(INC_DIR) $(CMOREFLG) $(EN_DEBUG)
 CPPFLAGS=-m32 -std=gnu++11 -static \
 	-fno-leading-underscore -nostartfiles \
-	-fno-exceptions -I/home/tijuo/src/gcc/libstdc++-v3/include/backward \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/bits \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/c \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/c_compatibility \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/c_global \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/c_std \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/debug \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/decimal \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/experimental \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/ext \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/parallel \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/precompiled \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/pstl \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/std \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/tr1 \
-	-I/home/tijuo/src/gcc/libstdc++-v3/include/tr2 \
-	-fno-rtti -Wall -Wextra -I$(INC_DIR)
+	-fno-exceptions -fno-rtti -Wall -Wextra -I$(INC_DIR)
 CMOREFLG=-Wall -Wextra -Wshadow -Wpointer-arith -Wsign-compare \
 	-Wsystem-headers -Wstrict-prototypes \
 	-Wunused-function -Wmissing-prototypes \

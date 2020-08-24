@@ -1,7 +1,7 @@
 include ../../../prefix.inc
 
 SRC     =time.c mktime.c gmtime.c asctime.c _time.c difftime.c\
-	ctime.c
+	ctime.c localtime.c
 OBJ     =$(SRC:.c=.o)
 OPT_FLG =-O2
 

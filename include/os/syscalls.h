@@ -80,7 +80,7 @@ void sys_exit(int code);
 int sys_send(const msg_t *msg, int block);
 int sys_call(const msg_t *inMsg, msg_t *outMsg, int block);
 int sys_receive(msg_t *msg, int block);
-int sys_wait(unsigned int timeout);
+int sys_wait(int timeout);
 int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, size_t numPages, int flags);
 int sys_unmap(u32 rootPmap, addr_t vaddr, size_t numPages);
 tid_t sys_create_thread(tid_t tid, addr_t entry, u32 rootPmap, addr_t stackTop);

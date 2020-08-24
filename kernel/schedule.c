@@ -30,7 +30,7 @@ tcb_t *detachRunQueue( tcb_t *thread );
 
 tcb_t *schedule(void)
 {
-  unsigned int priority, priorityLimit=LOWEST_PRIORITY;
+  int priority;
   tcb_t *newThread = NULL, *oldThread = currentThread;
 
   /* Threads with higher priority *MUST* execute before threads
@@ -41,14 +41,9 @@ tcb_t *schedule(void)
   {
     if( oldThread->threadState == RUNNING )
       oldThread->threadState = READY;
-
-    if( oldThread->threadState == READY )
-      priorityLimit = oldThread->priority;
   }
-  else
-    priorityLimit = LOWEST_PRIORITY;
 
-  for( priority=HIGHEST_PRIORITY; priority >= priorityLimit; priority-- )
+  for( priority=HIGHEST_PRIORITY; priority >= LOWEST_PRIORITY; priority-- )
   {
     if( !isQueueEmpty(&runQueues[priority])
         && !IS_ERROR(queueDequeue(&runQueues[priority], (void **)&newThread)) )

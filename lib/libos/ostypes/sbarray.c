@@ -209,7 +209,7 @@ int sbArrayPop(sbarray_t *array, void **ptr)
 
 int sbArrayPush(sbarray_t *array, void *ptr)
 {
-  if(!array || !ptr || array->nElems == INT_MAX || adjustArrayCapacity(array) < 0)
+  if(!array || array->nElems == INT_MAX || adjustArrayCapacity(array) < 0)
     return SB_FAIL;
 
   array->elems[array->nElems++] = ptr;

@@ -1,8 +1,8 @@
 include ../../prefix.inc
 
-SRC     =send.cc
+SRC     =send.c
 
 OUTPUT	=sender.exe
 INSTALL_DIR=programs/
 
-include ../apps_cpp.mk
+include ../apps.mk

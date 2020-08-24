@@ -19,6 +19,9 @@ static unsigned int PURE(getTimeInSecs(unsigned int year, unsigned int month,
     unsigned int day, unsigned int hour, unsigned int minute, unsigned int second));
 static int isUpdateInProgress(void);
 
+extern void print(const char *);
+extern void printInt(int);
+
 /* A leap year is either a non-century year divisible by 4 or
    a century year divisible by 400. */
 
@@ -61,7 +64,7 @@ static unsigned int getTimeInSecs(unsigned int year, unsigned int month,
 static int isUpdateInProgress(void)
 {
   outByte(RTC_INDEX, RTC_STATUS_A);
-  return (inByte(RTC_DATA) & RTC_A_UPDATING) != 0;
+  return (inByte(RTC_DATA) & RTC_A_UPDATING);
 }
 
 static unsigned int getTime(void)
@@ -76,8 +79,7 @@ static unsigned int getTime(void)
   bcd = (statusData & RTC_BINARY) ? 0 : 1;
   _24hr = (statusData & RTC_24_HR) ? 1 : 0;
 
-  if(isUpdateInProgress())
-    return currentTime;
+  while(isUpdateInProgress());
 
   outByte( RTC_INDEX, RTC_SECOND ); // second
   second = (bcd ? bcd2bin(inByte( RTC_DATA )) : inByte( RTC_DATA ));
@@ -119,11 +121,6 @@ int main(void)
   registerServer(SERVER_GENERIC);
   registerName(RTC_NAME);
 
-  getTime();
-
-  while(!currentTime)
-    sys_wait(200);
-
   while(1)
   {
     msg_t msg =
@@ -131,18 +128,32 @@ int main(void)
       .sender = ANY_SENDER
     };
 
-    if(sys_receive(&msg, 0) != ESYS_OK)
-      sys_wait(500);
-    else if(msg.subject == GET_TIME_MSG)
+    msg_t responseMsg;
+
+
+    if(sys_receive(&msg, 1) != ESYS_OK)
     {
-      msg.subject = RESPONSE_OK;
-      struct GetTimeResponse *responseBody = (struct GetTimeResponse *)&msg.data;
-
-      responseBody->time = currentTime;
-      sys_send(&msg, 0);
+      //sys_wait(500);
+      continue;
     }
+    else
+    {
+      getTime();
 
-    getTime();
+      if(msg.subject == GET_TIME_MSG)
+      {
+        responseMsg.subject = RESPONSE_OK;
+        struct GetTimeResponse *responseBody = (struct GetTimeResponse *)&responseMsg.data;
+        responseBody->time = currentTime;
+      }
+      else
+        responseMsg.subject = RESPONSE_FAIL;
+
+      responseMsg.recipient = msg.sender;
+
+      if(sys_send(&responseMsg, 0) != ESYS_OK)
+        print("rtc: Failed to send response\n");
+    }
   }
 
   return EXIT_FAILURE;

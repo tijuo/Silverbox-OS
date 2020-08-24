@@ -10,14 +10,16 @@
 #include <os/syscalls.h>
 #include <os/msg/message.h>
 #include <os/msg/init.h>
+#include <os/msg/rtc.h>
 
+/*
 addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags);
 addr_t unmapMem(addr_t addr, size_t length);
 pid_t createPort(pid_t port, int flags);
 pid_t destroyPort(pid_t port);
 int registerDriver(int major, int numDevices, int type, size_t blockSize);
 int unregisterDriver(int major);
-
+*/
 addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags)
 {
   msg_t msg =
@@ -158,7 +160,7 @@ tid_t lookupName(const char *name)
 
   msg_t responseMsg;
   struct LookupNameRequest *request = (struct LookupNameRequest *)&msg.data;
-  struct LookupNameResponse *response = (struct LookupNameResponse *)&msg.data;
+  struct LookupNameResponse *response = (struct LookupNameResponse *)&responseMsg.data;
 
   strncpy(request->name, name, sizeof request->name);
 
@@ -184,6 +186,32 @@ int unregisterName(const char *name)
 
   return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
+}
+
+int getCurrentTime(unsigned int *time)
+{
+  if(!time)
+    return -1;
+
+  tid_t rtcTid = lookupName(RTC_NAME);
+
+  msg_t msg =
+  {
+    .subject = GET_TIME_MSG,
+    .recipient = rtcTid
+  };
+
+  msg_t responseMsg;
+  struct GetTimeResponse *response = (struct GetTimeResponse *)&responseMsg.data;
+
+  if(sys_call(&msg, &responseMsg, 1) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK)
+  {
+    *time = response->time;
+    return 0;
+  }
+  else
+    return -1;
 }
 
 /*

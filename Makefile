@@ -1,6 +1,6 @@
 include prefix.inc
 
-.PHONY:  kernel lib drivers apps all clean install depend dep
+.PHONY:  kernel lib drivers apps servers all clean install depend dep
 
 .SILENT :
 
@@ -9,6 +9,9 @@ DIRS	=lib apps kernel
 all:	$(DIRS)
 
 apps:
+	make -C $@ all
+
+servers:
 	make -C $@ all
 
 kernel:

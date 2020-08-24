@@ -18,7 +18,7 @@
 #define RTC_STATUS_A        0x0a
 
 /* RTC Status Register A
-Bits: 
+Bits:
       0-3 - Rate selection bits for divider output(initially 0110 = 1.024 kHz)
       4-6 - 22 stage divider, time base used; (initially 010 = 32.768 kHz)
        7  - 1=time update in progress, 0=time/date available

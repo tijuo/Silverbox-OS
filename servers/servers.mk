@@ -1,7 +1,7 @@
 include ../../prefix.inc
 
 OBJ     =$(SRC:.c=.o)
-INSTALL_DIR=sbos/programs/
+INSTALL_DIR=sbos/servers/
 
 all: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp

@@ -7,11 +7,11 @@
 .cc.o:
 	$(CPP) $(OPT_FLG) -c $(CPPFLAGS) -I$(INC_DIR) $< -o $@
 
-$(SB_PREFIX)/lib/libc.a:
-	make -C $(SB_PREFIX)/lib/ libc.a
+$(SB_PREFIX)/libc/libc.a:
+	make -C $(SB_PREFIX)/lib/libc libc.a
 
-$(SB_PREFIX)/lib/libos.a:
-	make -C $(SB_PREFIX)/lib/ libos.a
+$(SB_PREFIX)/libos/libos.a:
+	make -C $(SB_PREFIX)/lib/libos libos.a
 
 dep:
 	make depend

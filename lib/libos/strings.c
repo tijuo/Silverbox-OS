@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static char outStr[19];
+
 char *strdup(const char *str)
 {
   char *newStr = malloc(strlen(str)+1);
@@ -40,9 +42,11 @@ char *strappend(const char *str, const char *add)
   return newStr;
 }
 
-/*
+
 char *toOctalString( unsigned int num )
 {
+  return itoa(num, outStr, 8);
+/*
   unsigned i = 0;
   static char s_num[13];
 
@@ -54,25 +58,31 @@ char *toOctalString( unsigned int num )
 
   s_num[i] = '\0';
   return s_num;
-}
 */
+}
 
 char *toHexString(unsigned int num)
 {
+  return itoa(num, outStr, 16);
+/*
   static char str[9];
 
   if(sprintf(str, "%X", num) < 0)
     str[0] = '\0';
 
   return str;
+*/
 }
 
 char *toIntString(int num)
 {
+  return itoa(num, outStr, 10);
+/*
   static char str[17];
 
   if(sprintf(str, "%d", num) < 0)
     str[0] = '\0';
 
   return str;
+*/
 }

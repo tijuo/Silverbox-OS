@@ -1,8 +1,8 @@
 include ../../prefix.inc
 
-SRC     =receive.c
+SRC     =time.c
 
-OUTPUT	=receiver.exe
+OUTPUT	=time.exe
 INSTALL_DIR=programs/
 
 include ../apps.mk

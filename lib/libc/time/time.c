@@ -1,12 +1,19 @@
 #include <time.h>
 #include <os/variables.h>
+#include <os/services.h>
+#include <errno.h>
 
 time_t time(time_t *timer)
 {
-  time_t t = (time_t)((*(clktick_t *)CLOCK_TICKS) / TICKS_PER_SEC);
+  unsigned int t;
 
-  if( timer )
-    *timer = t;
+  if(!timer || getCurrentTime(&t) != 0)
+  {
+    errno = EFAULT;
+    return (time_t)-1;
+  }
 
-  return t;
+  *timer = (time_t)t;
+
+  return *timer;
 }

@@ -2,23 +2,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-static unsigned long _hash_func(void *key, size_t keysize)
+static unsigned long _hash_func(char *key, size_t keysize)
 {
-  unsigned long htable = 0;
-  unsigned char *_key = (unsigned char *)key;
+  unsigned long hash = 0;
 
   for(size_t i=0; i < keysize; i++)
   {
-    htable += _key[i];
-    htable += (htable << 10);
-    htable ^= (htable >> 6);
+    hash += (unsigned int)key[i];
+    hash += (hash << 10);
+    hash ^= (hash >> 6);
   }
 
-  htable += (htable << 3);
-  htable ^= (htable >> 11);
-  htable += (htable << 15);
+  hash += (hash << 3);
+  hash ^= (hash >> 11);
+  hash += (hash << 15);
 
-  return htable;
+  return hash;
 }
 
 sbhash_t *sbHashCopy(sbhash_t *htable, sbhash_t *copy)
@@ -74,7 +73,7 @@ void sbHashDestroy(sbhash_t *htable)
   return;
 }
 
-int sbHashInsert(sbhash_t *htable, void *key, void *value)
+int sbHashInsert(sbhash_t *htable, char *key, void *value)
 {
   struct KeyValuePair *pair;
   size_t hashIndex;
@@ -100,7 +99,7 @@ int sbHashInsert(sbhash_t *htable, void *key, void *value)
   return SB_FULL;
 }
 
-size_t sbHashKeys(sbhash_t *htable, void **keys)
+size_t sbHashKeys(sbhash_t *htable, char **keys)
 {
   size_t keyCount=0;
   struct KeyValuePair *pair;
@@ -124,7 +123,12 @@ size_t sbHashKeys(sbhash_t *htable, void **keys)
   return keyCount;
 }
 
-int sbHashLookup(sbhash_t *htable, void *key, void **val)
+int sbHashLookup(sbhash_t *htable, char *key, void **val)
+{
+  return sbHashLookupPair(htable, key, NULL, val);
+}
+
+int sbHashLookupPair(sbhash_t *htable, char *key, char **storedKey, void **val)
 {
   struct KeyValuePair *pair;
   size_t hashIndex;
@@ -138,10 +142,13 @@ int sbHashLookup(sbhash_t *htable, void *key, void **val)
   {
     pair = &htable->buckets[(hashIndex + i) % htable->numBuckets];
 
-    if(pair->valid && pair->key == key)
+    if(pair->valid && strcmp(pair->key, key) == 0)
     {
       if(val)
         *(void **)val = pair->value;
+
+      if(storedKey)
+        *storedKey = pair->key;
 
       return 0;
     }
@@ -182,7 +189,12 @@ int sbHashMerge(sbhash_t *htable1, sbhash_t *htable2)
   return 0;
 }
 
-int sbHashRemove(sbhash_t *htable, void *key)
+int sbHashRemove(sbhash_t *htable, char *key)
+{
+  return sbHashRemovePair(htable, key, NULL, NULL);
+}
+
+int sbHashRemovePair(sbhash_t *htable, char *key, char **storedKey, void **elem)
 {
   struct KeyValuePair *pair;
   size_t hashIndex;
@@ -196,8 +208,14 @@ int sbHashRemove(sbhash_t *htable, void *key)
   {
     pair = &htable->buckets[(hashIndex + i) % htable->numBuckets];
 
-    if(pair->valid && pair->key == key)
+    if(pair->valid && strcmp(pair->key, key) == 0)
     {
+      if(storedKey)
+        *storedKey = pair->key;
+
+      if(elem)
+        *elem = pair->value;
+
       pair->valid = 0;
       return 0;
     }

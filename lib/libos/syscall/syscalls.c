@@ -71,7 +71,7 @@ void sys_exit(int code)
                        "a"(SYS_EXIT), "b"(code));
 }
 
-int sys_wait(unsigned int timeout)
+int sys_wait(int timeout)
 {
   int retval;
 

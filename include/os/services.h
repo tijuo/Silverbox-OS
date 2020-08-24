@@ -124,6 +124,7 @@ int unregisterServer(void);
 int registerName(const char *name);
 tid_t lookupName(const char *name);
 int unregisterName(const char *name);
+int getCurrentTime(unsigned int *time);
 
 //int mapMem( void *phys, void *virt, int numPages, int flags );
 //int allocatePages( void *address, int numPages );

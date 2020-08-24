@@ -104,7 +104,6 @@ int removeMapping(struct AddrSpace *addrSpace, addr_t virt);
 struct AddrRegion *getRegion(struct AddrSpace *addrSpace, addr_t addr);
 
 extern struct AddrSpace initsrvAddrSpace;
-extern sbhash_t tidMap;     // tid -> AddrSpace
 extern sbhash_t addrSpaces; // phys addr -> AddrSpace
 extern page_t *pageTable;
 

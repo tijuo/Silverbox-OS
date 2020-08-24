@@ -34,11 +34,13 @@ int attachSendQueue(tcb_t *sender, tid_t recipientTid)
     return E_OK;
   }
 
+  kprintf("attachSendQueue(): Error while enqueuing\n");
+
   attachRunQueue(sender);
   return E_FAIL;
 }
 
-/** Attach a recipient to a sender's receive quee. The receiving thread will
+/** Attach a recipient to a sender's receive queue. The receiving thread will
     then enter the WAIT_FOR_SEND state until the sender sends a message to
     the recipient.
 
@@ -61,6 +63,7 @@ int attachReceiveQueue(tcb_t *recipient, tid_t senderTid)
      && IS_ERROR(queueEnqueue(sender->receiverWaitQueue, getTid(recipient),
                      recipient)))
   {
+    kprintf("attachReceiveQueue(): Error occurred while enqueueing to receiver wait queue\n");
     attachRunQueue(recipient);
     return E_FAIL;
   }
@@ -172,11 +175,17 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
     return E_OK;
   }
   else if( !block )	// Recipient is not ready to receive, but we're not allowed to block, so return
+  {
+    kprintf("%d was not ready to receive message from %d\n", recipientTid, senderTid);
     return E_BLOCK;
+  }
   else	// Wait until the recipient is ready to receive the message
   {
     if(IS_ERROR(attachSendQueue(sender, getTid(recipient))))
       return E_FAIL;
+
+    assert(sender->threadState != READY);
+    assert(sender->threadState != RUNNING);
   }
 
   return E_OK;
@@ -282,10 +291,10 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
       state->esi = sender->execState.esi;
       state->edi = sender->execState.edi;
 
-      if((sender->execState.eax & 0xFF) == SYS_CALL_WAIT
-         && IS_ERROR(attachReceiveQueue(sender, recipientTid)))
+      if((sender->execState.eax & 0xFF) == SYS_CALL_WAIT)
       {
-        return E_FAIL;
+        if(IS_ERROR(attachReceiveQueue(sender, recipientTid)))
+          return E_FAIL;
       }
       else if(IS_ERROR(startThread(sender)))
         return E_FAIL;
@@ -306,8 +315,12 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
   }
   else if( !block )
   {
+/*
     kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", recipientTid, state->eip);
-    kprintf("EIP: 0x%x\n", *(dword *)(state->ebp + 4));
+    kprintf("Return EIP: 0x%x\n", *(dword *)(state->ebp + 4));
+*/
+    if(senderTid != ANY_SENDER)
+      kprintf("%d was not ready to send message to %d\n", senderTid, recipientTid);
     return E_BLOCK;
   }
   else // no one is waiting to send to this local port, so wait

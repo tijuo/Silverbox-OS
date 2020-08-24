@@ -1,6 +1,6 @@
 include ../prefix.inc
 
-DIRS	=sender receiver time
+DIRS	=init rtc
 
 .PHONY:	$(DIRS) $(DEF_PHONY)
 
@@ -10,7 +10,7 @@ all:	$(DIRS)
 init_server:
 	make -C $@ all
 
-shell:
+rtc:
 	make -C $@ all
 
 install: $(DIRS)

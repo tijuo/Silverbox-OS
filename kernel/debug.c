@@ -500,8 +500,11 @@ void incTimerCount( void )
   vidmem[0]++;
   vidmem[1] = 0x72;
 
-  kprintAt( "   ", 28, 0);
-  kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 28, 0 );
+  if(currentThread)
+  {
+    kprintAt( "   ", 28, 0);
+    kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 28, 0 );
+  }
 }
 
 /// Blanks the screen

@@ -10,15 +10,20 @@ extern void print(const char *);
 
 int mapRegion(struct AddrSpace *addrSpace, addr_t virt, paddr_t phys, size_t pages, int flags)
 {
-  struct AddrRegion region;
+  struct AddrRegion *region = malloc(sizeof(struct AddrRegion));
 
-  region.virtRegion.start = (int)virt;
-  region.virtRegion.length = pages * PAGE_SIZE;
-  region.flags = flags;
+  if(!region)
+    return -1;
+
+  region->virtRegion.start = (int)virt;
+  region->virtRegion.length = pages * PAGE_SIZE;
+  region->flags = flags;
 
 //  int sysFlags = (region.flags & REG_RO ? PM_READ_ONLY : PM_READ_WRITE);
 
-  if(attachAddrRegion(addrSpace, &region) != 0)
+  // XXX: region will need to be unmapped
+
+  if(attachAddrRegion(addrSpace, region) != 0)
   {
     print("Unable to attach\n");
     return -1;
