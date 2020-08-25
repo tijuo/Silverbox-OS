@@ -165,7 +165,7 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
     else if(IS_ERROR(startThread(recipient)))
       return E_FAIL;
 
-    recipient->execState.eax = (dword)((senderTid << 16) | (state->eax & 0xFF00) | ESYS_OK);
+    recipient->execState.eax = (((dword)senderTid << 16) | (state->eax & 0xFF00) | ESYS_OK);
     recipient->execState.ebx = state->ebx;
     recipient->execState.ecx = state->ecx;
     recipient->execState.edx = state->edx;
@@ -224,7 +224,7 @@ int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
       return E_FAIL;
     }
 
-    recipient->execState.eax = (dword)((KERNEL_TID << 16) | (message->subject << 8) | ESYS_OK);
+    recipient->execState.eax = (dword)(((dword)KERNEL_TID << 16) | ((dword)message->subject << 8) | ESYS_OK);
     recipient->execState.ebx = (dword)message->who;
     recipient->execState.ecx = (dword)message->errorCode;
     recipient->execState.edx = (dword)message->faultAddress;
@@ -279,17 +279,17 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
 
   if(sender && sender->waitTid == recipientTid)
   {
-    if(IS_ERROR(detachSendQueue(sender)))
-      return E_FAIL;
-
     if(sender->threadState == WAIT_FOR_RECV)
     {
-      state->eax = (senderTid << 16) | (sender->execState.eax & 0xFF00);
+      state->eax = ((dword)senderTid << 16) | (sender->execState.eax & 0xFF00);
       state->ebx = sender->execState.ebx;
       state->ecx = sender->execState.ecx;
       state->edx = sender->execState.edx;
       state->esi = sender->execState.esi;
       state->edi = sender->execState.edi;
+
+      if(IS_ERROR(detachSendQueue(sender)))
+        return E_FAIL;
 
       if((sender->execState.eax & 0xFF) == SYS_CALL_WAIT)
       {
@@ -303,11 +303,14 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
     {
       pem_t *message = &pendingMessageBuffer[senderTid];
 
-      state->eax = (dword)((KERNEL_TID << 16) | (message->subject << 8));
+      state->eax = (dword)(((dword)KERNEL_TID << 16) | ((dword)message->subject << 8));
       state->ebx = (dword)message->who;
       state->ecx = (dword)message->errorCode;
       state->edx = (dword)message->faultAddress;
       state->esi = (dword)message->intNum;
+
+      if(IS_ERROR(detachSendQueue(sender)))
+        return E_FAIL;
     }
     else
       return E_FAIL;

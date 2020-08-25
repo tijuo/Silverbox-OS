@@ -7,11 +7,11 @@ DIRS	=sender receiver time
 all:	$(DIRS)
 	for i in $(DIRS); do make -C $$i all; done
 
-init_server:
-	make -C $@ all
+#init_server:
+#	make -C $@ all
 
-shell:
-	make -C $@ all
+#shell:
+#	make -C $@ all
 
 install: $(DIRS)
 	for i in $(DIRS); do make -C $$i install; done

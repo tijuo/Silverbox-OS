@@ -101,16 +101,54 @@ int sleepThread( tcb_t *thread, int msecs )
   if(!timerDelta)
     return E_FAIL;
 
-  timerDelta->delta = (msecs*HZ)/1000;
+  list_node_t *newNode = kmalloc(sizeof(list_node_t));
+
+  if(!newNode)
+  {
+    kfree(timerDelta, sizeof(timerDelta));
+    return E_FAIL;
+  }
+
+  newNode->elem = (void *)timerDelta;
+  newNode->key = getTid(thread);
+  newNode->prev = newNode->next = NULL;
+
+  timerDelta->delta = (msecs*HZ) / 1000;
   timerDelta->thread = thread;
 
-  if(queueEnqueue(&timerQueue, getTid(thread), timerDelta) != E_OK)
-    return E_FAIL;
-  else
+  if(timerQueue.head)
   {
-    thread->threadState = SLEEPING;
-    return E_OK;
+    for(list_node_t *node=timerQueue.head; node != NULL; node = node->next)
+    {
+      timer_delta_t *nodeDelta = (timer_delta_t *)node->elem;
+
+      if(timerDelta->delta > nodeDelta->delta)
+        timerDelta->delta -= nodeDelta->delta;
+      else
+      {
+        nodeDelta->delta -= timerDelta->delta;
+
+        if(node->prev)
+          node->prev->next = newNode;
+        else
+          timerQueue.head = newNode;
+
+        newNode->next = node;
+        node->prev = newNode;
+        goto finish;
+      }
+    }
+
+    timerQueue.tail->next = newNode;
+    newNode->prev = timerQueue.tail;
+    timerQueue.tail = newNode;
   }
+  else
+    timerQueue.head = timerQueue.tail = newNode;
+
+finish:
+  thread->threadState = SLEEPING;
+  return E_OK;
 }
 
 /// Pauses a thread

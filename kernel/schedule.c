@@ -236,10 +236,7 @@ void timerInt(UNUSED_PARAM ExecutionState *state)
       assert( queueFindFirst(&timerQueue, getTid(wokenThread), NULL) == E_FAIL );
 
       if( wokenThread->threadState == WAIT_FOR_SEND || wokenThread->threadState == WAIT_FOR_RECV )
-      {
-        kprintf("SIGTMOUT to %d\n", getTid(wokenThread));
-        //sysRaise(wokenThread, SIGTMOUT, 0);
-      }
+        kprintf("Timeout for %d\n", getTid(wokenThread));
       else
       {
         wokenThread->threadState = READY;

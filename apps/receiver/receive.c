@@ -55,14 +55,12 @@ int main(int argc, char *argv[])
 {
   msg_t msg =
   {
-    .subject = 0,
     .sender = ANY_SENDER,
-    .data = {}
   };
 
   while(1)
   {
-    if(sys_receive(&msg, 1) == ESYS_OK)
+    if(sys_receive(&msg, 0) == ESYS_OK)
     {
       print("receiver: Received a message with subject "), printInt(msg.subject), print(" from "), printInt(msg.sender), print("\n");
 
@@ -81,10 +79,14 @@ int main(int argc, char *argv[])
         msg.sender = ANY_SENDER;
     }
     else
+      sys_wait(300);
+/*
+    else
     {
       print("Error. Unable to receive message");
       return 1;
     }
+*/
   }
 
   return 0;
