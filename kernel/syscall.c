@@ -516,14 +516,11 @@ static int sysSend(ExecutionState *state)
     case E_OK:
       return ESYS_OK;
     case E_INVALID_ARG:
-      kprintf("sys_send failed: invalid arg\n");
       return ESYS_ARG;
     case E_BLOCK:
-      kprintf("sys_send failed: block\n");
       return ESYS_NOTREADY;
     case E_FAIL:
     default:
-      kprintf("sys_send failed\n");
       return ESYS_FAIL;
   }
 }
@@ -538,14 +535,11 @@ static int sysCall(ExecutionState *state)
     case E_OK:
       return ESYS_OK;
     case E_INVALID_ARG:
-      kprintf("sys_call failed: invalid arg\n");
       return ESYS_ARG;
     case E_BLOCK:
-      kprintf("sys_call failed: not ready\n");
       return ESYS_NOTREADY;
     case E_FAIL:
     default:
-      kprintf("sys_call failed\n");
       return ESYS_FAIL;
   }
 }
@@ -587,13 +581,11 @@ int sysReceive(ExecutionState *state)
     case E_OK:
       return ESYS_OK;
     case E_INVALID_ARG:
-      kprintf("sys_receive failed: invalid arg\n");
       return ESYS_ARG;
     case E_BLOCK:
       return ESYS_NOTREADY;
     case E_FAIL:
     default:
-      kprintf("sys_receive failed\n");
       return ESYS_FAIL;
   }
 

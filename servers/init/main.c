@@ -186,9 +186,10 @@ static void handleMessage(msg_t *msg)
 */
         if(intNum == 14)
         {
-//          print(" Fault address: 0x");
-//          printHex(faultAddr);
-
+/*
+          print(" Fault address: 0x");
+          printHex(faultAddr);
+*/
           if(!(errorCode & 0x4))
           {
 
@@ -260,6 +261,7 @@ static void handleMessage(msg_t *msg)
         printInt(exitMsg->who);
         print(" exited with status code: ");
         printInt(exitMsg->statusCode);
+        print("\n");
         break;
        }
       default:
@@ -561,9 +563,9 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
     else
     {
       print("sys_receive() failed with code: "), printInt(code), print("\n");
-      sys_wait(0);
+      return EXIT_FAILURE;
     }
   }
 
-  return -1;
+  return EXIT_FAILURE;
 }

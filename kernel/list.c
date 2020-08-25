@@ -175,8 +175,11 @@ int listRemoveFirst(list_t *list, int key, void **elemPtr)
       if(node->prev != NULL)
         node->prev->next = node->next;
 
-      if(list->head == node || list->tail == node)
-        list->head = list->tail = NULL;
+      if(list->head == node)
+        list->head = node->next;
+
+      if(list->tail == node)
+        list->tail = node->prev;
 
       if(elemPtr)
         *elemPtr = node->elem;
@@ -201,8 +204,11 @@ int listRemoveLast(list_t *list, int key, void **elemPtr)
       if(node->prev != NULL)
         node->prev->next = node->next;
 
-      if(list->head == node || list->tail == node)
-        list->head = list->tail = NULL;
+      if(list->head == node)
+        list->head = node->next;
+
+      if(list->tail == node)
+        list->tail = node->prev;
 
       if(elemPtr)
         *elemPtr = node->elem;
@@ -231,8 +237,11 @@ int listRemoveAll(list_t *list, int key)
       if(node->prev != NULL)
         node->prev->next = node->next;
 
-      if(list->head == node || list->tail == node)
-        list->head = list->tail = NULL;
+      if(list->head == node)
+        list->head = node->next;
+
+      if(list->tail == node)
+        list->tail = node->prev;
 
       kfree(node, sizeof *node);
     }

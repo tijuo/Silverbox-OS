@@ -8,6 +8,7 @@ int main(int argc, char *argv[])
 {
   time_t t;
 
+  print("\n\n\n\n\n\nAbout to get the time.\n");
   sys_wait(1000);
 
   time(&t);

@@ -118,42 +118,37 @@ static unsigned int getTime(void)
 
 int main(void)
 {
+  msg_t msg;
+  msg_t responseMsg;
+
   registerServer(SERVER_GENERIC);
   registerName(RTC_NAME);
 
   while(1)
   {
-    msg_t msg =
-    {
-      .sender = ANY_SENDER
-    };
-
-    msg_t responseMsg;
-
+    msg.sender = ANY_SENDER;
 
     if(sys_receive(&msg, 1) != ESYS_OK)
-    {
-      //sys_wait(500);
-      continue;
-    }
-    else
-    {
-      getTime();
+      return EXIT_FAILURE;
 
-      if(msg.subject == GET_TIME_MSG)
+    responseMsg.recipient = msg.sender;
+
+    switch(msg.subject)
+    {
+      case GET_TIME_MSG:
       {
-        responseMsg.subject = RESPONSE_OK;
         struct GetTimeResponse *responseBody = (struct GetTimeResponse *)&responseMsg.data;
-        responseBody->time = currentTime;
+        responseMsg.subject = RESPONSE_OK;
+        responseBody->time = getTime();
+        break;
       }
-      else
+      default:
         responseMsg.subject = RESPONSE_FAIL;
-
-      responseMsg.recipient = msg.sender;
-
-      if(sys_send(&responseMsg, 0) != ESYS_OK)
-        print("rtc: Failed to send response\n");
+        break;
     }
+
+    if(sys_send(&responseMsg, 0) != ESYS_OK)
+      print("rtc: Failed to send response to "), printInt(msg.sender), print("\n");
   }
 
   return EXIT_FAILURE;

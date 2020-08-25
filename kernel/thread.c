@@ -41,12 +41,12 @@ int startThread( tcb_t *thread )
         return E_FAIL;
       break;
     case WAIT_FOR_RECV:
-      if(detachSendQueue(thread) != E_OK)
+      if(detachSendWaitQueue(thread) != E_OK)
         return E_FAIL;
       thread->waitTid = NULL_TID;
       break;
     case WAIT_FOR_SEND:
-      if(detachReceiveQueue(thread) != E_OK)
+      if(detachReceiveWaitQueue(thread) != E_OK)
         return E_FAIL;
       thread->waitTid = NULL_TID;
       break;
@@ -282,11 +282,11 @@ int releaseThread( tcb_t *thread )
 
       break;
     case WAIT_FOR_RECV:
-      if(detachSendQueue(thread) != E_OK)
+      if(detachSendWaitQueue(thread) != E_OK)
         return E_FAIL;
       break;
     case WAIT_FOR_SEND:
-      if(detachReceiveQueue(thread) != E_OK)
+      if(detachReceiveWaitQueue(thread) != E_OK)
         return E_FAIL;
       break;
     case SLEEPING:

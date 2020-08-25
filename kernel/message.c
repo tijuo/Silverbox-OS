@@ -18,7 +18,7 @@ pem_t *pendingMessageBuffer;
   @return E_OK on success. E_FAIL on failure.
 */
 
-int attachSendQueue(tcb_t *sender, tid_t recipientTid)
+int attachSendWaitQueue(tcb_t *sender, tid_t recipientTid)
 {
   tcb_t *recipient = getTcb(recipientTid);
 
@@ -34,8 +34,6 @@ int attachSendQueue(tcb_t *sender, tid_t recipientTid)
     return E_OK;
   }
 
-  kprintf("attachSendQueue(): Error while enqueuing\n");
-
   attachRunQueue(sender);
   return E_FAIL;
 }
@@ -50,7 +48,7 @@ int attachSendQueue(tcb_t *sender, tid_t recipientTid)
   @return E_OK on success. E_FAIL on failure.
 */
 
-int attachReceiveQueue(tcb_t *recipient, tid_t senderTid)
+int attachReceiveWaitQueue(tcb_t *recipient, tid_t senderTid)
 {
   tcb_t *sender = getTcb(senderTid);
 
@@ -63,7 +61,6 @@ int attachReceiveQueue(tcb_t *recipient, tid_t senderTid)
      && IS_ERROR(queueEnqueue(sender->receiverWaitQueue, getTid(recipient),
                      recipient)))
   {
-    kprintf("attachReceiveQueue(): Error occurred while enqueueing to receiver wait queue\n");
     attachRunQueue(recipient);
     return E_FAIL;
   }
@@ -82,7 +79,7 @@ int attachReceiveQueue(tcb_t *recipient, tid_t senderTid)
   @return E_OK on success. E_FAIL on failure.
 */
 
-int detachSendQueue(tcb_t *sender)
+int detachSendWaitQueue(tcb_t *sender)
 {
   assert(sender);
   tcb_t *recipient = getTcb(sender->waitTid);
@@ -104,14 +101,14 @@ int detachSendQueue(tcb_t *sender)
   @return E_OK on success. E_FAIL on failure.
 */
 
-int detachReceiveQueue(tcb_t *recipient)
+int detachReceiveWaitQueue(tcb_t *recipient)
 {
   assert(recipient);
   tcb_t *sender = getTcb(recipient->waitTid);
 
   if((sender && !IS_ERROR(queueRemoveLast(sender->receiverWaitQueue,
                      getTid(recipient), NULL)))
-     || (!sender && recipient->waitTid == NULL_TID))
+     || (!sender && recipient->waitTid == ANY_SENDER))
   {
     recipient->waitTid = NULL_TID;
     recipient->threadState = PAUSED;
@@ -158,9 +155,9 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
      && (recipient->waitTid == ANY_SENDER
          || recipient->waitTid == senderTid))
   {
-    if(IS_ERROR(detachReceiveQueue(recipient)))
+    if(IS_ERROR(detachReceiveWaitQueue(recipient)))
       return E_FAIL;
-    else if(call && IS_ERROR(attachReceiveQueue(sender, recipientTid)))
+    else if(call && IS_ERROR(attachReceiveWaitQueue(sender, recipientTid)))
       return E_FAIL;
     else if(IS_ERROR(startThread(recipient)))
       return E_FAIL;
@@ -175,13 +172,10 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
     return E_OK;
   }
   else if( !block )	// Recipient is not ready to receive, but we're not allowed to block, so return
-  {
-    kprintf("%d was not ready to receive message from %d\n", recipientTid, senderTid);
     return E_BLOCK;
-  }
   else	// Wait until the recipient is ready to receive the message
   {
-    if(IS_ERROR(attachSendQueue(sender, getTid(recipient))))
+    if(IS_ERROR(attachSendWaitQueue(sender, getTid(recipient))))
       return E_FAIL;
 
     assert(sender->threadState != READY);
@@ -218,7 +212,7 @@ int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
   if(recipient->threadState == WAIT_FOR_SEND
      && (recipient->waitTid == ANY_SENDER || recipient->waitTid == senderTid))
   {
-    if(IS_ERROR(detachReceiveQueue(recipient))
+    if(IS_ERROR(detachReceiveWaitQueue(recipient))
        || IS_ERROR(startThread(recipient)))
     {
       return E_FAIL;
@@ -232,7 +226,7 @@ int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
   }
   else  // Wait until the recipient is ready to receive the message
   {
-    if(IS_ERROR(attachSendQueue(sender, recipientTid)))
+    if(IS_ERROR(attachSendWaitQueue(sender, recipientTid)))
       return E_FAIL;
 
     pendingMessageBuffer[senderTid] = *message;
@@ -288,12 +282,12 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
       state->esi = sender->execState.esi;
       state->edi = sender->execState.edi;
 
-      if(IS_ERROR(detachSendQueue(sender)))
+      if(IS_ERROR(detachSendWaitQueue(sender)))
         return E_FAIL;
 
       if((sender->execState.eax & 0xFF) == SYS_CALL_WAIT)
       {
-        if(IS_ERROR(attachReceiveQueue(sender, recipientTid)))
+        if(IS_ERROR(attachReceiveWaitQueue(sender, recipientTid)))
           return E_FAIL;
       }
       else if(IS_ERROR(startThread(sender)))
@@ -309,7 +303,7 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
       state->edx = (dword)message->faultAddress;
       state->esi = (dword)message->intNum;
 
-      if(IS_ERROR(detachSendQueue(sender)))
+      if(IS_ERROR(detachSendWaitQueue(sender)))
         return E_FAIL;
     }
     else
@@ -322,13 +316,11 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
     kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", recipientTid, state->eip);
     kprintf("Return EIP: 0x%x\n", *(dword *)(state->ebp + 4));
 */
-    if(senderTid != ANY_SENDER)
-      kprintf("%d was not ready to send message to %d\n", senderTid, recipientTid);
     return E_BLOCK;
   }
   else // no one is waiting to send to this local port, so wait
   {
-    if(IS_ERROR(attachReceiveQueue(recipient, senderTid)))
+    if(IS_ERROR(attachReceiveWaitQueue(recipient, senderTid)))
       return E_FAIL;
   }
 
