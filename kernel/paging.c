@@ -40,8 +40,8 @@ bool isWritable( addr_t addr, paddr_t pdir );
 
 int initializeRootPmap(dword pmap)
 {
-  size_t bufSize = sizeof(pde_t)*(1023-PDE_INDEX(KERNEL_TCB_START));
-  char buf[bufSize];
+//  size_t bufSize = sizeof(pde_t)*(1023-PDE_INDEX(KERNEL_TCB_START));
+//  char buf[bufSize];
 
   // Map the page directory, kernel space, and first page table
   // into the new address space
@@ -53,14 +53,25 @@ int initializeRootPmap(dword pmap)
   if(IS_ERROR(writePmapEntry(pmap, PDE_INDEX(PAGETAB), &pentry)))
     RET_MSG(E_FAIL, "Unable to perform recursive mapping.")
 
-///# if DEBUG
+#if DEBUG
 
   // map the first page table
 
   if(IS_ERROR(writePmapEntry(pmap, 0, (void *)PAGEDIR)))
     RET_MSG(E_FAIL, "Unable to map first page table.")
-//# endif /* DEBUG */
+#endif /* DEBUG */
 
+  pde_t *pmapPtr = (pde_t *)pmap;
+  pde_t *currPmapPtr = (pde_t *)PAGEDIR;
+
+  if(IS_ERROR(poke((addr_t)&pmapPtr[PDE_INDEX(KERNEL_TCB_START)],
+                   (void *)&currPmapPtr[PDE_INDEX(KERNEL_TCB_START)],
+                   sizeof(pde_t)*(1023-PDE_INDEX(KERNEL_TCB_START)))))
+  {
+    RET_MSG(E_FAIL, "Unable to copy kernel PDEs.");
+  }
+
+/*
   // Copy any page tables in the kernel region of virtual memory from
   // the bootstrap address space to the thread's address space
 
@@ -68,7 +79,7 @@ int initializeRootPmap(dword pmap)
     RET_MSG(E_FAIL, "Unable to peek kernel PDEs")
   else if(IS_ERROR(poke(pmap + sizeof(pde_t) * PDE_INDEX(KERNEL_TCB_START), (void *)buf, bufSize)))
     RET_MSG(E_FAIL, "Unable to poke kernel PDEs")
-
+*/
   return E_OK;
 }
 
@@ -540,7 +551,7 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
   if( virt == INVALID_VADDR  )
     RET_MSG(E_INVALID_ARG, "Invalid virtual address.")
 
-    pdePtr = ADDR_TO_PDE( virt );
+  pdePtr = ADDR_TO_PDE( virt );
 
   if (pdePtr->present)
   {
@@ -569,7 +580,7 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
   else
     RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.")
 
-    invalidatePage( virt );
+  invalidatePage( virt );
 
   return E_OK;
 }

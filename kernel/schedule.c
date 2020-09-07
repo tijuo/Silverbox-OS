@@ -71,6 +71,8 @@ tcb_t *schedule(void)
         attachRunQueue( oldThread );
       #endif
     }
+
+    incSchedCount();
   }
   else
   {
@@ -80,8 +82,6 @@ tcb_t *schedule(void)
 
   newThread->threadState = RUNNING;
   newThread->quantaLeft = newThread->priority + 1;
-
-  incSchedCount();
 
   return newThread;
 }

@@ -30,6 +30,7 @@
 #define DOWN_DIR            0
 #define UP_DIR              1
 
+#define CHAR_MASK           0x00FFu
 #define COLOR_MASK          0xFF00u
 
 enum TextColors { BLACK, BLUE, GREEN, CYAN, RED, MAGENTA, BROWN, GRAY,
@@ -38,6 +39,11 @@ enum TextColors { BLACK, BLUE, GREEN, CYAN, RED, MAGENTA, BROWN, GRAY,
 };
 
 #define COLOR_ATTR(fg, bg)  ((fg) | ((bg) << 4))
+#define VGA_CHAR(c, fg, bg) (word)((c) | COLOR_ATTR(fg, bg) << 8)
+
+#define VGA_CHAR_AT(vidmem, line, col)	(vidmem)[(CHARS_PER_LINE*(line)+(col))]
+#define CHAR_OF(c)			((c) & 0xFF)
+#define COLOR_OF(c)			(((c) >> 8) & 0xFF)
 
 bool useLowMem;
 bool badAssertHlt;
@@ -356,17 +362,19 @@ int scrollDown( void )
 void kprintAt( const char *str, int x, int y )
 {
   volatile word *vidmem = (volatile word *)VIDMEM_START;
-  size_t offset = CHARS_PER_LINE * y + x;
-  size_t i=0;
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
-  while(str[i])
+  while(*str)
   {
-    vidmem[offset] = (vidmem[offset] & COLOR_MASK) | (byte)str[i];
-    offset++;
-    i++;
+    word w = VGA_CHAR_AT(vidmem, y, x);
+    VGA_CHAR_AT(vidmem, y, x) = (w & COLOR_MASK) | *(str++);
+
+    x = (x+1) % SCREEN_WIDTH;
+
+    if(!x)
+       y = (y+1) % MAX_LINES;
   }
 }
 
@@ -394,14 +402,15 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
 CALL_COUNTER(incSchedCount)
 void incSchedCount( void )
 {
-  volatile char *vidmem = ( volatile char * )(VIDMEM_START);
+  volatile word *vidmem = ( volatile word * )(VIDMEM_START);
   char buf[KITOA_BUF_LEN];
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
-  vidmem[(SCREEN_WIDTH - 1) * 2]++;
-  vidmem[(SCREEN_WIDTH - 1) * 2 + 1] = COLOR_ATTR(DARK_GRAY, GRAY);
+  word w = VGA_CHAR_AT(vidmem, 0, 0);
+
+  VGA_CHAR_AT(vidmem, 0, 0) = VGA_CHAR(CHAR_OF(w + 1), RED, GRAY);
 
   assert( currentThread != NULL );
 
@@ -421,14 +430,15 @@ void incSchedCount( void )
 
 void incTimerCount( void )
 {
-  volatile char *vidmem = ( volatile char * ) ( VIDMEM_START );
+  volatile word *vidmem = ( volatile word * ) ( VIDMEM_START );
   char buf[KITOA_BUF_LEN];
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
-  vidmem[0]++;
-  vidmem[1] = COLOR_ATTR(GREEN, GRAY);
+  word w = VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1);
+
+  VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH-1) = VGA_CHAR(CHAR_OF(w + 1), GREEN, GRAY);
 
   if(currentThread)
   {
@@ -441,21 +451,21 @@ void incTimerCount( void )
 
 void clearScreen( void )
 {
-  volatile char *vidmem = ( volatile char * ) ( VIDMEM_START );
+  volatile word *vidmem = ( volatile word * ) ( VIDMEM_START );
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
-  memset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
+  for(int col=0; col < SCREEN_WIDTH; col++)
+    VGA_CHAR_AT(vidmem, 0, col) = VGA_CHAR(' ', BLACK, GRAY);
 
-  for( unsigned int j=0; j < SCREEN_HEIGHT * 2; j++ )
+  for(int line=1; line < SCREEN_HEIGHT; line++)
   {
-    for( unsigned int i=0; i < SCREEN_WIDTH; i++ )
-    {
-      vidmem[(i+j*SCREEN_WIDTH)*2] = ' ';
-      vidmem[(i+j*SCREEN_WIDTH)*2+1] = COLOR_ATTR(GRAY, BLACK);
-    }
+    for(int col=0; col < SCREEN_WIDTH; col++)
+      VGA_CHAR_AT(vidmem, line, col) = VGA_CHAR(' ', GRAY, BLACK);
   }
+
+ // memset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
 
   resetScroll();
 }
@@ -473,18 +483,17 @@ void doNewLine( int *x, int *y )
 
 void _putChar( char c, int x, int y, unsigned char attrib )
 {
-  volatile char *vidmem = (char *)(VIDMEM_START);
+  volatile word *vidmem = (volatile word *)(VIDMEM_START);
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
-  vidmem[ 2 * (y * SCREEN_WIDTH + x) ] = c;
-  vidmem[ 2 * (y * SCREEN_WIDTH + x) + 1 ] = attrib;
+  VGA_CHAR_AT(vidmem, y, x) = VGA_CHAR(c, attrib & 0x0F, (attrib >> 4) & 0x0F);
 }
 
 void putChar( char c, int x, int y )
 {
-  _putChar( c, x, y, COLOR_ATTR(BLACK, GRAY) );
+  _putChar( c, x, y, COLOR_ATTR(GRAY, BLACK) );
 }
 
 

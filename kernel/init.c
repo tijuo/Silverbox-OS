@@ -28,9 +28,9 @@
 
 #define INIT_SERVER_FLAG	"initsrv="
 
-static inline void switchContext( u32 addrSpace, ExecutionState state ) __attribute__((section(".dtext")));
+static void switchContext( u32 addrSpace, ExecutionState *state ) __attribute__((section(".dtext")));
 
-static inline void switchContext( u32 addrSpace, ExecutionState state )
+static void switchContext( u32 addrSpace, ExecutionState *state )
 {
   __asm__ __volatile__(
       "mov %%edx, %%esp\n"
@@ -43,7 +43,7 @@ static inline void switchContext( u32 addrSpace, ExecutionState state )
       "pop %%ecx\n"
       "pop %%eax\n"
       "iret\n" :: "ecx"(addrSpace),
-      "edx"((dword)&state));
+      "edx"((dword)state));
 }
 
 extern tcb_t *initServerThread;
@@ -1253,10 +1253,9 @@ void init( multiboot_info_t *info )
 
   schedule();
 
-
   for(addr_t addr=(addr_t)0x0000; addr < (addr_t)largePageSize; addr += PAGE_SIZE)
   {
-    if(addr == 0x90000)
+    if(addr == kernelStackTop-8*PAGE_SIZE)
       addr = (addr_t)0xA0000;
 
 #if DEBUG
@@ -1279,6 +1278,6 @@ void init( multiboot_info_t *info )
 
   kprintf("Context switching...\n");
 
-  switchContext( initServerThread->rootPageMap, initServerThread->execState );
+  switchContext( initServerThread->rootPageMap, &initServerThread->execState );
   stopInit("Error: Context switch failed.");
 }

@@ -12,6 +12,35 @@ size_t pageTableSize = PAGE_TABLE_SIZE;
 
 static void freeUnusedHeapPages(void);
 
+void *memset(void *ptr, int value, size_t num)
+{
+  char *p = (char *)ptr;
+
+  while(num)
+  {
+    *(p++) = value;
+    num--;
+  }
+
+  return ptr;
+}
+
+// XXX: Assumes that the memory regions don't overlap
+
+void *memcpy(void *dest, const void *src, size_t num)
+{
+  char *d = (char *)dest;
+  const char *s = (const char *)src;
+
+  while(num)
+  {
+    *(d++) = *(s++);
+    num --;
+  }
+
+  return dest;
+}
+
 /** Allocate an available 4 KB physical page frame.
 
     @return The physical address of a newly allocated page frame. NULL_PADDR, on failure.
