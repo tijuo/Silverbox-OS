@@ -7,24 +7,24 @@
 
 #define SYSCALL_INT             0x40
 
-#define SYS_EXIT		0
-#define SYS_WAIT		1
-#define SYS_SEND		2
-#define SYS_RECEIVE		3
-#define SYS_SEND_WAIT		4
-#define SYS_RECEIVE_WAIT	5
-#define SYS_CALL		6
-#define SYS_CALL_WAIT		7
-#define SYS_MAP			8
-#define SYS_UNMAP		9
-#define SYS_CREATE_THREAD	10
-#define SYS_DESTROY_THREAD	11
-#define SYS_READ_THREAD		12
-#define SYS_UPDATE_THREAD	13
-#define SYS_EOI			14
-#define SYS_IRQ_WAIT		15
-#define SYS_BIND_IRQ		16
-#define SYS_UNBIND_IRQ		17
+#define SYS_EXIT		        0
+#define SYS_WAIT		        1
+#define SYS_SEND		        2
+#define SYS_RECEIVE		        3
+#define SYS_SEND_WAIT		    4
+#define SYS_RECEIVE_WAIT	    5
+#define SYS_CALL		        6
+#define SYS_CALL_WAIT		    7
+#define SYS_MAP			        8
+#define SYS_UNMAP		        9
+#define SYS_CREATE_THREAD	    10
+#define SYS_DESTROY_THREAD	    11
+#define SYS_READ_THREAD		    12
+#define SYS_UPDATE_THREAD	    13
+#define SYS_EOI			        14
+#define SYS_IRQ_WAIT		    15
+#define SYS_BIND_IRQ		    16
+#define SYS_UNBIND_IRQ		    17
 
 #define PM_PRESENT              0x01
 #define PM_NOT_PRESENT          0
@@ -39,23 +39,30 @@
 #define PM_LARGE_PAGE           0x80
 #define PM_INVALIDATE           0x80000000
 
-#define PRIV_SUPER			0
-#define PRIV_PAGER			1
+#define PRIV_SUPER			    0
+#define PRIV_PAGER			    1
 
 #define ESYS_OK			     	 0
 #define ESYS_ARG		    	-1
 #define ESYS_FAIL		    	-2
 #define ESYS_PERM		    	-3
-#define ESYS_BADCALL		    	-4
-#define ESYS_NOTIMPL		    	-5
-#define ESYS_NOTREADY               	-6
+#define ESYS_BADCALL		    -4
+#define ESYS_NOTIMPL		    -5
+#define ESYS_NOTREADY           -6
 
-#define ANY_SENDER		NULL_TID
+#define ANY_SENDER		        NULL_TID
 
-#define TF_STATUS		1
-#define TF_PRIORITY		2
-#define TF_REG_STATE		4
-#define TF_PMAP			8
+#define TF_STATUS		        1
+#define TF_PRIORITY		        2
+#define TF_REG_STATE		    4
+#define TF_PMAP			        8
+
+#define SYSCALL_TID_OFFSET      16
+#define SYSCALL_SUBJ_OFFSET     8
+#define SYSCALL_TID_MASK        0xFFFF0000
+#define SYSCALL_SUBJ_MASK       0xFF00
+#define SYSCALL_RET_MASK        0xFF
+#define SYSCALL_CALL_MASK       0xFF
 
 typedef struct Tcb
 {
@@ -66,8 +73,16 @@ typedef struct Tcb
 
   struct State
   {
-    dword eax, ebx, ecx, edx, ebp, esp, edi, esi;
-    dword eip, eflags;
+    dword eax;
+    dword ebx;
+    dword ecx;
+    dword edx;
+    dword ebp;
+    dword esp;
+    dword edi;
+    dword esi;
+    dword eip;
+    dword eflags;
   } state;
 } thread_info_t;
 

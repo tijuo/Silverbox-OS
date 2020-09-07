@@ -8,15 +8,15 @@
 
 #define MAX_THREADS		65536
 
-#define INACTIVE		0
-#define PAUSED			1  // Infinite blocking state
-#define SLEEPING		2  // Blocks until timer runs out
-#define READY			3  // Thread is ready to be scheduled to a processor
-#define RUNNING			4  // Thread is already scheduled to a processor
+#define INACTIVE		    0
+#define PAUSED			    1  // Infinite blocking state
+#define SLEEPING		    2  // Blocks until timer runs out
+#define READY			    3  // Thread is ready to be scheduled to a processor
+#define RUNNING			    4  // Thread is already scheduled to a processor
 #define WAIT_FOR_SEND		5
 #define WAIT_FOR_RECV		6
-#define ZOMBIE			7  // Thread is waiting to be released
-#define IRQ_WAIT		8
+#define ZOMBIE			    7  // Thread is waiting to be released
+#define IRQ_WAIT		    8
 
 #define NUM_PROCESSORS   	1u
 
@@ -58,9 +58,9 @@ int startThread( tcb_t *thread );
 int pauseThread( tcb_t *thread );
 int sysYield( tcb_t *thread );
 
-extern tcb_t *initServerThread, *initPagerThread;
+extern tcb_t *initServerThread;
+extern tcb_t *initPagerThread;
 extern tcb_t *currentThread;
 extern tcb_t *tcbTable;
-extern addr_t heapEnd;
 
 #endif /* THREAD_H */

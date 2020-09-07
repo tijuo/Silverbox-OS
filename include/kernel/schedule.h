@@ -11,6 +11,8 @@
 #define NORMAL_PRIORITY 	3
 #define LOWEST_PRIORITY		0
 
+#define MSECS_PER_QUANTUM   1000
+
 /** The number of run queues used for the scheduler. */
 
 int attachPausedQueue( tcb_t *thread );
@@ -24,6 +26,7 @@ HOT(tcb_t *schedule(void));
 HOT(void timerInt(UNUSED_PARAM ExecutionState *state));
 HOT(void switchStacks(ExecutionState *state));
 
-extern queue_t runQueues[NUM_RUN_QUEUES], timerQueue;
+extern queue_t runQueues[NUM_RUN_QUEUES];
+extern queue_t timerQueue;
 
 #endif /* SCHEDULE_H */

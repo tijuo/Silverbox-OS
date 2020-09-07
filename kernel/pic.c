@@ -1,5 +1,6 @@
 #include <kernel/io.h>
 #include <kernel/pic.h>
+#include <kernel/bits.h>
 
 HOT(void sendEOI(void));
 COLD(void enableIRQ( unsigned int irq ));
@@ -11,9 +12,8 @@ COLD(void disableIRQ( unsigned int irq ));
 
 void sendEOI( void )
 {
-  outByte( (word)0x20u, (byte)0x20u );
-  ioWait();
-  outByte( (word)0xA0u, (byte)0x20u );
+  outByte(PIC1_CMD_PORT, PIC_EOI);
+  outByte(PIC2_CMD_PORT, PIC_EOI);
   ioWait();
 }
 
@@ -23,18 +23,14 @@ void sendEOI( void )
     @param irq An IRQ number from 0 to 15.
 */
 
-void enableIRQ( unsigned int irq )
+void enableIRQ(unsigned int irq)
 {
-  if( irq < 8 )
-  {
-    outByte( (word)0x21u, inByte((word)0x21u) & (byte)~(1u << irq));
-    ioWait();
-  }
+  if(irq < PIC2_IRQ_START)
+    outByte(PIC1_DATA_PORT, inByte(PIC1_DATA_PORT) & (byte)~FROM_FLAG_BIT(irq));
   else
-  {
-    outByte( (word)0xA1u, inByte((word)0xA1u) & (byte)~(1u << (irq-8)));
-    ioWait();
-  }
+    outByte(PIC2_DATA_PORT, inByte(PIC2_DATA_PORT) & (byte)~FROM_FLAG_BIT(irq-PIC2_IRQ_START));
+
+  ioWait();
 }
 
 /**
@@ -43,16 +39,12 @@ void enableIRQ( unsigned int irq )
     @param irq An IRQ number from 0 to 15.
 */
 
-void disableIRQ( unsigned int irq )
+void disableIRQ(unsigned int irq)
 {
-  if( irq < 8 )
-  {
-    outByte( (word)0x21, inByte((word)0x21u) | (byte)(1u << irq));
-    ioWait();
-  }
+  if(irq < PIC2_IRQ_START)
+    outByte( PIC1_DATA_PORT, inByte(PIC1_DATA_PORT) | (byte)FROM_FLAG_BIT(irq));
   else
-  {
-    outByte( (word)0xA1, inByte((word)0xA1) | (byte)(1u << (irq-8)));
-    ioWait();
-  }
+    outByte(PIC2_DATA_PORT, inByte(PIC2_DATA_PORT) | (byte)FROM_FLAG_BIT(irq-PIC2_IRQ_START));
+
+  ioWait();
 }

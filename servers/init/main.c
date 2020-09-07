@@ -16,7 +16,11 @@
 
 #define STACK_TOP		0xC0000000
 
-extern sbhash_t threadNames, deviceNames, fsNames, deviceTable, fsTable;
+extern sbhash_t threadNames;
+extern sbhash_t deviceNames;
+extern sbhash_t fsNames;
+extern sbhash_t deviceTable;
+extern sbhash_t fsTable;
 
 sbhash_t serverTable; // "tid" -> ServerEntry
 
@@ -107,7 +111,8 @@ int initPageStack(multiboot_info_t *info, addr_t lastFreeKernelPage)
   for(int pass=0; pass < 2; pass++)
   {
     addr_t freePage = lastFreeKernelPage + PAGE_SIZE;
-    size_t pagesNeeded, pagesLeft;
+    size_t pagesNeeded;
+    size_t pagesLeft;
     addr_t ptr;
 
     if(pass == 1)

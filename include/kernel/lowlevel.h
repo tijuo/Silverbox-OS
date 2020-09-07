@@ -4,13 +4,15 @@
 #include <types.h>
 #include <kernel/multiboot.h>
 
+#define MODE_BIT_WIDTH  32
+
 #define KCODE           0x08u
 #define KDATA           0x10u
 #define UCODE           (0x18u | 0x03u)
 #define UDATA           (0x20u | 0x03u)
 #define TSS             0x28u
-#define BKCODE		0x30u
-#define BKDATA		0x38u
+#define BKCODE		    0x30u
+#define BKDATA		    0x38u
 
 #define TRAP_GATE       (I_TRAP << 16)
 #define INT_GATE        (I_INT  << 16)
@@ -50,8 +52,8 @@
 
 #define G_PRESENT       0x80u
 
-#define FP_SEG(addr)    (((addr_t)addr & 0xF0000u) >> 4)
-#define FP_OFF(addr)    ((addr_t)addr & 0xFFFFu)
+#define FP_SEG(addr)    (((addr_t)(addr) & 0xF0000u) >> 4)
+#define FP_OFF(addr)    ((addr_t)(addr) & 0xFFFFu)
 
 #define IRQ0            0x20
 #define IRQ1            (IRQ0 + 1)
@@ -91,6 +93,9 @@
 #define EFLAGS_VIF	(1 << 19)
 #define EFLAGS_VIP	(1 << 20)
 #define EFLAGS_ID	(1 << 21)
+
+#define PCID_BITS   12
+#define PCID_MASK   0xFFFu
 
 #define enableInt()     __asm__ __volatile__("sti\n")
 #define disableInt()    __asm__ __volatile__("cli\n")
@@ -144,8 +149,18 @@ struct TSS_Struct
 
 typedef struct
 {
-  dword edi, esi, ebp, ebx, edx, ecx, eax;
-  dword eip, cs, eflags, userEsp, userSS;
+  dword edi;
+  dword esi;
+  dword ebp;
+  dword ebx;
+  dword edx;
+  dword ecx;
+  dword eax;
+  dword eip;
+  dword cs;
+  dword eflags;
+  dword userEsp;
+  dword userSS;
 } ExecutionState;
 
 extern void atomicInc( volatile void * );

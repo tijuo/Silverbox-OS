@@ -6,52 +6,61 @@
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
 #include <kernel/list.h>
+#include <kernel/memory.h>
 
 /* FIXME: Changing any of these values may require changing
    the asm code */
 
-#define KERNEL_TCB_START	((addr_t)&kTcbStart)
-#define KERNEL_VSTART       	((addr_t)&kVirtStart)
-#define PHYSMEM_START       	((addr_t)&VPhysMemStart)
-#define KERNEL_START        	((addr_t)&kPhysStart)
-#define RESD_PHYSMEM	    	KERNEL_START
+#define KERNEL_TCB_START	        ((addr_t)&kTcbStart)
+#define KERNEL_VSTART       	    ((addr_t)&kVirtStart)
+#define PHYSMEM_START       	    ((addr_t)&VPhysMemStart)
+#define KERNEL_START        	    ((addr_t)&kPhysStart)
+#define RESD_PHYSMEM	    	    KERNEL_START
 
-#define PAGE_STACK            ((addr_t)&kVirtPageStack)
+#define PAGE_STACK                  ((addr_t)&kVirtPageStack)
 
-#define KVIRT_TO_PHYS(x)	((x) - (KERNEL_VSTART-KERNEL_START))
+#define KVIRT_TO_PHYS(x)	        ((x) - (KERNEL_VSTART-KERNEL_START))
 
-#define KERNEL_HEAP_START     ((addr_t)0xD0000000)
-#define KERNEL_HEAP_LIMIT     ((addr_t)0xF0000000)
+#define KERNEL_HEAP_START           ((addr_t)0xD0000000)
+#define KERNEL_HEAP_LIMIT           ((addr_t)0xF0000000)
 
 /* FIXME: Changing any of these values may require changing the
    asm code. */
 
-#define TEMP_PAGEADDR           ((addr_t)0xC0000)
-#define LAPIC_VADDR             (TEMP_PAGEADDR + PAGE_SIZE)
-#define KERNEL_CLOCK		(LAPIC_VADDR + PAGE_SIZE)
+#define TEMP_PAGEADDR               ((addr_t)0xC0000)
+#define LAPIC_VADDR                 (TEMP_PAGEADDR + PAGE_SIZE)
+#define KERNEL_CLOCK		        (LAPIC_VADDR + PAGE_SIZE)
 
-#define INVALID_VADDR       	((addr_t)0xFFFFFFFF)
-#define INVALID_ADDR        	((addr_t)0xFFFFFFFF)
+#define INVALID_VADDR       	    ((addr_t)0xFFFFFFFF)
+#define INVALID_ADDR        	    ((addr_t)0xFFFFFFFF)
 
-#define INIT_SERVER_STACK_TOP	((addr_t)KERNEL_TCB_START)
+#define INIT_SERVER_STACK_TOP	    ((addr_t)KERNEL_TCB_START)
 
-/// Aligns an address to the next page boundary (if not already aligned)
-#define PAGE_ALIGN(addr)    ALIGN(PAGE_SIZE, (addr))
+/** Aligns an address to the previous boundary (if not already aligned) */
+#define ALIGN_DOWN(addr, boundary)       ((addr_t)( (addr) & ~((boundary) - 1) ))
+
+#define IS_ALIGNED(addr, boundary)       (((addr) & ((boundary) - 1)) == 0)
+
+/** Aligns an address to next boundary (even if it's already aligned) */
+
+#define ALIGN_NEXT(addr, boundary)       (ALIGN_DOWN(addr, boundary) + boundary)
 
 /// Aligns an address to the next boundary (if not already aligned)
-#define ALIGN(mod, addr)    ({ __typeof__ (mod) _mod=(mod); \
-                              __typeof__ (addr) _addr=(addr); \
-                              (((_addr == ALIGN_DOWN(_mod, _addr)) ? (addr_t)_addr : \
-                               ((addr_t)((ALIGN_DOWN(_mod, _addr)) + _mod)) )) })
+#define ALIGN_UP(addr, boundary) \
+({ \
+  __typeof__ (boundary) _boundary=(boundary);  \
+  __typeof__ (addr) _addr=(addr);              \
+  (_addr == ALIGN_DOWN(_addr, _boundary) ?     \
+    _addr : ALIGN_NEXT(_addr, _boundary)); \
+})
 
-/// Aligns an address to the previous boundary (if not already aligned)
-#define ALIGN_DOWN(mod, addr) ((addr_t)( (addr) & ~((mod) - 1) ))
+#define ALIGN(addr, boundary)         ALIGN_UP(addr, boundary)
 
 /// Temporarily maps a physical page into the current address space
-#define mapTemp( phys ) kMapPage((addr_t)(TEMP_PAGEADDR), (phys), PAGING_RW)
+#define mapTemp( phys )             kMapPage((addr_t)(TEMP_PAGEADDR), (phys), PAGING_RW)
 
 /// Unmaps the temporary page
-#define unmapTemp() 	kUnmapPage((addr_t)(TEMP_PAGEADDR), NULL)
+#define unmapTemp() 	            kUnmapPage((addr_t)(TEMP_PAGEADDR), NULL)
 
 HOT(int readPmapEntry(paddr_t pbase, int entry, void *buffer));
 HOT(int writePmapEntry(paddr_t pbase, int entry, void *buffer));
@@ -78,12 +87,16 @@ bool isWritable( addr_t addr, paddr_t addrSpace );
 
 void invalidateTlb(void);
 void invalidatePage( addr_t virt );
+dword getRootPageMap(void);
 
-extern paddr_t *freePageStack, *freePageStackTop;
+extern paddr_t *freePageStack;
+extern paddr_t *freePageStackTop;
 
 //extern void addGDTEntry( word, addr_t, uint32, uint32 );
 
 paddr_t allocPageFrame(void);
 void freePageFrame(paddr_t frame);
+
+extern size_t pageTableSize;
 
 #endif

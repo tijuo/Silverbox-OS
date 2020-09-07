@@ -50,10 +50,10 @@ IMPORT VPhysMemStart
 
 kStackTop equ 0xA0000
 kBootStackTop  equ 0x9F000
-kPageDir       equ 0x70000
-kLowPageTab    equ 0x71000
-kPageTab       equ 0x72000
-k1to1PageTab   equ 0x73000
+kPageDir       equ 0x90000
+kLowPageTab    equ 0x91000
+kPageTab       equ 0x92000
+k1to1PageTab   equ 0x93000
 
 ;_kernelIDTLen equ 0x800
 ;_kernelGDTLen equ 0x40

@@ -1,5 +1,3 @@
-#ifdef DEBUG
-
 #include <kernel/debug.h>
 #include <kernel/memory.h>
 #include <kernel/mm.h>
@@ -7,16 +5,51 @@
 #include <kernel/io.h>
 #include <stdarg.h>
 #include <kernel/lowlevel.h>
+#include <os/syscalls.h>
+#include <kernel/interrupt.h>
+#include <kernel/bits.h>
+
+#ifdef DEBUG
+
+#define KITOA_BUF_LEN   12
 
 #define SCREEN_HEIGHT   25
 #define SCREEN_WIDTH    80
 
+#define MISC_OUTPUT_RD_REG  0x3CC
+#define MISC_OUTPUT_WR_REG  0x3C2
+#define CRT_CONTR_INDEX     0x3D4
+#define CRT_CONTR_DATA      0x3D5
+
+#define START_ADDR_HIGH     0x0Cu
+#define START_ADDR_LOW      0x0Du
+
+#define CHARS_PER_LINE      SCREEN_WIDTH
+#define MAX_LINES           203
+
+#define DOWN_DIR            0
+#define UP_DIR              1
+
+#define COLOR_MASK          0xFF00u
+
+enum TextColors { BLACK, BLUE, GREEN, CYAN, RED, MAGENTA, BROWN, GRAY,
+  DARK_GRAY, LIGHT_BLUE, LIGHT_GREEN, LIGHT_CYAN, LIGHT_RED, LIGHT_MAGENTA, YELLOW,
+  WHITE
+};
+
+#define COLOR_ATTR(fg, bg)  ((fg) | ((bg) << 4))
+
 bool useLowMem;
 bool badAssertHlt;
-dword upper1, lower1, upper2, lower2;
+dword upper1;
+dword lower1;
+dword upper2;
+dword lower2;
 
 void kprintAt( const char *str, int x, int y );
 void kprintf( const char *str, ... );
+static int scroll(int up);
+static void setScroll(word addr);
 void resetScroll( void );
 void scrollUp( void );
 int scrollDown( void );
@@ -30,16 +63,17 @@ void dump_state( const ExecutionState *state, int intNum, int errorCode);
 void dump_stack( addr_t, addr_t );
 static const char *_digits="0123456789abcdefghijklmnopqrstuvwxyz";
 
-unsigned int sx=0, sy=1;
+unsigned int sx=0;
+unsigned int sy=1;
 
-#define com1 0x3f8
-#define com2 0x2f8
+#define COM1 0x3f8
+#define COM2 0x2f8
 
-#define combase com1
+#define COMBASE COM1
 
 /** Sets up the serial ports for printing debug messages
     (and possibly receiving commands).
-*/
+ */
 
 void startTimeStamp(void)
 {
@@ -58,33 +92,33 @@ unsigned int getTimeDifference(void)
   else if( upper2 == upper1 + 1 )
   {
     if( lower2 < lower1 )
-        return (0xFFFFFFFFu - lower1) + lower2;
+      return (0xFFFFFFFFu - lower1) + lower2;
   }
   return 0xFFFFFFFFu;
 }
 
 void init_serial(void)
 {
-    outByte(combase + 3, inByte(combase + 3) | 0x80u); // Set DLAB for
-                                                      // DLLB access
-    outByte(combase, 0x03u);                           /* 38400 baud */
-    outByte(combase + 1, 0u); // Disable interrupts
-    outByte(combase + 3, inByte(combase + 3) & 0x7fu); // Clear DLAB
-    outByte(combase + 3, 3u); // 8-N-1
+  outByte(COMBASE + 3, inByte(COMBASE + 3) | 0x80u); // Set DLAB for
+  // DLLB access
+  outByte(COMBASE, 0x03u);                           /* 38400 baud */
+  outByte(COMBASE + 1, 0u); // Disable interrupts
+  outByte(COMBASE + 3, inByte(COMBASE + 3) & 0x7fu); // Clear DLAB
+  outByte(COMBASE + 3, 3u); // 8-N-1
 }
 
 int getDebugChar(void)
 {
-    while (!(inByte(combase + 5) & 0x01u));
-    return inByte(combase);
+  while (!(inByte(COMBASE + 5) & 0x01u));
+  return inByte(COMBASE);
 }
 
 void putDebugChar(int ch)
 {
-    outByte(0xE9, (byte)ch); // Use E9 hack to output characters
-    while (!(inByte(combase + 5) & 0x20u));
-    outByte(combase, (byte) ch);
-/*
+  outByte(0xE9, (byte)ch); // Use E9 hack to output characters
+  while (!(inByte(COMBASE + 5) & 0x20u));
+  outByte(COMBASE, (byte) ch);
+  /*
 if( ch == '\r' )
 {
  sx=0;
@@ -109,7 +143,7 @@ if( sx >= SCREEN_WIDTH )
   if( sy >= SCREEN_HEIGHT )
     scrollDown();
 }
-*/
+   */
 }
 
 char *kitoa(int value, char *str, int base, int unSigned)
@@ -194,7 +228,7 @@ char *klltoa(long long int value, char *str, int base, int unSigned)
   }
   return str;
 }
-*/
+ */
 
 /*
 char *klltoa(long long int value, char *str, int base)
@@ -234,123 +268,17 @@ char *klltoa(long long int value, char *str, int base)
   }
   return str;
 }
-*/
+ */
 void initVideo( void )
 {
-  useLowMem = false;
+  useLowMem = true;
   badAssertHlt = true;//false; // true;
+  outByte(MISC_OUTPUT_WR_REG, inByte(MISC_OUTPUT_RD_REG) | FROM_FLAG_BIT(0));
 }
-
-/*
-char toIntString(int num)
-{
-  static char digits[12];
-
-  return kitoa(num, digits, 10);
-}
-
-char toHexString(unsigned num)
-{
-  static char digits[9];
-
-  return kitoa(num, digits, 16);
-}
-
-char *__toIntString(int num, int sign)
-{
-  unsigned i = 0, j = 0;
-  const char iChars[] = { '0','1','2','3','4','5','6','7','8','9' };
-  unsigned d_num[17];
-  static char s_num[11];
-
-  s_num[0] = 0;
-
-  if(num == 0){
-    s_num[0] = '0';
-    s_num[1] = '\0';
-    return s_num;
-  }
-
-  if( sign && num < 0 )
-  {
-    s_num[j++] = '-';
-    num = -num;
-  }
-
-  if( sign )
-  {
-    for( ; num > 0; i++, num /= 10 )
-      d_num[i] = num % 10;
-  }
-  else
-  {
-    for( ; (unsigned)num > 0; i++, num /= 10 )
-      d_num[i] = (unsigned)num % 10;
-  }
-
-  i--;
-
-  while((i + 1) > 0)
-    s_num[j++] = iChars[d_num[i--]];
-
-  s_num[j] = '\0';
-  return s_num;
-}
-
-char *_toIntString(int num)
-{
-  return __toIntString(num, 1);
-}
-
-char *__toHexString(unsigned int num, int lower)
-{
-  unsigned i = 0, j = 0;
-  
-  char const uHexChars[] = { '0','1','2','3','4','5','6','7','8','9', 'A', 'B',
-                            'C', 'D', 'E', 'F' };
-  char const lHexChars[] = { '0','1','2','3','4','5','6','7','8','9', 'a', 'b',
-                             'c', 'd', 'e', 'f' }; 
-  char const *hexChars;
-                           
-  static char s_num[9];
-  unsigned h_num[9];
-
-  if( lower )
-    hexChars = lHexChars;
-  else
-    hexChars = uHexChars;
-
-  s_num[0] = 0;
-
-  if(num == 0)
-  {
-    s_num[0] = '0';
-    s_num[1] = '\0';
-    return s_num;
-  }
-
-  for( ; num > 0; i++, num /= 16 )
-    h_num[i] = num % 16;
-
-  i--;
-
-  while( (i + 1) > 0 )
-    s_num[j++] = hexChars[h_num[i--]];
-
-  s_num[j] = '\0';
-
-  return s_num;
-}
-
-char *_toHexString(unsigned int num)
-{
-  return __toHexString(num, 0);
-}
-*/
 
 /** Sets the flag to use conventional memory for printing instead
     of virtual memory.
-*/
+ */
 void setVideoLowMem( bool value )
 {
   useLowMem = value;
@@ -363,78 +291,80 @@ void setBadAssertHlt( bool value )
   badAssertHlt = value;
 }
 
+static void setScroll(word addr)
+{
+  byte high = (addr >> 8) & 0xFFu;
+  byte low = addr & 0xFFu;
+
+  outByte( CRT_CONTR_INDEX, START_ADDR_HIGH );
+  outByte( CRT_CONTR_DATA, high );
+  outByte( CRT_CONTR_INDEX, START_ADDR_LOW );
+  outByte( CRT_CONTR_DATA, low );
+}
+
 void resetScroll( void )
 {
-//  word address=0;
-
-  outByte( 0x3D4u, 0x0Cu );
-  outByte( 0x3D5u, 0 );
-  outByte( 0x3D4u, 0x0Du );
-  outByte( 0x3D5u, 0 );
+  setScroll(0);
 }
 
-void scrollUp( void )
+static int scroll(int up)
 {
-  byte high, low;
+  int ret=0;
+  byte high;
+  byte low;
   word address;
 
-  outByte( 0x3D4u, 0x0Cu );
-  high = inByte( 0x3D5u );
-  outByte( 0x3D4u, 0x0Du );
-  low = inByte( 0x3D5u );
-  address = (high << 8 | low );
+  outByte( CRT_CONTR_INDEX, START_ADDR_HIGH );
+  high = inByte( CRT_CONTR_DATA );
+  outByte( CRT_CONTR_INDEX, START_ADDR_LOW );
+  low = inByte( CRT_CONTR_DATA );
+  address = (((word)high << 8) | low );
 
-  if( address == 0 )
-    address = 0x3fc0u;
-  else
-    address -= 0x50u;
-
-  outByte( 0x3D4u, 0x0Cu );
-  outByte( 0x3D5u, address >> 8 );
-  outByte( 0x3D4u, 0x0Du );
-  outByte( 0x3D5u, address & 0xFFu );
-}
-
-int scrollDown( void )
-{
-  byte high, low;
-  word address;
-  int ret = 0;
-
-  outByte( 0x3D4u, 0x0Cu );
-  high = inByte( 0x3D5u );
-  outByte( 0x3D4u, 0x0Du );
-  low = inByte( 0x3D5u );
-
-  address = (high << 8 | low );
-  address += 0x50u;
-
-  if( address > 0x3e80u )
+  if(up)
   {
-    address = 0;
-    ret = 1;
+    if(address == 0)
+      address = CHARS_PER_LINE*MAX_LINES;
+    else
+      address -= CHARS_PER_LINE;
+  }
+  else
+  {
+    address += CHARS_PER_LINE;
+
+    if( address > CHARS_PER_LINE*MAX_LINES )
+    {
+      address = 0;
+      ret = 1;
+    }
   }
 
-  outByte( 0x3D4u, 0x0Cu );
-  outByte( 0x3D5u, address >> 8 );
-  outByte( 0x3D4u, 0x0Du );
-  outByte( 0x3D5u, address & 0xFFu );
+  setScroll(address);
 
   return ret;
 }
 
+void scrollUp( void )
+{
+  scroll(UP_DIR);
+}
+
+int scrollDown( void )
+{
+  return scroll(DOWN_DIR);
+}
 
 void kprintAt( const char *str, int x, int y )
 {
   volatile word *vidmem = (volatile word *)VIDMEM_START;
-  size_t offset = 80 * y + x, i=0;
+  size_t offset = CHARS_PER_LINE * y + x;
+  size_t i=0;
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
   while(str[i])
   {
-    vidmem[offset] = (vidmem[offset] & 0xFF00u) | (byte)str[i];
+    vidmem[offset] = (vidmem[offset] & COLOR_MASK) | (byte)str[i];
     offset++;
     i++;
   }
@@ -459,51 +389,51 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
 
 /** Increments a counter that keeps track of the number of times that
     the scheduler was called.
-*/
+ */
 
 CALL_COUNTER(incSchedCount)
 void incSchedCount( void )
 {
-  volatile char *vidmem = ( volatile char * ) ( VIDMEM_START );
-  char digits[12];
+  volatile char *vidmem = ( volatile char * )(VIDMEM_START);
+  char buf[KITOA_BUF_LEN];
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
   vidmem[(SCREEN_WIDTH - 1) * 2]++;
-  vidmem[(SCREEN_WIDTH - 1) * 2 + 1] = 0x78;
+  vidmem[(SCREEN_WIDTH - 1) * 2 + 1] = COLOR_ATTR(DARK_GRAY, GRAY);
 
   assert( currentThread != NULL );
 
   if( currentThread )
   {
     kprintAt("tid:       pri:     quant:     cr3:         ", 2, 0);
-    kprintAt( kitoa((int)getTid(currentThread), digits, 10, 0), 7, 0 );
-    kprintAt( kitoa((int)currentThread->priority, digits, 10, 0), 18, 0 );
-    kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 28, 0 );
-    kprintAt( kitoa(currentThread->rootPageMap, digits, 16, 0), 37, 0 );
+    kprintAt( kitoa((int)getTid(currentThread), buf, 10, 0), 7, 0 );
+    kprintAt( kitoa((int)currentThread->priority, buf, 10, 0), 18, 0 );
+    kprintAt( kitoa((int)currentThread->quantaLeft, buf, 10, 0), 28, 0 );
+    kprintAt( kitoa(currentThread->rootPageMap, buf, 16, 0), 37, 0 );
   }
 }
 
 /** Increments a counter that keeps track of the number of times that
     the timer interrupt was called.
-*/
+ */
 
 void incTimerCount( void )
 {
   volatile char *vidmem = ( volatile char * ) ( VIDMEM_START );
-  char digits[12];
+  char buf[KITOA_BUF_LEN];
 
   if( !useLowMem )
     vidmem += PHYSMEM_START;
 
   vidmem[0]++;
-  vidmem[1] = 0x72;
+  vidmem[1] = COLOR_ATTR(GREEN, GRAY);
 
   if(currentThread)
   {
     kprintAt( "   ", 28, 0);
-    kprintAt( kitoa((int)currentThread->quantaLeft, digits, 10, 0), 28, 0 );
+    kprintAt( kitoa((int)currentThread->quantaLeft, buf, 10, 0), 28, 0 );
   }
 }
 
@@ -518,12 +448,16 @@ void clearScreen( void )
 
   memset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
 
-  for( int i=0; i < SCREEN_WIDTH; i++ )
+  for( unsigned int j=0; j < SCREEN_HEIGHT * 2; j++ )
   {
-    vidmem[i << 1] = ' ';
-    vidmem[(i << 1)+1] = 0x70;
+    for( unsigned int i=0; i < SCREEN_WIDTH; i++ )
+    {
+      vidmem[(i+j*SCREEN_WIDTH)*2] = ' ';
+      vidmem[(i+j*SCREEN_WIDTH)*2+1] = COLOR_ATTR(GRAY, BLACK);
+    }
   }
-  //resetScroll();
+
+  resetScroll();
 }
 
 
@@ -532,11 +466,8 @@ void doNewLine( int *x, int *y )
   (*y)++;
   *x = 0;
 
-  if( *y > 24 )
-  {
-    if( scrollDown() )
-      *y = 0;
-  }
+  if(*y >= SCREEN_HEIGHT && scrollDown())
+    *y = 0;
 }
 
 
@@ -553,14 +484,14 @@ void _putChar( char c, int x, int y, unsigned char attrib )
 
 void putChar( char c, int x, int y )
 {
-  _putChar( c, x, y, 7 );
+  _putChar( c, x, y, COLOR_ATTR(BLACK, GRAY) );
 }
 
 
 /** A simplified stdio printf() for debugging use
     @param str The formatted string to print with format specifiers
     @param ... The arguments to the specifiers
-*/
+ */
 
 void kprintf( const char *str, ... )
 {
@@ -568,7 +499,7 @@ void kprintf( const char *str, ... )
   int unSigned=0;
   int percent = 0;
   va_list args;
-  char digits[12];
+  char buf[KITOA_BUF_LEN];
   size_t i;
 
   va_start(args, str);
@@ -598,16 +529,16 @@ void kprintf( const char *str, ... )
         case 'x':
         case 'X':
           if(longCounter >= 2)
-           {
-             long long int arg = va_arg(args, long long int);
+          {
+            long long int arg = va_arg(args, long long int);
 
-             if(arg >> 32)
-               kprintf(kitoa((int)(arg >> 32), digits, 16, 0));
+            if(arg >> 32)
+              kprintf(kitoa((int)(arg >> 32), buf, 16, 0));
 
-             kprintf(kitoa((int)(arg & 0xFFFFFFFF), digits, 16, 0));
-           }
-           else
-             kprintf(kitoa(va_arg(args, int), digits, 16, 0));
+            kprintf(kitoa((int)(arg & 0xFFFFFFFF), buf, 16, 0));
+          }
+          else
+            kprintf(kitoa(va_arg(args, int), buf, 16, 0));
 
           longCounter = 0;
           unSigned = 0;
@@ -624,12 +555,12 @@ void kprintf( const char *str, ... )
           break;
         case 'd':
         case 'i':
-/*
+          /*
           if(longCounter >= 2)
-            kprintf(klltoa(va_arg(args, long long int), digits, 10));
+            kprintf(klltoa(va_arg(args, long long int), buf, 10));
           else
-*/
-          kprintf(kitoa(va_arg(args, int), digits, 10, unSigned));
+           */
+          kprintf(kitoa(va_arg(args, int), buf, 10, unSigned));
 
           percent = 0;
           longCounter = 0;
@@ -652,16 +583,16 @@ void kprintf( const char *str, ... )
           putDebugChar('\r');
           putDebugChar('\n');
           break;
-/*
+          /*
         case '\r':
-          *x = 0;
+           *x = 0;
           break;
-*/
+           */
         default:
           putDebugChar( str[i] );
 
-        //  if( ++(*x) == SCREEN_WIDTH )
-        //    doNewLine( x, y );
+          //  if( ++(*x) == SCREEN_WIDTH )
+          //    doNewLine( x, y );
           break;
       }
     }
@@ -677,22 +608,14 @@ void dump_state( const ExecutionState *execState, int intNum, int errorCode )
     return;
   }
 
-  if( intNum == 0x40 )
-  {
+  if( intNum == SYSCALL_INT )
     kprintf("Syscall");
-  }
   else if( intNum < IRQ0 )
-  {
     kprintf("Exception %d", intNum);
-  }
   else if( intNum >= IRQ0 && intNum <= IRQ15 )
-  {
     kprintf("IRQ%d", intNum - IRQ0);
-  }
   else
-  {
     kprintf("Software Interrupt %d", intNum);
-  }
 
   kprintf(" @ EIP: 0x%x", execState->eip);
 
@@ -700,19 +623,15 @@ void dump_state( const ExecutionState *execState, int intNum, int errorCode )
   kprintf( "\nESI: 0x%x EDI: 0x%x EBP: 0x%x", execState->esi, execState->edi, execState->ebp );
   kprintf( "\nCS: 0x%x", execState->cs );
 
-  if( intNum == 14 )
-  {
+  if( intNum == PAGE_FAULT_INT )
     kprintf(" CR2: 0x%x", getCR2());
-  }
 
   kprintf( " error code: 0x%x\n", errorCode );
 
   kprintf("EFLAGS: 0x%x ", execState->eflags);
 
   if( execState->cs == UCODE )
-  {
     kprintf("ESP: 0x%x User SS: 0x%x\n", execState->userEsp, execState->userSS);
-  }
 }
 
 void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
@@ -723,25 +642,17 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
   {
     kprintf("<0x%x>:", stackFramePtr);
 
-    if( isReadable( stackFramePtr + 4, addrSpace ) )
-    {
-      kprintf(" [0x%x]", *(dword *)(stackFramePtr + 4));
-    }
+    if( isReadable( stackFramePtr + sizeof(dword), addrSpace ) )
+      kprintf(" [0x%x]", *(dword *)(stackFramePtr + sizeof(dword)));
     else
-    {
       kprintf(" [???]");
-    }
 
     for( int i=2; i < 8; i++ )
     {
-      if( isReadable( stackFramePtr + 4 * i, addrSpace) )
-      {
-        kprintf(" 0x%x", *(dword *)(stackFramePtr + 4 * i));
-      }
+      if( isReadable( stackFramePtr + sizeof(dword) * i, addrSpace) )
+        kprintf(" 0x%x", *(dword *)(stackFramePtr + sizeof(dword) * i));
       else
-      {
         break;
-      }
     }
 
     kprintf("\n");
@@ -752,13 +663,16 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
       break;
     }
     else
-    {
       stackFramePtr = *(dword *)stackFramePtr;
-    }
   }
 }
 
-/// Prints useful debugging information about the current thread
+/** Prints useful debugging information about the current thread
+  @param thread The current thread
+  @param execState The saved execution state that was pushed to the stack upon context switch
+  @param intNum The interrupt vector (if applicable)
+  @param errorCode The error code provided by the processor (if applicable)
+*/
 
 void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum, int errorCode )
 {
@@ -766,32 +680,14 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
 
   kprintf( "Thread: 0x%x (TID: %d) ", thread, getTid(thread));
 
-/*
-  if( ((addr_t)thread - (addr_t)tcbTable) % sizeof *thread == 0 &&
-      getTid(thread) >= INITIAL_TID )
-  {
-    kprintf("TID: %d ", getTid(thread));
-  }
-  else
-  {
-    kprintf("(invalid thread address) ");
-  }
-*/
-//  if( (unsigned int)(thread + 1) == tssEsp0 ) // User thread
-//  {
-//    execState = (ExecutionState *)&thread->execState;
-//  }
-
   dump_state(execState, intNum, errorCode);
 
   if( !execState )
-  {
     kprintf("\n");
-  }
 
   kprintf( "Thread CR3: 0x%x Current CR3: 0x%x\n", *(unsigned *)&thread->rootPageMap, getCR3() );
 
-  if( !execState || intNum == -1)
+  if( !execState || intNum < 0)
   {
     __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
 
@@ -804,9 +700,7 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
     stackFramePtr = *(addr_t *)stackFramePtr;
   }
   else
-  {
     stackFramePtr = (addr_t)execState->ebp;
-  }
 
   dump_stack(stackFramePtr, thread->rootPageMap);
 }
@@ -821,7 +715,20 @@ void abort(void)
 
   kprintf("Debug Error: abort() has been called.\n");
   __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
-  dump_stack(stackFramePtr, getCR3());
+  dump_stack(stackFramePtr, getRootPageMap());
 
   __asm__("hlt");
+}
+
+void printPanicMsg(const char *msg, const char *file, const char *func, int line)
+{
+  addr_t stackFramePtr;
+  kprintf("\nKernel panic - %s(): %d (%s). %s\nSystem halted\n", func, line, file, msg);
+
+  __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
+  dump_stack(stackFramePtr, getRootPageMap());
+
+  disableInt();
+  __asm__("hlt");
+  disableInt();
 }

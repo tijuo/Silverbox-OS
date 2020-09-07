@@ -11,6 +11,7 @@
 #include <kernel/pic.h>
 #include <kernel/interrupt.h>
 #include <oslib.h>
+#include <kernel/bits.h>
 #include <os/syscalls.h>
 #include <os/msg/kernel.h>
 #include <os/msg/init.h>
@@ -42,8 +43,6 @@ static int sysUnbindIrq(ExecutionState *state);
 
 static int sysExit(ExecutionState *state);
 static int sysWait(ExecutionState *state);
-
-// XXX: Need to implement flags
 
 #define PM_READ_ONLY            0
 #define PM_READ_WRITE           0x02
@@ -92,39 +91,46 @@ static int sysMap(ExecutionState *state)
     pde_t pde;
     pte_t pte;
 
-    if(addrSpace == NULL)
+    if(!addrSpace)
     {
-      addrSpace = getCR3();
+      addrSpace = getRootPageMap();
       invalidate = 1;
     }
 
     for(; numPages--; vAddr += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE : PAGE_SIZE,
                       pframe += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE / PAGE_SIZE : 1)
     {
-      if(readPmapEntry(addrSpace, PDE_INDEX(vAddr), &pde) != E_OK)
+      if(IS_ERROR(readPmapEntry(addrSpace, PDE_INDEX(vAddr), &pde)))
         return ESYS_FAIL;
 
       if(!pde.present)
       {
         paddr_t addr;
 
-        if(flags & PM_LARGE_PAGE)
-        {
-          *(u32 *)&pde = 0;
+        pde.accessed = 0;
+        pde.global = 0;
+        pde.dirty = 0;
+        pde.available = 0;
+        pde.usPriv = 1;
+        pde.present = 1;
 
+        if(IS_FLAG_SET(flags, PM_LARGE_PAGE))
+        {
           pde.base = (u32)pframe;
-          pde.rwPriv = (flags & PM_READ_WRITE) == PM_READ_WRITE;
-          pde.pwt = (flags & PM_WRITE_THROUGH) == PM_WRITE_THROUGH;
-          pde.pcd = (flags & PM_NOT_CACHED) == PM_NOT_CACHED;
-          pde.pageSize = pde.usPriv = pde.present = 1;
+          pde.rwPriv = IS_FLAG_SET(flags, PM_READ_WRITE);
+          pde.pwt = IS_FLAG_SET(flags, PM_WRITE_THROUGH);
+          pde.pcd = IS_FLAG_SET(flags, PM_NOT_CACHED);
+          pde.pageSize = 1;
         }
         else
         {
           addr = allocPageFrame();
 
-          *(u32 *)&pde = 0;
-          pde.base = (u32)(addr >> 12);
-          pde.rwPriv = pde.usPriv = pde.present = 1;
+          pde.base = ADDR_TO_PFRAME(addr);
+          pde.rwPriv = 1;
+          pde.pwt = 0;
+          pde.pcd = 0;
+          pde.pageSize = 0;
 
           clearPhysPage(addr);
         }
@@ -144,7 +150,7 @@ static int sysMap(ExecutionState *state)
         }
       }
 
-      if(readPmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(vAddr), &pte) != E_OK)
+      if(IS_ERROR(readPmapEntry((paddr_t)PFRAME_TO_ADDR(pde.base), PTE_INDEX(vAddr), &pte)))
         return ESYS_FAIL;
 
       if(pte.present)
@@ -152,16 +158,17 @@ static int sysMap(ExecutionState *state)
       else
       {
         pte.base = (u32)pframe;
-        pte.rwPriv = (flags & PM_READ_WRITE) == PM_READ_WRITE;
-        pte.usPriv = pte.present = 1;
-        pde.pwt = (flags & PM_WRITE_THROUGH) == PM_WRITE_THROUGH;
-        pde.pcd = (flags & PM_NOT_CACHED) == PM_NOT_CACHED;
+        pte.rwPriv = IS_FLAG_SET(flags, PM_READ_WRITE);
+        pte.usPriv = 1;
+        pte.present = 1;
+        pde.pwt = IS_FLAG_SET(flags, PM_WRITE_THROUGH);
+        pde.pcd = IS_FLAG_SET(flags, PM_NOT_CACHED);
 
-        if(writePmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(vAddr), &pte) != E_OK)
+        if(IS_ERROR(writePmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(vAddr), &pte)))
           return ESYS_FAIL;
 
         if(invalidate)
-          invalidatePage(vAddr & ~(PAGE_SIZE-1));
+          invalidatePage(ALIGN_DOWN(vAddr, PAGE_SIZE));
 
         continue;
       }
@@ -186,33 +193,31 @@ static int sysUnmap(ExecutionState *state)
     pde_t pde;
     pte_t pte;
 
-    if(addrSpace == NULL)
-      addrSpace = getCR3();
+    if(!addrSpace)
+      addrSpace = getRootPageMap();
 
     while(numPages--)
     {
-      if(readPmapEntry(addrSpace, PDE_INDEX(addr), &pde) != E_OK)
-        return ESYS_FAIL;
-      else if(!pde.present)
+      if(IS_ERROR(readPmapEntry(addrSpace, PDE_INDEX(addr), &pde)) || !pde.present)
         return ESYS_FAIL;
 
       if(pde.pageSize)
       {
         pde.present = 0;
 
-        if(writePmapEntry(addrSpace, PDE_INDEX(addr), &pde) != E_OK)
+        if(IS_ERROR(writePmapEntry(addrSpace, PDE_INDEX(addr), &pde)))
           return ESYS_FAIL;
 
         addr += PAGE_TABLE_SIZE;
       }
       else
       {
-        if(readPmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(addr), &pte) != E_OK || !pte.present)
+        if(IS_ERROR(readPmapEntry((paddr_t)PFRAME_TO_ADDR(pde.base), PTE_INDEX(addr), &pte)) || !pte.present)
           return ESYS_FAIL;
 
         pte.present = 0;
 
-        if(writePmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(addr), &pte) != E_OK)
+        if(IS_ERROR(writePmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(addr), &pte)))
           return ESYS_FAIL;
 
         addr += PAGE_SIZE;
@@ -234,8 +239,8 @@ static int sysCreateThread(ExecutionState *state)
 
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
-    if(addrSpace == NULL)
-      addrSpace = getCR3() & ~0xFFF;
+    if(!addrSpace)
+      addrSpace = getRootPageMap();
 
     tcb_t *newTcb = createThread(desiredTid, entry, (paddr_t)addrSpace, stackTop);
     return newTcb ? (int)getTid(newTcb) : ESYS_FAIL;
@@ -249,7 +254,7 @@ static int sysDestroyThread(ExecutionState *state)
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
     tcb_t *tcb = getTcb((tid_t)state->ebx);
-    return tcb && releaseThread(tcb) == E_OK ? ESYS_OK : ESYS_FAIL;
+    return tcb && !IS_ERROR(releaseThread(tcb)) ? ESYS_OK : ESYS_FAIL;
   }
   else
     return ESYS_PERM;
@@ -471,9 +476,9 @@ static int sysIrqWait(ExecutionState *state)
       {
         isHandler = true;
 
-        if(pendingIrqBitmap[irqNum / 32] & (1 << (irqNum & 0x1F)))
+        if(IS_FLAG_SET(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1))))
         {
-          pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
+          CLEAR_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
           return irqNum;
         }
       }
@@ -486,9 +491,9 @@ static int sysIrqWait(ExecutionState *state)
     return ESYS_ARG;
   else if(irqHandlers[irqNum] != currentThread)
     return ESYS_PERM;
-  else if(pendingIrqBitmap[irqNum / 32] & (1 << (irqNum & 0x1F)))
+  else if(IS_FLAG_SET(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1))))
   {
-    pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
+    CLEAR_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
     return irqNum;
   }
   else if(poll)
@@ -508,8 +513,8 @@ static int sysIrqWait(ExecutionState *state)
 
 static int sysSend(ExecutionState *state)
 {
-  tid_t remoteTid = (tid_t)(state->eax >> 16);
-  int isBlocking = (int)((state->eax & 0xFF) == SYS_SEND_WAIT);
+  tid_t remoteTid = (tid_t)(state->eax >> SYSCALL_TID_OFFSET);
+  int isBlocking = (int)((state->eax & SYSCALL_CALL_MASK) == SYS_SEND_WAIT);
 
   switch(sendMessage(currentThread, state, remoteTid, isBlocking, 0))
   {
@@ -527,8 +532,8 @@ static int sysSend(ExecutionState *state)
 
 static int sysCall(ExecutionState *state)
 {
-  tid_t remoteTid = (tid_t)(state->eax >> 16);
-  int isBlocking = (int)((state->eax & 0xFF) == SYS_CALL_WAIT);
+  tid_t remoteTid = (tid_t)(state->eax >> SYSCALL_TID_OFFSET);
+  int isBlocking = (int)((state->eax & SYSCALL_CALL_MASK) == SYS_CALL_WAIT);
 
   switch(sendMessage(currentThread, state, remoteTid, isBlocking, 1))
   {
@@ -573,8 +578,8 @@ static int sysWait(ExecutionState *state)
 
 int sysReceive(ExecutionState *state)
 {
-  tid_t senderTid = (tid_t)(state->eax >> 16);
-  int isBlocking = (int)((state->eax & 0xFF) == SYS_RECEIVE_WAIT);
+  tid_t senderTid = (tid_t)(state->eax >> SYSCALL_TID_OFFSET);
+  int isBlocking = (int)((state->eax & SYSCALL_CALL_MASK) == SYS_RECEIVE_WAIT);
 
   switch(receiveMessage(currentThread, state, senderTid, isBlocking))
   {
@@ -597,7 +602,7 @@ int sysReceive(ExecutionState *state)
 void _syscall( ExecutionState *execState )
 {
   int retval;
-  unsigned int callIndex = execState->eax & 0xFF;
+  unsigned int callIndex = execState->eax & SYSCALL_CALL_MASK;
 
   retval = callIndex >= sizeof(syscallTable) ? ESYS_BADCALL : syscallTable[callIndex](execState);
 
@@ -612,7 +617,7 @@ void _syscall( ExecutionState *execState )
       if(retval != ESYS_OK)
         execState->eax = (dword)retval;
       else
-        execState->eax = (execState->eax & 0xFFFFFF00) | ESYS_OK;
+        execState->eax = (execState->eax & ~SYSCALL_RET_MASK) | ESYS_OK;
       break;
     default:
       execState->eax = (dword)retval;

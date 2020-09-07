@@ -2,7 +2,7 @@
 
 volatile int errno;
 
-const char * const _errno_reasons[80] = {
+const char * const _errno_reasons[] = {
 "No error.",
 "Argument list too long.",
 "Permission denied.",

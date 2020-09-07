@@ -3,11 +3,15 @@
 
 static const char *digits = "0123456789abcdefghijklmnopqrstuvwxyz";
 
+#define MIN_BASE        2
+#define DEC_BASE        10
+#define MAX_BASE        36
+
 char *itoa(int v, char *str, int base)
 {
   char *ptr = str;
   char *retStr = str;
-  int neg = (base == 10 && v < 0);
+  int neg = (base == DEC_BASE && v < 0);
   unsigned int value;
 
   if(!str)
@@ -18,7 +22,7 @@ char *itoa(int v, char *str, int base)
   if(base < 0)
     base = -base;
 
-  if(base < 2 || base > 36)
+  if(base < MIN_BASE || base > MAX_BASE)
     return retStr;
 
   if(neg)

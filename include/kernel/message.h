@@ -26,6 +26,6 @@ int attachReceiveWaitQueue(tcb_t *receiver, tid_t sender);
 int detachSendWaitQueue(tcb_t *sender);
 int detachReceiveWaitQueue(tcb_t *receiver);
 
-extern pem_t *pendingMessageBuffer;
+extern pem_t pendingMessageBuffer[MAX_THREADS];
 
 #endif /* MESSAGE */

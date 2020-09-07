@@ -1,10 +1,10 @@
 #ifndef PIT
 #define PIT
 
-#define TIMER0		0x40u
-#define TIMER1		0x41u
-#define TIMER2		0x42u
-#define TIMER_CTRL	0x43u
+#define TIMER0		    0x40u
+#define TIMER1		    0x41u
+#define TIMER2		    0x42u
+#define TIMER_CTRL	    0x43u
 
 
 // Bit 0
@@ -13,12 +13,12 @@
 
 // Bits 321
 
-#define C_MODE0		0x00u  // mode 0
-#define C_MODE1		0x02u  // mode 1
-#define C_MODE2		0x04u  // mode 2
-#define C_MODE3		0x06u  // mode 3
-#define C_MODE4		0x08u  // mode 4
-#define C_MODE5		0x0Au  // mode 5
+#define C_MODE0		    0x00u  // mode 0
+#define C_MODE1		    0x02u  // mode 1
+#define C_MODE2		    0x04u  // mode 2
+#define C_MODE3		    0x06u  // mode 3
+#define C_MODE4		    0x08u  // mode 4
+#define C_MODE5		    0x0Au  // mode 5
 
 
 // Bits 54
@@ -31,11 +31,11 @@
 // Bits 76
 
 #define C_SELECT0		0x00u  // Select counter 0
-#define C_SELECT1       	0x40u  // Select counter 1
-#define C_SELECT2       	0x80u  // Select counter 2
+#define C_SELECT1       0x40u  // Select counter 1
+#define C_SELECT2       0x80u  // Select counter 2
 #define C_SELECT3		0xC0u  // Select counter 3
 
 #define TIMER_FREQ		1193182u
-#define HZ			   100u
+#define TIMER_QUANTA_HZ    100u
 
 #endif

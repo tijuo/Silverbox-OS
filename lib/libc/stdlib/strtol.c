@@ -6,14 +6,20 @@ enum _strtotype_type { __LONG_TYPE,  __ULONG_TYPE };
 
 long _strtotype(const char *nptr, char **endptr, int base, .../*int type*/);
 
+#define MIN_BASE        2
+#define DEC_BASE        10
+#define OCT_BASE         8
+#define HEX_BASE        16
+#define MAX_BASE        36
+
 long atol(char *nptr)
 {
-  return strtol(nptr, (char **)NULL, 10);
+  return strtol(nptr, (char **)NULL, DEC_BASE);
 }
 
 int atoi(char *nptr)
 {
-  return (int)strtol(nptr, (char **)NULL, 10);
+  return (int)strtol(nptr, (char **)NULL, DEC_BASE);
 }
 
 long strtol(const char *nptr, char **endptr, int base)
@@ -43,26 +49,26 @@ long _strtotype(const char *nptr, char **endptr, int base, .../*int type*/)
     {
       if(tolower(*(++nptr)) == 'x')
       {
-        base = 16;
+        base = HEX_BASE;
         nptr++;
       }
       else
-        base = 8;
+        base = OCT_BASE;
     }
     else
-      base = 10;
+      base = DEC_BASE;
   }
 
   while(*nptr)
   {
     if(!isalnum(*nptr))
       goto error;
-    else if( base >= 2 && base <= 10 && *nptr - '0' >= base )
+    else if( base >= MIN_BASE && base <= DEC_BASE && *nptr - '0' >= base )
       goto error;
-    else if( base > 10 && base < 36 && tolower(*nptr) - 'a' >= base - 10 )
+    else if( base > DEC_BASE && base < MAX_BASE && tolower(*nptr) - 'a' >= base - DEC_BASE )
       goto error;
 
-    num = num * base + (neg ? -1 : 1) * (isdigit(*nptr) ? (*nptr - '0') : (10 + tolower(*nptr) - 'a'));
+    num = num * base + (neg ? -1 : 1) * (isdigit(*nptr) ? (*nptr - '0') : (DEC_BASE + tolower(*nptr) - 'a'));
     nptr++;
   }
 

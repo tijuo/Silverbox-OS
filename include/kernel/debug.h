@@ -59,16 +59,17 @@ unsigned int getTimeDifference(void);
 
 #else
 
-#define assert(exp)
-#define incSchedCount()
-#define incTimerCount()
-#define clearScreen()
-#define kprintf( x, ... )
-#define printAssertMsg( w, x, y, z )
-#define setBadAssertHlt( val )
-#define setVideoLowMem( val )
-#defin dump_regs( t );
-#define dump_state( s );
+#define assert(exp)         ({})
+#define incSchedCount()     ({})
+#define incTimerCount()     ({})
+#define clearScreen()       ({})
+#define kprintf( x, ... )   ({})
+#define printAssertMsg( w, x, y, z )    ({})
+#define setBadAssertHlt( val )      ({})
+#define setVideoLowMem( val )       ({})
+#define dump_regs( t, s, i, e )     ({})
+#define dump_state( s, i, e )       ({})
+#define dump_stack( x, y )          ({})
 
 //#define kprintInt( num )
 //#define kprintHex( num )
@@ -78,9 +79,13 @@ unsigned int getTimeDifference(void);
 //#define _putChar(c, i, j, attr)
 //#define printString(str, x, y)
 //#define _printString(str, x, y, ...)
-#define initVideo()
+#define initVideo()                 ({})
 #define RET_MSG(x,y)	return x;
 #define CALL_COUNTER(ret_type, fname, arg)	ret_type fname(arg);
 #endif /* DEBUG */
+
+void printPanicMsg(const char *msg, const char *file, const char *func, int line);
+
+#define panic(msg)     printPanicMsg( msg, __FILE__, __func__, __LINE__ )
 
 #endif /* DEBUG_H */

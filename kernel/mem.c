@@ -2,12 +2,13 @@
 #include <kernel/paging.h>
 #include <kernel/error.h>
 #include <kernel/debug.h>
+#include <kernel/kmalloc.h>
 #include <oslib.h>
 
 paddr_t *freePageStack=(paddr_t *)PAGE_STACK;
-paddr_t *freePageStackTop;
-
-bool tempMapped;
+paddr_t *freePageStackTop=NULL;
+bool tempMapped=false;
+size_t pageTableSize = PAGE_TABLE_SIZE;
 
 static void freeUnusedHeapPages(void);
 
@@ -18,7 +19,7 @@ static void freeUnusedHeapPages(void);
 
 paddr_t allocPageFrame(void)
 {
-  if(freePageStackTop == NULL)
+  if(!freePageStackTop)
   {
     kprintf("allocPageFrame(): Free page stack hasn't been initialized yet!\n");
     return NULL_PADDR;
@@ -27,16 +28,13 @@ paddr_t allocPageFrame(void)
   // Attempt to reclaim unused heap pages
 
   if(freePageStackTop == freePageStack)
-    freeUnusedHeapPages();
-
-  if(freePageStackTop == freePageStack)
   {
     kprintf("allocPageFrame(): Free page stack is empty!\n");
+    freeUnusedHeapPages();
   }
-
 #if DEBUG
-  if(freePageStackTop != freePageStack)
-    assert(((*(freePageStackTop-1)) & (PAGE_SIZE-1)) == 0);
+  else
+    assert(*(freePageStackTop-1) == ALIGN_DOWN(*(freePageStackTop-1), PAGE_SIZE))
 #endif /* DEBUG */
 
   return (freePageStackTop == freePageStack) ? NULL_PADDR : *--freePageStackTop;
@@ -49,10 +47,11 @@ paddr_t allocPageFrame(void)
 
 void freePageFrame(paddr_t frame)
 {
-  assert((frame & (PAGE_SIZE - 1)) == 0);
+  assert(frame == ALIGN_DOWN(frame, PAGE_SIZE));
+  assert(freePageStackTop);
 
-  if(freePageStackTop == NULL)
-    *freePageStackTop++ = frame & ~(PAGE_SIZE - 1);
+  if(!freePageStackTop)
+    *freePageStackTop++ = ALIGN_DOWN(frame, PAGE_SIZE);
 }
 
 /**
@@ -65,29 +64,30 @@ void freeUnusedHeapPages(void)
   addr_t addr=heapEnd;
   pde_t pde;
   pte_t pte;
+  int firstPass = 1;
 
   // Align address to the next page boundary, if unaligned
 
-  if((addr & (PAGE_SIZE-1)) != 0)
-    addr += PAGE_SIZE - (addr & (PAGE_SIZE - 1));
+  addr = ALIGN_UP(addr, PAGE_SIZE);
 
   // Unmap and free any present pages that are still mapped past the end of heap
 
-  for(int first=1; addr < KERNEL_HEAP_LIMIT; )
+  while(addr < KERNEL_HEAP_LIMIT)
   {
-    if((((addr & (PAGE_TABLE_SIZE-1)) == 0) || first) && IS_ERROR(readPmapEntry(NULL_PADDR, addr, &pde)))
+    if((IS_ALIGNED(addr, pageTableSize) || firstPass)
+        && IS_ERROR(readPmapEntry(NULL_PADDR, addr, &pde)))
     {
-      addr = (addr & ~(PAGE_TABLE_SIZE-1)) + PAGE_TABLE_SIZE;
+      addr = ALIGN_UP(addr, pageTableSize);
       continue;
     }
 
-    first = 0;
+    firstPass = 0;
 
-    if(pde.present && !IS_ERROR(readPmapEntry((paddr_t)(pde.base << 12), addr, &pte)))
+    if(pde.present && !IS_ERROR(readPmapEntry((paddr_t)PFRAME_TO_ADDR(pde.base), addr, &pte)))
     {
       if(pte.present)
       {
-        freePageFrame((paddr_t)(pte.base << 12));
+        freePageFrame((paddr_t)PFRAME_TO_ADDR(pte.base));
         pte.base = 0;
         pte.present = 0;
 
@@ -97,6 +97,6 @@ void freeUnusedHeapPages(void)
       addr += PAGE_SIZE;
     }
     else // If an entire page table is marked as not-present, then assume that all PTEs are invalid (and thus have no allocated pages). Skip searching through it
-      addr += PAGE_TABLE_SIZE - (addr & (PAGE_TABLE_SIZE - 1));
+      addr = ALIGN_UP(addr, pageTableSize);
   }
 }

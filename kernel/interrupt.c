@@ -10,13 +10,16 @@
 #include <kernel/error.h>
 #include <os/msg/kernel.h>
 #include <os/msg/init.h>
+#include <kernel/bits.h>
 
 static int handleHeapPageFault(int errorCode);
+
+#define FIRST_VALID_PAGE        0x1000u
 
 // The threads that are responsible for handling IRQs
 
 tcb_t *irqHandlers[NUM_IRQS];
-int pendingIrqBitmap[IRQ_BITMAP_COUNT];
+u32 pendingIrqBitmap[IRQ_BITMAP_COUNT];
 
 /** Notify the interrupt controller that the IRQ has been handled and to re-enable the generation of IRQs.
 
@@ -41,11 +44,11 @@ int registerIrq(tcb_t *thread, int irqNum)
   assert(isValidIRQ(irqNum));
 
   if(irqHandlers[irqNum])
-    return E_FAIL;
+    RET_MSG(E_FAIL, "IRQ Handler has already been set")
 
   kprintf("TID %d registered IRQ: 0x%x\n", getTid(thread), irqNum);
 
-  pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
+  CLEAR_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
   irqHandlers[irqNum] = thread;
   enableIRQ(irqNum);
   return E_OK;
@@ -78,9 +81,9 @@ void handleIRQ(int irqNum, ExecutionState *state)
 {
   assert(state != NULL);
 
-  if(irqNum == 0 && !irqHandlers[0])
+  if(irqNum == TIMER_IRQ && !irqHandlers[TIMER_IRQ])
     timerInt(state);
-  else if(irqNum == 7 && !irqHandlers[7])
+  else if(irqNum == SPURIOUS_IRQ && !irqHandlers[SPURIOUS_IRQ])
     sendEOI(); // Stops the spurious IRQ7
   else
   {
@@ -91,13 +94,13 @@ void handleIRQ(int irqNum, ExecutionState *state)
 
     if(handler && handler->threadState == IRQ_WAIT)
     {
-      pendingIrqBitmap[irqNum / 32] &= ~(1 << (irqNum & 0x1F));
+      CLEAR_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
       setPriority(handler, HIGHEST_PRIORITY);
       handler->execState.eax = irqNum;
       startThread(handler);
     }
     else
-      pendingIrqBitmap[irqNum / 32] |= (1 << (irqNum & 0x1F));
+      SET_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
   }
 }
 
@@ -112,7 +115,7 @@ void handleIRQ(int irqNum, ExecutionState *state)
 
 int handleHeapPageFault(int errorCode)
 {
-  if(errorCode & (PAGING_ERR_PRES | PAGING_ERR_USER))
+  if(IS_FLAG_SET(errorCode, PAGING_ERR_PRES) || IS_FLAG_SET(errorCode, PAGING_ERR_USER))
     return E_PERM;
 
   addr_t faultAddr=(addr_t)getCR2();
@@ -120,53 +123,46 @@ int handleHeapPageFault(int errorCode)
   pde_t pde;
   pte_t pte;
 
-  if(faultAddr < 0x1000)
-  {
-    kprintf("Error: NULL page access.\n");
-    return E_PERM;
-  }
+  if(faultAddr < FIRST_VALID_PAGE)
+    RET_MSG(E_PERM, "Error: NULL page access.")
 
   //kprintf("Page fault at 0x%x\n", faultAddr);
 
   if(faultAddr >= PAGETAB)
-    return E_FAIL;
+    RET_MSG(E_FAIL, "Page fault occurred in page table/directory region.")
 
   if(faultAddr >= KERNEL_HEAP_START && faultAddr <= KERNEL_HEAP_LIMIT)
   {
-    if(IS_ERROR(readPmapEntry(NULL_PADDR, PDE_INDEX(faultAddr), &pde))
-    || IS_ERROR(readPmapEntry((paddr_t)(pde.base << 12), PDE_INDEX(faultAddr), &pte)))
-    {
-      return E_FAIL;
-    }
+    if(IS_ERROR(readPmapEntry(NULL_PADDR, PDE_INDEX(faultAddr), &pde)))
+      RET_MSG(E_FAIL, "Unable to read page directory entry.")
+    else if(IS_ERROR(readPmapEntry((paddr_t)PFRAME_TO_ADDR(pde.base), PDE_INDEX(faultAddr), &pte)))
+      RET_MSG(E_FAIL, "Unable to read page table entry.")
     else if(!pte.present)
     {
       pageFrame = allocPageFrame();
 
       if(pageFrame == NULL_PADDR)
-        return E_FAIL;
+        RET_MSG(E_FAIL, "Unable to allocate page frame.")
       else if(IS_ERROR(kMapPage(faultAddr, pageFrame, PAGING_RW | PAGING_SUPERVISOR)))
       {
-        kprintf("Unable to map page: %x -> %x.\n", faultAddr, pageFrame << 12);
+        kprintf("%x -> %x.\n", faultAddr, PFRAME_TO_ADDR(pageFrame));
         freePageFrame(pageFrame);
-        return E_FAIL;
+        RET_MSG(E_FAIL, "Unable to map page")
       }
     }
-    else if(pte.usPriv || (!pte.rwPriv && (errorCode & PAGING_ERR_WRITE)))
+    else if(pte.usPriv || (!pte.rwPriv && IS_FLAG_SET(errorCode, PAGING_ERR_WRITE)))
     {
       if(pte.usPriv)
         kprintf("Page is marked as user.\n");
 
-      if(!pte.rwPriv && (errorCode & PAGING_ERR_WRITE))
+      if(!pte.rwPriv && IS_FLAG_SET(errorCode, PAGING_ERR_WRITE))
         kprintf("Page is marked as read-only (but a write access was performed).\n");
 
       return E_PERM;
     }
   }
   else
-  {
-    kprintf("Fault address lies outside of heap range.\n");
-    return E_RANGE;
-  }
+    RET_MSG(E_RANGE, "Fault address lies outside of heap range.");
 
   return E_OK;
 }
@@ -189,12 +185,12 @@ void handleCPUException(int exNum, int errorCode, ExecutionState *state)
 
   // Handle page faults due to non-present pages in kernel heap
 
-  if(exNum == 14 && !IS_ERROR(handleHeapPageFault(errorCode)))
+  if(exNum == PAGE_FAULT_INT && !IS_ERROR(handleHeapPageFault(errorCode)))
     return;
 
   #if DEBUG
 
-  if(tcb != NULL)
+  if(tcb)
   {
     if( tcb == initServerThread )
     {
@@ -208,7 +204,7 @@ void handleCPUException(int exNum, int errorCode, ExecutionState *state)
   }
   #endif
 
-  if( tcb == NULL )
+  if( !tcb )
   {
     kprintf("NULL tcb. Unable to handle exception. System halted.\n");
     dump_state(state, exNum, errorCode);
@@ -217,11 +213,12 @@ void handleCPUException(int exNum, int errorCode, ExecutionState *state)
   }
 
   pem_t message = {
-    .subject = EXCEPTION_MSG,
-    .intNum = exNum,
-    .who    = getTid(tcb),
-    .errorCode = errorCode,
-    .faultAddress = exNum == 14 ? getCR2() : 0 };
+    .subject      = EXCEPTION_MSG,
+    .intNum       = exNum,
+    .who          = getTid(tcb),
+    .errorCode    = errorCode,
+    .faultAddress = exNum == 14 ? getCR2() : 0
+  };
 
 /*
   if(state->cs == 0x08)

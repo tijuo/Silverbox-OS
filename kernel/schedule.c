@@ -7,13 +7,14 @@
 #include <kernel/lowlevel.h>
 #include <kernel/error.h>
 
-queue_t runQueues[NUM_RUN_QUEUES], timerQueue;
+queue_t runQueues[NUM_RUN_QUEUES];
+queue_t timerQueue;
 
 int setPriority( tcb_t *thread, unsigned int level );
 tcb_t *attachRunQueue( tcb_t *thread );
 tcb_t *detachRunQueue( tcb_t *thread );
 
-/* TODO: There's probably a more efficient way of scheduling threads */
+/* TODO: There might be a more efficient way of scheduling threads */
 
 /**
   Picks the best thread to run next.
@@ -31,7 +32,8 @@ tcb_t *detachRunQueue( tcb_t *thread );
 tcb_t *schedule(void)
 {
   int priority;
-  tcb_t *newThread = NULL, *oldThread = currentThread;
+  tcb_t *newThread = NULL;
+  tcb_t *oldThread = currentThread;
 
   /* Threads with higher priority *MUST* execute before threads
      with lower priority. Warning: This may cause starvation
@@ -54,10 +56,7 @@ tcb_t *schedule(void)
   }
 
   if(!newThread && !oldThread)
-  {
-    kprintf("Unable to schedule any threads!\n");
-    return NULL;
-  }
+    RET_MSG(NULL, "Unable to schedule any threads!")
   else if(newThread) // If a thread was found, then run it(assumes that the thread is ready since it's in the ready queue)
   {
     assert( newThread->threadState == READY );
@@ -137,7 +136,9 @@ int setPriority( tcb_t *thread, unsigned int level )
   assert( level < NUM_PRIORITIES );
 
   if(thread->priority == level)
-    return E_DONE;
+    RET_MSG(E_DONE, "Thread is already set to the desired priority level")
+
+  // Detach the thread from the run queue if it hasn't been detached already
 
   if(thread->threadState == READY)
     detachRunQueue( thread );
@@ -145,7 +146,7 @@ int setPriority( tcb_t *thread, unsigned int level )
   thread->priority = level;
 
   if( thread->threadState == READY && !attachRunQueue(thread))
-    return E_FAIL;
+    RET_MSG(E_FAIL, "Unable to attach thread to new run queue")
 
   if( level < currentThread->priority && currentThread->threadState == RUNNING )
     currentThread->threadState = READY;
@@ -245,7 +246,7 @@ void timerInt(UNUSED_PARAM ExecutionState *state)
           attachRunQueue( wokenThread );
         #else
           assert( attachRunQueue( wokenThread ) != NULL );
-        #endif
+        #endif /* DEBUG */
       }
 
       assert( wokenThread != currentThread );

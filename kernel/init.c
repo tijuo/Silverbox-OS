@@ -15,15 +15,16 @@
 #include <oslib.h>
 #include <kernel/error.h>
 #include <os/msg/init.h>
+#include <os/syscalls.h>
 
 #include <kernel/io.h>
 #include <os/variables.h>
 
 #define DISC_CODE(X) \
-  X __attribute__((section(".dtext")))
+    X __attribute__((section(".dtext")))
 
 #define  DISC_DATA(X)  \
-  X __attribute__((section(".ddata")))
+    X __attribute__((section(".ddata")))
 
 #define INIT_SERVER_FLAG	"initsrv="
 
@@ -31,22 +32,23 @@ static inline void switchContext( u32 addrSpace, ExecutionState state ) __attrib
 
 static inline void switchContext( u32 addrSpace, ExecutionState state )
 {
-   __asm__ __volatile__(
-    "mov %%edx, %%esp\n"
-    "mov %%ecx, %%cr3\n"
-    "pop %%edi\n"
-    "pop %%esi\n"
-    "pop %%ebp\n"
-    "pop %%ebx\n"
-    "pop %%edx\n"
-    "pop %%ecx\n"
-    "pop %%eax\n"
-    "iret\n" :: "ecx"(addrSpace),
-    "edx"((dword)&state));
+  __asm__ __volatile__(
+      "mov %%edx, %%esp\n"
+      "mov %%ecx, %%cr3\n"
+      "pop %%edi\n"
+      "pop %%esi\n"
+      "pop %%ebp\n"
+      "pop %%ebx\n"
+      "pop %%edx\n"
+      "pop %%ecx\n"
+      "pop %%eax\n"
+      "iret\n" :: "ecx"(addrSpace),
+      "edx"((dword)&state));
 }
 
 extern tcb_t *initServerThread;
-extern paddr_t *freePageStack, *freePageStackTop;
+extern paddr_t *freePageStack;
+extern paddr_t *freePageStackTop;
 
 static tcb_t *DISC_CODE(loadElfExe( addr_t, paddr_t, addr_t ));
 static bool DISC_CODE(isValidElfExe( addr_t img ));
@@ -61,23 +63,25 @@ static void DISC_CODE(bootstrapInitServer(multiboot_info_t *info));
 void DISC_CODE(init(multiboot_info_t *));
 static void DISC_CODE(initPIC( void ));
 static int DISC_CODE(memcmp(const char *s1, const char *s2, register size_t n));
-static int DISC_CODE(strncmp(const char * restrict, const char * restrict, size_t num));
+static int DISC_CODE(strncmp(const char *, const char *, size_t num));
 //static size_t DISC_CODE(strlen(const char *s));
-static char *DISC_CODE(strstr(const char * restrict, const char * restrict));
-static char *DISC_CODE(strchr(const char * restrict, int));
+static char *DISC_CODE(strstr(char *, const char *));
+static char *DISC_CODE(strchr(char *, int));
+
 static void DISC_CODE(showCPU_Features(void));
 static void DISC_CODE(showMBInfoFlags(multiboot_info_t *));
+
 static void DISC_CODE(initStructures(multiboot_info_t *));
 /*
 static unsigned DISC_CODE(bcd2bin(unsigned num));
 static unsigned long long DISC_CODE(mktime(unsigned int year, unsigned int month, unsigned int day, unsigned int hour,
                           unsigned int minute, unsigned int second));
-*/
+ */
 static addr_t DISC_DATA(initServerImg);
-static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * restrict info,
+static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * info,
                                      int isLargePage));
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
-static void DISC_CODE(initPageAllocator(multiboot_info_t * restrict info));
+static void DISC_CODE(initPageAllocator(multiboot_info_t * info));
 static paddr_t DISC_DATA(lastKernelFreePage);
 extern void invalidatePage( addr_t );
 
@@ -102,9 +106,9 @@ void readPhysMem(addr_t address, addr_t buffer, size_t len)
     len -= bytes;
   }
 }
-*/
+ */
 
-bool isReservedPage(paddr_t addr, multiboot_info_t * restrict info, int isLargePage)
+bool isReservedPage(paddr_t addr, multiboot_info_t * info, int isLargePage)
 {
   unsigned int kernelStart = (unsigned int)&kPhysStart;
   unsigned int kernelLength = (unsigned int)&kSize;
@@ -124,7 +128,7 @@ bool isReservedPage(paddr_t addr, multiboot_info_t * restrict info, int isLargeP
   if(addr < (paddr_t)0x100000)
     return true;
   else if((addr >= kernelStart && addr < kernelStart + kernelLength)
-          || (addrEnd >= kernelStart && addrEnd < kernelStart+kernelLength))
+      || (addrEnd >= kernelStart && addrEnd < kernelStart+kernelLength))
     return true;
   else
   {
@@ -144,7 +148,7 @@ bool isReservedPage(paddr_t addr, multiboot_info_t * restrict info, int isLargeP
       mmap_base |= mmap->base_addr_low;
 
       if(((u64)addr >= mmap_base && (u64)addr <= mmap_base + mmapLen)
-         || ((u64)addrEnd >= mmap_base && (u64)addrEnd <= mmap_base + mmapLen))
+          || ((u64)addrEnd >= mmap_base && (u64)addrEnd <= mmap_base + mmapLen))
       {
         inSomeRegion = 1;
 
@@ -163,10 +167,10 @@ bool isReservedPage(paddr_t addr, multiboot_info_t * restrict info, int isLargeP
     for(unsigned int i=0; i < info->mods_count; i++, module++)
     {
       if(addr > module->mod_start && addr >= module->mod_end
-         && addrEnd > module->mod_start && addrEnd > module->mod_end)
+          && addrEnd > module->mod_start && addrEnd > module->mod_end)
         continue;
       else if(addr < module->mod_start && addr < module->mod_end &&
-              addrEnd <= module->mod_start && addrEnd < module->mod_end)
+          addrEnd <= module->mod_start && addrEnd < module->mod_end)
         continue;
       else
         return true;
@@ -194,9 +198,9 @@ void initPageAllocator(multiboot_info_t *info)
 
      3. Repeat until all available page frames are added to the page
         frame stack.
-  */
+   */
 
-/*      kprintf("Multiboot MMAP base: 0x%x Multiboot MMAP length: 0x%x\n", info->mmap_addr, info->mmap_length);
+  /*      kprintf("Multiboot MMAP base: 0x%x Multiboot MMAP length: 0x%x\n", info->mmap_addr, info->mmap_length);
 
       for(unsigned long offset=0; offset < info->mmap_length; offset += mmap->size+sizeof(mmap->size))
       {
@@ -222,9 +226,10 @@ void initPageAllocator(multiboot_info_t *info)
 
        kprintf("%x Type: 0x%x Size: 0x%x\n", mmap->length_low, mmap->type, mmap->size);
      }
-*/
+   */
   size_t pageStackSize = sizeof(paddr_t)*(info->mem_upper) / (16 * 4);
-  size_t stackSizeLeft, tcbSizeLeft;
+  size_t stackSizeLeft;
+  size_t tcbSizeLeft;
 
   if(pageStackSize % PAGE_SIZE)
     pageStackSize += PAGE_SIZE - (pageStackSize & (PAGE_SIZE-1));
@@ -240,8 +245,13 @@ void initPageAllocator(multiboot_info_t *info)
 
   if(info->flags & MBI_FLAGS_MMAP)
   {
-    paddr_t largePages[32], pageTables[32], tcbPages[2];
-    unsigned int pageTableCount=0, largePageCount=0, tcbPageCount=0; // Number of addresses corresponding to page tables and large pages in each of the previous arrays
+    paddr_t largePages[32];
+    paddr_t pageTables[32];
+    paddr_t tcbPages[2];
+
+    size_t pageTableCount=0; // Number of addresses corresponding to page tables,
+    size_t largePageCount=0; // large pages,
+    size_t tcbPageCount=0;   // and TCBs in each of the previous arrays
 
     unsigned int isPageStackMapped=0;
     unsigned int smallPageMapCount=0;
@@ -282,7 +292,7 @@ void initPageAllocator(multiboot_info_t *info)
               baseAddr += largePageSize - extraSpace;
 
             while(tcbSizeLeft >= largePageSize
-                  && mmapLen >= extraSpace + (tcbPagesSearched+1)*largePageSize)
+                && mmapLen >= extraSpace + (tcbPagesSearched+1)*largePageSize)
             {
               if(!isReservedPage(baseAddr + largePageSize * tcbPagesSearched, info, 1))
               {
@@ -308,7 +318,7 @@ void initPageAllocator(multiboot_info_t *info)
             // Find and map all large-sized pages in the memory region that we'll need
 
             while(stackSizeLeft >= largePageSize
-                  && mmapLen >= extraSpace + (largePagesSearched+1)*largePageSize)
+                && mmapLen >= extraSpace + (largePagesSearched+1)*largePageSize)
             {
               if(!isReservedPage(baseAddr + largePageSize * largePagesSearched, info, 1))
               {
@@ -338,7 +348,7 @@ void initPageAllocator(multiboot_info_t *info)
             // Map the remaining regions with 4 KiB pages
 
             while(stackSizeLeft > 0
-                  && mmapLen >= extraSpace + (pageTablesNeeded+smallPagesSearched+1)*PAGE_SIZE)
+                && mmapLen >= extraSpace + (pageTablesNeeded+smallPagesSearched+1)*PAGE_SIZE)
             {
               if(isReservedPage(baseAddr + PAGE_SIZE * (smallPagesSearched+pageTablesNeeded), info, 0))
               {
@@ -473,7 +483,7 @@ void initPageAllocator(multiboot_info_t *info)
           {
             pte_t *pte = ADDR_TO_PTE(addr);
 
-            if((paddr_t)(pte->base << 12) == paddr)
+            if((paddr_t)PFRAME_TO_ADDR(pte->base) == paddr)
             {
               found = 1;
               paddr += PAGE_SIZE;
@@ -513,7 +523,7 @@ int memcmp(const char *s1, const char *s2, register size_t n)
     return (*s1 > *s2 ? 1 : -1);
 }
 
-int strncmp( const char * restrict str1, const char * restrict str2, size_t num )
+int strncmp( const char * str1, const char * str2, size_t num )
 {
   register size_t i;
 
@@ -532,22 +542,19 @@ int strncmp( const char * restrict str1, const char * restrict str2, size_t num 
     return (str1[i] > str2[i] ? 1 : -1);
 }
 
-char *strstr( const char * restrict str, const char * restrict substr )
+char *strstr(char * str, const char * substr )
 {
   register size_t i;
-  register size_t off;
 
-  if( !str )
-    return NULL;
-  else if( !substr || !substr[0] )
-    return (char *)str;
-
-  for( off=0; str[off]; off++ )
+  if(str && substr)
   {
-    for( i=0; str[off+i] == substr[i] && substr[i]; i++ );
+    for( ; *str; str++ )
+    {
+      for( i=0; str[i] == substr[i] && substr[i]; i++ );
 
-    if( !substr[i] )
-      return (char *)str;
+      if( !substr[i] )
+        return str;
+    }
   }
 
   return NULL;
@@ -560,20 +567,23 @@ size_t strlen(const char *s)
 
   return (size_t)(strchr(s, '\0') - s);
 }
-*/
-char *strchr(const char * restrict s, int c)
+ */
+char *strchr(char * s, int c)
 {
-  register size_t i;
+  if(s)
+  {
+    while(*s)
+    {
+      if(*s == c)
+        return (char *)s;
+      else
+        s++;
+    }
 
-  if( !s )
-    return NULL;
+    return c ? NULL : s;
+  }
 
-  for( i=0; s[i] != c && s[i]; i++ );
-
-  if( s[i] == c )
-    return (char *)s;
-  else
-    return NULL;
+  return NULL;
 }
 
 void initPIC( void )
@@ -647,7 +657,7 @@ int add_gdt_entry(unsigned int sel, dword base, dword limit, int flags)
 
   return rsel;
 }
-*/
+ */
 
 void setupGDT(void)
 {
@@ -682,7 +692,7 @@ void stopInit(const char *msg)
    functions that are called by this function may break the entire
    kernel. */
 
-int initMemory( multiboot_info_t * restrict info )
+int initMemory( multiboot_info_t * info )
 {
   unsigned int totalPhysMem = (info->mem_upper + 1024) * 1024;
   pte_t *ptePtr;
@@ -715,8 +725,8 @@ void initTimer( void )
   addIDTEntry( timerHandler, IRQ0, INT_GATE | KCODE );
 
   outByte( (word)TIMER_CTRL, (byte)(C_SELECT0 | C_MODE3 | BIN_COUNTER | RWL_FORMAT3) );
-  outByte( (word)TIMER0, (byte)(( TIMER_FREQ / HZ ) & 0xFF) );
-  outByte( (word)TIMER0, (byte)(( TIMER_FREQ / HZ ) >> 8) );
+  outByte( (word)TIMER0, (byte)(( TIMER_FREQ / TIMER_QUANTA_HZ ) & 0xFF) );
+  outByte( (word)TIMER0, (byte)(( TIMER_FREQ / TIMER_QUANTA_HZ ) >> 8) );
 
   kprintf("Enabling IRQ 0\n");
   enableIRQ( 0 );
@@ -774,7 +784,7 @@ void initInterrupts( void )
   for( i = 0x30; i <= 0xFF; i++ )
     addIDTEntry( ( void *) invalidIntHandler, i, INT_GATE | KCODE );
 
-  addIDTEntry( ( void * ) syscallHandler, 0x40, INT_GATE | KCODE | I_DPL3 );
+  addIDTEntry( ( void * ) syscallHandler, SYSCALL_INT, INT_GATE | KCODE | I_DPL3 );
 
   initPIC();
   loadIDT();
@@ -816,14 +826,15 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
   paddr_t page;
   pde_t pde;
   pte_t pte;
-  size_t i, offset;
+  size_t i;
+  size_t offset;
 
   peek( img, &image, sizeof image );
   pte.present = 0;
 
-  #if DEBUG
-    int result;
-  #endif /* DEBUG */
+#if DEBUG
+  int result;
+#endif /* DEBUG */
 
   if( !isValidElfExe( (addr_t)&image ) )
   {
@@ -850,11 +861,11 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
 
     for( offset=0; offset < sheader.size; offset += PAGE_SIZE )
     {
-      #if DEBUG
-        result =
-      #endif /* DEBUG */
+#if DEBUG
+      result =
+#endif /* DEBUG */
 
-      readPmapEntry(addrSpace, PDE_INDEX(sheader.addr+offset), &pde);
+          readPmapEntry(addrSpace, PDE_INDEX(sheader.addr+offset), &pde);
       //readPDE(sheader.addr + offset, &pde, addrSpace);
 
       assert( result == 0 );
@@ -864,20 +875,23 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
         page = allocPageFrame();
         clearPhysPage(page);
 
-        *(u32 *)&pde = (u32)page | PAGING_RW | PAGING_USER | PAGING_PRES;
+        pde.base = (u32)ADDR_TO_PFRAME(page);
+        pde.rwPriv = 1;
+        pde.usPriv = 1;
+        pde.present = 1;
 
-        #if DEBUG
-          result =
-        #endif /* DEBUG */
+#if DEBUG
+        result =
+#endif /* DEBUG */
 
-        writePmapEntry(addrSpace, PDE_INDEX(sheader.addr+offset), &pde);
+            writePmapEntry(addrSpace, PDE_INDEX(sheader.addr+offset), &pde);
         //writePDE((addr_t)sheader.addr + offset, &pde, addrSpace);
 
         assert( result == 0 );
       }
       else
       {
-        readPmapEntry(pde.base << 12, PTE_INDEX(sheader.addr+offset), &pte);
+        readPmapEntry(PFRAME_TO_ADDR(pde.base), PTE_INDEX(sheader.addr+offset), &pte);
         //readPTE(sheader.addr + offset, &pte, addrSpace);
       }
 
@@ -887,15 +901,17 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
 
         if( !pte.present )
         {
-          *(u32 *)&pte = ((u32)img + sheader.offset + offset) | PAGING_USER |
-              (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO) | PAGING_PRES;
+          pte.base = (u32)ADDR_TO_PFRAME((u32)img + sheader.offset + offset);
+          pte.usPriv = 1;
+          pte.rwPriv = !!(sheader.flags & SHF_WRITE);
+          pte.present = 1;
 
-          if(writePmapEntry((pde.base << 12), PTE_INDEX(sheader.addr+offset), &pte) !=0)
+          if(writePmapEntry(PFRAME_TO_ADDR(pde.base), PTE_INDEX(sheader.addr+offset), &pte) !=0)
             return NULL;
 
-/*          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
+          /*          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
             return NULL; */
-/*
+          /*
 	  mapPage((addr_t)sheader.addr + offset, (addr_t)img + sheader.offset + offset,
             PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO), addrSpace); */
         }
@@ -908,16 +924,18 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
           clearPhysPage( page );
           //kprintf("mapping NOBITS 0x%x->0x%x\n", (sheader.addr + offset), page);
 
-          *(u32 *)&pte = page | PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW
-              : PAGING_RO) | PAGING_PRES;
+          pte.base = (u32)ADDR_TO_PFRAME(page);
+          pte.usPriv = 1;
+          pte.rwPriv = !!(sheader.flags & SHF_WRITE);
+          pte.present = 1;
 
-          if(writePmapEntry((pde.base << 12), PTE_INDEX(sheader.addr+offset), &pte) !=0)
+          if(writePmapEntry(PFRAME_TO_ADDR(pde.base), PTE_INDEX(sheader.addr+offset), &pte) !=0)
             return NULL;
 
-/*          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
+          /*          if( writePTE((addr_t)sheader.addr + offset, &pte, addrSpace) != 0 )
             return NULL;
-*/
-/*
+           */
+          /*
           mapPage((addr_t)sheader.addr + offset, (addr_t)page,
                   PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO), addrSpace); */
         }
@@ -934,7 +952,7 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
 
 /**
     Bootstraps the initial server and passes necessary boot data to it.
-*/
+ */
 
 void bootstrapInitServer(multiboot_info_t *info)
 {
@@ -953,7 +971,7 @@ void bootstrapInitServer(multiboot_info_t *info)
   if(!isValidElfExe( (addr_t)&elf_header ))
     fail = 1;
   else if((initServerPDir = allocPageFrame()) == NULL_PADDR
-          || clearPhysPage(initServerPDir) != E_OK)
+      || clearPhysPage(initServerPDir) != E_OK)
   {
     fail = 1;
   }
@@ -965,11 +983,15 @@ void bootstrapInitServer(multiboot_info_t *info)
     memset(&pde, 0, sizeof(pde_t));
     memset(&pte, 0, sizeof(pte_t));
 
-    pde.base = (u32)stackPTab >> 12;
-    pde.rwPriv = pde.usPriv = pde.present = 1;
+    pde.base = (u32)ADDR_TO_PFRAME(stackPTab);
+    pde.rwPriv = 1;
+    pde.usPriv = 1;
+    pde.present = 1;
 
-    pte.base = (u32)stackPage >> 12;
-    pte.rwPriv = pte.usPriv = pte.present = 1;
+    pte.base = (u32)ADDR_TO_PFRAME(stackPage);
+    pte.rwPriv = 1;
+    pte.usPriv = 1;
+    pte.present = 1;
 
     if(stackPTab != NULL_PADDR)
       clearPhysPage(stackPTab);
@@ -983,8 +1005,8 @@ void bootstrapInitServer(multiboot_info_t *info)
       fail = 1;
     else if(writePmapEntry(initServerPDir, PDE_INDEX(initServerStack-PAGE_SIZE),
                            &pde) != E_OK ||
-            writePmapEntry(stackPTab, PTE_INDEX(initServerStack-PAGE_SIZE),
-                           &pte) != E_OK)
+        writePmapEntry(stackPTab, PTE_INDEX(initServerStack-PAGE_SIZE),
+                       &pte) != E_OK)
     {
       fail = 1;
     }
@@ -1032,7 +1054,7 @@ void bootstrapInitServer(multiboot_info_t *info)
 void showMBInfoFlags( multiboot_info_t *info )
 {
   const char *names[] = { "MEM", "BOOT_DEV", "CMDLINE", "MODS", "SYMTAB", "SHDR",
-                          "MMAP", "DRIVES", "CONFIG", "BOOTLDR", "APM_TAB", "GFX_TAB" };
+      "MMAP", "DRIVES", "CONFIG", "BOOTLDR", "APM_TAB", "GFX_TAB" };
 
   kprintf("Mulitboot Information Flags:\n");
 
@@ -1088,7 +1110,7 @@ void initStructures(multiboot_info_t *info)
       paddr_t phys = allocPageFrame();
 
       clearPhysPage(phys);
-      pdePtr->base = (u32)phys >> 12;
+      pdePtr->base = (u32)ADDR_TO_PFRAME(phys);
       pdePtr->rwPriv = 1;
       pdePtr->usPriv = 0;
       pdePtr->present = 1;
@@ -1101,6 +1123,8 @@ void initStructures(multiboot_info_t *info)
     queueInit(&runQueues[i]);
 
   queueInit(&timerQueue);
+
+  /*
   pendingMessageBuffer = (pem_t *)freePageStackTop;
 
   for(addr_t addr=(addr_t)pendingMessageBuffer; addr < (addr_t)(pendingMessageBuffer + MAX_THREADS); addr += PAGE_SIZE)
@@ -1110,21 +1134,23 @@ void initStructures(multiboot_info_t *info)
     if(!pte->present)
       kMapPage(addr, allocPageFrame(), PAGING_SUPERVISOR | PAGING_RW);
   }
+  */
 }
 
 /**
     Bootstraps the kernel.
 
     @param info The multiboot structure passed by the bootloader.
-*/
+ */
 
 void init( multiboot_info_t *info )
 {
-//  memory_map_t *mmap;
+  //  memory_map_t *mmap;
   module_t *module;
   unsigned int i=0;
   bool initServerFound=false;
-  char *initServerStrPtr = NULL, *initServerStrEnd=NULL;
+  char *initServerStrPtr = NULL;
+  char *initServerStrEnd=NULL;
   pte_t *pte;
 
 #ifdef DEBUG
@@ -1158,7 +1184,7 @@ void init( multiboot_info_t *info )
     kprintf("Lower Memory: %d B Upper Memory: %d B\n", info->mem_lower << 10, info->mem_upper << 10);
 
   kprintf("Boot info struct: 0x%x\nModules located at 0x%x. %d modules\n",
-    info, info->mods_addr, info->mods_count);
+          info, info->mods_addr, info->mods_count);
 
   module = (module_t *)info->mods_addr;
 
@@ -1191,8 +1217,8 @@ void init( multiboot_info_t *info )
   kprintf("Initializing data structures.\n");
   initStructures(info);
 
-//  enable_apic();
-//  init_apic_timer();
+  //  enable_apic();
+  //  init_apic_timer();
   kprintf("Initializing scheduler.\n");
   initScheduler();
 
@@ -1205,7 +1231,7 @@ void init( multiboot_info_t *info )
   /* Release the pages for the code and data that will never be used again. */
 
   for( addr_t addr=(addr_t)EXT_PTR(kdCode); addr < (addr_t)EXT_PTR(kBss); addr += PAGE_SIZE )
-    freePageFrame((paddr_t)(ADDR_TO_PTE(addr)->base << 12));
+    freePageFrame((paddr_t)(PFRAME_TO_ADDR(ADDR_TO_PTE(addr)->base)));
 
   // XXX: Release any pages tables used for discardable sections
 
@@ -1213,18 +1239,20 @@ void init( multiboot_info_t *info )
 
   pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap));
 
-  freePageFrame((paddr_t)(pte->base << 12));
+  freePageFrame((paddr_t)(PFRAME_TO_ADDR(pte->base)));
 
   pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap) + PAGE_SIZE);
 
   freePageFrame((paddr_t)(pte->base << 12));
 
   freePageFrame((paddr_t)k1To1PageTable);
+
   freePageFrame((paddr_t)(bootStackTop-PAGE_SIZE));
 
   *(dword *)EXT_PTR(tssEsp0) = (dword)kernelStackTop;
 
   schedule();
+
 
   for(addr_t addr=(addr_t)0x0000; addr < (addr_t)largePageSize; addr += PAGE_SIZE)
   {
@@ -1238,7 +1266,7 @@ void init( multiboot_info_t *info )
       addr = (addr_t)0xC0000;
       continue;
     }
-#endif /* DEBUG */
+#endif  /* DEBUG */
 
     pte = ADDR_TO_PTE(addr);
 
@@ -1249,6 +1277,7 @@ void init( multiboot_info_t *info )
     }
   }
 
+  kprintf("Context switching...\n");
 
   switchContext( initServerThread->rootPageMap, initServerThread->execState );
   stopInit("Error: Context switch failed.");

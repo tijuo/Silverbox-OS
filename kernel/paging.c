@@ -6,6 +6,7 @@
 #include <kernel/error.h>
 #include <oslib.h>
 #include <string.h>
+#include <kernel/bits.h>
 
 size_t largePageSize=LARGE_PAGE_SIZE;
 
@@ -17,7 +18,7 @@ static int readPTE( addr_t virt, pte_t *pte, paddr_t pdir );
 
 static int accessPhys( paddr_t phys, void *buffer, size_t len, bool readPhys );
 static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir,
-    bool read );
+                      bool read );
 /*
 int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t pdir );
 int peekVirt( addr_t address, size_t len, void *buffer, paddr_t pdir );
@@ -27,7 +28,7 @@ int peek( paddr_t phys, void *buffer, size_t bytes );
 
 bool isReadable( addr_t addr, paddr_t pdir );
 bool isWritable( addr_t addr, paddr_t pdir );
-*/
+ */
 
 /**
   Set up a new page map to be used as an address space for a thread. Inserts the
@@ -35,38 +36,38 @@ bool isWritable( addr_t addr, paddr_t pdir );
 
   @param pmap The address of the page map
   @return E_OK, on success. E_FAIL, on error.
-*/
+ */
 
 int initializeRootPmap(dword pmap)
 {
- // Map the page directory, kernel space, and first page table
- // into the new address space
+  size_t bufSize = sizeof(pde_t)*(1023-PDE_INDEX(KERNEL_TCB_START));
+  char buf[bufSize];
+
+  // Map the page directory, kernel space, and first page table
+  // into the new address space
 
   u32 pentry = (u32)pmap | PAGING_RW | PAGING_PRES;
 
   // recursively map the page map to itself
 
-  if(writePmapEntry(pmap, PDE_INDEX(PAGETAB), &pentry) != E_OK)
-    return E_FAIL;
-#if DEBUG
+  if(IS_ERROR(writePmapEntry(pmap, PDE_INDEX(PAGETAB), &pentry)))
+    RET_MSG(E_FAIL, "Unable to perform recursive mapping.")
+
+///# if DEBUG
 
   // map the first page table
 
-  if(writePmapEntry(pmap, 0, (void *)PAGEDIR) != E_OK)
-    return E_FAIL;
-#endif /* DEBUG */
+  if(IS_ERROR(writePmapEntry(pmap, 0, (void *)PAGEDIR)))
+    RET_MSG(E_FAIL, "Unable to map first page table.")
+//# endif /* DEBUG */
 
   // Copy any page tables in the kernel region of virtual memory from
   // the bootstrap address space to the thread's address space
 
-  size_t bufSize = 4*(1023-PDE_INDEX(KERNEL_TCB_START));
-  char buf[bufSize];
-
-  if(peek(initKrnlPDir+4*PDE_INDEX(KERNEL_TCB_START), (void *)buf, bufSize) != E_OK
-     || poke(pmap+4*PDE_INDEX(KERNEL_TCB_START), (void *)buf, bufSize) != E_OK)
-  {
-    return E_FAIL;
-  }
+  if(IS_ERROR(peek(initKrnlPDir + sizeof(pde_t) * PDE_INDEX(KERNEL_TCB_START), (void *)buf, bufSize)))
+    RET_MSG(E_FAIL, "Unable to peek kernel PDEs")
+  else if(IS_ERROR(poke(pmap + sizeof(pde_t) * PDE_INDEX(KERNEL_TCB_START), (void *)buf, bufSize)))
+    RET_MSG(E_FAIL, "Unable to poke kernel PDEs")
 
   return E_OK;
 }
@@ -76,12 +77,12 @@ int initializeRootPmap(dword pmap)
 
   @param phys Physical address frame to clear.
   @return E_OK on success. E_FAIL on failure.
-*/
+ */
 
 int clearPhysPage( paddr_t phys )
 {
-  if( mapTemp( phys ) != E_OK )
-    return E_FAIL;
+  if(IS_ERROR(mapTemp(phys)))
+    RET_MSG(E_FAIL, "Unable to map temporary page address.")
 
   memset( (void *)TEMP_PAGEADDR, 0, PAGE_SIZE );
 
@@ -95,19 +96,16 @@ int clearPhysPage( paddr_t phys )
     @param addr The virtual address to be tested.
     @param pdir The physical address of the address space
     @return true if address is readable. false, otherwise.
-**/
+ **/
 
 bool isReadable( addr_t addr, paddr_t pdir )
 {
   pte_t pte;
 
-  if( readPTE( addr, &pte, pdir ) != E_OK )
+  if(IS_ERROR(readPTE( addr, &pte, pdir )))
     return false;
 
-  if( pte.present )
-    return true;
-  else
-    return false;
+  return pte.present ? true : false;
 }
 
 /**
@@ -116,26 +114,23 @@ bool isReadable( addr_t addr, paddr_t pdir )
     @param addr The virtual address to be tested.
     @param pdir The physical address of the address space
     @return true if address is writable. false, otherwise.
-**/
+ **/
 
 bool isWritable( addr_t addr, paddr_t pdir )
 {
   pte_t pte;
   pde_t pde;
 
-  if( readPDE( PDE_INDEX(addr), &pde, pdir ) != E_OK )
+  if(IS_ERROR(readPDE( PDE_INDEX(addr), &pde, pdir )))
     return false;
 
   if( !pde.rwPriv )
     return false;
 
-  if( readPTE( addr, &pte, pdir ) != E_OK )
+  if(IS_ERROR(readPTE( addr, &pte, pdir )))
     return false;
 
-  if( pte.present && pte.rwPriv )
-    return true;
-  else
-    return false;
+  return (pte.present && pte.rwPriv) ? true : false;
 }
 
 /**
@@ -150,12 +145,12 @@ bool isWritable( addr_t addr, paddr_t pdir )
   @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the
           PDE corresponding to the virtual address hasn't been mapped
           yet. E_INVALID_ARG if pdir is NULL_PADDR.
-*/
+ */
 
 int readPmapEntry(paddr_t pbase, int entry, void *buffer)
 {
   if(pbase == NULL_PADDR)
-    pbase = (paddr_t)(getCR3() & ~0x3FF);
+    pbase = (paddr_t)getRootPageMap();
 
   return peek(pbase+sizeof(pmap_t)*entry, buffer, sizeof(pmap_t));
 }
@@ -171,12 +166,12 @@ int readPmapEntry(paddr_t pbase, int entry, void *buffer)
   @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the
           PDE corresponding to the virtual address hasn't been mapped
           yet. E_INVALID_ARG if pdir is NULL_PADDR.
-*/
+ */
 
 int writePmapEntry(paddr_t pbase, int entry, void *buffer)
 {
   if(pbase == NULL_PADDR)
-    pbase = (paddr_t)(getCR3() & ~0x3FF);
+    pbase = (paddr_t)getRootPageMap();
 
   return poke(pbase+sizeof(pmap_t)*entry, buffer, sizeof(pmap_t));
 }
@@ -191,12 +186,12 @@ int writePmapEntry(paddr_t pbase, int entry, void *buffer)
 
   This must be done when switching to a new address space.
   If only a few entries need to be flushed, use invalidatePage().
-*/
+ */
 
 void invalidateTlb(void)
 {
   __asm__ __volatile__("movl %%cr3, %%eax\n"
-          "movl %%eax, %%cr3\n" ::: "eax", "memory");
+      "movl %%eax, %%cr3\n" ::: "eax", "memory");
 }
 
 /**
@@ -204,11 +199,16 @@ void invalidateTlb(void)
 
   Instead of flushing the entire TLB, only a single page is flushed.
   This is faster than reload_cr3() for flushing a few entries.
-*/
+ */
 
 void invalidatePage( addr_t virt )
 {
   __asm__ __volatile__( "invlpg (%0)\n" :: "r"( virt ) : "memory" );
+}
+
+dword getRootPageMap(void)
+{
+  return getCR3() & ~PCID_MASK;
 }
 
 /**
@@ -221,7 +221,7 @@ void invalidatePage( addr_t virt )
          page directory in register CR3.
   @return E_OK on success. E_FAIL on failure. E_INVALID_ARG if
          pdir is NULL_PADDR.
-*/
+ */
 
 static int readPDE( unsigned entryNum, pde_t *pde, paddr_t pdir )
 {
@@ -248,20 +248,17 @@ static int readPDE( unsigned entryNum, pde_t *pde, paddr_t pdir )
   @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the
           PDE corresponding to the virtual address hasn't been mapped
           yet. E_INVALID_ARG if pdir is NULL_PADDR
-*/
+ */
 
 int readPTE( addr_t virt, pte_t *pte, paddr_t pdir )
 {
   pde_t pde;
 
-  if( readPDE( PDE_INDEX(virt), &pde, pdir ) != E_OK )
-  {
-    kprintf("readPDE() failed\n");
-    return E_FAIL;
-  }
+  if(IS_ERROR(readPDE(PDE_INDEX(virt), &pde, pdir)))
+    RET_MSG(E_FAIL, "Unable to read PDE")
 
   if( !pde.present )
-    return E_NOT_MAPPED;
+    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
 
   if( pdir == NULL_PADDR )
   {
@@ -269,7 +266,7 @@ int readPTE( addr_t virt, pte_t *pte, paddr_t pdir )
     return E_OK;
   }
   else
-    return readPmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(virt), pte);
+    return readPmapEntry((paddr_t)(pde.base << PMAP_FLAG_BITS), PTE_INDEX(virt), pte);
 }
 
 /**
@@ -279,7 +276,7 @@ int readPTE( addr_t virt, pte_t *pte, paddr_t pdir )
   @param buffer The starting address from which data will be copied.
   @param bytes The number of bytes to be written.
   @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
-*/
+ */
 
 int poke( paddr_t phys, void *buffer, size_t bytes )
 {
@@ -293,7 +290,7 @@ int poke( paddr_t phys, void *buffer, size_t bytes )
   @param buffer The starting address to which data will be copied.
   @param bytes The number of bytes to be read.
   @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
-*/
+ */
 
 int peek( paddr_t phys, void *buffer, size_t bytes )
 {
@@ -310,14 +307,15 @@ int peek( paddr_t phys, void *buffer, size_t bytes )
   @param bytes The number of bytes to be read/written.
   @param readPhys True if operation is a read, false if it's a write
   @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
-*/
+ */
 
 static int accessPhys( paddr_t phys, void *buffer, size_t len, bool readPhys )
 {
-  size_t offset, bytes;
+  size_t offset;
+  size_t bytes;
 
   if(phys == NULL_PADDR)
-    return E_INVALID_ARG;
+    RET_MSG(E_INVALID_ARG, "Invalid physical address")
 
   for( size_t i=0; len; phys += bytes, i += bytes, len -= bytes )
   {
@@ -352,7 +350,7 @@ static int accessPhys( paddr_t phys, void *buffer, size_t len, bool readPhys )
   @param pdir The physical address of the address space.
   @param read True if reading. False if writing.
   @return E_OK on success. E_FAIL on failure.
-*/
+ */
 
 static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bool read )
 {
@@ -361,7 +359,7 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
   paddr_t read_pdir;
   paddr_t write_pdir;
   size_t addr_offset;
-  size_t buffer_offset;
+  size_t buffer_offset = 0;
   pte_t pte;
   size_t bytes;
 
@@ -373,45 +371,45 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
     read_addr = address;
     write_addr = (addr_t)buffer;
     read_pdir = pdir;
-    write_pdir = NULL_PADDR; //getCR3() & ~0xFFFu;
+    write_pdir = NULL_PADDR;
   }
   else
   {
     write_addr = address;
     read_addr = (addr_t)buffer;
     write_pdir = pdir;
-    read_pdir = NULL_PADDR; //getCR3() & ~0xFFFu;
+    read_pdir = NULL_PADDR;
   }
 
   for( addr_offset=0; addr_offset < len;
-       addr_offset = (len - addr_offset < PAGE_SIZE ? len : addr_offset + PAGE_SIZE) )
+      addr_offset = (len - addr_offset < PAGE_SIZE ? len : addr_offset + PAGE_SIZE) )
   {
     if( !isReadable(read_addr+addr_offset, read_pdir) || !isWritable(write_addr+addr_offset, write_pdir) )
     {
-      #if DEBUG
-        if( !isReadable(read_addr+addr_offset, read_pdir) )
-          kprintf("0x%x is not readable in address space: 0x%llx\n", read_addr+addr_offset, read_pdir);
+#if DEBUG
+      if( !isReadable(read_addr+addr_offset, read_pdir) )
+        kprintf("0x%x is not readable in address space: 0x%llx\n", read_addr+addr_offset, read_pdir);
 
-        if( !isWritable(write_addr+addr_offset, write_pdir) )
-          kprintf("0x%x is not writable in address space: 0x%llx\n", write_addr+addr_offset, write_pdir);
-      #endif /* DEBUG */
+      if( !isWritable(write_addr+addr_offset, write_pdir) )
+        kprintf("0x%x is not writable in address space: 0x%llx\n", write_addr+addr_offset, write_pdir);
+#endif /* DEBUG */
 
-      return E_FAIL;
+      RET_MSG(E_FAIL, "Unable to perform memory operation.");
     }
   }
 
   while( len )
   {
-    if( readPTE( address, &pte, pdir ) != E_OK )
-      return E_FAIL;
+    if( IS_ERROR(readPTE( address, &pte, pdir )) )
+      RET_MSG(E_FAIL, "Unable to to PTE for address")
 
     addr_offset = address & (PAGE_SIZE - 1);
     bytes = (len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
 
     if( read )
-      peek( ((paddr_t)pte.base << 12) + addr_offset, (void *)((addr_t)buffer + buffer_offset), bytes );
+      peek( (paddr_t)PFRAME_TO_ADDR(pte.base) + addr_offset, (void *)((addr_t)buffer + buffer_offset), bytes );
     else
-      poke( ((paddr_t)pte.base << 12) + addr_offset, (void *)((addr_t)buffer + buffer_offset), bytes );
+      poke( (paddr_t)PFRAME_TO_ADDR(pte.base) + addr_offset, (void *)((addr_t)buffer + buffer_offset), bytes );
 
     address += bytes;
     buffer_offset += bytes;
@@ -431,11 +429,11 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
   @param buffer The buffer in the current address space that is used for the write.
   @param pdir The physical address of the address space.
   @return E_OK on success. E_FAIL on failure.
-*/
+ */
 
 int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t pdir )
 {
-  if( pdir == (paddr_t)(getCR3() & ~(PAGE_SIZE-1)) )
+  if( pdir == (paddr_t)getRootPageMap() )
   {
     memcpy( (void *)address, buffer, len );
     return E_OK;
@@ -456,11 +454,11 @@ int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t pdir )
   @param buffer The buffer in the current address space that is used for the read.
   @param pdir The physical address of the address space.
   @return E_OK on success. E_FAIL on failure.
-*/
+ */
 
 int peekVirt( addr_t address, size_t len, void *buffer, paddr_t pdir )
 {
-  if( pdir == (paddr_t)(getCR3() & ~(PAGE_SIZE-1)) )
+  if( pdir == (paddr_t)getRootPageMap() )
   {
     memcpy( buffer, (void *)address, len );
     return E_OK;
@@ -478,7 +476,7 @@ int peekVirt( addr_t address, size_t len, void *buffer, paddr_t pdir )
   @return E_OK on success. E_INVALID_ARG if virt is invalid or phys is NULL.
           E_OVERWRITE if a mapping already exists.
           E_NOT_MAPPED if the page table of the page isn't mapped.
-*/
+ */
 
 int kMapPage( addr_t virt, paddr_t phys, u32 flags )
 {
@@ -487,30 +485,21 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
 
   if( virt == INVALID_VADDR || phys == NULL_PADDR )
   {
-    kprintf("kMapPage(): %llx -> %x: ", phys, virt);
-
-    if(virt == INVALID_VADDR)
-      kprintf(" Invalid virtual address.");
-
-    if(phys == NULL_PADDR)
-      kprintf(" Invalid physical address.");
-
-    kprintf("\n");
-
-    return E_INVALID_ARG;
+    kprintf("kMapPage(): %x -> %llx\n", virt, phys);
+    RET_MSG(E_INVALID_ARG, "Invalid address.")
   }
 
   pdePtr = ADDR_TO_PDE( virt );
 
-  if(flags & PAGING_4MB_PAGE)
+  if(IS_FLAG_SET(flags, PAGING_4MB_PAGE))
   {
     if( pdePtr->present )
     {
-      kprintf("kMapPage(): %llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
-      return E_OVERWRITE;
+      kprintf("kMapPage(): %x -> %llx\n", virt, phys);
+      RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.")
     }
 
-    *(dword *)pdePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
+    *(dword *)pdePtr = (dword)phys | (flags & PMAP_FLAG_MASK) | PAGING_PRES;
   }
   else
   {
@@ -518,16 +507,16 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
 
     if ( !pdePtr->present )
     {
-      kprintf("kMapPage(): Trying to map %llx -> %x, but no PDE present.\n", phys, virt);
-      return E_NOT_MAPPED;
+      kprintf("kMapPage(): %x -> %llx\n", virt, phys);
+      RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.")
     }
     else if( ptePtr->present )
     {
-      kprintf("kMapPage(): %llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
-      return E_OVERWRITE;
+      kprintf("kMapPage(): %x -> %llx\n", virt, phys);
+      RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.")
     }
 
-    *(dword *)ptePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
+    *(dword *)ptePtr = (dword)phys | (flags & PMAP_FLAG_MASK) | PAGING_PRES;
   }
 
   invalidatePage( virt );
@@ -541,7 +530,7 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
   @param virt The virtual address of the page to unmap.
   @return E_OK on success with *phys set to the physical address of the page frame.
           E_INVALID_ARG if virt is INVALID_VADDR. E_NOT_MAPPED if address was already unmapped.
-*/
+ */
 
 int kUnmapPage( addr_t virt, paddr_t *phys )
 {
@@ -549,15 +538,11 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
   pde_t *pdePtr;
 
   if( virt == INVALID_VADDR  )
-  {
-    kprintf("kUnmapPage(): Invalid virtual address.\n");
+    RET_MSG(E_INVALID_ARG, "Invalid virtual address.")
 
-    return E_INVALID_ARG;
-  }
+    pdePtr = ADDR_TO_PDE( virt );
 
-  pdePtr = ADDR_TO_PDE( virt );
-
-  if ( pdePtr->present )
+  if (pdePtr->present)
   {
     if(!(pdePtr->pageSize))
     {
@@ -565,26 +550,26 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
 
       if(ptePtr->present)
       {
-        if(phys != NULL)
-          *phys = (paddr_t)ptePtr->base << 12;
+        if(phys)
+          *phys = (paddr_t)PFRAME_TO_ADDR(ptePtr->base);
 
         ptePtr->present = 0;
       }
       else
-        return E_NOT_MAPPED;
+        RET_MSG(E_NOT_MAPPED, "Virtual address is not mapped.")
     }
     else
     {
-      if(phys != NULL)
-        *phys = (paddr_t)pdePtr->base << 12;
+      if(phys)
+        *phys = (paddr_t)PFRAME_TO_ADDR(pdePtr->base);
 
       pdePtr->present = 0;
     }
   }
   else
-    return E_NOT_MAPPED;
+    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.")
 
-  invalidatePage( virt );
+    invalidatePage( virt );
 
   return E_OK;
 }
@@ -597,7 +582,7 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
   @param flags The flags that modify page properties.
   @return E_OK on success. E_INVALID_ARG if virt is INVALID_VADDR or phys is NULL_PADDR.
           E_OVERWRITE if a mapping already exists.
-*/
+ */
 
 int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
 {
@@ -605,7 +590,7 @@ int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
 
   if( virt == INVALID_VADDR || phys == NULL_PADDR )
   {
-    kprintf("kMapPageTable(): %llx -> %x: ", phys, virt);
+    kprintf("kMapPageTable(): %x -> %llx: ", virt, phys);
 
     if(virt == INVALID_VADDR)
       kprintf(" Invalid virtual address.");
@@ -615,20 +600,18 @@ int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
 
     kprintf("\n");
 
-    return E_INVALID_ARG;
+    RET_MSG(E_INVALID_ARG, "Invalid address");
   }
 
   pdePtr = ADDR_TO_PDE( virt );
 
   if( pdePtr->present )
   {
-    kprintf("kMapPageTable(): %llx -> %x: 0x%x is already mapped!\n", phys, virt, virt);
-    return E_OVERWRITE;
+    kprintf("kMapPageTable(): %x -> %llx:\n", virt, phys);
+    RET_MSG(E_OVERWRITE, "Address is already mapped!")
   }
 
-  *(dword *)pdePtr = (dword)phys | (flags & 0xFFFu) | PAGING_PRES;
-
-  invalidatePage(virt & ~(PAGE_TABLE_SIZE-1));
+  *(dword *)pdePtr = (dword)phys | (flags & PMAP_FLAG_MASK) | PAGING_PRES;
 
   return E_OK;
 }
@@ -641,30 +624,29 @@ int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
               will be returned
   @return E_OK on success. E_INVALID_ARG if virt is INVALID_VADDR or phys is NULL_PADDR.
           E_NOT_MAPPED if mapping didn't exist yet
-*/
+ */
 
 int kUnmapPageTable( addr_t virt, paddr_t *phys )
 {
   pde_t *pdePtr;
 
   if( virt == INVALID_VADDR)
-  {
-    kprintf("mapPageTable(): Invalid virtual address.\n");
-
-    return E_INVALID_ARG;
-  }
+    RET_MSG(E_INVALID_ARG, "Invalid virtual address");
 
   pdePtr = ADDR_TO_PDE( virt );
 
   if( !pdePtr->present )
-    return E_NOT_MAPPED;
+    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.")
 
   pdePtr->present = 0;
 
-  if(phys != NULL)
-    *phys = (paddr_t)pdePtr->base << 12;
+  if(phys)
+    *phys = (paddr_t)pdePtr->base << PMAP_FLAG_BITS;
 
-  invalidatePage(virt & ~(PAGE_TABLE_SIZE-1));
+  addr_t tableBaseAddr = ALIGN_DOWN(virt, pageTableSize);
+
+  for(addr_t addr=tableBaseAddr; addr < tableBaseAddr + pageTableSize; addr += PAGE_SIZE)
+    invalidatePage(addr);
 
   return E_OK;
 }

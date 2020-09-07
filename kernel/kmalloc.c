@@ -29,14 +29,14 @@ void *kmalloc(size_t size)
   block_t *block;
   int hasFreeBlock = (freeBlockHead != NULL);
 
-  if(size < 16)
-    size = 16;
+  if(size < BLK_LEN)
+    size = BLK_LEN;
 
-  assert(size == 16)
+  assert(size == BLK_LEN);
 
   // XXX: This allocator doesn't currently handle requests for more than 16 bytes
 
-  if(size > 16)
+  if(size > BLK_LEN)
     return NULL;
 
   if(hasFreeBlock)
@@ -61,7 +61,7 @@ void *kmalloc(size_t size)
 
   block->nextFree = NULL;
 
-  return &block->data;
+  return &(block->data);
 }
 
 /**

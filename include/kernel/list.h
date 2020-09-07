@@ -5,7 +5,8 @@ struct ListNode
 {
   int key;
   void *elem;
-  struct ListNode *next, *prev;
+  struct ListNode *prev;
+  struct ListNode *next;
 };
 /*
 struct TreeNode
@@ -20,7 +21,8 @@ typedef struct ListNode list_node_t;
 
 struct List
 {
-  list_node_t *head, *tail;
+  list_node_t *head;
+  list_node_t *tail;
 };
 /*
 struct Tree

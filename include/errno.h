@@ -82,5 +82,5 @@
 #define EXDEV		79	/*Cross-device link.*/
 
 extern volatile int errno;
-extern const char * const _errno_reasons[80];
+extern const char * const _errno_reasons[];
 #endif

@@ -3,9 +3,15 @@
 #include <kernel/debug.h>
 #include <kernel/kmalloc.h>
 
-static list_node_t *_createListNode(int key, void *elem);
+enum ListOpWhich { FIRST, LAST, ALL, HEAD, TAIL };
 
-list_node_t *_createListNode(int key, void *elem)
+static list_node_t *_createListNode(int key, void *elem);
+static int _listInsert(list_t *list, int key, void *element, enum ListOpWhich which);
+static int _listFind(list_t *list, int key, void **elemPtr, enum ListOpWhich which);
+static int _listRemove(list_t *list, int key, void **elemPtr, enum ListOpWhich which);
+static int _listRemoveEnd(list_t *list, void **elemPtr, enum ListOpWhich which);
+
+static list_node_t *_createListNode(int key, void *elem)
 {
   list_node_t *node = kmalloc(sizeof(list_node_t));
 
@@ -19,11 +25,23 @@ list_node_t *_createListNode(int key, void *elem)
   return node;
 }
 
+/** Initialize a new list.
+ *
+ * @param list The list to initialize (assumed to be non-null).
+ * @return E_OK on success.
+ */
+
 int listInit(list_t *list)
 {
   list->head = list->tail = NULL;
   return E_OK;
 }
+
+/** Destroys a list by freeing any memory allocated for nodes.
+ *
+ * @param list The list to destroy (assumed to be non-null).
+ * @return E_OK on success.
+ */
 
 int listDestroy(list_t *list)
 {
@@ -39,213 +57,174 @@ int listDestroy(list_t *list)
   return E_OK;
 }
 
-int listInsertHead(list_t *list, int key, void *element)
+static int _listInsert(list_t *list, int key, void *element, enum ListOpWhich which)
 {
   list_node_t *node = _createListNode(key, element);
 
-  if(node == NULL)
+  if(!node)
     return E_FAIL;
 
-  assert(element != NULL);
-
-  if(list->head != NULL && list->tail != NULL)
+  if(which == HEAD)
   {
-    list->head->prev = node;
-    node->next = list->head;
+    if(list->head)
+    {
+      list->head->prev = node;
+      node->next = list->head;
+    }
+
+    list->head = node;
+
+    if(!list->tail)
+      list->tail = node;
   }
+  else
+  {
+    if(list->tail)
+    {
+      list->tail->next = node;
+      node->prev = list->tail;
+    }
 
-  list->head = node;
-
-  if(!list->tail)
     list->tail = node;
 
+    if(!list->head)
+      list->head = node;
+  }
+
   return E_OK;
+}
+
+int listInsertHead(list_t *list, int key, void *element)
+{
+  return _listInsert(list, key, element, HEAD);
 }
 
 int listInsertTail(list_t *list, int key, void *element)
 {
-  list_node_t *node = _createListNode(key, element);
+  return _listInsert(list, key, element, TAIL);
+}
 
-  if(node == NULL)
-    return E_FAIL;
+static int _listFind(list_t *list, int key, void **elemPtr, enum ListOpWhich which)
+{
+  list_node_t *node = (which == FIRST) ? list->head : list->tail;
 
-  assert(element != NULL);
-
-  if(list->head != NULL && list->tail != NULL)
+  while(node)
   {
-    list->tail->next = node;
-    node->prev = list->tail;
+    if(node->key == key)
+    {
+      if(elemPtr != NULL)
+        *elemPtr = node->elem;
+
+      return E_OK;
+    }
+
+    node = (which == FIRST) ? node->next : node->prev;
   }
 
-  list->tail = node;
-
-  if(!list->head)
-    list->head = node;
-
-  return E_OK;
+  return E_FAIL;
 }
 
 int listFindFirst(list_t *list, int key, void **elemPtr)
 {
-  for(list_node_t *node=list->head; node != NULL; node = node->next)
-  {
-    if(node->key == key)
-    {
-      if(elemPtr != NULL)
-        *elemPtr = node->elem;
-
-      return E_OK;
-    }
-  }
-
-  return E_FAIL;
+  return _listFind(list, key, elemPtr, FIRST);
 }
 
 int listFindLast(list_t *list, int key, void **elemPtr)
 {
-  for(list_node_t *node=list->tail; node != NULL; node = node->prev)
+  return _listFind(list, key, elemPtr, LAST);
+}
+
+static int _listRemoveEnd(list_t *list, void **elemPtr, enum ListOpWhich which)
+{
+  list_node_t *prevNode = (which == HEAD) ? list->head : list->tail;
+
+  if(prevNode)
   {
-    if(node->key == key)
+    if(which == HEAD)
     {
-      if(elemPtr != NULL)
-        *elemPtr = node->elem;
+      list->head = prevNode->next;
 
-      return E_OK;
+      if(list->head)
+        list->head->prev = NULL;
+      else
+        list->tail = NULL;
     }
-  }
+    else
+    {
+      list->tail = prevNode->prev;
 
-  return E_FAIL;
+      if(list->tail)
+        list->tail->next = NULL;
+      else
+        list->head = NULL;
+    }
+
+    if(elemPtr)
+      *elemPtr = prevNode->elem;
+
+    kfree(prevNode, sizeof *prevNode);
+    return E_OK;
+  }
+  else
+    return E_FAIL;
 }
 
 int listRemoveHead(list_t *list, void **elemPtr)
 {
-  list_node_t *prevHead = list->head;
-
-  if(prevHead)
-  {
-    list->head = prevHead->next;
-
-    if(list->head)
-      list->head->prev = NULL;
-    else
-      list->tail = NULL;
-
-    if(elemPtr)
-      *elemPtr = prevHead->elem;
-
-    kfree(prevHead, sizeof *prevHead);
-    return E_OK;
-  }
-  else
-    return E_FAIL;
+  return _listRemoveEnd(list, elemPtr, HEAD);
 }
 
 int listRemoveTail(list_t *list, void **elemPtr)
 {
-  list_node_t *prevTail = list->tail;
+  return _listRemoveEnd(list, elemPtr, TAIL);
+}
 
-  if(prevTail)
+static int _listRemove(list_t *list, int key, void **elemPtr, enum ListOpWhich which)
+{
+  list_node_t *node = (which == LAST) ? list->tail : list->head;
+
+  while(node)
   {
-    list->tail = prevTail->prev;
+    if(node->key == key)
+    {
+      if(node->next)
+        node->next->prev = node->prev;
 
-    if(list->tail)
-      list->tail->next = NULL;
-    else
-      list->head = NULL;
+      if(node->prev)
+        node->prev->next = node->next;
 
-    if(elemPtr)
-      *elemPtr = prevTail->elem;
+      if(list->head == node)
+        list->head = node->next;
 
-    kfree(prevTail, sizeof *prevTail);
-    return E_OK;
+      if(list->tail == node)
+        list->tail = node->prev;
+
+      if(elemPtr)
+        *elemPtr = node->elem;
+
+      kfree(node, sizeof *node);
+
+      if(which != ALL)
+        return E_OK;
+    }
+
+    node = (which == LAST) ? node->prev : node->next;
   }
-  else
-    return E_FAIL;
+
+  return (which == ALL) ? E_OK : E_FAIL;
 }
 
 int listRemoveFirst(list_t *list, int key, void **elemPtr)
 {
-  for(list_node_t *node=list->head; node != NULL; node = node->next)
-  {
-    if(node->key == key)
-    {
-      if(node->next != NULL)
-        node->next->prev = node->prev;
-
-      if(node->prev != NULL)
-        node->prev->next = node->next;
-
-      if(list->head == node)
-        list->head = node->next;
-
-      if(list->tail == node)
-        list->tail = node->prev;
-
-      if(elemPtr)
-        *elemPtr = node->elem;
-
-      kfree(node, sizeof *node);
-      return E_OK;
-    }
-  }
-
-  return E_FAIL;
+  return _listRemove(list, key, elemPtr, FIRST);
 }
 
 int listRemoveLast(list_t *list, int key, void **elemPtr)
 {
-  for(list_node_t *node=list->tail; node != NULL; node=node->prev)
-  {
-    if(node->key == key)
-    {
-      if(node->next != NULL)
-        node->next->prev = node->prev;
-
-      if(node->prev != NULL)
-        node->prev->next = node->next;
-
-      if(list->head == node)
-        list->head = node->next;
-
-      if(list->tail == node)
-        list->tail = node->prev;
-
-      if(elemPtr)
-        *elemPtr = node->elem;
-
-      kfree(node, sizeof *node);
-      return E_OK;
-    }
-  }
-
-  return E_FAIL;
+  return _listRemove(list, key, elemPtr, LAST);
 }
 
 int listRemoveAll(list_t *list, int key)
 {
-  list_node_t *next;
-
-  for(list_node_t *node=list->head; node != NULL; node=next)
-  {
-    next = node->next;
-
-    if(node->key == key)
-    {
-      if(node->next != NULL)
-        node->next->prev = node->prev;
-
-      if(node->prev != NULL)
-        node->prev->next = node->next;
-
-      if(list->head == node)
-        list->head = node->next;
-
-      if(list->tail == node)
-        list->tail = node->prev;
-
-      kfree(node, sizeof *node);
-    }
-  }
-
-  return E_OK;
+  return _listRemove(list, key, NULL, ALL);
 }
