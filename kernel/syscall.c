@@ -57,24 +57,24 @@ static int sysWait(ExecutionState *state);
 
 int (*syscallTable[])(ExecutionState *) =
 {
-  sysExit,
-  sysWait,
-  sysSend,
-  sysReceive,
-  sysSend,
-  sysReceive,
-  sysCall,
-  sysCall,
-  sysMap,
-  sysUnmap,
-  sysCreateThread,
-  sysDestroyThread,
-  sysReadThread,
-  sysUpdateThread,
-  sysEoi,
-  sysIrqWait,
-  sysBindIrq,
-  sysUnbindIrq
+    sysExit,
+    sysWait,
+    sysSend,
+    sysReceive,
+    sysSend,
+    sysReceive,
+    sysCall,
+    sysCall,
+    sysMap,
+    sysUnmap,
+    sysCreateThread,
+    sysDestroyThread,
+    sysReadThread,
+    sysUpdateThread,
+    sysEoi,
+    sysIrqWait,
+    sysBindIrq,
+    sysUnbindIrq
 };
 
 static int sysMap(ExecutionState *state)
@@ -98,7 +98,7 @@ static int sysMap(ExecutionState *state)
     }
 
     for(; numPages--; vAddr += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE : PAGE_SIZE,
-                      pframe += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE / PAGE_SIZE : 1)
+        pframe += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE / PAGE_SIZE : 1)
     {
       if(IS_ERROR(readPmapEntry(addrSpace, PDE_INDEX(vAddr), &pde)))
         return ESYS_FAIL;
@@ -177,7 +177,7 @@ static int sysMap(ExecutionState *state)
     return ESYS_OK;
   }
   else
-    return ESYS_PERM;
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
 
   return ESYS_FAIL;
 }
@@ -227,7 +227,7 @@ static int sysUnmap(ExecutionState *state)
     return ESYS_OK;
   }
   else
-    return ESYS_PERM;
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
 }
 
 static int sysCreateThread(ExecutionState *state)
@@ -246,7 +246,7 @@ static int sysCreateThread(ExecutionState *state)
     return newTcb ? (int)getTid(newTcb) : ESYS_FAIL;
   }
   else
-    return ESYS_PERM;
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
 }
 
 static int sysDestroyThread(ExecutionState *state)
@@ -257,7 +257,7 @@ static int sysDestroyThread(ExecutionState *state)
     return tcb && !IS_ERROR(releaseThread(tcb)) ? ESYS_OK : ESYS_FAIL;
   }
   else
-    return ESYS_PERM;
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
 }
 
 static int sysReadThread(ExecutionState *state)
@@ -320,7 +320,7 @@ static int sysReadThread(ExecutionState *state)
     return ESYS_OK;
   }
   else
-    return ESYS_PERM;
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
 
   return ESYS_FAIL;
 }
@@ -331,79 +331,75 @@ static int sysUpdateThread(ExecutionState *state)
   int flags = (int)state->ecx;
   thread_info_t *info = (thread_info_t *)state->edx;
 
-  if(getTid(currentThread) == INIT_SERVER_TID)
+  if(getTid(currentThread) != INIT_SERVER_TID)
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
+
+  tcb_t *tcb = tid == NULL_TID ? currentThread : getTcb(tid);
+
+  if(!tcb || tcb->threadState == INACTIVE)
+    RET_MSG(ESYS_ARG, "The specified thread doesn't exist");
+
+  if(flags & TF_STATUS)
   {
-    tcb_t *tcb = tid == NULL_TID ? currentThread : getTcb(tid);
+    tcb->threadState = info->status;
 
-    if(!tcb)
-      return ESYS_FAIL;
+    if(info->status == READY && !attachRunQueue(tcb))
+      RET_MSG(ESYS_FAIL, "Unable to attach thread to the run queue.");
 
-    if(flags & TF_STATUS)
-    {
-      tcb->threadState = info->status;
-
-      if(info->status == READY)
-        attachRunQueue(tcb);
-
-      if(tcb->threadState == WAIT_FOR_SEND || tcb->threadState == WAIT_FOR_RECV)
-        info->waitTid = tcb->waitTid;
-    }
-
-    if(flags & TF_REG_STATE)
-    {
-      if(tcb == currentThread)
-      {
-        state->eax = info->state.eax;
-        state->ebx = info->state.eax;
-        state->ecx = info->state.eax;
-        state->edx = info->state.eax;
-        state->esi = info->state.eax;
-        state->edi = info->state.eax;
-        state->userEsp = info->state.esp;
-        state->ebp = info->state.ebp;
-        state->eflags = info->state.eflags;
-        state->eip = info->state.eip;
-      }
-      else
-      {
-        tcb->execState.eax = info->state.eax;
-        tcb->execState.ebx = info->state.eax;
-        tcb->execState.ecx = info->state.eax;
-        tcb->execState.edx = info->state.eax;
-        tcb->execState.esi = info->state.eax;
-        tcb->execState.edi = info->state.eax;
-        tcb->execState.userEsp = info->state.esp;
-        tcb->execState.ebp = info->state.ebp;
-        tcb->execState.eflags = info->state.eflags;
-        tcb->execState.eip = info->state.eip;
-      }
-    }
-
-    if(flags & TF_PMAP)
-    {
-      tcb->rootPageMap = info->rootPageMap;
-
-      initializeRootPmap(tcb->rootPageMap);
-    }
-
-    if(flags & TF_PRIORITY)
-      setPriority(tcb, info->priority);
-
-    return ESYS_OK;
+    if(tcb->threadState == WAIT_FOR_SEND || tcb->threadState == WAIT_FOR_RECV)
+      info->waitTid = tcb->waitTid;
   }
-  else
-    return ESYS_PERM;
 
-  return ESYS_FAIL;
+  if(flags & TF_REG_STATE)
+  {
+    if(tcb == currentThread)
+    {
+      state->eax = info->state.eax;
+      state->ebx = info->state.eax;
+      state->ecx = info->state.eax;
+      state->edx = info->state.eax;
+      state->esi = info->state.eax;
+      state->edi = info->state.eax;
+      state->userEsp = info->state.esp;
+      state->ebp = info->state.ebp;
+      state->eflags = info->state.eflags;
+      state->eip = info->state.eip;
+    }
+    else
+    {
+      tcb->execState.eax = info->state.eax;
+      tcb->execState.ebx = info->state.eax;
+      tcb->execState.ecx = info->state.eax;
+      tcb->execState.edx = info->state.eax;
+      tcb->execState.esi = info->state.eax;
+      tcb->execState.edi = info->state.eax;
+      tcb->execState.userEsp = info->state.esp;
+      tcb->execState.ebp = info->state.ebp;
+      tcb->execState.eflags = info->state.eflags;
+      tcb->execState.eip = info->state.eip;
+    }
+  }
+
+  if(flags & TF_PMAP)
+  {
+    tcb->rootPageMap = info->rootPageMap;
+
+    initializeRootPmap(tcb->rootPageMap);
+  }
+
+  if((flags & TF_PRIORITY) && IS_ERROR(setPriority(tcb, info->priority)))
+    RET_MSG(ESYS_FAIL, "Unable to change thread priority.");
+
+  return ESYS_OK;
 }
 
 static int sysExit(ExecutionState *state)
 {
   pem_t message =
   {
-    .subject = EXIT_MSG,
-    .who = getTid(currentThread),
-    .errorCode = (int)state->ebx
+      .subject = EXIT_MSG,
+      .who = getTid(currentThread),
+      .errorCode = (int)state->ebx
   };
 
   sendExceptionMessage(currentThread, INIT_SERVER_TID, &message);
@@ -416,18 +412,22 @@ static int sysBindIrq(ExecutionState *state)
   tcb_t *tcb = getTcb((tid_t)state->ebx);
   int irq = (int)state->ecx;
 
-  if(getTid(currentThread) == INIT_SERVER_TID)
-    return registerIrq(tcb, irq) == E_OK ? ESYS_OK : ESYS_FAIL;
-  else
-    return ESYS_PERM;
+  if(getTid(currentThread) != INIT_SERVER_TID)
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
+  else if(IS_ERROR(registerIrq(tcb, irq)))
+    RET_MSG(ESYS_FAIL, "Unable to register irq.");
+
+  return ESYS_OK;
 }
 
 static int sysUnbindIrq(ExecutionState *state)
 {
-  if(getTid(currentThread) == INIT_SERVER_TID)
-    return unregisterIrq((int)state->ebx) == E_OK ? ESYS_OK : ESYS_FAIL;
-  else
-    return ESYS_PERM;
+  if(getTid(currentThread) != INIT_SERVER_TID)
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
+  else if(IS_ERROR(unregisterIrq((int)state->ebx)))
+    RET_MSG(ESYS_FAIL, "Unable to unbind irq.");
+
+  return ESYS_OK;
 }
 
 static int sysEoi(ExecutionState *state)
@@ -435,16 +435,12 @@ static int sysEoi(ExecutionState *state)
   int irqNum = (int)state->ebx;
 
   if(!isValidIRQ(irqNum))
-    return ESYS_ARG;
+    RET_MSG(ESYS_ARG, "Invalid irq.");
   else if(irqHandlers[irqNum] != currentThread)
-    return ESYS_PERM;
-  else
-  {
-    enableIRQ(irqNum);
-    return ESYS_OK;
-  }
+    RET_MSG(ESYS_PERM, "Calling thread doesn't handle this irq.");
 
-  return ESYS_FAIL;
+  enableIRQ(irqNum);
+  return ESYS_OK;
 }
 
 /**
@@ -459,7 +455,7 @@ static int sysEoi(ExecutionState *state)
           current thread doesn't have permisson to receive the irq.
           ESYS_NOTREADY if no irq is pending and the call would block.
           ESYS_ARG upon invalid irqNum.
-*/
+ */
 
 static int sysIrqWait(ExecutionState *state)
 {
@@ -485,12 +481,12 @@ static int sysIrqWait(ExecutionState *state)
     }
 
     if(!isHandler)
-      return ESYS_PERM;
+      RET_MSG(ESYS_PERM, "Calling thread doesn't handle this irq.");
   }
   else if(!isValidIRQ(irqNum))
     return ESYS_ARG;
   else if(irqHandlers[irqNum] != currentThread)
-    return ESYS_PERM;
+    RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
   else if(IS_FLAG_SET(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1))))
   {
     CLEAR_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
@@ -500,7 +496,7 @@ static int sysIrqWait(ExecutionState *state)
     return ESYS_NOTREADY;
 
   if(currentThread->threadState == RUNNING
-     || (currentThread->threadState == READY && detachRunQueue(currentThread)))
+      || (currentThread->threadState == READY && detachRunQueue(currentThread)))
   {
     currentThread->threadState = IRQ_WAIT;
     return ESYS_OK; /* Doesn't actually return this to the user. The return

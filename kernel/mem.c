@@ -2,7 +2,6 @@
 #include <kernel/paging.h>
 #include <kernel/error.h>
 #include <kernel/debug.h>
-#include <kernel/kmalloc.h>
 #include <oslib.h>
 
 paddr_t *freePageStack=(paddr_t *)PAGE_STACK;
@@ -11,6 +10,8 @@ bool tempMapped=false;
 size_t pageTableSize = PAGE_TABLE_SIZE;
 
 static void freeUnusedHeapPages(void);
+
+addr_t heapEnd = NULL;
 
 void *memset(void *ptr, int value, size_t num)
 {
@@ -44,49 +45,59 @@ void *memcpy(void *dest, const void *src, size_t num)
 /** Allocate an available 4 KB physical page frame.
 
     @return The physical address of a newly allocated page frame. NULL_PADDR, on failure.
-**/
+ **/
 
 paddr_t allocPageFrame(void)
 {
+#if DEBUG
   if(!freePageStackTop)
-  {
-    kprintf("allocPageFrame(): Free page stack hasn't been initialized yet!\n");
-    return NULL_PADDR;
-  }
+    RET_MSG(NULL_PADDR, "allocPageFrame(): Free page stack hasn't been initialized yet.");
+#endif /* DEBUG */
 
   // Attempt to reclaim unused heap pages
 
   if(freePageStackTop == freePageStack)
   {
-    kprintf("allocPageFrame(): Free page stack is empty!\n");
+    PRINT_DEBUG("allocPageFrame(): Free page stack is empty!\n");
     freeUnusedHeapPages();
   }
+
 #if DEBUG
   else
     assert(*(freePageStackTop-1) == ALIGN_DOWN(*(freePageStackTop-1), PAGE_SIZE))
 #endif /* DEBUG */
 
-  return (freePageStackTop == freePageStack) ? NULL_PADDR : *--freePageStackTop;
+    if(freePageStackTop == freePageStack)
+      RET_MSG(NULL_PADDR, "Kernel has no more available physical page frames.");
+    else
+      return *--freePageStackTop;
 }
 
 /** Release a 4 KB page frame.
 
     @param frame The physical address of the page frame to be released
-**/
+ **/
 
 void freePageFrame(paddr_t frame)
 {
   assert(frame == ALIGN_DOWN(frame, PAGE_SIZE));
   assert(freePageStackTop);
 
-  if(!freePageStackTop)
+#if DEBUG
+  if(freePageStackTop)
+#endif /* DEBUG */
     *freePageStackTop++ = ALIGN_DOWN(frame, PAGE_SIZE);
+
+#if DEBUG
+  else
+    PRINT_DEBUG("Free page stack hasn't been initialized yet\n");
+#endif /* DEBUG */
 }
 
 /**
   Attempt to release any physical page frames that have been allocated for heap use that
   are not being used.
-*/
+ */
 
 void freeUnusedHeapPages(void)
 {

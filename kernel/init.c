@@ -20,6 +20,12 @@
 #include <kernel/io.h>
 #include <os/variables.h>
 
+#define VGA_RAM             0xA0000
+#define VGA_COLOR_TEXT      0xB8000
+#define BIOS_ROM            0xC0000
+#define EXTENDED_MEMORY     0x100000
+
+#define KERNEL_STACK_SIZE   (8*PAGE_SIZE)
 #define DISC_CODE(X) \
     X __attribute__((section(".dtext")))
 
@@ -82,8 +88,21 @@ static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * info,
                                      int isLargePage));
 //static void DISC_CODE( readPhysMem(addr_t address, addr_t buffer, size_t len) );
 static void DISC_CODE(initPageAllocator(multiboot_info_t * info));
-static paddr_t DISC_DATA(lastKernelFreePage);
+DISC_DATA(static paddr_t lastKernelFreePage);
 extern void invalidatePage( addr_t );
+
+DISC_DATA(static void (*procExHandlers[20])(void)) = {
+    intHandler0, intHandler1, intHandler2, intHandler3, intHandler4, intHandler5,
+    intHandler6, intHandler7, intHandler8, intHandler9, intHandler10, intHandler11,
+    intHandler12, intHandler13, intHandler14, invalidIntHandler, intHandler16, intHandler17,
+    intHandler18, intHandler19
+};
+
+DISC_DATA(static void (*procIrqHandlers[16])(void)) = {
+    (void (*)(void))timerInt, irq1Handler, irq2Handler, irq3Handler, irq4Handler, irq5Handler,
+    irq6Handler, irq7Handler, irq8Handler, irq9Handler, irq10Handler, irq11Handler,
+    irq12Handler, irq13Handler, irq14Handler, irq15Handler
+};
 
 /*
 void readPhysMem(addr_t address, addr_t buffer, size_t len)
@@ -125,7 +144,7 @@ bool isReservedPage(paddr_t addr, multiboot_info_t * info, int isLargePage)
     addrEnd = addr + PAGE_SIZE;
   }
 
-  if(addr < (paddr_t)0x100000)
+  if(addr < (paddr_t)EXTENDED_MEMORY)
     return true;
   else if((addr >= kernelStart && addr < kernelStart + kernelLength)
       || (addrEnd >= kernelStart && addrEnd < kernelStart+kernelLength))
@@ -739,52 +758,21 @@ void initScheduler( void)
 
 void initInterrupts( void )
 {
-  unsigned int i;
+  for(unsigned int i=0; i <= 0xFF; i++)
+  {
+    void *handler;
 
-  addIDTEntry( ( void * ) intHandler0, 0, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler1, 1, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler2, 2, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler3, 3, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler4, 4, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler5, 5, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler6, 6, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler7, 7, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler8, 8, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler9, 9, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler10, 10, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler11, 11, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler12, 12, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler13, 13, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler14, 14, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) invalidIntHandler, 15, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler16, 16, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler17, 17, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler18, 18, INT_GATE | KCODE );
-  addIDTEntry( ( void * ) intHandler19, 19, INT_GATE | KCODE );
+    if(i < 20)
+      handler = (void *)procExHandlers[i];
+    else if(i >= IRQ0 && i <= IRQ15)
+      handler = (void *)procIrqHandlers[i - IRQ0];
+    else if(i == SYSCALL_INT)
+      handler = syscallHandler;
+    else
+      handler = invalidIntHandler;
 
-  addIDTEntry( ( void * ) irq1Handler, 0x21, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq2Handler, 0x22, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq3Handler, 0x23, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq4Handler, 0x24, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq5Handler, 0x25, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq6Handler, 0x26, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq7Handler, 0x27, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq8Handler, 0x28, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq9Handler, 0x29, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq10Handler, 0x2A, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq11Handler, 0x2B, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq12Handler, 0x2C, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq13Handler, 0x2D, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq14Handler, 0x2E, INT_GATE | KCODE ) ;
-  addIDTEntry( ( void * ) irq15Handler, 0x2F, INT_GATE | KCODE ) ;
-
-  for ( i = 20; i < 32; i++ )
-    addIDTEntry( ( void * ) invalidIntHandler, i, INT_GATE | KCODE );
-
-  for( i = 0x30; i <= 0xFF; i++ )
-    addIDTEntry( ( void *) invalidIntHandler, i, INT_GATE | KCODE );
-
-  addIDTEntry( ( void * ) syscallHandler, SYSCALL_INT, INT_GATE | KCODE | I_DPL3 );
+    addIDTEntry(handler, i, INT_GATE | KCODE | (i == SYSCALL_INT ? I_DPL3 : I_DPL0));
+  }
 
   initPIC();
   loadIDT();
@@ -1118,23 +1106,6 @@ void initStructures(multiboot_info_t *info)
   }
 
   memset(tcbTable, 0, (int)&kTcbTableSize);
-
-  for(int i=LOWEST_PRIORITY; i <= HIGHEST_PRIORITY; i++)
-    queueInit(&runQueues[i]);
-
-  queueInit(&timerQueue);
-
-  /*
-  pendingMessageBuffer = (pem_t *)freePageStackTop;
-
-  for(addr_t addr=(addr_t)pendingMessageBuffer; addr < (addr_t)(pendingMessageBuffer + MAX_THREADS); addr += PAGE_SIZE)
-  {
-    pte_t *pte = ADDR_TO_PTE(addr);
-
-    if(!pte->present)
-      kMapPage(addr, allocPageFrame(), PAGING_SUPERVISOR | PAGING_RW);
-  }
-  */
 }
 
 /**
@@ -1243,7 +1214,7 @@ void init( multiboot_info_t *info )
 
   pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap) + PAGE_SIZE);
 
-  freePageFrame((paddr_t)(pte->base << 12));
+  freePageFrame((paddr_t)PFRAME_TO_ADDR(pte->base));
 
   freePageFrame((paddr_t)k1To1PageTable);
 
@@ -1255,14 +1226,14 @@ void init( multiboot_info_t *info )
 
   for(addr_t addr=(addr_t)0x0000; addr < (addr_t)largePageSize; addr += PAGE_SIZE)
   {
-    if(addr == kernelStackTop-8*PAGE_SIZE)
-      addr = (addr_t)0xA0000;
+    if(addr == kernelStackTop-KERNEL_STACK_SIZE)
+      addr = (addr_t)VGA_RAM;
 
 #if DEBUG
 
-    if(addr == 0xB8000)
+    if(addr == VGA_COLOR_TEXT)
     {
-      addr = (addr_t)0xC0000;
+      addr = (addr_t)BIOS_ROM;
       continue;
     }
 #endif  /* DEBUG */

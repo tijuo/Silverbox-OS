@@ -55,6 +55,8 @@
 
 #define AVAIL_BITS              3
 
+#define CR3_BASE_MASK           0xFFFFF000u
+
 /*
 struct CR3_Struct
 {

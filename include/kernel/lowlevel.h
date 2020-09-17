@@ -1,5 +1,5 @@
-#ifndef LOWLEVEL_H
-#define LOWLEVEL_H
+#ifndef KERNEL_LOWLEVEL_H
+#define KERNEL_LOWLEVEL_H
 
 #include <types.h>
 #include <kernel/multiboot.h>
@@ -269,4 +269,4 @@ extern const unsigned int VPhysMemStart;
 extern const unsigned int ioPermBitmap;
 
 extern const size_t kernelStackLen;
-#endif /* LOWLEVEL_H */
+#endif /* KERNEL_LOWLEVEL_H */

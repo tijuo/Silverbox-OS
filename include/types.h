@@ -60,7 +60,7 @@ typedef unsigned short int pid_t;
 #endif /* __cplusplus */
 
 #ifndef NULL
-  #define NULL ((void *)0)
+  #define NULL 0
 #endif
 
 #ifndef UNUSED_PARAM

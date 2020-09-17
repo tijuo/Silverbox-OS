@@ -1,5 +1,5 @@
-#ifndef PIT
-#define PIT
+#ifndef KERNEL_PIT_H
+#define KERNEL_PIT_H
 
 #define TIMER0		    0x40u
 #define TIMER1		    0x41u
@@ -38,4 +38,4 @@
 #define TIMER_FREQ		1193182u
 #define TIMER_QUANTA_HZ    100u
 
-#endif
+#endif /* KERNEL_PIT_H */

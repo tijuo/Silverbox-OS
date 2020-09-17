@@ -16,7 +16,7 @@ pem_t pendingMessageBuffer[MAX_THREADS] __ALIGNED__(16);
   @param sender The thread to attach.
   @paarm recipientTid The tid of the recipient to which the sender will be attached.
   @return E_OK on success. E_FAIL on failure.
-*/
+ */
 
 int attachSendWaitQueue(tcb_t *sender, tid_t recipientTid)
 {
@@ -25,10 +25,10 @@ int attachSendWaitQueue(tcb_t *sender, tid_t recipientTid)
   assert(sender);
 
   if(!recipient)
-    RET_MSG(E_FAIL, "Invalid recipient")
+    RET_MSG(E_FAIL, "Invalid recipient");
   else if(sender->threadState == READY && !detachRunQueue(sender))
-    RET_MSG(E_FAIL, "Unable to detach thread from run queue")
-  else if(!IS_ERROR(queueEnqueue(recipient->senderWaitQueue, getTid(sender), sender)))
+    RET_MSG(E_FAIL, "Unable to detach thread from run queue");
+  else if(!IS_ERROR(listEnqueue(&recipient->senderWaitQueue, sender)))
   {
     sender->threadState = WAIT_FOR_RECV;
     sender->waitTid = recipientTid;
@@ -39,7 +39,7 @@ int attachSendWaitQueue(tcb_t *sender, tid_t recipientTid)
   if(!attachRunQueue(sender))
     panic("Unable to reattach sender to run queue.");
 
-  RET_MSG(E_FAIL, "Unable to enqueue thread to sender wait queue.")
+  RET_MSG(E_FAIL, "Unable to enqueue thread to sender wait queue.");
 }
 
 /** Attach a recipient to a sender's receive queue. The receiving thread will
@@ -50,7 +50,7 @@ int attachSendWaitQueue(tcb_t *sender, tid_t recipientTid)
                    a sender.
   @paarm senderTid The tid of the thread that the recipient is waiting to send a message.
   @return E_OK on success. E_FAIL on failure.
-*/
+ */
 
 int attachReceiveWaitQueue(tcb_t *recipient, tid_t senderTid)
 {
@@ -59,15 +59,14 @@ int attachReceiveWaitQueue(tcb_t *recipient, tid_t senderTid)
   assert(recipient);
 
   if(recipient->threadState == READY && !detachRunQueue(recipient))
-    RET_MSG(E_FAIL, "Unable to detach recipient from run queue.")
+    RET_MSG(E_FAIL, "Unable to detach recipient from run queue.");
 
-  if(sender && IS_ERROR(queueEnqueue(sender->receiverWaitQueue, getTid(recipient),
-                        recipient)))
+  if(sender && IS_ERROR(listEnqueue(&sender->receiverWaitQueue, recipient)))
   {
     if(!attachRunQueue(sender))
       panic("Unable to reattach recipient to run queue.");
 
-    RET_MSG(E_FAIL, "Unable to enqueue thread to recipient wait queue.")
+    RET_MSG(E_FAIL, "Unable to enqueue thread to recipient wait queue.");
   }
   else
   {
@@ -82,45 +81,43 @@ int attachReceiveWaitQueue(tcb_t *recipient, tid_t senderTid)
 
   @param sender The sender to be detached.
   @return E_OK on success. E_FAIL on failure.
-*/
+ */
 
 int detachSendWaitQueue(tcb_t *sender)
 {
   assert(sender);
   tcb_t *recipient = getTcb(sender->waitTid);
 
-  if(recipient && !IS_ERROR(queueRemoveLast(recipient->senderWaitQueue,
-                     getTid(sender), NULL)))
+  if(recipient && !IS_ERROR(listRemove(&recipient->senderWaitQueue, sender)))
   {
     sender->waitTid = NULL_TID;
     sender->threadState = PAUSED;
     return E_OK;
   }
 
-  RET_MSG(E_FAIL, "Unable to detach sender from sender wait queue.")
+  RET_MSG(E_FAIL, "Unable to detach sender from sender wait queue.");
 }
 
 /** Remove a recipient from its sender's receive queue.
 
   @param recipient The recipient that will be detached.
   @return E_OK on success. E_FAIL on failure.
-*/
+ */
 
 int detachReceiveWaitQueue(tcb_t *recipient)
 {
   assert(recipient);
   tcb_t *sender = getTcb(recipient->waitTid);
 
-  if((sender && !IS_ERROR(queueRemoveLast(sender->receiverWaitQueue,
-                     getTid(recipient), NULL)))
-     || (!sender && recipient->waitTid == ANY_SENDER))
+  if((sender && !IS_ERROR(listRemove(&sender->receiverWaitQueue, recipient)))
+      || (!sender && recipient->waitTid == ANY_SENDER))
   {
     recipient->waitTid = NULL_TID;
     recipient->threadState = PAUSED;
     return E_OK;
   }
 
-  RET_MSG(E_FAIL, "Unable to detach recipient from recipient wait queue.")
+  RET_MSG(E_FAIL, "Unable to detach recipient from recipient wait queue.");
 }
 
 /**
@@ -138,7 +135,7 @@ int detachReceiveWaitQueue(tcb_t *recipient)
               as a reply. 0, otherwise.
   @return E_OK on success. E_FAIL on failure. E_INVALID_ARG on bad argument.
           E_BLOCK if no recipient is ready to receive (and not blocking).
-*/
+ */
 
 int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int block, int call)
 {
@@ -150,27 +147,30 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
     if(call)
       return (int)senderTid;
     else
-      RET_MSG(E_INVALID_ARG, "Sender attempted to send a message to itself.")
+      RET_MSG(E_INVALID_ARG, "Sender attempted to send a message to itself.");
   }
 
   if(!(recipient=getTcb(recipientTid)))
-    RET_MSG(E_INVALID_ARG, "Invalid recipient.")
+  {
+    kprintf("%d tried to send a message to tid %d.\n", senderTid, recipientTid);
+    RET_MSG(E_INVALID_ARG, "Invalid recipient.");
+  }
 
   if(recipient->threadState == INACTIVE)
-    RET_MSG(E_INVALID_ARG, "Attempting to send message to inactive thread.")
+    RET_MSG(E_INVALID_ARG, "Attempting to send message to inactive thread.");
 
   // If the recipient is waiting for a message from this sender or any sender
 
   if(recipient->threadState == WAIT_FOR_SEND
-     && (recipient->waitTid == ANY_SENDER
-         || recipient->waitTid == senderTid))
+      && (recipient->waitTid == ANY_SENDER
+          || recipient->waitTid == senderTid))
   {
     if(IS_ERROR(detachReceiveWaitQueue(recipient)))
-      RET_MSG(E_FAIL, "Unable to detach recipient from recipient wait queue.")
+      RET_MSG(E_FAIL, "Unable to detach recipient from recipient wait queue.");
     else if(call && IS_ERROR(attachReceiveWaitQueue(sender, recipientTid)))
-      RET_MSG(E_FAIL, "Unable to attach sender to sender wait queue.")
+      RET_MSG(E_FAIL, "Unable to attach sender to sender wait queue.");
     else if(IS_ERROR(startThread(recipient)))
-      RET_MSG(E_FAIL, "Unable to retart recipient.")
+      RET_MSG(E_FAIL, "Unable to retart recipient.");
 
     recipient->execState.eax = (((dword)senderTid << SYSCALL_TID_OFFSET)
         | (state->eax & SYSCALL_SUBJ_MASK) | ESYS_OK);
@@ -187,7 +187,7 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
   else	// Wait until the recipient is ready to receive the message
   {
     if(IS_ERROR(attachSendWaitQueue(sender, getTid(recipient))))
-      RET_MSG(E_FAIL, "Unable to attach sender to sender wait queue.")
+      RET_MSG(E_FAIL, "Unable to attach sender to sender wait queue.");
 
     assert(sender->threadState != READY);
     assert(sender->threadState != RUNNING);
@@ -207,26 +207,25 @@ int sendMessage(tcb_t *sender, ExecutionState *state, tid_t recipientTid, int bl
   @param message The kernel message to be sent.
   @return E_OK on success. E_FAIL on failure. E_INVALID_ARG on bad argument.
           E_BLOCK if no recipient is ready to receive (and not blocking).
-*/
+ */
 
-int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
-                         pem_t * message)
+int sendExceptionMessage(tcb_t * sender, tid_t recipientTid, pem_t * message)
 {
   tcb_t *recipient = getTcb(recipientTid);
   tid_t senderTid = getTid(sender);
 
   if(!recipient)
-    RET_MSG(E_INVALID_ARG, "Invalid recipient.")
+    RET_MSG(E_INVALID_ARG, "Invalid recipient.");
 
   // If the recipient is waiting for a message from this sender or any sender
 
   if(recipient->threadState == WAIT_FOR_SEND
-     && (recipient->waitTid == ANY_SENDER || recipient->waitTid == senderTid))
+      && (recipient->waitTid == ANY_SENDER || recipient->waitTid == senderTid))
   {
     if(IS_ERROR(detachReceiveWaitQueue(recipient)))
-      RET_MSG(E_FAIL, "Unable to detach recipient from recipient wait queue.")
+      RET_MSG(E_FAIL, "Unable to detach recipient from recipient wait queue.");
     else if IS_ERROR(startThread(recipient))
-      RET_MSG(E_FAIL, "Unable to restart recipient.")
+            RET_MSG(E_FAIL, "Unable to restart recipient.");
 
     recipient->execState.eax = (dword)(((dword)KERNEL_TID << SYSCALL_TID_OFFSET)
         | ((dword)message->subject << SYSCALL_SUBJ_OFFSET) | ESYS_OK);
@@ -238,7 +237,7 @@ int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
   else  // Wait until the recipient is ready to receive the message
   {
     if(IS_ERROR(attachSendWaitQueue(sender, recipientTid)))
-      RET_MSG(E_FAIL, "Unable to attach sender to sender wait queue.")
+      RET_MSG(E_FAIL, "Unable to attach sender to sender wait queue.");
 
     pendingMessageBuffer[senderTid] = *message;
   }
@@ -260,7 +259,7 @@ int sendExceptionMessage(tcb_t * sender, tid_t recipientTid,
          sends). Otherwise, give up if no senders are available.
   @return E_OK on success. E_FAIL on failure. E_INVALID_ARG on bad argument.
           E_BLOCK if no messages are pending to be received (and non-blocking).
-*/
+ */
 
 int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, int block )
 {
@@ -271,11 +270,11 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
   assert( recipient->threadState == RUNNING );
 
   if(recipient == sender)
-    RET_MSG(E_INVALID_ARG, "Recipient attempted to receive message from itself.")
+    RET_MSG(E_INVALID_ARG, "Recipient attempted to receive message from itself.");
 
-  if(!sender && !isQueueEmpty(recipient->senderWaitQueue)) // receive message from anyone
+  if(!sender && !isListEmpty(&recipient->senderWaitQueue)) // receive message from anyone
   {
-    sender = queueGetTail(recipient->senderWaitQueue);
+    sender = listDequeue(&recipient->senderWaitQueue);
     senderTid = getTid(sender);
   }
 
@@ -284,7 +283,7 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
     if(sender->threadState == WAIT_FOR_RECV)
     {
       state->eax = ((dword)senderTid << SYSCALL_TID_OFFSET)
-          | (sender->execState.eax & SYSCALL_SUBJ_MASK);
+                  | (sender->execState.eax & SYSCALL_SUBJ_MASK);
       state->ebx = sender->execState.ebx;
       state->ecx = sender->execState.ecx;
       state->edx = sender->execState.edx;
@@ -292,15 +291,15 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
       state->edi = sender->execState.edi;
 
       if(IS_ERROR(detachSendWaitQueue(sender)))
-        RET_MSG(E_FAIL, "Unablo to attach sender to sender wait queue.")
+        RET_MSG(E_FAIL, "Unablo to attach sender to sender wait queue.");
 
       if((sender->execState.eax & SYSCALL_CALL_MASK) == SYS_CALL_WAIT)
       {
         if(IS_ERROR(attachReceiveWaitQueue(sender, recipientTid)))
-          RET_MSG(E_FAIL, "Unable to attach sender to recipient wait queue.")
+          RET_MSG(E_FAIL, "Unable to attach sender to recipient wait queue.");
       }
       else if(IS_ERROR(startThread(sender)))
-        RET_MSG(E_FAIL, "Unable to restart sender.")
+        RET_MSG(E_FAIL, "Unable to restart sender.");
     }
     else if(sender->threadState == PAUSED) // sender sent an exception/exit message
     {
@@ -314,25 +313,25 @@ int receiveMessage( tcb_t *recipient, ExecutionState *state, tid_t senderTid, in
       state->esi = (dword)message->intNum;
 
       if(IS_ERROR(detachSendWaitQueue(sender)))
-        RET_MSG(E_FAIL, "Unable to detach sender from send wait queue.")
+        RET_MSG(E_FAIL, "Unable to detach sender from send wait queue.");
     }
     else
-      RET_MSG(E_FAIL, "Sender was in an invalid state")
+      RET_MSG(E_FAIL, "Sender was in an invalid state");
 
-      return E_OK;
+    return E_OK;
   }
   else if(!block)
   {
-/*
+    /*
     kprintf("receive: Non-blocking. TID: %d\tEIP: 0x%x\n", recipientTid, state->eip);
     kprintf("Return EIP: 0x%x\n", *(dword *)(state->ebp + 4));
-*/
+     */
     return E_BLOCK;
   }
   else // no one is waiting to send to this local port, so wait
   {
     if(IS_ERROR(attachReceiveWaitQueue(recipient, senderTid)))
-      RET_MSG(E_FAIL, "Unable to attach recipient to recipient wait queue.")
+      RET_MSG(E_FAIL, "Unable to attach recipient to recipient wait queue.");
   }
 
   return E_OK;

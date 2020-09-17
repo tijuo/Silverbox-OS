@@ -8,7 +8,6 @@
 #include <oslib.h>
 #include <kernel/message.h>
 #include <kernel/error.h>
-#include <kernel/kmalloc.h>
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
 
@@ -27,33 +26,26 @@ static tid_t getNewTid(void);
 */
 int startThread( tcb_t *thread )
 {
-  #if DEBUG
-  if( !IS_ERROR(queueFindFirst(&timerQueue, getTid(thread), NULL)) )
-    kprintf("Thread is in timer queue!\n");
-  #endif /* DEBUG */
-
-  assert( IS_ERROR(queueFindFirst(&timerQueue, getTid(thread), NULL)) );
-
   switch(thread->threadState)
   {
     case SLEEPING:
-      if(IS_ERROR(queueRemoveFirst(&timerQueue, getTid(thread), NULL)))
-        RET_MSG(E_FAIL, "Unable to remove thread from sleep queue.")
+      if(IS_ERROR(deltaListRemove(&timerQueue, thread)))
+        RET_MSG(E_FAIL, "Unable to remove thread from sleep queue.");
       break;
     case WAIT_FOR_RECV:
       if(IS_ERROR(detachSendWaitQueue(thread)))
-        RET_MSG(E_FAIL, "Unable to detach thread from sender wait queue.")
+        RET_MSG(E_FAIL, "Unable to detach thread from sender wait queue.");
       thread->waitTid = NULL_TID;
       break;
     case WAIT_FOR_SEND:
       if(IS_ERROR(detachReceiveWaitQueue(thread)))
-        RET_MSG(E_FAIL, "Unable to detach thread from recipient wait queue.")
+        RET_MSG(E_FAIL, "Unable to detach thread from recipient wait queue.");
       thread->waitTid = NULL_TID;
       break;
     case READY:
-      RET_MSG(E_DONE, "Thread has already started.")
+      RET_MSG(E_DONE, "Thread has already started.");
     case RUNNING:
-      RET_MSG(E_DONE, "Thread is already running.")
+      RET_MSG(E_DONE, "Thread is already running.");
     default:
       break;
   }
@@ -63,7 +55,7 @@ int startThread( tcb_t *thread )
   if(attachRunQueue( thread ))
     return E_OK;
   else
-    RET_MSG(E_FAIL, "Unable to attach thread to run queue")
+    RET_MSG(E_FAIL, "Unable to attach thread to run queue");
 }
 
 /**
@@ -80,15 +72,15 @@ int startThread( tcb_t *thread )
 int sleepThread( tcb_t *thread, int msecs )
 {
   if( thread->threadState == SLEEPING )
-    RET_MSG(E_DONE, "Thread is already sleeping.")
+    RET_MSG(E_DONE, "Thread is already sleeping.");
   else if(msecs < 0)
     RET_MSG(E_INVALID_ARG, "Invalid sleep interval");
 
   if( thread->threadState != READY && thread->threadState != RUNNING )
-    RET_MSG(E_FAIL, "Thread is neither ready nor running.")
+    RET_MSG(E_FAIL, "Thread is neither ready nor running.");
 
   if( thread->threadState == READY && !detachRunQueue( thread ))
-    RET_MSG(E_FAIL, "Unable to detach thread from run queue.")
+    RET_MSG(E_FAIL, "Unable to detach thread from run queue.");
 
   if(msecs == 0)
   {
@@ -96,60 +88,13 @@ int sleepThread( tcb_t *thread, int msecs )
     return E_OK;
   }
 
-  timer_delta_t *timerDelta = kmalloc(sizeof(timer_delta_t));
-
-  if(!timerDelta)
-    RET_MSG(E_FAIL, "Unable to allocate memory for timer delta struct.")
-
-  list_node_t *newNode = kmalloc(sizeof(list_node_t));
-
-  if(!newNode)
-  {
-    kfree(timerDelta, sizeof(timerDelta));
-    RET_MSG(E_FAIL, "Unable to allocate memory for new list node")
-  }
-
-  newNode->elem = (void *)timerDelta;
-  newNode->key = getTid(thread);
-  newNode->prev = NULL;
-  newNode->next = NULL;
-
-  timerDelta->delta = (msecs*TIMER_QUANTA_HZ) / MSECS_PER_SEC;
-  timerDelta->thread = thread;
-
-  if(timerQueue.head)
-  {
-    for(list_node_t *node=timerQueue.head; node; node = node->next)
-    {
-      timer_delta_t *nodeDelta = (timer_delta_t *)node->elem;
-
-      if(timerDelta->delta > nodeDelta->delta)
-        timerDelta->delta -= nodeDelta->delta;
-      else
-      {
-        nodeDelta->delta -= timerDelta->delta;
-
-        if(node->prev)
-          node->prev->next = newNode;
-        else
-          timerQueue.head = newNode;
-
-        newNode->next = node;
-        node->prev = newNode;
-        goto finish;
-      }
-    }
-
-    timerQueue.tail->next = newNode;
-    newNode->prev = timerQueue.tail;
-    timerQueue.tail = newNode;
-  }
+  if(IS_ERROR(deltaListPush(&timerQueue, thread, msecs)))
+    RET_MSG(E_FAIL, "Unable to add thread to the timer/sleep queue.");
   else
-    timerQueue.head = timerQueue.tail = newNode;
-
-finish:
-  thread->threadState = SLEEPING;
-  return E_OK;
+  {
+    thread->threadState = SLEEPING;
+    return E_OK;
+  }
 }
 
 /** Block a thread indefinitely until it is restarted.
@@ -163,15 +108,15 @@ int pauseThread( tcb_t *thread )
   {
     case READY:
       if(!detachRunQueue( thread ))
-        RET_MSG(E_FAIL, "Unable to detach thread from run queue.")
+        RET_MSG(E_FAIL, "Unable to detach thread from run queue.");
       break;
     case RUNNING:
       break;
     case PAUSED:
-      RET_MSG(E_DONE, "Thread is already paused.")
+      RET_MSG(E_DONE, "Thread is already paused.");
     default:
       kprintf("Thread state: %d\n", thread->threadState);
-      RET_MSG(E_FAIL, "Thread is neither ready, running, nor paused.")
+      RET_MSG(E_FAIL, "Thread is neither ready, running, nor paused.");
   }
 
   thread->threadState = PAUSED;
@@ -194,7 +139,7 @@ tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t
   tid_t tid = (desiredTid == NULL_TID ? getNewTid() : desiredTid);
 
   if(!entryAddr)
-    RET_MSG(NULL, "NULL entry addr")
+    RET_MSG(NULL, "NULL entry addr");
   else if(tid == NULL_TID)
     RET_MSG(NULL, "Unable to create new thread.");
 
@@ -206,7 +151,7 @@ tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t
   thread = getTcb(tid);
 
   if( thread->threadState != INACTIVE )
-    RET_MSG(NULL, "Thread is already active.")
+    RET_MSG(NULL, "Thread is already active.");
 
   thread->priority = NORMAL_PRIORITY;
   thread->rootPageMap = (dword)rootPmap;
@@ -221,28 +166,10 @@ tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t
   thread->execState.userEsp = stack;
   thread->execState.userSS = UDATA;
 
-  thread->receiverWaitQueue = kmalloc(sizeof(queue_t));
-  thread->senderWaitQueue = kmalloc(sizeof(queue_t));
-
-  if(!thread->receiverWaitQueue
-     || queueInit(thread->receiverWaitQueue) != E_OK
-     || !thread->senderWaitQueue
-     || queueInit(thread->senderWaitQueue) != E_OK)
-  {
-    if(thread->receiverWaitQueue)
-    {
-      queueDestroy(thread->receiverWaitQueue);
-      kfree(thread->receiverWaitQueue, sizeof *thread->receiverWaitQueue );
-    }
-
-    if(thread->senderWaitQueue)
-    {
-      queueDestroy(thread->senderWaitQueue);
-      kfree(thread->senderWaitQueue, sizeof *thread->senderWaitQueue);
-    }
-
-    RET_MSG(NULL, "Unable to initialize message queues.");
-  }
+  thread->receiverWaitQueue.headTid = NULL;
+  thread->senderWaitQueue.headTid = NULL;
+  thread->receiverWaitQueue.tailTid = NULL;
+  thread->senderWaitQueue.tailTid = NULL;
 
   kprintf("Created new thread at 0x%x\n", thread);
 
@@ -259,8 +186,8 @@ tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t
 
 int releaseThread( tcb_t *thread )
 {
-  queue_t *queues[2] = { thread->senderWaitQueue, thread->receiverWaitQueue };
-  queue_t *queue;
+  list_t *queues[2] = { &thread->senderWaitQueue, &thread->receiverWaitQueue };
+  list_t *queue;
   size_t i;
 
   kprintf("Releasing thread 0x%x\n", thread);
@@ -275,20 +202,20 @@ int releaseThread( tcb_t *thread )
     /* Assumes that a ready/running thread can't be on the timer queue. */
 
     case READY:
-      if(IS_ERROR(queueRemoveFirst(&runQueues[thread->priority], getTid(thread), NULL)))
-        RET_MSG(E_FAIL, "Unable to release thread from run queue.")
+      if(IS_ERROR(listRemove(&runQueues[thread->priority], thread)))
+        RET_MSG(E_FAIL, "Unable to release thread from run queue.");
       break;
     case WAIT_FOR_RECV:
       if(IS_ERROR(detachSendWaitQueue(thread)))
-        RET_MSG(E_FAIL, "Unable to detach thread from sender wait queue.")
+        RET_MSG(E_FAIL, "Unable to detach thread from sender wait queue.");
       break;
     case WAIT_FOR_SEND:
       if(IS_ERROR(detachReceiveWaitQueue(thread)))
-        RET_MSG(E_FAIL, "Unable to detach thread from recipient wait queue.")
+        RET_MSG(E_FAIL, "Unable to detach thread from recipient wait queue.");
       break;
     case SLEEPING:
-      if(IS_ERROR(queueRemoveFirst(&timerQueue, getTid(thread), NULL)))
-        RET_MSG(E_FAIL, "Unable to remove thread from sleep queue")
+      if(IS_ERROR(deltaListRemove(&timerQueue, thread)))
+        RET_MSG(E_FAIL, "Unable to remove thread from sleep queue");
       break;
     case INACTIVE:
       RET_MSG(E_DONE, "Thread is already inactive.");
@@ -301,15 +228,17 @@ int releaseThread( tcb_t *thread )
 
   for(i=0, queue=queues[0]; i < ARRAY_SIZE(queues); i++, queue++)
   {
-    for(tcb_t *t=NULL; !IS_ERROR(queuePop(queue, (void *)&t)); )
+    while(queue->headTid != NULL_TID)
     {
-      t->waitTid = NULL_TID;
-      t->execState.eax = E_FAIL;
-      startThread(t);
-    }
+      tcb_t *t = listDequeue(queue);
 
-    queueDestroy(queue);
-    kfree(queue, sizeof *queue);
+      if(t)
+      {
+        t->waitTid = NULL_TID;
+        t->execState.eax = E_FAIL;
+        startThread(t);
+      }
+    }
   }
 
   thread->threadState = INACTIVE;
@@ -333,7 +262,7 @@ tid_t getNewTid(void)
   } while(lastTid != prevTid && getTcb(lastTid)->threadState != INACTIVE);
 
   if(lastTid == prevTid)
-    RET_MSG(NULL_TID, "No more TIDs are available")
+    RET_MSG(NULL_TID, "No more TIDs are available");
 
   return (tid_t)lastTid;
 }

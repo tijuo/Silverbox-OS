@@ -1,5 +1,5 @@
-#ifndef PIC_H
-#define PIC_H
+#ifndef KERNEL_PIC_H
+#define KERNEL_PIC_H
 
 #define PIC1_CMD_PORT       0x20
 #define PIC1_DATA_PORT      0x21
@@ -14,4 +14,4 @@ void sendEOI( void );
 void enableIRQ( unsigned int irq );
 void disableIRQ( unsigned int irq );
 
-#endif /* PIC_H */
+#endif /* KERNEL_PIC_H */

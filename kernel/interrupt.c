@@ -44,7 +44,7 @@ int registerIrq(tcb_t *thread, int irqNum)
   assert(isValidIRQ(irqNum));
 
   if(irqHandlers[irqNum])
-    RET_MSG(E_FAIL, "IRQ Handler has already been set")
+    RET_MSG(irqHandlers[irqNum] == thread ? E_DONE : E_FAIL, "IRQ Handler has already been set");
 
   kprintf("TID %d registered IRQ: 0x%x\n", getTid(thread), irqNum);
 
@@ -124,30 +124,30 @@ int handleHeapPageFault(int errorCode)
   pte_t pte;
 
   if(faultAddr < FIRST_VALID_PAGE)
-    RET_MSG(E_PERM, "Error: NULL page access.")
+    RET_MSG(E_PERM, "Error: NULL page access.");
 
   //kprintf("Page fault at 0x%x\n", faultAddr);
 
   if(faultAddr >= PAGETAB)
-    RET_MSG(E_FAIL, "Page fault occurred in page table/directory region.")
+    RET_MSG(E_FAIL, "Page fault occurred in page table/directory region.");
 
   if(faultAddr >= KERNEL_HEAP_START && faultAddr <= KERNEL_HEAP_LIMIT)
   {
     if(IS_ERROR(readPmapEntry(NULL_PADDR, PDE_INDEX(faultAddr), &pde)))
-      RET_MSG(E_FAIL, "Unable to read page directory entry.")
+      RET_MSG(E_FAIL, "Unable to read page directory entry.");
     else if(IS_ERROR(readPmapEntry((paddr_t)PFRAME_TO_ADDR(pde.base), PDE_INDEX(faultAddr), &pte)))
-      RET_MSG(E_FAIL, "Unable to read page table entry.")
+      RET_MSG(E_FAIL, "Unable to read page table entry.");
     else if(!pte.present)
     {
       pageFrame = allocPageFrame();
 
       if(pageFrame == NULL_PADDR)
-        RET_MSG(E_FAIL, "Unable to allocate page frame.")
+        RET_MSG(E_FAIL, "Unable to allocate page frame.");
       else if(IS_ERROR(kMapPage(faultAddr, pageFrame, PAGING_RW | PAGING_SUPERVISOR)))
       {
         kprintf("%x -> %x.\n", faultAddr, PFRAME_TO_ADDR(pageFrame));
         freePageFrame(pageFrame);
-        RET_MSG(E_FAIL, "Unable to map page")
+        RET_MSG(E_FAIL, "Unable to map page");
       }
     }
     else if(pte.usPriv || (!pte.rwPriv && IS_FLAG_SET(errorCode, PAGING_ERR_WRITE)))
@@ -158,7 +158,7 @@ int handleHeapPageFault(int errorCode)
       if(!pte.rwPriv && IS_FLAG_SET(errorCode, PAGING_ERR_WRITE))
         kprintf("Page is marked as read-only (but a write access was performed).\n");
 
-      return E_PERM;
+      RET_MSG(E_PERM, "Protection fault.");
     }
   }
   else

@@ -7,9 +7,11 @@
 #include <kernel/thread.h>
 #define  VIDMEM_START   0xB8000u
 
-#define RET_MSG(ret, msg)	{ kprintf("<'%s' %s: %d> Ret: %d. %s\n", \
-				__FILE__, __func__, __LINE__, (ret), (msg)); \
-				return (ret); }
+#define PRINT_DEBUG(msg)      ({ kprintf("<'%s' %s: %d> %s", \
+                              __FILE__, __func__, __LINE__, (msg)); })
+#define RET_MSG(ret, msg)     ({ kprintf("<'%s' %s: line %d> Returned: %d. %s\n", \
+				              __FILE__, __func__, __LINE__, (ret), (msg)); \
+				              return ret; })
 
 #define DECL_CALL_COUNTER(fname)		extern unsigned int fname ## _counter;
 #define CALL_COUNTER(fname)			unsigned int fname ## _counter;
@@ -80,7 +82,8 @@ unsigned int getTimeDifference(void);
 //#define printString(str, x, y)
 //#define _printString(str, x, y, ...)
 #define initVideo()                 ({})
-#define RET_MSG(x,y)	return x;
+#define PRINT_DEBUG(msg)            ({})
+#define RET_MSG(x, y)	return (x)
 #define CALL_COUNTER(ret_type, fname, arg)	ret_type fname(arg);
 #endif /* DEBUG */
 

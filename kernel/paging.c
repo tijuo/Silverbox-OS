@@ -51,14 +51,14 @@ int initializeRootPmap(dword pmap)
   // recursively map the page map to itself
 
   if(IS_ERROR(writePmapEntry(pmap, PDE_INDEX(PAGETAB), &pentry)))
-    RET_MSG(E_FAIL, "Unable to perform recursive mapping.")
+    RET_MSG(E_FAIL, "Unable to perform recursive mapping.");
 
 #if DEBUG
 
   // map the first page table
 
   if(IS_ERROR(writePmapEntry(pmap, 0, (void *)PAGEDIR)))
-    RET_MSG(E_FAIL, "Unable to map first page table.")
+    RET_MSG(E_FAIL, "Unable to map first page table.");
 #endif /* DEBUG */
 
   pde_t *pmapPtr = (pde_t *)pmap;
@@ -93,7 +93,7 @@ int initializeRootPmap(dword pmap)
 int clearPhysPage( paddr_t phys )
 {
   if(IS_ERROR(mapTemp(phys)))
-    RET_MSG(E_FAIL, "Unable to map temporary page address.")
+    RET_MSG(E_FAIL, "Unable to map temporary page address.");
 
   memset( (void *)TEMP_PAGEADDR, 0, PAGE_SIZE );
 
@@ -114,7 +114,7 @@ bool isReadable( addr_t addr, paddr_t pdir )
   pte_t pte;
 
   if(IS_ERROR(readPTE( addr, &pte, pdir )))
-    return false;
+    RET_MSG(false, "Unable to to PTE for address.");
 
   return pte.present ? true : false;
 }
@@ -133,13 +133,13 @@ bool isWritable( addr_t addr, paddr_t pdir )
   pde_t pde;
 
   if(IS_ERROR(readPDE( PDE_INDEX(addr), &pde, pdir )))
-    return false;
+    RET_MSG(false, "Unable to read PDE for address.");
 
   if( !pde.rwPriv )
-    return false;
+    RET_MSG(false, "PDE for address is marked as read-only.");
 
   if(IS_ERROR(readPTE( addr, &pte, pdir )))
-    return false;
+    RET_MSG(false, "Unable to read PTE for address.");
 
   return (pte.present && pte.rwPriv) ? true : false;
 }
@@ -219,7 +219,7 @@ void invalidatePage( addr_t virt )
 
 dword getRootPageMap(void)
 {
-  return getCR3() & ~PCID_MASK;
+  return getCR3() & CR3_BASE_MASK;
 }
 
 /**
@@ -266,7 +266,7 @@ int readPTE( addr_t virt, pte_t *pte, paddr_t pdir )
   pde_t pde;
 
   if(IS_ERROR(readPDE(PDE_INDEX(virt), &pde, pdir)))
-    RET_MSG(E_FAIL, "Unable to read PDE")
+    RET_MSG(E_FAIL, "Unable to read PDE");
 
   if( !pde.present )
     RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
@@ -326,7 +326,7 @@ static int accessPhys( paddr_t phys, void *buffer, size_t len, bool readPhys )
   size_t bytes;
 
   if(phys == NULL_PADDR)
-    RET_MSG(E_INVALID_ARG, "Invalid physical address")
+    RET_MSG(E_INVALID_ARG, "Invalid physical address");
 
   for( size_t i=0; len; phys += bytes, i += bytes, len -= bytes )
   {
@@ -412,7 +412,7 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
   while( len )
   {
     if( IS_ERROR(readPTE( address, &pte, pdir )) )
-      RET_MSG(E_FAIL, "Unable to to PTE for address")
+      RET_MSG(E_FAIL, "Unable to to PTE for address");
 
     addr_offset = address & (PAGE_SIZE - 1);
     bytes = (len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
@@ -497,7 +497,7 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
   if( virt == INVALID_VADDR || phys == NULL_PADDR )
   {
     kprintf("kMapPage(): %x -> %llx\n", virt, phys);
-    RET_MSG(E_INVALID_ARG, "Invalid address.")
+    RET_MSG(E_INVALID_ARG, "Invalid address.");
   }
 
   pdePtr = ADDR_TO_PDE( virt );
@@ -507,7 +507,7 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
     if( pdePtr->present )
     {
       kprintf("kMapPage(): %x -> %llx\n", virt, phys);
-      RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.")
+      RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.");
     }
 
     *(dword *)pdePtr = (dword)phys | (flags & PMAP_FLAG_MASK) | PAGING_PRES;
@@ -519,12 +519,12 @@ int kMapPage( addr_t virt, paddr_t phys, u32 flags )
     if ( !pdePtr->present )
     {
       kprintf("kMapPage(): %x -> %llx\n", virt, phys);
-      RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.")
+      RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
     }
     else if( ptePtr->present )
     {
       kprintf("kMapPage(): %x -> %llx\n", virt, phys);
-      RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.")
+      RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.");
     }
 
     *(dword *)ptePtr = (dword)phys | (flags & PMAP_FLAG_MASK) | PAGING_PRES;
@@ -549,7 +549,7 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
   pde_t *pdePtr;
 
   if( virt == INVALID_VADDR  )
-    RET_MSG(E_INVALID_ARG, "Invalid virtual address.")
+    RET_MSG(E_INVALID_ARG, "Invalid virtual address.");
 
   pdePtr = ADDR_TO_PDE( virt );
 
@@ -567,7 +567,7 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
         ptePtr->present = 0;
       }
       else
-        RET_MSG(E_NOT_MAPPED, "Virtual address is not mapped.")
+        RET_MSG(E_NOT_MAPPED, "Virtual address is not mapped.");
     }
     else
     {
@@ -578,7 +578,7 @@ int kUnmapPage( addr_t virt, paddr_t *phys )
     }
   }
   else
-    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.")
+    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
 
   invalidatePage( virt );
 
@@ -619,7 +619,7 @@ int kMapPageTable( addr_t virt, paddr_t phys, u32 flags )
   if( pdePtr->present )
   {
     kprintf("kMapPageTable(): %x -> %llx:\n", virt, phys);
-    RET_MSG(E_OVERWRITE, "Address is already mapped!")
+    RET_MSG(E_OVERWRITE, "Address is already mapped!");
   }
 
   *(dword *)pdePtr = (dword)phys | (flags & PMAP_FLAG_MASK) | PAGING_PRES;
@@ -647,7 +647,7 @@ int kUnmapPageTable( addr_t virt, paddr_t *phys )
   pdePtr = ADDR_TO_PDE( virt );
 
   if( !pdePtr->present )
-    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.")
+    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
 
   pdePtr->present = 0;
 

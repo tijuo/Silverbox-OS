@@ -5,7 +5,6 @@
 #include <kernel/multiboot.h>
 #include <kernel/lowlevel.h>
 #include <kernel/paging.h>
-#include <kernel/list.h>
 #include <kernel/memory.h>
 
 /* FIXME: Changing any of these values may require changing
