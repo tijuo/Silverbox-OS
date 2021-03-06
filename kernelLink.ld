@@ -7,9 +7,9 @@ SECTIONS
   kVirtCode  = 0xC0800000;
   kVirtStart = 0xC0800000;
   kTcbStart =  0xC0000000;
-  kTcbEnd    = kTcbStart + 64*65536;
+  kTcbEnd    = kTcbStart + 128*65536;
 
-  kTcbTableSize   = kTcbEnd - kTcbStart;
+  kTcbTableSize = kTcbEnd - kTcbStart;
 
   kVirtToPhys = kPhysStart - kVirtStart;
   kPhysToVirt = kVirtStart - kPhysStart;

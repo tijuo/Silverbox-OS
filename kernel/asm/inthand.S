@@ -1,64 +1,64 @@
-[BITS 32]
+.code32
 
-%include "asm/context.inc"
+.include "asm/context.h"
 
-[section .text]
+.text
 
 IMPORT handleCPUException
 IMPORT timerInt
 IMPORT _syscall
 IMPORT handleIRQ
 
-%macro ECODE_CPU_EX_HANDLER 1
-  push ecx
-  mov ecx, [esp+4]
-  mov [esp+4], eax
-  mov [esp-7*4], ecx  ; Move error code out of the way (to be used in a future interrupt handler)
+.macro ECODE_CPU_EX_HANDLER err_code
+  push %ecx
+  mov 4(%esp), %ecx
+  mov %eax, 4(%esp)
+  mov %ecx, -28(%esp)  // Move error code out of the way (to be used in a future interrupt handler)
   ECODE_SAVE_STATE
-  sub  esp, 4
-  push %1
+  sub  $4, %esp
+  push $\err_code
 
   call handleCPUException
 
-  add esp, 8
+  add $8, %esp
   RESTORE_STATE
   iret
-%endmacro
+.endm
 
-%macro CPU_EX_HANDLER 1
+.macro CPU_EX_HANDLER int_num
   SAVE_STATE
-  push 0
-  push %1
+  push $0
+  push $\int_num
 
   call handleCPUException
 
-  add esp, 8
+  add $8, %esp
   RESTORE_STATE
   iret
-%endmacro
+.endm
 
-%macro INVALID_EX_HANDLER 1
+.macro INVALID_EX_HANDLER int_num
   SAVE_STATE
-  push 0xBAD1
-  push %1
+  push $0xBAD1
+  push $\int_num
 
   call handleCPUException
 
-  add esp, 8
+  add $8, %esp
   RESTORE_STATE
   iret
-%endmacro
+.endm
 
-%macro IRQ_HANDLER 1
+.macro IRQ_HANDLER irq_num
   SAVE_STATE
-  push %1
+  push $\irq_num
 
   call handleIRQ
 
-  add esp, 4
+  add $4, %esp
   RESTORE_STATE
   iret
-%endmacro
+.endm
 
 
 EXPORT intHandler0
@@ -121,13 +121,6 @@ EXPORT intHandler19
 EXPORT invalidIntHandler
   INVALID_EX_HANDLER 0
 
-;EXPORT irq0Handler
-;        mov     dword [kernelStack-4], 0x20
-
-;    push dword 0
-;    push dword 0x20
-;    jmp enterIrqHandler
-
 EXPORT irq1Handler
     IRQ_HANDLER 1
 
@@ -151,22 +144,6 @@ EXPORT irq7Handler
 
 EXPORT irq8Handler
     IRQ_HANDLER 8
-;    inc dword [0x91000]
-;    jnz .return
-;    inc dword [0x91004]
-;.return:
-;    push eax
-;    mov	al, 0x0C
-;    out 0x70, al
-;    in al, 0x71
-
-; Send acknowledgement to PICs
-
-;    mov al, 0x20
-;    out 0x20, al
-;    out 0xA0,al
-;    pop eax
-;    iret
 
 EXPORT irq9Handler
     IRQ_HANDLER 9

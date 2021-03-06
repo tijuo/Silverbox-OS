@@ -25,6 +25,17 @@
 #define getTid(tcb)			({ __typeof__ (tcb) _tcb=(tcb); (_tcb ? (_tcb - tcbTable) : NULL_TID); })
 #define getTcb(tid)			({ __typeof__ (tid) _tid=(tid); (_tid == NULL_TID ? NULL : &tcbTable[_tid]); })
 
+struct PendingExceptionMessage
+{
+  unsigned char subject;
+  unsigned char intNum;
+  tid_t who;
+  int errorCode;
+  int faultAddress;
+} __PACKED__;
+
+typedef struct PendingExceptionMessage pem_t;
+
 /* This assumes a uniprocessor system */
 
 /* Touching the data types of this struct may break the context switcher! */
@@ -40,6 +51,9 @@ struct ThreadControlBlock
   ExecutionState execState; // 48 bytes
   list_t receiverWaitQueue; // queue of threads waiting to receive a message from this thread
   list_t senderWaitQueue;   // queue of threads waiting to send a message to this thread
+  pem_t pendingExceptionMessage;
+  addr_t *extExecState;      // Pointer to 512 byte xsave registers
+  byte _resd[40];
 } __PACKED__;
 
 typedef struct ThreadControlBlock tcb_t;

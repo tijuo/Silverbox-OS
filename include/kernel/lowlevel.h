@@ -163,6 +163,91 @@ typedef struct
   dword userSS;
 } ExecutionState;
 
+typedef struct
+{
+  word fcw;
+  word fsw;
+  byte ftw;
+  byte _resd1;
+  word fop;
+  dword fpuIp;
+  word cs;
+  word _resd2;
+  dword fpu_dp;
+  word ds;
+  word _resd3;
+  dword _mxcsr;
+  dword mxcsv_mask;
+
+  byte mm0[10];
+  byte _resd4[6];
+
+  word mm1[10];
+  byte _resd5[6];
+
+  word mm2[10];
+  byte _resd6[6];
+
+  word mm3[10];
+  byte _resd7[6];
+
+  word mm4[10];
+  byte _resd8[6];
+
+  word mm5[10];
+  byte _resd9[6];
+
+  word mm6[10];
+  byte _resd10[6];
+
+  word mm7[10];
+  byte _resd11[6];
+
+  byte xmm0[16];
+  byte xmm1[16];
+  byte xmm2[16];
+  byte xmm3[16];
+  byte xmm4[16];
+  byte xmm5[16];
+  byte xmm6[16];
+  byte xmm7[16];
+  byte xmm8[16];
+  byte xmm9[16];
+  byte xmm10[16];
+  byte xmm11[16];
+  byte xmm12[16];
+  byte xmm13[16];
+  byte xmm14[16];
+  byte xmm15[16];
+  byte xmm16[16];
+
+  byte _resd12[48];
+  byte _avail[48];
+
+} XSaveState;
+
+typedef struct
+{
+  byte ymm0[16];
+  byte ymm1[16];
+  byte ymm2[16];
+  byte ymm3[16];
+  byte ymm4[16];
+  byte ymm5[16];
+  byte ymm6[16];
+  byte ymm7[16];
+  byte ymm8[16];
+  byte ymm9[16];
+  byte ymm10[16];
+  byte ymm11[16];
+  byte ymm12[16];
+  byte ymm13[16];
+  byte ymm14[16];
+  byte ymm15[16];
+  byte ymm16[16];
+
+} XSaveYMMState;
+
 extern void atomicInc( volatile void * );
 extern void atomicDec( volatile void *);
 extern int testAndSet( volatile void *, volatile int );
