@@ -1206,16 +1206,6 @@ void init( multiboot_info_t *info )
 
   // XXX: Release any pages tables used for discardable sections
 
-  // Release the pages for the TSS IO permission bitmap
-
-  pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap));
-
-  freePageFrame((paddr_t)(PFRAME_TO_ADDR(pte->base)));
-
-  pte = ADDR_TO_PTE((addr_t)EXT_PTR(ioPermBitmap) + PAGE_SIZE);
-
-  freePageFrame((paddr_t)PFRAME_TO_ADDR(pte->base));
-
   freePageFrame((paddr_t)k1To1PageTable);
 
   freePageFrame((paddr_t)(bootStackTop-PAGE_SIZE));
@@ -1223,6 +1213,8 @@ void init( multiboot_info_t *info )
   *(dword *)EXT_PTR(tssEsp0) = (dword)kernelStackTop;
 
   schedule();
+
+  // Unmap any unneeded mapped pages in the kernel's address space
 
   for(addr_t addr=(addr_t)0x0000; addr < (addr_t)largePageSize; addr += PAGE_SIZE)
   {

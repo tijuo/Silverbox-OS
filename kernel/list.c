@@ -140,6 +140,14 @@ static tcb_t *_listRemoveFromEnd(list_t *list, int isDelta, int atTail)
   assert(list);
   tid_t removedTid = atTail ? list->tailTid : list->headTid;
 
+  #if DEBUG
+  if(!list->headTid || !list->tailTid)
+    assert(list->headTid == NULL_TID && list->tailTid == NULL_TID);
+
+  if(list->headTid || list->tailTid)
+    assert(list->headTid != NULL_TID && list->tailTid != NULL_TID);
+  #endif
+
   if(removedTid != NULL_TID)
   {
     node_t *removedNode = &threadNodes[removedTid];

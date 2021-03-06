@@ -70,7 +70,10 @@ paddr_t allocPageFrame(void)
     if(freePageStackTop == freePageStack)
       RET_MSG(NULL_PADDR, "Kernel has no more available physical page frames.");
     else
+    {
+      assert(*(freePageStackTop-1) != 0x24e000);
       return *--freePageStackTop;
+    }
 }
 
 /** Release a 4 KB page frame.

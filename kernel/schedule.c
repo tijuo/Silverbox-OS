@@ -78,6 +78,8 @@ tcb_t *schedule(void)
     newThread = oldThread;
   }
 
+  assert(newThread != NULL);
+
   newThread->threadState = RUNNING;
   newThread->quantaLeft = newThread->priority + 1;
 
@@ -112,6 +114,11 @@ void switchStacks(ExecutionState *state)
 
       oldTcb->execState = *state;
       *state = newTcb->execState;
+
+      // Restore extended register state
+
+      if(newTcb->extExecState)
+        __asm__ __volatile__("xrstor (%0)" :: "a"(0xFFFFFFFF), "d"(0xFFFFFFFF), "m"(newTcb->extExecState));
     }
   }
 }
@@ -219,7 +226,7 @@ void timerInt(UNUSED_PARAM ExecutionState *state)
   if(node && node->delta)
     node->delta--;
 
-  for(; node && node->delta <= 0; node=node->next)
+  for(; node && node->delta <= 0; node=getHeadNode(&timerQueue))
   {
     wokenThread = deltaListPop(&timerQueue);
 

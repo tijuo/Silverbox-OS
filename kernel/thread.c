@@ -156,6 +156,7 @@ tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t
   thread->priority = NORMAL_PRIORITY;
   thread->rootPageMap = (dword)rootPmap;
   thread->waitTid = NULL_TID;
+  thread->extExecState = NULL;
 
   memset(&thread->execState, 0, sizeof thread->execState);
 
