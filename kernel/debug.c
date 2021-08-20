@@ -685,7 +685,7 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
 
 void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum, int errorCode )
 {
-  addr_t stackFramePtr;
+  dword stackFramePtr;
 
   kprintf( "Thread: 0x%x (TID: %d) ", thread, getTid(thread));
 
@@ -706,12 +706,12 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
       return;
     }
 
-    stackFramePtr = *(addr_t *)stackFramePtr;
+    stackFramePtr = *(dword *)stackFramePtr;
   }
   else
-    stackFramePtr = (addr_t)execState->ebp;
+    stackFramePtr = (dword)execState->ebp;
 
-  dump_stack(stackFramePtr, thread->rootPageMap);
+  dump_stack((addr_t)stackFramePtr, (addr_t)thread->rootPageMap);
 }
 
 #endif /* DEBUG */

@@ -95,7 +95,7 @@ int clearPhysPage( paddr_t phys )
   if(IS_ERROR(mapTemp(phys)))
     RET_MSG(E_FAIL, "Unable to map temporary page address.");
 
-  memset( (void *)TEMP_PAGEADDR, 0, PAGE_SIZE );
+  clearMemory( (void *)TEMP_PAGEADDR, PAGE_SIZE );
 
   unmapTemp();
   return E_OK;
@@ -365,10 +365,6 @@ static int accessPhys( paddr_t phys, void *buffer, size_t len, bool readPhys )
 
 static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bool read )
 {
-  addr_t read_addr;
-  addr_t write_addr;
-  paddr_t read_pdir;
-  paddr_t write_pdir;
   size_t addr_offset;
   size_t buffer_offset = 0;
   pte_t pte;
@@ -376,6 +372,12 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
 
   assert( buffer != NULL );
   assert( address != NULL );
+
+/*
+  addr_t read_addr;
+  addr_t write_addr;
+  paddr_t read_pdir;
+  paddr_t write_pdir;
 
   if( read )
   {
@@ -392,6 +394,7 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
     read_pdir = NULL_PADDR;
   }
 
+
   for( addr_offset=0; addr_offset < len;
       addr_offset = (len - addr_offset < PAGE_SIZE ? len : addr_offset + PAGE_SIZE) )
   {
@@ -403,16 +406,17 @@ static int accessMem( addr_t address, size_t len, void *buffer, paddr_t pdir, bo
 
       if( !isWritable(write_addr+addr_offset, write_pdir) )
         kprintf("0x%x is not writable in address space: 0x%llx\n", write_addr+addr_offset, write_pdir);
-#endif /* DEBUG */
+#endif / * DEBUG * /
 
       RET_MSG(E_FAIL, "Unable to perform memory operation.");
     }
   }
+*/
 
   while( len )
   {
     if( IS_ERROR(readPTE( address, &pte, pdir )) )
-      RET_MSG(E_FAIL, "Unable to to PTE for address");
+      RET_MSG(E_FAIL, "Unable to read PTE for address");
 
     addr_offset = address & (PAGE_SIZE - 1);
     bytes = (len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
@@ -462,8 +466,8 @@ int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t pdir )
 
   @param address The address in the address space to perform the read.
   @param len The length of the block to read.
-  @param buffer The buffer in the current address space that is used for the read.
-  @param pdir The physical address of the address space.
+  @param buffer The buffer to store the data read from address.
+  @param pdir The physical address of the root page map.
   @return E_OK on success. E_FAIL on failure.
  */
 

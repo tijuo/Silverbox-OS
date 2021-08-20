@@ -7,6 +7,8 @@
 #define IRQ_MSG                 0xF1
 #define EXIT_MSG                0xF2
 
+#define MSG_KERNEL  0x80000000
+
 struct ExceptionMessage
 {
   tid_t who;

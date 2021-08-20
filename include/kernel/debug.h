@@ -5,7 +5,7 @@
 
 #include <kernel/mm.h>
 #include <kernel/thread.h>
-#define  VIDMEM_START   0xB8000u
+#define  VIDMEM_START   (K1TO1_AREA + (0xB8000u-0xA0000u))
 
 #define PRINT_DEBUG(msg)      ({ kprintf("<'%s' %s: %d> %s", \
                               __FILE__, __func__, __LINE__, (msg)); })
@@ -16,6 +16,8 @@
 #define DECL_CALL_COUNTER(fname)		extern unsigned int fname ## _counter;
 #define CALL_COUNTER(fname)			unsigned int fname ## _counter;
 #define INC_COUNT()				__func__ _counter++
+
+#define BREAKPOINT()		asm volatile("xchgw %bx, %bx\n")
 
 void init_serial(void);
 int getDebugChar(void);
@@ -57,7 +59,7 @@ unsigned int getTimeDifference(void);
 
 #define assert(exp)  { __typeof__ (exp) _exp=(exp); \
                        if(_exp) ; \
-                       else printAssertMsg( #exp, __FILE__, __func__, __LINE__ ); }
+                       else { BREAKPOINT(); printAssertMsg( #exp, __FILE__, __func__, __LINE__ );} }
 
 #else
 

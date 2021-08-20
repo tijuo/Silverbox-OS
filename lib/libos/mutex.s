@@ -1,5 +1,5 @@
-  .file "mutex.s"
-  .text
+.file "mutex.s"
+.text
 
 .global mutex_lock
 .type	mutex_lock, @function
@@ -16,7 +16,7 @@ mutex_lock:
 mutex_unlock:
   push %ebp
   mov %esp, %ebp
-  mov $0, %eax
+  xor %eax, %eax
   jmp _mutex_op
 
 _mutex_op:

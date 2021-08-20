@@ -1,6 +1,6 @@
 include ../prefix.inc
 
-DIRS	=init rtc
+DIRS	=rtc
 
 .PHONY:	$(DIRS) $(DEF_PHONY)
 

@@ -3,6 +3,7 @@
 
 #include <types.h>
 
+void clearMemory(void *ptr, size_t len);
 void *memcpy( void *dest, const void *src, size_t count);
 void *memset( void *buffer, int c, size_t num);
 

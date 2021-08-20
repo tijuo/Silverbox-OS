@@ -45,9 +45,14 @@ mboot:
 EXPORT start
 //  eax has the mulitboot magic value
 //  ebx has multiboot data address
-  mov	$kBootStackTop, %esp
+
+  lea	kBootStack, %esp
+  add   $kVirtToPhys, %esp
+  add   PAGE_SIZE, %esp
   mov	%esp, %ebp
   cld
+
+// Save for main()
 
   push %eax
   push %ebx
@@ -55,10 +60,14 @@ EXPORT start
   lea kernelGDT, %ecx
   add $kVirtToPhys, %ecx
 
+// Load GDT
+
   push %ecx
   push $(KERNEL_GDT_LEN << 16)
   lgdt 2(%esp)
   add  $8, %esp
+
+ // Load valid linear addresses into the GDTR
 
   mov  $BOOT_DATA_SEL, %cx
   mov  %cx, %ds
@@ -72,7 +81,6 @@ EXPORT start
   ljmp $BOOT_CODE_SEL, $.reloadSel
 
 .reloadSel:
- // Load valid linear addresses into the GDTR
 
   cmp $mbootMagic, %eax
   jne .badMboot
@@ -83,6 +91,14 @@ EXPORT start
 
 .okMboot:
   call initPaging2
+
+/* Stack and base pointers point to 1:1 mapped addresses
+   Convert them to their kernel memory equivalents since the
+   1:1 mapped addresses will eventually be unmapped.
+*/
+
+  add $kPhysToVirt, %esp
+  add $kPhysToVirt, %ebp
 
   call init
   jmp  idle
@@ -110,22 +126,27 @@ initPaging2:
 
   xor %eax, %eax
   mov $1024, %ecx
-  mov $kPageDir, %edi
+  lea kPageDir, %edi
+  add $kVirtToPhys, %edi
   rep stosl
 
   mov $1024, %ecx
-  mov $kLowPageTab, %edi
+  lea kLowPageTab, %edi
+  add $kVirtToPhys, %edi
   rep stosl
 
   mov $1024, %ecx
-  mov $kPageTab, %edi
+  lea kPageTab, %edi
+  add $kVirtToPhys, %edi
   rep stosl
 
   mov $1024, %ecx
-  mov $k1to1PageTab, %edi
+  lea k1to1PageTab, %edi
+  add $kVirtToPhys, %edi
   rep stosl
 
-  mov $kLowPageTab, %ebx
+  lea kLowPageTab, %ebx
+  add $kVirtToPhys, %ebx
   add $4, %ebx
   mov $0x1000, %ecx		// Skip the first page (leave it as not present to catch NULL dereferences)
 
@@ -133,8 +154,10 @@ initPaging2:
   cmp $videoRamStart, %ecx
   jge  .mapVideoRam
 
+  // Do not allow low memory to be overwritten
+
   mov %ecx, %eax
-  or  $(PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT), %eax
+  or  $(PG_SUPERVISOR | PG_READ_ONLY | PG_PRESENT), %eax
   mov %eax, (%ebx)
 
   add $PAGE_SIZE, %ecx
@@ -143,7 +166,8 @@ initPaging2:
 
 .mapVideoRam:
   mov $videoRamStart, %ecx
-  mov $kLowPageTab, %ebx
+  lea kLowPageTab, %ebx
+  add $kVirtToPhys, %ebx
   mov $videoRamStart, %edx
   shr $12, %edx
   and $0x3FF, %edx
@@ -162,7 +186,8 @@ initPaging2:
   jmp .mapVideoRamLoop
 
 .mapKernel:
-  mov $kPageTab, %ebx
+  lea kPageTab, %ebx
+  add $kVirtToPhys, %ebx
   mov $kPhysStart, %esi
   mov $kVirtStart, %edi
   shr $12, %edi
@@ -184,13 +209,15 @@ initPaging2:
   jmp .mapKernelLoop
 
 .mapPDEs:
-  mov $kPageDir, %ebx
+  lea kPageDir, %ebx
+  add $kVirtToPhys, %ebx
 
   // Map page directory onto itself
 
   mov $0x3FF, %ecx
   lea (%ebx,%ecx,4), %edx
-  mov $kPageDir, %eax
+  lea kPageDir, %eax
+  add $kVirtToPhys, %eax
   or  $(PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT), %eax
   mov %eax, (%edx)
 
@@ -198,7 +225,8 @@ initPaging2:
 
   xor %ecx, %ecx
   lea (%ebx,%ecx,4), %edx
-  mov $kLowPageTab, %eax
+  lea kLowPageTab, %eax
+  add $kVirtToPhys, %eax
   or  $(PG_USER | PG_READ_WRITE | PG_PRESENT), %eax
   mov %eax, (%edx)
 
@@ -212,12 +240,14 @@ initPaging2:
   testl $PG_PRESENT, (%edx)
   jnz  .tablePresent
   xor  %edi, %edi
-  mov  $k1to1PageTab, %ebx
+  lea  k1to1PageTab, %ebx
+  add  $kVirtToPhys, %ebx
   jmp  .map1to1Kernel
 
 .tablePresent:
   mov $1, %edi
-  mov $kLowPageTab, %ebx
+  lea kLowPageTab, %ebx
+  add $kVirtToPhys, %ebx
 
 .map1to1Kernel:
   mov $kPhysStart, %ecx
@@ -250,7 +280,8 @@ initPaging2:
   jnz .setKPDE
 
 .map1to1KernelPDE:
-  mov  $k1to1PageTab, %eax
+  lea  k1to1PageTab, %eax
+  add $kVirtToPhys, %eax
   or   $(PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT), %eax
   mov  %eax, (%edx)
 
@@ -260,11 +291,13 @@ initPaging2:
   mov $kVirtStart, %ecx
   shr $22, %ecx
   lea (%ebx,%ecx,4), %edx
-  mov $kPageTab, %eax
+  lea kPageTab, %eax
+  add $kVirtToPhys, %eax
   or  $(PG_SUPERVISOR | PG_READ_WRITE | PG_PRESENT), %eax
   mov %eax, (%edx)
 
-  mov   $kPageDir, %eax
+  lea   kPageDir, %eax
+  add   $kVirtToPhys, %eax
   mov   %eax, %cr3
 
   mov   %cr4, %eax
@@ -283,7 +316,7 @@ initPaging2:
   lgdt 2(%esp)
   add  $8, %esp
 
-  mov   $KERNEL_DATA_SEL, %ax
+  mov   $KERNEL_DATA_SEL, %eax
   mov   %ax, %ds
   mov   %ax, %es
   mov   %ax, %fs
@@ -364,6 +397,7 @@ EXPORT gdtLen
 EXPORT tssLen
   .int KERNEL_TSS_LEN
 
+/*
 EXPORT initKrnlPDir
   .int kPageDir
 
@@ -375,6 +409,4 @@ EXPORT k1To1PageTable
 
 EXPORT bootStackTop
   .int kBootStackTop
-
-EXPORT kernelStackTop
-  .int kStackTop
+*/

@@ -10,7 +10,7 @@ DIRS	=syscall ostypes
 
 .PHONY:	all syscall ostypes
 
-all: libos.a
+all: libos.a libos_init.a
 
 libos.a: $(OBJ) $(AS_OBJ)
 	make -C ostypes/ all
@@ -18,6 +18,10 @@ libos.a: $(OBJ) $(AS_OBJ)
 	for dir in $(DIRS); do make -C $$dir; done
 	for dir in $(DIRS); do $(AR) $(ARFLAGS) $@ $$dir/*.o; done
 	$(AR) $(ARFLAGS) $@ *.o
+
+libos_init.a: libos.a
+	cp libos.a libos_init.a
+	ar -d libos_init.a sbrk.o
 
 include ../../Makefile.inc
 

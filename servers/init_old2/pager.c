@@ -29,10 +29,12 @@ int mapRegion(struct AddrSpace *addrSpace, addr_t virt, paddr_t phys, size_t pag
     return -1;
   }
 
+// pframe_t frame = (pframe_t)(phys >> 12);
+
   if(!findAddress(addrSpace, virt))
     print("Unable to find address that was just attached!\n");
 
-//  else if((flags & MEM_FLG_EAGER) && phys != NULL_PADDR && sys_map(addrSpace->physAddr, virt, (u32)(phys >> 12), pages, sysFlags) != 0)
+//  else if((flags & MEM_FLG_EAGER) && phys != NULL_PADDR && sys_map(addrSpace->physAddr, virt, &frame, pages, sysFlags) != (int)pages)
 //    return -1;
 
   if(phys != NULL_PADDR)

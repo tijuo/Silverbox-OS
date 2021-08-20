@@ -21,6 +21,7 @@ depend:
 	for i in $(DIRS); do make -C $$i depend; done
 
 clean:
+	rm -f libc/libc.a libos/libos.a
 	rm -f *.a
 	for i in $(DIRS); do make -C $$i clean; done
 	rm -rf *.o

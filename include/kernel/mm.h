@@ -26,15 +26,20 @@
 /* FIXME: Changing any of these values may require changing the
    asm code. */
 
-#define TEMP_PAGEADDR               ((addr_t)0xC0000)
-#define LAPIC_VADDR                 (TEMP_PAGEADDR + PAGE_SIZE)
+#define KMAP_AREA			((addr_t)0xF0000000)
+#define TEMP_PAGEADDR		    	KMAP_AREA
+#define LAPIC_VADDR                 	(TEMP_PAGEADDR + PAGE_SIZE)
 #define KERNEL_CLOCK		        (LAPIC_VADDR + PAGE_SIZE)
+
+#if DEBUG
+#define K1TO1_AREA			(KMAP_AREA + 0x100000)
+#endif /* DEBUG */
 
 #define INVALID_VADDR       	    ((addr_t)0xFFFFFFFF)
 #define INVALID_ADDR        	    ((addr_t)0xFFFFFFFF)
 
 #define INIT_SERVER_STACK_TOP	    ((addr_t)KERNEL_TCB_START)
-
+#define INIT_SERVER_STACK_SIZE      0x400000
 /** Aligns an address to the previous boundary (if not already aligned) */
 #define ALIGN_DOWN(addr, boundary)       ((addr_t)( (addr) & ~((boundary) - 1) ))
 
@@ -56,10 +61,10 @@
 #define ALIGN(addr, boundary)         ALIGN_UP(addr, boundary)
 
 /// Temporarily maps a physical page into the current address space
-#define mapTemp( phys )             kMapPage((addr_t)(TEMP_PAGEADDR), (phys), PAGING_RW)
+#define mapTemp( phys )             kMapPage((addr_t)TEMP_PAGEADDR, (phys), PAGING_RW)
 
 /// Unmaps the temporary page
-#define unmapTemp() 	            kUnmapPage((addr_t)(TEMP_PAGEADDR), NULL)
+#define unmapTemp() 	            kUnmapPage((addr_t)TEMP_PAGEADDR, NULL)
 
 HOT(int readPmapEntry(paddr_t pbase, int entry, void *buffer));
 HOT(int writePmapEntry(paddr_t pbase, int entry, void *buffer));

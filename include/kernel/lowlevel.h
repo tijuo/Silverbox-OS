@@ -330,6 +330,9 @@ extern const void * const kTcbTableSize;
 
 extern const void * const kVirtPageStack;
 
+extern const void * const kernelStacksTop;
+extern const void * const kernelStacksBottom;
+
 extern const unsigned int kernelGDT;
 extern const unsigned int kernelIDT;
 extern const unsigned int kernelTSS;
@@ -347,7 +350,7 @@ extern const unsigned int uDataSel;
 extern const unsigned int kTssSel;
 
 extern const unsigned int kernelStack;
-extern const unsigned int tssEsp0;
+extern unsigned int tssEsp0;
 extern const unsigned int kVirtToPhys;
 extern const unsigned int kPhysToVirt;
 extern const unsigned int VPhysMemStart;

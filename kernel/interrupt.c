@@ -26,7 +26,7 @@ u32 pendingIrqBitmap[IRQ_BITMAP_COUNT];
    @param irqNum The IRQ number to re-enable.
 */
 
-void endIRQ(int irqNum)
+void endIRQ(unsigned int irqNum)
 {
   enableIRQ(irqNum);
   sendEOI();
@@ -38,7 +38,7 @@ void endIRQ(int irqNum)
    @param irqnum The IRQ number.
 */
 
-int registerIrq(tcb_t *thread, int irqNum)
+int registerIrq(tcb_t *thread, unsigned int irqNum)
 {
   assert(thread != NULL);
   assert(isValidIRQ(irqNum));
@@ -59,7 +59,7 @@ int registerIrq(tcb_t *thread, int irqNum)
    @param irqnum The IRQ number.
 */
 
-int unregisterIrq(int irqNum)
+int unregisterIrq(unsigned int irqNum)
 {
   assert(isValidIRQ(irqNum));
 
@@ -77,7 +77,7 @@ int unregisterIrq(int irqNum)
    @param state The saved execution state of the processor before the exception occurred.
 */
 
-void handleIRQ(int irqNum, ExecutionState *state)
+void handleIRQ(unsigned int irqNum, ExecutionState *state)
 {
   assert(state != NULL);
 
@@ -145,7 +145,7 @@ int handleHeapPageFault(int errorCode)
         RET_MSG(E_FAIL, "Unable to allocate page frame.");
       else if(IS_ERROR(kMapPage(faultAddr, pageFrame, PAGING_RW | PAGING_SUPERVISOR)))
       {
-        kprintf("%x -> %x.\n", faultAddr, PFRAME_TO_ADDR(pageFrame));
+        //kprintf("%x -> %x.\n", faultAddr, PFRAME_TO_ADDR(pageFrame));
         freePageFrame(pageFrame);
         RET_MSG(E_FAIL, "Unable to map page");
       }
@@ -177,7 +177,7 @@ int handleHeapPageFault(int errorCode)
 */
 
 
-void handleCPUException(int exNum, int errorCode, ExecutionState *state)
+void handleCPUException(unsigned int exNum, int errorCode, ExecutionState *state)
 {
   tcb_t *tcb = currentThread;
 
@@ -186,7 +186,7 @@ void handleCPUException(int exNum, int errorCode, ExecutionState *state)
   // Handle page faults due to non-present pages in kernel heap
 
   if(exNum == PAGE_FAULT_INT && !IS_ERROR(handleHeapPageFault(errorCode)))
-    return;
+      return;
 
   #if DEBUG
 
@@ -194,6 +194,17 @@ void handleCPUException(int exNum, int errorCode, ExecutionState *state)
   {
     if( tcb == initServerThread )
     {
+      if(exNum == PAGE_FAULT_INT)
+      {
+        addr_t faultAddress = (addr_t)getCR2();
+
+        if(faultAddress >= INIT_SERVER_STACK_TOP - INIT_SERVER_STACK_SIZE && faultAddress < INIT_SERVER_STACK_TOP && (errorCode & PAGING_PRES) == 0
+           && kMapPage(faultAddress, allocPageFrame(), PAGING_RW | PAGING_USER) == 0)
+        {
+          return;
+        }
+      }
+
       kprintf("Exception for initial server. System Halted.\n");
       dump_regs( tcb, state, exNum, errorCode );
       __asm__("hlt\n");
@@ -212,13 +223,14 @@ void handleCPUException(int exNum, int errorCode, ExecutionState *state)
     return;
   }
 
-  pem_t message = {
-    .subject      = EXCEPTION_MSG,
+  struct ExceptionMessage message = {
     .intNum       = exNum,
     .who          = getTid(tcb),
     .errorCode    = errorCode,
     .faultAddress = exNum == 14 ? getCR2() : 0
   };
+
+  //kprintf("Sending exception %d message (err code: 0x%x, fault addr: 0x%x)\n", exNum, errorCode, exNum == 14 ? getCR2() : 0);
 
 /*
   if(state->cs == 0x08)
@@ -227,7 +239,7 @@ void handleCPUException(int exNum, int errorCode, ExecutionState *state)
     dump_regs( tcb, state, exNum, errorCode );
   }
 */
-  if(IS_ERROR(sendExceptionMessage(tcb, INIT_SERVER_TID, &message)))
+  if(IS_ERROR(sendKernelMessage(INIT_SERVER_TID, EXCEPTION_MSG, &message, sizeof message)))
   {
     kprintf("Unable to send exception message to intial server\n");
     dump_regs( tcb, state, exNum, errorCode );

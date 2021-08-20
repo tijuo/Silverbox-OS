@@ -11,7 +11,7 @@ SECTIONS
 
   kTcbTableSize = kTcbEnd - kTcbStart;
 
-  kVirtToPhys = kPhysStart - kVirtStart;
+  kVirtToPhys = kPhysStart + ~kVirtStart + 1;
   kPhysToVirt = kVirtStart - kPhysStart;
   VPhysMemStart = 0x00000000;
 
@@ -57,6 +57,10 @@ SECTIONS
     *(.bss)
     *(.COMMON)
     . = ALIGN(4096);
+    kernelStacksBottom = .;
+    *(.stacks)
+    . = ALIGN(4096);
+    kernelStacksTop = .;
   }
 
   kEnd = ALIGN(4096);

@@ -1,93 +1,95 @@
-#include <os/mutex.h>
+#include <os/services.h>
 #include <os/syscalls.h>
 #include <oslib.h>
+#include <stdlib.h>
+#include <stdio.h>
 
-extern void print(const char *);
-extern void printN(const char *, int);
-extern void printInt(int);
-extern void printHex(int);
-extern void printC(char);
-
-/*
-void printC( char c )
+int main(void)
 {
-  char volatile *vidmem = (char *)(0xB8000 + 160 * 4);
-  static int i=0;
-
-  while(mutex_lock(&print_lock))
-    sys_wait(0);
-
-  if( c == '\n' )
-    i += 160 - (i % 160);
+  if(registerName("receiver") != 0)
+    fprintf(stderr, "Unable to register name: receiver\n");
   else
+    fprintf(stderr, "Receiver registered successfully.\n");
+
+  tid_t senderTid;
+
+  for(int i=0; i < 10; i++)
   {
-    vidmem[i++] = c;
-    vidmem[i++] = 7;
+    senderTid = lookupName("sender");
+
+    if(senderTid != NULL_TID)
+      break;
+
+    sys_wait(500);
   }
 
-  mutex_unlock(&print_lock);
-}
+  if(senderTid == NULL_TID)
+  {
+    fprintf(stderr, "Unable to locate sender.\n");
+    return EXIT_FAILURE;
+  }
 
-void printN( const char *str, int n )
-{
-  for( int i=0; i < n; i++, str++ )
-    printC(*str);
-}
+  size_t bufLen = 4096;
+  unsigned char *buf = malloc(bufLen);
 
-void print( const char *str )
-{
-  for(; *str; str++ )
-    printC(*str);
-}
+  if(!buf)
+  {
+    fprintf(stderr, "Unable to allocate memory for buffer\n");
+    return EXIT_FAILURE;
+  }
 
-void printInt( int n )
-{
-  print(toIntString(n));
-}
-
-void printHex( int n )
-{
-  print(toHexString(n));
-}
-*/
-
-int main(int argc, char *argv[])
-{
   msg_t msg =
   {
     .sender = ANY_SENDER,
+    .buffer = buf,
+    .bufferLen = 4096,
+    .flags = 0
   };
 
   while(1)
   {
-    if(sys_receive(&msg, 0) == ESYS_OK)
+    if(sys_receive(&msg) == ESYS_OK)
     {
-      print("receiver: Received a message with subject "), printInt(msg.subject), print(" from "), printInt(msg.sender), print("\n");
+      fprintf(stderr, "Received a message (subj: %d) from tid: %d of length %d bytes\n", msg.subject, msg.sender, msg.bytesTransferred);
 
-      if(msg.sender == 1026)
+      if(msg.sender == senderTid && msg.bytesTransferred == 20)
       {
-        for(int i=0; i < 5; i++)
-        {
-          print("0x");
-          printHex(msg.data.i32[i]);
-          print(" ");
-        }
-        print("\n");
-        break;
+        int *ptr = (int *)buf;
+
+        fprintf(stderr, "Message data:");
+
+        for(size_t i=0; i < 5; i++)
+          fprintf(stderr, " 0x%x", ptr[i]);
+
+        fprintf(stderr, "\n");
       }
-      else
-        msg.sender = ANY_SENDER;
+      else if(msg.sender == senderTid && msg.bytesTransferred == 4096)
+      {
+        for(size_t i=0; i < 4096; i++)
+        {
+          if(buf[i] != (unsigned char)(i % 256))
+          {
+            fprintf(stderr, "Invalid data sent.\n");
+            free(buf);
+            break;
+          }
+        }
+        fprintf(stderr, "Data received successfully.\n");
+      }
+
     }
     else
       sys_wait(300);
+
 /*
     else
     {
-      print("Error. Unable to receive message");
+      fprintf(stderr, "Error. Unable to receive message\n");
       return 1;
     }
 */
   }
 
+  free(buf);
   return 0;
 }

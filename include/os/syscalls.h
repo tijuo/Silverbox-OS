@@ -7,40 +7,39 @@
 
 #define SYSCALL_INT             0x40
 
-#define SYS_EXIT		        0
-#define SYS_WAIT		        1
-#define SYS_SEND		        2
-#define SYS_RECEIVE		        3
-#define SYS_SEND_WAIT		    4
-#define SYS_RECEIVE_WAIT	    5
-#define SYS_CALL		        6
-#define SYS_CALL_WAIT		    7
-#define SYS_MAP			        8
-#define SYS_UNMAP		        9
-#define SYS_CREATE_THREAD	    10
-#define SYS_DESTROY_THREAD	    11
-#define SYS_READ_THREAD		    12
-#define SYS_UPDATE_THREAD	    13
-#define SYS_EOI			        14
-#define SYS_IRQ_WAIT		    15
-#define SYS_BIND_IRQ		    16
-#define SYS_UNBIND_IRQ		    17
+#define SYS_EXIT		        0u
+#define SYS_WAIT		        1u
+#define SYS_SEND		        2u
+#define SYS_RECEIVE		        3u
+#define SYS_CALL		        4u
+#define SYS_MAP			        5u
+#define SYS_UNMAP		        6u
+#define SYS_CREATE_THREAD	    7u
+#define SYS_DESTROY_THREAD	    8u
+#define SYS_READ_THREAD		    9u
+#define SYS_UPDATE_THREAD	    10u
+#define SYS_EOI			        11u
+#define SYS_IRQ_WAIT		    12u
+#define SYS_BIND_IRQ		    13u
+#define SYS_UNBIND_IRQ		    14u
 
-#define PM_PRESENT              0x01
-#define PM_NOT_PRESENT          0
-#define PM_READ_ONLY            0
-#define PM_READ_WRITE           0x02
-#define PM_NOT_CACHED           0x10
-#define PM_WRITE_THROUGH        0x08
-#define PM_NOT_ACCESSED         0
-#define PM_ACCESSED             0x20
-#define PM_NOT_DIRTY            0
-#define PM_DIRTY                0x40
-#define PM_LARGE_PAGE           0x80
-#define PM_INVALIDATE           0x80000000
+#define PM_PRESENT              0x01u
+#define PM_NOT_PRESENT          0u
+#define PM_READ_ONLY            0u
+#define PM_READ_WRITE           0x02u
+#define PM_NOT_CACHED           0x10u
+#define PM_WRITE_THROUGH        0x08u
+#define PM_NOT_ACCESSED         0u
+#define PM_ACCESSED             0x20u
+#define PM_NOT_DIRTY            0u
+#define PM_DIRTY                0x40u
+#define PM_LARGE_PAGE           0x80u
+#define PM_OVERWRITE		0x20000000u
+#define PM_ARRAY		0x40000000u
+#define PM_INVALIDATE           0x80000000u
 
-#define PRIV_SUPER			    0
-#define PRIV_PAGER			    1
+#define PRIV_SUPER			    0u
+#define PRIV_PAGER			    1u
 
 #define ESYS_OK			     	 0
 #define ESYS_ARG		    	-1
@@ -52,22 +51,30 @@
 
 #define ANY_SENDER		        NULL_TID
 
-#define TF_STATUS		        1
-#define TF_PRIORITY		        2
-#define TF_REG_STATE		    4
-#define TF_PMAP			        8
+#define TF_STATUS		        1u
+#define TF_PRIORITY		        2u
+#define TF_REG_STATE		    	4u
+#define TF_PMAP			        8u
+#define TF_EXT_REG_STATE		16u
 
-#define SYSCALL_TID_OFFSET      16
-#define SYSCALL_SUBJ_OFFSET     8
-#define SYSCALL_TID_MASK        0xFFFF0000
-#define SYSCALL_SUBJ_MASK       0xFF00
-#define SYSCALL_RET_MASK        0xFF
-#define SYSCALL_CALL_MASK       0xFF
+#define SYSCALL_TID_OFFSET      16u
+#define SYSCALL_SUBJ_OFFSET     8u
+#define SYSCALL_NUM_OFFSET	0u
+#define SYSCALL_TID_MASK        0xFFFF0000u
+#define SYSCALL_SUBJ_MASK       0xFF00u
+#define SYSCALL_RET_MASK        0xFFu
+#define SYSCALL_CALL_MASK       0xFFu
+#define SYSCALL_NUM_MASK	SYSCALL_CALL_MASK
+
+#define MSG_NOBLOCK         1
+#define MSG_SYSTEM          2
+#define MSG_CALL            4
+#define MSG_KERNEL  0x80000000
 
 typedef struct Tcb
 {
-  int priority;
-  int status;
+  unsigned int priority;
+  unsigned int status;
   paddr_t rootPageMap;
   tid_t waitTid;
 
@@ -83,7 +90,11 @@ typedef struct Tcb
     dword esi;
     dword eip;
     dword eflags;
+    word  cs;
+    word  ss;
   } state;
+  void *extRegState;
+
 } thread_info_t;
 
 #ifdef __cplusplus
@@ -92,21 +103,21 @@ extern "C" {
 #endif /* __cplusplus */
 
 void sys_exit(int code);
-int sys_send(const msg_t *msg, int block);
-int sys_call(const msg_t *inMsg, msg_t *outMsg, int block);
-int sys_receive(msg_t *msg, int block);
+int sys_send(msg_t *msg);
+int sys_call(msg_t *inMsg, msg_t *outMsg);
+int sys_receive(msg_t *msg);
 int sys_wait(int timeout);
-int sys_map(u32 rootPmap, addr_t vaddr, pframe_t pframe, size_t numPages, int flags);
-int sys_unmap(u32 rootPmap, addr_t vaddr, size_t numPages);
-tid_t sys_create_thread(tid_t tid, addr_t entry, u32 rootPmap, addr_t stackTop);
+int sys_map(paddr_t *rootPmap, void *vaddr, pframe_t *pframe, int numPages, unsigned int flags);
+int sys_unmap(paddr_t *rootPmap, void *vaddr, int numPages, pframe_t *unmappedFrames);
+tid_t sys_create_thread(tid_t tid, void *entry, paddr_t *rootPmap, void *stackTop);
 int sys_destroy_thread(tid_t tid);
-int sys_read_thread(tid_t tid, int flags, thread_info_t *info);
-int sys_update_thread(tid_t tid, int flags, thread_info_t *info);
-int sys_bind_irq(tid_t tid, int irqNum);
-int sys_unbind_irq(int irqNum);
-int sys_eoi(int irqNum);
-int sys_wait_irq(int irqNum);
-int sys_poll_irq(int irqNum);
+int sys_read_thread(tid_t tid, unsigned int flags, thread_info_t *info);
+int sys_update_thread(tid_t tid, unsigned int flags, thread_info_t *info);
+int sys_bind_irq(tid_t tid, unsigned int irqNum);
+int sys_unbind_irq(unsigned int irqNum);
+int sys_eoi(unsigned int irqNum);
+int sys_wait_irq(unsigned int irqNum);
+int sys_poll_irq(unsigned int irqNum);
 
 #ifdef __cplusplus
 };

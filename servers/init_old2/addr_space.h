@@ -87,11 +87,11 @@ struct Executable
   struct MemRegion bssRegion;
 };
 
-void initAddrSpace(struct AddrSpace *addrSpace, paddr_t physAddr);
+void initAddrSpace(struct AddrSpace *addrSpace, paddr_t *physAddr);
 void destroyAddrSpace(struct AddrSpace *addrSpace);
 int addAddrSpace(struct AddrSpace *addrSpace);
-struct AddrSpace *lookupPageMap(paddr_t physAddr);
-int removeAddrSpace(paddr_t physAddr);
+struct AddrSpace *lookupPageMap(paddr_t *physAddr);
+int removeAddrSpace(paddr_t *physAddr);
 int attachTid(struct AddrSpace *addrSpace, tid_t tid);
 int detachTid(tid_t tid);
 struct AddrSpace *lookupTid(tid_t tid);

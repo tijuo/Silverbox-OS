@@ -3,9 +3,7 @@
 #include <string.h>
 //#include <os/dev_interface.h>
 // #include <os/services.h>
-#include <os/console.h>
-
-extern int printChar(char);
+//#include <os/console.h>
 
 int fputc(int c, FILE *stream)
 {
@@ -42,7 +40,8 @@ int fputc(int c, FILE *stream)
   }
   else
   {
-    ; // put the raw char
+    if(stream == stderr || stream == stdout)
+      asm("out %%al, %%dx\n" :: "d"(0xE9), "a"((unsigned char)c));
   }
 /*
   if( stream == stdout || stream == stderr )

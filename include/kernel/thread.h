@@ -5,6 +5,7 @@
 #include <kernel/list_struct.h>
 #include <kernel/mm.h>
 #include <kernel/lowlevel.h>
+#include <os/msg/message.h>
 
 #define MAX_THREADS			65536
 
@@ -22,19 +23,10 @@
 
 #define GET_TID_START			1024u
 
+#define KERNEL_STACK_SIZE		2048
+
 #define getTid(tcb)			({ __typeof__ (tcb) _tcb=(tcb); (_tcb ? (_tcb - tcbTable) : NULL_TID); })
 #define getTcb(tid)			({ __typeof__ (tid) _tid=(tid); (_tid == NULL_TID ? NULL : &tcbTable[_tid]); })
-
-struct PendingExceptionMessage
-{
-  unsigned char subject;
-  unsigned char intNum;
-  tid_t who;
-  int errorCode;
-  int faultAddress;
-} __PACKED__;
-
-typedef struct PendingExceptionMessage pem_t;
 
 /* This assumes a uniprocessor system */
 
@@ -44,16 +36,19 @@ typedef struct PendingExceptionMessage pem_t;
 struct ThreadControlBlock
 {
   dword rootPageMap;
-  unsigned char quantaLeft;
+  unsigned char quantaLeft : 7;
+  unsigned char waitForKernelMsg : 1;
   unsigned char threadState : 4;
   unsigned char priority : 4;
   tid_t waitTid;
   ExecutionState execState; // 48 bytes
   list_t receiverWaitQueue; // queue of threads waiting to receive a message from this thread
   list_t senderWaitQueue;   // queue of threads waiting to send a message to this thread
-  pem_t pendingExceptionMessage;
   addr_t *extExecState;      // Pointer to 512 byte xsave registers
-  byte _resd[40];
+  addr_t *kernelStack;
+  msg_t *pendingMessage;
+  msg_t *responseMessage;
+  byte _resd[48];
 } __PACKED__;
 
 typedef struct ThreadControlBlock tcb_t;
@@ -65,6 +60,11 @@ int sleepThread( tcb_t *thread, int msecs );
 int startThread( tcb_t *thread );
 int pauseThread( tcb_t *thread );
 int sysYield( tcb_t *thread );
+addr_t allocateKernelStack(void);
+void releaseKernelStack(void *stack);
+int saveAndSwitchContext(tcb_t *newThread);
+int _saveAndSwitchContext(tcb_t *oldThread, tcb_t *newThread);
+void switchContext(tcb_t *newThread);
 
 extern tcb_t *initServerThread;
 extern tcb_t *initPagerThread;

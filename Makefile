@@ -4,7 +4,7 @@ include prefix.inc
 
 .SILENT :
 
-DIRS	=lib apps kernel
+DIRS	=lib apps kernel servers
 
 all:	$(DIRS)
 

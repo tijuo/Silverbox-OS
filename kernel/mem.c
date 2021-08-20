@@ -13,6 +13,24 @@ static void freeUnusedHeapPages(void);
 
 addr_t heapEnd = NULL;
 
+char kPageDir[PAGE_SIZE] __ALIGNED__(PAGE_SIZE);
+char kPageTab[PAGE_SIZE] __ALIGNED__(PAGE_SIZE);
+char kMapAreaPTab[PAGE_SIZE] __ALIGNED__(PAGE_SIZE);
+
+void clearMemory(void *ptr, size_t len)
+{
+#if DEBUG
+  if((size_t)ptr % 4 != 0 || len % 4 != 0)
+  {
+    kprintf("clearMemory(): Start address (0x%x) must have 4-byte alignment and length (%d)must be divisible by 4. Using memset() instead...\n", ptr, len);
+    memset(ptr, 0, len);
+    return;
+  }
+#endif
+  asm("xor %%eax, %%eax\n"
+      "rep stosl\n" :: "c"(len / 4), "D"(ptr) : "memory");
+}
+
 void *memset(void *ptr, int value, size_t num)
 {
   char *p = (char *)ptr;

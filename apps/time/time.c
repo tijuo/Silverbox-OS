@@ -1,20 +1,22 @@
 #include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <os/syscalls.h>
+#include <os/msg/rtc.h>
+#include <oslib.h>
+#include <os/services.h>
 
-extern void print(const char *);
-extern void printInt(int);
-
-int main(int argc, char *argv[])
+int main(void)
 {
   time_t t;
 
-  print("\n\n\n\n\n\nAbout to get the time.\n");
-  sys_wait(1000);
+  fprintf(stderr, "Waiting for the time server...\n");
+
+  while(lookupName(RTC_NAME) == NULL_TID)
+    sys_wait(500);
 
   time(&t);
-  print("The current time is: ");
-  print(ctime(&t));
-  print("\n");
+  fprintf(stderr, "The current time is: %s\n", ctime(&t));
 
-  return 0;
+  return EXIT_SUCCESS;
 }

@@ -22,9 +22,9 @@ IMPORT switchStacks
     push %esi
     push %edi
 
-    mov   $KERNEL_DATA_SEL, %ax
-    mov   %ax, %ds
-    mov   %ax, %es
+    mov   $KERNEL_DATA_SEL, %eax
+    mov   %eax, %ds
+    mov   %eax, %es
 
     push  %esp		// Pass the stack pointer to the handler
 .endm

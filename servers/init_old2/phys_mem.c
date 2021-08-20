@@ -57,7 +57,9 @@ static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys)
   if(len > 0xE00000) // Unable to handle larger sizes due to location of physMap
     return -1;
 
-  if(sys_map(NULL, (addr_t)physMap, phys >> 12, numPages, PM_READ_WRITE) != ESYS_OK)
+  pframe_t frame = (pframe_t)(phys >> 12);
+
+  if(sys_map(NULL, (void *)physMap, &frame, numPages, PM_READ_WRITE) != (int)numPages)
     return -1;
 
   if( readPhys )
@@ -65,7 +67,7 @@ static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys)
   else
     memcpy((void *)(physMap + offset), buffer, len);
 
-  sys_unmap(NULL, (addr_t)physMap, numPages);
+  sys_unmap(NULL, (void *)physMap, numPages);
 
   return 0;
 }

@@ -32,6 +32,7 @@ tcb_t *detachRunQueue(tcb_t *thread);
 tcb_t *schedule(void)
 {
   int priority;
+  int lowestPriority = LOWEST_PRIORITY;
   tcb_t *newThread = NULL;
   tcb_t *oldThread = currentThread;
 
@@ -43,9 +44,12 @@ tcb_t *schedule(void)
   {
     if(oldThread->threadState == RUNNING)
       oldThread->threadState = READY;
+
+    if(oldThread->threadState == READY)
+      lowestPriority = oldThread->priority;
   }
 
-  for(priority=HIGHEST_PRIORITY; priority >= LOWEST_PRIORITY; priority--)
+  for(priority=HIGHEST_PRIORITY; priority >= lowestPriority; priority--)
   {
     if(!isListEmpty(&runQueues[priority]))
     {
@@ -80,11 +84,77 @@ tcb_t *schedule(void)
 
   assert(newThread != NULL);
 
+
   newThread->threadState = RUNNING;
   newThread->quantaLeft = newThread->priority + 1;
 
   return newThread;
 }
+
+void switchStacks(ExecutionState *state)
+{
+  tcb_t *oldTcb = currentThread;
+
+  assert(state != NULL);
+
+  if(!oldTcb)
+    return;
+
+  if(oldTcb->threadState != RUNNING || !oldTcb->quantaLeft)
+  {
+    tcb_t *newTcb = schedule();
+
+    if(newTcb != oldTcb && newTcb) // if switching to a new thread
+    {
+//      kprintf("switchStacks: %d -> %d\n", getTid(oldTcb), getTid(newTcb));
+
+      // Switch to the new address space
+
+      if((oldTcb->rootPageMap & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
+        asm volatile("mov %0, %%cr3" :: "r"(newTcb->rootPageMap));
+
+      if(oldTcb->kernelStack)
+        _saveAndSwitchContext(oldTcb, newTcb);
+      else
+      {
+        oldTcb->execState = *state;
+
+        if(newTcb->extExecState)
+          asm volatile("xrstor (%0)" :: "a"(0xFFFFFFFF), "d"(0xFFFFFFFF), "m"(newTcb->extExecState));
+
+        if(newTcb->kernelStack)
+          switchContext(newTcb);
+        else
+          *state = newTcb->execState;
+
+        //switchContext(newTcb);
+      }
+    }
+  }
+  else if(oldTcb->kernelStack)
+  {
+    addr_t *oldStack = *((addr_t **)oldTcb->kernelStack);
+
+    if(!oldStack)
+    {
+      //kprintf("switchStacks: Releasing kernel stack for tid: %d\n", getTid(oldTcb));
+      releaseKernelStack(oldTcb->kernelStack);
+      oldTcb->kernelStack = NULL;
+
+     // XXX: This won't work because an exception would result in the old state being placed back onto the stack
+
+     // *state = oldTcb->execState; // it's possible that a system call modified the thread's state in the tcb
+                                    // so, load the updated values
+    }
+    else
+    {
+      switchContext(oldTcb);
+      //kprintf("switchStacks: %d Returning to kernel mode\n", getTid(oldTcb));
+      //BREAKPOINT();
+    }
+  }
+}
+
 
 /**
   Switch to a new stack (and thus perform a context switch to a new thread),
@@ -93,27 +163,87 @@ tcb_t *schedule(void)
   @param The saved execution state of the processor.
  */
 
+/*
 void switchStacks(ExecutionState *state)
 {
-  assert(state != NULL);
-  // No need to switch stacks if going back into kernel code
-
-  if(state->cs == KCODE)
-    return;
-
   tcb_t *oldTcb = currentThread;
 
-  if((oldTcb && (oldTcb->threadState != RUNNING || !oldTcb->quantaLeft)))
+  assert(state != NULL);
+
+  // Do not switch stacks if the scheduler hasn't been initialized yet.
+
+  if(!oldTcb)
+    return;
+
+  if(oldTcb->threadState != RUNNING || !oldTcb->quantaLeft)
   {
     tcb_t *newTcb = schedule();
 
-    if(newTcb && newTcb != oldTcb)
+    if(newTcb != oldTcb && newTcb) // if switching to a new thread
     {
-      if((oldTcb->rootPageMap & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
-        __asm__ __volatile__("mov %0, %%cr3" :: "r"(newTcb->rootPageMap));
+      kprintf("%d -> %d\n", getTid(oldTcb), getTid(newTcb));
 
-      oldTcb->execState = *state;
-      *state = newTcb->execState;
+      // Switch to the new address space
+
+      if((oldTcb->rootPageMap & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
+        asm volatile("mov %0, %%cr3" :: "r"(newTcb->rootPageMap));
+
+      if(state->cs == KCODE) // old thread was running in kernel mode (due to an exception while handling a system call, for example)
+      {
+        // Save the state to the stack, and have the old thread claim this stack
+       // dword oldStack;
+       // asm volatile("lea 4(%%ebp), %0" : "=r"(oldStack));
+
+        oldTcb->kernelStack = ((addr_t *)state) - 2;//oldStack;
+        kprintf("Saving state to kernel stack (0x%x) for tid: %d\n", oldTcb->kernelStack, getTid(oldTcb));
+
+        if(newTcb->kernelStack) // kernel->kernel context switch (just load the new kernel stack), this doesn't continue in this function
+        {
+          kprintf("1. Switching to %d's kernel stack at 0x%x\n", getTid(newTcb), newTcb->kernelStack);
+          asm volatile("mov %0, %%esp\nret" :: "r"(newTcb->kernelStack));
+        }
+        else // kernel->user context switch (create a new kernel stack for all subsequent user->kernel mode switches)
+        {
+          // Restore extended register state
+
+          if(newTcb->extExecState)
+            __asm__ __volatile__("xrstor (%0)" :: "a"(0xFFFFFFFF), "d"(0xFFFFFFFF), "m"(newTcb->extExecState));
+
+          tssEsp0 = (dword)allocateKernelStack();
+          kprintf("Setting tss to 0x%x\n", tssEsp0);
+          assert(tssEsp0 != 0);
+          ExecutionState *newState = (ExecutionState *)tssEsp0;
+
+          newState -=1;
+          *newState = newTcb->execState;
+
+          dword *ptr = (dword *)newState;
+          dword returnAddr;
+          *(ptr-1) = (dword)ptr;
+          ptr -= 2;
+
+          // *(ptr-2) = (dword)(((dword*)state)-1);
+
+          // Copy the return address into this new stack
+
+          asm volatile("mov 4(%%ebp), %0" : "=r"(returnAddr));
+          *ptr = returnAddr;
+          asm volatile("mov %0, %%esp\nret" :: "m"(ptr));
+        }
+      }
+      else // old thread was running in user mode
+      {
+        // Save the state to the thread's TCB
+        oldTcb->execState = *state;
+
+        if(newTcb->kernelStack) // user->kernel context switch (just load the new kernel stack), this doesn't continue in this function
+        {
+          kprintf("2. Switching to %d's kernel stack at 0x%x\n", getTid(newTcb), newTcb->kernelStack);
+          asm volatile("mov %0, %%esp\nret" :: "r"(newTcb->kernelStack));
+        }
+        else // user->user context switch (replace the old execution state on the kernel stack with the new state)
+          *state = newTcb->execState;
+      }
 
       // Restore extended register state
 
@@ -121,7 +251,19 @@ void switchStacks(ExecutionState *state)
         __asm__ __volatile__("xrstor (%0)" :: "a"(0xFFFFFFFF), "d"(0xFFFFFFFF), "m"(newTcb->extExecState));
     }
   }
+  else if(oldTcb->kernelStack)
+  {
+    if(state->cs == UCODE)
+    {
+      kprintf("Releasing kernel stack for tid: %d\n", getTid(oldTcb));
+      releaseKernelStack(oldTcb->kernelStack);
+      oldTcb->kernelStack = NULL;
+      *state = oldTcb->execState; // it's possible that a system call modified the thread's state in the tcb
+                                  // so, load the updated values
+    }
+  }
 }
+*/
 
 /**
     Adjust the priority level of a thread.

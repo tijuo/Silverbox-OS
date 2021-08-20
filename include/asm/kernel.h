@@ -43,11 +43,12 @@ IMPORT kPhysToVirt
 IMPORT kVirtToPhys
 IMPORT VPhysMemStart
 
-.equ kStackTop,      0xA0000
+/*
 .equ kBootStackTop,  0x9F000
 .equ kPageDir,       0x90000
 .equ kLowPageTab,    0x91000
 .equ kPageTab,       0x92000
 .equ k1to1PageTab,   0x93000
+*/
 
 .endif

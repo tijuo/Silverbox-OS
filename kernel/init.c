@@ -25,7 +25,6 @@
 #define BIOS_ROM            0xC0000
 #define EXTENDED_MEMORY     0x100000
 
-#define KERNEL_STACK_SIZE   (8*PAGE_SIZE)
 #define DISC_CODE(X) \
     X __attribute__((section(".dtext")))
 
@@ -34,13 +33,23 @@
 
 #define INIT_SERVER_FLAG	"initsrv="
 
-static void switchContext( u32 addrSpace, ExecutionState *state ) __attribute__((section(".dtext")));
+extern char kPageDir[PAGE_SIZE];
+extern char kMapAreaPTab[PAGE_SIZE];
 
-static void switchContext( u32 addrSpace, ExecutionState *state )
+char kBootStack[PAGE_SIZE] __attribute__((aligned(PAGE_SIZE), section(".ddata")));
+
+char kLowPageTab[PAGE_SIZE] __attribute__((aligned(PAGE_SIZE), section(".ddata")));
+char k1to1PageTab[PAGE_SIZE] __attribute__((aligned(PAGE_SIZE), section(".ddata")));
+
+static void enterContext( u32 addrSpace, ExecutionState *state ) __attribute__((section(".dtext")));
+
+static void enterContext( u32 addrSpace, ExecutionState *state )
 {
   __asm__ __volatile__(
-      "mov %%edx, %%esp\n"
-      "mov %%ecx, %%cr3\n"
+/*      "mov %%edx, %%esp\n"
+      "mov %%ecx, %%cr3\n" */
+      "mov %0, %%esp\n"
+      "mov %1, %%cr3\n"
       "pop %%edi\n"
       "pop %%esi\n"
       "pop %%ebp\n"
@@ -48,8 +57,7 @@ static void switchContext( u32 addrSpace, ExecutionState *state )
       "pop %%edx\n"
       "pop %%ecx\n"
       "pop %%eax\n"
-      "iret\n" :: "ecx"(addrSpace),
-      "edx"((dword)state));
+      "iret\n" :: "r"(state), "r"(addrSpace) : "memory");
 }
 
 extern tcb_t *initServerThread;
@@ -299,7 +307,7 @@ void initPageAllocator(multiboot_info_t *info)
           baseAddr = baseAddr << 32;
           baseAddr |= mmap->base_addr_low;
 
-          if(baseAddr >= 0x100000000ull) // Ignore physical addresses greater than 4 GiB
+          if(baseAddr >= 0x100000000ull || baseAddr < 0x100000) // Ignore physical addresses greater than 4 GiB or less than 1 MiB
             continue;
 
           if(pageSearchPhase == 0)      // Look for large page-sized memory for tcb table
@@ -722,7 +730,7 @@ int initMemory( multiboot_info_t * info )
   if( totalPhysMem < (8 << 20) )
     stopInit("Not enough memory!");
 
-  kprintf("Kernel AddrSpace: 0x%x\n", initKrnlPDir);
+  kprintf("Kernel AddrSpace: 0x%x\n", kPageDir);
 
   // Mark kernel code pages as read-write
 
@@ -792,6 +800,7 @@ bool isValidElfExe( addr_t img )
   {
     if ( image->identifier[ EI_VERSION ] != EV_CURRENT )
       return false;
+
     if ( image->type != ET_EXEC )
       return false;
     if ( image->machine != EM_386 )
@@ -877,11 +886,11 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
 
         assert( result == 0 );
       }
-      else
-      {
+    //  else
+    //  {
         readPmapEntry(PFRAME_TO_ADDR(pde.base), PTE_INDEX(sheader.addr+offset), &pte);
         //readPTE(sheader.addr + offset, &pte, addrSpace);
-      }
+    //  }
 
       if( sheader.type == SHT_PROGBITS )
       {
@@ -928,15 +937,20 @@ tcb_t *loadElfExe( addr_t img, paddr_t addrSpace, addr_t uStack )
                   PAGING_USER | (sheader.flags & SHF_WRITE ? PAGING_RW : PAGING_RO), addrSpace); */
         }
         else
-        {
           memset((void *)(sheader.addr + offset), 0, PAGE_SIZE - (offset % PAGE_SIZE));
-        }
       }
     }
   }
 
   return thread;
 }
+
+struct InitStackArgs {
+  u32 returnAddress;
+  multiboot_info_t *multibootInfo;
+  paddr_t lastPage;
+  unsigned char code[8];
+} __PACKED__;
 
 /**
     Bootstraps the initial server and passes necessary boot data to it.
@@ -950,7 +964,10 @@ void bootstrapInitServer(multiboot_info_t *info)
   elf_header_t elf_header;
   paddr_t stackPTab = allocPageFrame();
   paddr_t stackPage = allocPageFrame();
-  int stackData[2] = { (int)info, (int)lastKernelFreePage };
+  struct InitStackArgs stackData = { .returnAddress = initServerStack-sizeof ((struct InitStackArgs *)0)->code,
+                                     .multibootInfo = info,
+                                     .lastPage = lastKernelFreePage,
+                                     .code = { 0x31, 0xc0, 0x31, 0xdb, 0x43, 0xcd, 0x40, 0x90 } };
 
   kprintf("Bootstrapping initial server...\n");
 
@@ -968,8 +985,8 @@ void bootstrapInitServer(multiboot_info_t *info)
     pde_t pde;
     pte_t pte;
 
-    memset(&pde, 0, sizeof(pde_t));
-    memset(&pte, 0, sizeof(pte_t));
+    clearMemory(&pde, sizeof(pde_t));
+    clearMemory(&pte, sizeof(pte_t));
 
     pde.base = (u32)ADDR_TO_PFRAME(stackPTab);
     pde.rwPriv = 1;
@@ -1000,7 +1017,7 @@ void bootstrapInitServer(multiboot_info_t *info)
     }
     else
     {
-      poke(stackPage + PAGE_SIZE - sizeof(stackData), stackData, sizeof(stackData));
+      poke(stackPage + PAGE_SIZE - sizeof(stackData), &stackData, sizeof(stackData));
       kprintf("Starting initial server... 0x%x\n", initServerThread);
 
       if(startThread(initServerThread) != E_OK)
@@ -1105,7 +1122,7 @@ void initStructures(multiboot_info_t *info)
     }
   }
 
-  memset(tcbTable, 0, (int)&kTcbTableSize);
+  clearMemory(tcbTable, (size_t)&kTcbTableSize);
 }
 
 /**
@@ -1123,6 +1140,19 @@ void init( multiboot_info_t *info )
   char *initServerStrPtr = NULL;
   char *initServerStrEnd=NULL;
   pte_t *pte;
+
+  clearMemory(kMapAreaPTab, PAGE_SIZE);
+
+  if(kMapPageTable(KMAP_AREA, (addr_t)((size_t)kMapAreaPTab + (size_t)EXT_PTR(kVirtToPhys)), PAGING_SUPERVISOR | PAGING_RW) != E_OK)
+    stopInit("Unable to map kernel map area.\n");
+
+#if DEBUG
+
+  for(size_t p=VGA_RAM, v=K1TO1_AREA; p < BIOS_ROM; p += PAGE_SIZE, v += PAGE_SIZE)
+    kMapPage((addr_t)v, (addr_t)p, PAGING_RW | PAGING_PWT | PAGING_PCD | PAGING_SUPERVISOR);
+
+#endif /* DEBUG */
+
 
 #ifdef DEBUG
   init_serial();
@@ -1204,23 +1234,17 @@ void init( multiboot_info_t *info )
   for( addr_t addr=(addr_t)EXT_PTR(kdCode); addr < (addr_t)EXT_PTR(kBss); addr += PAGE_SIZE )
     freePageFrame((paddr_t)(PFRAME_TO_ADDR(ADDR_TO_PTE(addr)->base)));
 
-  // XXX: Release any pages tables used for discardable sections
+  // Release any pages tables used for discardable sections
 
-  freePageFrame((paddr_t)k1To1PageTable);
+  *(dword *)EXT_PTR(tssEsp0) = (dword)allocateKernelStack();
 
-  freePageFrame((paddr_t)(bootStackTop-PAGE_SIZE));
-
-  *(dword *)EXT_PTR(tssEsp0) = (dword)kernelStackTop;
-
+  kprintf("Scheduling first thread...\n");
   schedule();
 
   // Unmap any unneeded mapped pages in the kernel's address space
 
   for(addr_t addr=(addr_t)0x0000; addr < (addr_t)largePageSize; addr += PAGE_SIZE)
   {
-    if(addr == kernelStackTop-KERNEL_STACK_SIZE)
-      addr = (addr_t)VGA_RAM;
-
 #if DEBUG
 
     if(addr == VGA_COLOR_TEXT)
@@ -1241,6 +1265,6 @@ void init( multiboot_info_t *info )
 
   kprintf("Context switching...\n");
 
-  switchContext( initServerThread->rootPageMap, &initServerThread->execState );
+  enterContext( initServerThread->rootPageMap, &initServerThread->execState );
   stopInit("Error: Context switch failed.");
 }

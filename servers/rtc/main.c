@@ -4,6 +4,7 @@
 #include <os/services.h>
 #include <os/msg/rtc.h>
 #include <os/io.h>
+#include <stdio.h>
 
 #define UNIX_EPOCH          1970u
 #define CENTURY_START       2000u
@@ -18,9 +19,6 @@ static unsigned int getTime(void);
 static unsigned int PURE(getTimeInSecs(unsigned int year, unsigned int month,
     unsigned int day, unsigned int hour, unsigned int minute, unsigned int second));
 static int isUpdateInProgress(void);
-
-extern void print(const char *);
-extern void printInt(int);
 
 /* A leap year is either a non-century year divisible by 4 or
    a century year divisible by 400. */
@@ -118,37 +116,65 @@ static unsigned int getTime(void)
 
 int main(void)
 {
-  msg_t msg;
-  msg_t responseMsg;
+  int failureCount = 0;
 
-  registerServer(SERVER_GENERIC);
-  registerName(RTC_NAME);
+  fprintf(stderr, "Starting rtc server...\n");
+
+  if(registerServer(SERVER_GENERIC) == 0)
+    fprintf(stderr, "Server registered successfully.\n");
+  else
+    fprintf(stderr, "Unable to register time server.\n");
+
+  if(registerName(RTC_NAME) == 0)
+    fprintf(stderr, "rtc name registered\n");
+  else
+    fprintf(stderr, "rtc name not registered.\n");
 
   while(1)
   {
-    msg.sender = ANY_SENDER;
+    struct GetTimeResponse responseBody;
 
-    if(sys_receive(&msg, 1) != ESYS_OK)
-      return EXIT_FAILURE;
+    msg_t requestMsg = {
+      .sender = ANY_SENDER,
+      .flags = 0,
+      .buffer = NULL,
+      .bufferLen = 0,
+    };
 
-    responseMsg.recipient = msg.sender;
+    if(sys_receive(&requestMsg) != ESYS_OK)
+    {
+      if(failureCount > 5)
+        return EXIT_FAILURE;
+      else
+        failureCount++;
+    }
 
-    switch(msg.subject)
+    failureCount = 0;
+
+    msg_t responseMsg = {
+      .recipient = requestMsg.sender,
+      .flags = MSG_NOBLOCK,
+      .buffer = &responseBody,
+      .bufferLen = sizeof responseBody,
+    };
+
+    switch(requestMsg.subject)
     {
       case GET_TIME_MSG:
       {
-        struct GetTimeResponse *responseBody = (struct GetTimeResponse *)&responseMsg.data;
         responseMsg.subject = RESPONSE_OK;
-        responseBody->time = getTime();
+        responseBody.time = getTime();
         break;
       }
       default:
         responseMsg.subject = RESPONSE_FAIL;
+        responseMsg.buffer = NULL;
+        responseMsg.bufferLen = 0;
         break;
     }
 
-    if(sys_send(&responseMsg, 0) != ESYS_OK)
-      print("rtc: Failed to send response to "), printInt(msg.sender), print("\n");
+    if(sys_send(&responseMsg) != ESYS_OK)
+      fprintf(stderr, "rtc: Failed to send response to %d\n", requestMsg.sender);
   }
 
   return EXIT_FAILURE;

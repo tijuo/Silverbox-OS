@@ -20,194 +20,162 @@ pid_t destroyPort(pid_t port);
 int registerDriver(int major, int numDevices, int type, size_t blockSize);
 int unregisterDriver(int major);
 */
+
+#define EMPTY_REQUEST_MSG(subj, recv) { .subject = subj, .sender = NULL_TID, .recipient = recv, .buffer = NULL, .bufferLen = 0, .flags = 0, .bytesTransferred = 0 }
+#define REQUEST_MSG(subj, recv, request) { .subject = subj, .sender = NULL_TID, .recipient = recv, .buffer = &request, .bufferLen = sizeof request, .flags = 0, .bytesTransferred = 0 }
+#define RESPONSE_MSG(response)	{ .subject = 0, .sender = NULL_TID, .recipient = NULL_TID, .buffer = &response, .bufferLen = sizeof response, .flags = 0, .bytesTransferred = 0 }
+
 addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags)
 {
-  msg_t msg =
-  {
-    .subject = MAP_MEM,
-    .recipient = INIT_SERVER_TID
-  };
+  struct MapRequest request;
+  struct MapResponse response;
 
-  msg_t responseMsg;
-  struct MapRequest *request = (struct MapRequest *)&msg.data;
-  struct MapResponse *response = (struct MapResponse *)&responseMsg.data;
+  request.addr = addr;
+  request.device = device;
+  request.length = length;
+  request.offset = offset;
+  request.flags = flags;
 
-  request->addr = addr;
-  request->device = device;
-  request->length = length;
-  request->offset = offset;
-  request->flags = flags;
+  msg_t requestMsg = REQUEST_MSG(MAP_MEM, INIT_SERVER_TID, request);
+  msg_t responseMsg = RESPONSE_MSG(response);
 
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
-          && responseMsg.subject == RESPONSE_OK) ? response->addr : NULL;
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
+          && responseMsg.subject == RESPONSE_OK) ? response.addr : NULL;
 }
 
-addr_t unmapMem(addr_t addr, size_t length)
+int unmapMem(addr_t addr, size_t length)
 {
-  msg_t msg =
-  {
-    .subject = UNMAP_MEM,
-    .recipient = INIT_SERVER_TID
-  };
+  struct UnmapRequest request;
 
-  msg_t responseMsg;
-  struct UnmapRequest *request = (struct UnmapRequest *)&msg.data;
+  request.addr = addr;
+  request.length = length;
 
-  request->addr = addr;
-  request->length = length;
+  msg_t requestMsg = REQUEST_MSG(UNMAP_MEM, INIT_SERVER_TID, request);
+  msg_t responseMsg = EMPTY_MSG;
 
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
+
 pid_t createPort(pid_t pid, int flags)
 {
-  msg_t msg =
-  {
-    .subject = CREATE_PORT,
-    .recipient = INIT_SERVER_TID
-  };
+  struct CreatePortRequest request;
+  struct CreatePortResponse response;
 
-  msg_t responseMsg;
-  struct CreatePortRequest *request = (struct CreatePortRequest *)&msg.data;
-  struct CreatePortResponse *response = (struct CreatePortResponse *)&responseMsg.data;
+  request.pid = pid;
+  request.flags = flags;
 
-  request->pid = pid;
-  request->flags = flags;
+  msg_t requestMsg = REQUEST_MSG(CREATE_PORT, INIT_SERVER_TID, request);
+  msg_t responseMsg = RESPONSE_MSG(response);
 
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
-           && responseMsg.subject == RESPONSE_OK) ? response->pid : NULL_PID;
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
+           && responseMsg.subject == RESPONSE_OK) ? response.pid : NULL_PID;
 }
 
-pid_t destroyPort(pid_t port)
+int destroyPort(pid_t port)
 {
-  msg_t msg =
-  {
-    .subject = DESTROY_PORT,
-    .recipient = INIT_SERVER_TID
-  };
+  struct DestroyPortRequest request;
 
-  msg_t responseMsg;
-  struct DestroyPortRequest *request = (struct DestroyPortRequest *)&msg.data;
+  msg_t requestMsg = REQUEST_MSG(DESTROY_PORT, INIT_SERVER_TID, request);
+  msg_t responseMsg = EMPTY_MSG;
 
-  request->port = port;
+  request.port = port;
 
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 int registerServer(int type)
 {
-  msg_t msg =
-  {
-    .subject = REGISTER_SERVER,
-    .recipient = INIT_SERVER_TID
-  };
+  struct RegisterServerRequest request;
 
-  msg_t responseMsg;
-  struct RegisterServerRequest *request = (struct RegisterServerRequest *)&msg.data;
+  msg_t requestMsg = REQUEST_MSG(REGISTER_SERVER, INIT_SERVER_TID, request);
+  msg_t responseMsg = EMPTY_MSG;
 
-  request->type = type;
+  request.type = type;
 
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 int unregisterServer(void)
 {
-  msg_t msg =
-  {
-    .subject = UNREGISTER_SERVER,
-    .recipient = INIT_SERVER_TID
-  };
+  msg_t requestMsg = EMPTY_REQUEST_MSG(UNREGISTER_SERVER, INIT_SERVER_TID);
+  msg_t responseMsg = EMPTY_MSG;
 
-  msg_t responseMsg;
-
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 int registerName(const char *name)
 {
-  msg_t msg =
-  {
-    .subject = REGISTER_NAME,
-    .recipient = INIT_SERVER_TID,
-  };
+  struct RegisterNameRequest request;
 
   if(!name)
     return -1;
 
-  msg_t responseMsg;
-  struct RegisterNameRequest *request = (struct RegisterNameRequest *)&msg.data;
+  msg_t requestMsg = REQUEST_MSG(REGISTER_NAME, INIT_SERVER_TID, request);
+  msg_t responseMsg = EMPTY_MSG;
 
-  strncpy(request->name, name, sizeof request->name);
+  strncpy(request.name, name, sizeof request.name);
 
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 tid_t lookupName(const char *name)
 {
-  msg_t msg =
-  {
-    .subject = LOOKUP_NAME,
-    .recipient = INIT_SERVER_TID
-  };
+  struct LookupNameRequest request;
+  struct LookupNameResponse response;
 
   if(!name)
-    return -1;
+    return NULL_TID;
 
-  msg_t responseMsg;
-  struct LookupNameRequest *request = (struct LookupNameRequest *)&msg.data;
-  struct LookupNameResponse *response = (struct LookupNameResponse *)&responseMsg.data;
+  msg_t requestMsg = REQUEST_MSG(LOOKUP_NAME, INIT_SERVER_TID, request);
+  msg_t responseMsg = RESPONSE_MSG(response);
 
-  strncpy(request->name, name, sizeof request->name);
+  strncpy(request.name, name, sizeof request.name);
 
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
-           && responseMsg.subject == RESPONSE_OK) ? response->tid : NULL_TID;
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject == RESPONSE_OK)
+    ? response.tid : NULL_TID;
 }
 
 int unregisterName(const char *name)
 {
-  msg_t msg =
-  {
-    .subject = UNREGISTER_NAME,
-    .recipient = INIT_SERVER_TID
-  };
+  struct UnregisterNameRequest request;
 
   if(!name)
     return -1;
 
-  msg_t responseMsg;
-  struct UnregisterNameRequest *request = (struct UnregisterNameRequest *)&msg.data;
+  msg_t requestMsg = REQUEST_MSG(UNREGISTER_NAME, INIT_SERVER_TID, request);
+  msg_t responseMsg = EMPTY_MSG;
 
-  strncpy(request->name, name, sizeof request->name);
+  strncpy(request.name, name, sizeof request.name);
 
-  return (sys_call(&msg, &responseMsg, 1) == ESYS_OK
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
 int getCurrentTime(unsigned int *time)
 {
+  struct GetTimeResponse response;
+
   if(!time)
     return -1;
 
   tid_t rtcTid = lookupName(RTC_NAME);
 
-  msg_t msg =
-  {
-    .subject = GET_TIME_MSG,
-    .recipient = rtcTid
-  };
+  if(rtcTid == NULL_TID)
+    return -1;
 
-  msg_t responseMsg;
-  struct GetTimeResponse *response = (struct GetTimeResponse *)&responseMsg.data;
+  msg_t requestMsg = EMPTY_REQUEST_MSG(GET_TIME_MSG, rtcTid);
+  msg_t responseMsg = RESPONSE_MSG(response);
 
-  if(sys_call(&msg, &responseMsg, 1) == ESYS_OK
+  if(sys_call(&requestMsg, &responseMsg) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK)
   {
-    *time = response->time;
+    *time = response.time;
     return 0;
   }
   else

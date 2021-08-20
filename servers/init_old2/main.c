@@ -13,6 +13,7 @@
 #include <os/msg/init.h>
 #include <os/msg/kernel.h>
 #include "name/name.h"
+#include "elf.h"
 
 #define STACK_TOP		0xC0000000
 
@@ -32,7 +33,7 @@ void printHex(int);
 int initPageStack(multiboot_info_t *info, addr_t lastFreeKernelPage);
 static int loadElfExe(module_t *module);
 static void handleMessage(msg_t *msg);
-tid_t createNewThread(tid_t desiredTid, addr_t entry, addr_t pageMap, addr_t stackTop);
+tid_t createNewThread(tid_t desiredTid, void *entry, paddr_t *pageMap, void *stackTop);
 
 extern void (*idle)(void);
 int startThread(tid_t tid);
@@ -148,7 +149,9 @@ int initPageStack(multiboot_info_t *info, addr_t lastFreeKernelPage)
           for( ; freePage >= mmapBase && freePage < mmapBase + mmapLen; freePage += PAGE_SIZE, freePageCount++);
         else
         {
-          if(sys_map(NULL, ptr, (pframe_t)(freePage >> 12), pagesNeeded, PM_READ_WRITE) != ESYS_OK)
+          pframe_t freeFrame = (pframe_t)(freePage >> 12);
+
+          if(sys_map(NULL, (void *)ptr, &freeFrame, pagesNeeded, PM_READ_WRITE) != (int)pagesNeeded)
           {
             print("Unable to allocate memory for free page stack.\n");
             return 1;
@@ -237,7 +240,7 @@ static void handleMessage(msg_t *msg)
    If region is marked as ZERO, then clear page
    If region is marked as COW and a write was performed, create new page, map it as r/w, and copy data
 */
-            sys_map((addr_t)aspace->physAddr, faultAddr, frame, 1,
+            sys_map(&aspace->physAddr, (void *)faultAddr, &frame, 1,
                     (region->flags & REG_RO) ? PM_READ_ONLY : PM_READ_WRITE);
 
             if(region->flags & REG_GUARD)
@@ -347,7 +350,7 @@ static void handleMessage(msg_t *msg)
   }
 }
 
-tid_t createNewThread(tid_t desiredTid, addr_t entry, addr_t pageMap, addr_t stackTop)
+tid_t createNewThread(tid_t desiredTid, void *entry, paddr_t *pageMap, void *stackTop)
 {
   struct AddrSpace *addrSpace = lookupPageMap(pageMap);
   tid_t tid = sys_create_thread(desiredTid, entry, pageMap, stackTop);
@@ -365,7 +368,7 @@ static int loadElfExe(module_t *module)
   elf_pheader_t *pheader;
   tid_t tid;
   int fail=0;
-  addr_t stackTop = (addr_t)STACK_TOP;
+  void *stackTop = (void *)STACK_TOP;
   size_t modSize = module->mod_end-module->mod_start;
 
   if(!module)
@@ -394,14 +397,14 @@ static int loadElfExe(module_t *module)
     return -1;
   }
 
-  u32 pmap = allocPhysPage();
+  paddr_t pmap = (paddr_t)allocPhysPage();
   struct AddrSpace *addrSpace = malloc(sizeof(struct AddrSpace));
 
   if(!pmap || !addrSpace)
     fail = 1;
   else
   {
-    initAddrSpace(addrSpace, (paddr_t)pmap);
+    initAddrSpace(addrSpace, &pmap);
     addAddrSpace(addrSpace);
 
     phtab_count = image->phnum;
@@ -440,7 +443,7 @@ static int loadElfExe(module_t *module)
 
   if(!fail)
   {
-    tid = createNewThread(NULL_TID, (addr_t)image->entry, pmap, stackTop);
+    tid = createNewThread(NULL_TID, (void *)image->entry, &pmap, stackTop);
 
     if(tid == NULL_TID)
       fail = 1;
@@ -452,7 +455,7 @@ static int loadElfExe(module_t *module)
 
   if(fail)
   {
-    print("Failure\n");
+    print("Failure in loadElfExec\n");
 
     if(tid)
       detachTid(tid);
@@ -464,7 +467,7 @@ static int loadElfExe(module_t *module)
     }
 
     if(pmap)
-      freePhysPage(pmap);
+      freePhysPage((addr_t)pmap);
 
     if(image)
       free(image);
@@ -529,10 +532,10 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
   sbHashCreate(&fsTable, 128);
   sbHashCreate(&serverTable, 1024);
 
-  initAddrSpace(&initsrvAddrSpace, inInfo.rootPageMap);
+  initAddrSpace(&initsrvAddrSpace, &inInfo.rootPageMap);
   addAddrSpace(&initsrvAddrSpace);
 
-  tid_t idleTid = createNewThread(NULL_TID, (addr_t)&idle, NULL, 0x00);
+  tid_t idleTid = createNewThread(NULL_TID, &idle, NULL, NULL);
 
   if(idleTid == NULL_TID || setPriority(idleTid, 0) != 0 || startThread(idleTid) != 0)
   {

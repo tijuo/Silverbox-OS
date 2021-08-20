@@ -115,7 +115,6 @@ int pauseThread( tcb_t *thread )
     case PAUSED:
       RET_MSG(E_DONE, "Thread is already paused.");
     default:
-      kprintf("Thread state: %d\n", thread->threadState);
       RET_MSG(E_FAIL, "Thread is neither ready, running, nor paused.");
   }
 
@@ -153,26 +152,18 @@ tcb_t *createThread(tid_t desiredTid, addr_t entryAddr, paddr_t rootPmap, addr_t
   if( thread->threadState != INACTIVE )
     RET_MSG(NULL, "Thread is already active.");
 
+  clearMemory(thread, sizeof(tcb_t));
   thread->priority = NORMAL_PRIORITY;
   thread->rootPageMap = (dword)rootPmap;
-  thread->waitTid = NULL_TID;
-  thread->extExecState = NULL;
-
-  memset(&thread->execState, 0, sizeof thread->execState);
 
   thread->execState.eflags = EFLAGS_IOPL3 | EFLAGS_IF;
   thread->execState.eip = ( dword ) entryAddr;
 
   thread->execState.cs = UCODE;
-  thread->execState.userEsp = stack;
+  thread->execState.userEsp = thread->execState.ebp = stack;
   thread->execState.userSS = UDATA;
 
-  thread->receiverWaitQueue.headTid = NULL;
-  thread->senderWaitQueue.headTid = NULL;
-  thread->receiverWaitQueue.tailTid = NULL;
-  thread->senderWaitQueue.tailTid = NULL;
-
-  kprintf("Created new thread at 0x%x\n", thread);
+  kprintf("Created new thread at 0x%x (tid: %d, pmap: 0x%x)\n", thread, tid, (u32)thread->rootPageMap);
 
   thread->threadState = PAUSED;
   return thread;
@@ -190,8 +181,6 @@ int releaseThread( tcb_t *thread )
   list_t *queues[2] = { &thread->senderWaitQueue, &thread->receiverWaitQueue };
   list_t *queue;
   size_t i;
-
-  kprintf("Releasing thread 0x%x\n", thread);
 
   /* If the thread is a sender waiting for a recipient, remove the
      sender from the recipient's wait queue. If the thread is a
@@ -237,6 +226,7 @@ int releaseThread( tcb_t *thread )
       {
         t->waitTid = NULL_TID;
         t->execState.eax = E_FAIL;
+        kprintf("Releasing thread. Starting %d\n", getTid(t));
         startThread(t);
       }
     }
@@ -266,4 +256,152 @@ tid_t getNewTid(void)
     RET_MSG(NULL_TID, "No more TIDs are available");
 
   return (tid_t)lastTid;
+}
+
+addr_t allocateKernelStack(void)
+{
+  for(addr_t stack=(addr_t)EXT_PTR(kernelStacksTop); stack > (addr_t)EXT_PTR(kernelStacksBottom); stack -= KERNEL_STACK_SIZE)
+  {
+    dword *ptr = (dword *)(stack - sizeof(dword));
+
+    if(!*ptr)
+    {
+      *ptr = 1;
+      return (addr_t)ptr;
+    }
+  }
+
+  return NULL;
+}
+
+void releaseKernelStack(void *stack)
+{
+  dword ptr = (dword)stack;
+
+  ptr += KERNEL_STACK_SIZE - (ptr & (KERNEL_STACK_SIZE-1));
+
+#if DEBUG
+  int found = ptr > (dword)EXT_PTR(kernelStacksBottom) && ptr <= (dword)EXT_PTR(kernelStacksTop);
+
+  if(!found)
+    kprintf("Attempted to deallocate invalid kernel stack at 0x%x. 0x%x is <= than 0x%x and > 0x%x\n", (dword)stack, ptr, (dword)EXT_PTR(kernelStacksBottom), (dword)EXT_PTR(kernelStacksTop));
+  assert(found);
+#endif
+  dword *p = (dword *)(ptr-sizeof(dword));
+  *p = 0;
+}
+
+int saveAndSwitchContext(tcb_t *newThread)
+{
+  return _saveAndSwitchContext(currentThread, newThread);
+}
+
+int _saveAndSwitchContext(tcb_t *oldThread, tcb_t *newThread)
+{
+  if(!newThread)
+    newThread = schedule();
+
+  assert(newThread);
+
+  if(!newThread || oldThread == newThread)
+    RET_MSG(E_FAIL, "Switching to the same thread!");
+
+  ExecutionState *oldState = (ExecutionState *)tssEsp0;
+  oldState--;
+
+  oldThread->execState = *oldState;
+
+  dword newTss = (dword)allocateKernelStack();
+
+  if(!newTss)
+    return -1;
+
+//  kprintf("Switching from %d to %d\n", getTid(oldThread), getTid(newThread));
+//  kprintf("saveAndSwitchContext: Saving kernel stack (0x%x) for tid %d\n", oldThread->kernelStack, getTid(oldThread));
+
+  //kprintf("Saving kernel stack at 0x%x for tid %d\n", oldThread->kernelStack, getTid(oldThread));
+
+  tssEsp0 = newTss;
+
+  asm volatile("mov $0, %%eax\n"
+	       "pushf\n"
+               "push %%eax\n"
+               "push %%ecx\n"
+               "push %%edx\n"
+               "push %%ebx\n"
+               "push %%ebp\n"
+               "push %%esi\n"
+               "push %%edi\n"
+               "push %1\n"
+               "mov %%esp, %0" : "=m"(oldThread->kernelStack) : "m"(oldThread->kernelStack) : "eax");
+
+  switchContext(newThread);
+
+  return 0;
+}
+
+void switchContext(tcb_t *thread)
+{
+  assert(thread);
+
+  assert(thread == currentThread);
+  assert(thread->threadState == RUNNING);
+
+//  kprintf("Switching context...\n");
+
+  if((thread->rootPageMap & CR3_BASE_MASK) != (getCR3() & CR3_BASE_MASK))
+    asm volatile("mov %0, %%cr3" :: "r"(thread->rootPageMap));
+
+  if(thread->kernelStack /*&& *((addr_t *)thread->kernelStack)*/)
+  {
+    addr_t *stack = thread->kernelStack;
+    //thread->kernelStack = NULL;
+//    addr_t *oldFrame = (addr_t *)*(stack+3);
+
+//    kprintf("switchContext: Loading kernel stack at 0x%x for tid %d\n", stack, getTid(thread));
+ //   kprintf("switchContext: Popping previous kernel stack at 0x%x Return address: 0x%x\n", *stack, *(oldFrame+1));
+
+    asm volatile("mov %1, %%esp\n"
+                 "pop %0\n" : "=r"(thread->kernelStack) : "m"(stack));
+    asm volatile("pop %%edi\n"
+                 "pop %%esi\n"
+                 "pop %%ebp\n"
+                 "pop %%ebx\n"
+                 "pop %%edx\n"
+                 "pop %%ecx\n"
+                 "pop %%eax\n"
+                 "popf\n"
+                 "leave\n"
+                 "ret\n" ::: "eax", "ebx", "ecx", "edx", "esi", "edi");
+  }
+  else
+  {
+    ExecutionState *state = (ExecutionState *)tssEsp0;
+
+    assert(state);
+
+    if(!thread->kernelStack && thread->extExecState)
+      asm volatile("xrstor (%0)" :: "a"(0xFFFFFFFF), "d"(0xFFFFFFFF), "m"(thread->extExecState));
+
+    if(thread->kernelStack)
+      thread->kernelStack = NULL;
+
+    state--;
+    *state = thread->execState;
+
+    //kprintf("switchContext: Restoring user state at 0x%x for tid: %d\n", state, getTid(thread));
+
+    asm volatile("mov %1, %%esp\n"
+		 "mov %0, %%eax\n"
+                 "mov %%eax, %%ds\n"
+                 "mov %%eax, %%es\n"
+                 "pop %%edi\n"
+                 "pop %%esi\n"
+                 "pop %%ebp\n"
+                 "pop %%ebx\n"
+                 "pop %%edx\n"
+                 "pop %%ecx\n"
+                 "pop %%eax\n"
+                 "iret" :: "i"(UDATA), "r"(state) : "eax");
+  }
 }

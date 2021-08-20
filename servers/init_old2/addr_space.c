@@ -9,11 +9,22 @@ page_t *pageTable;
 /* Initializes an address space and its tables. The physical
    address is the address of the page directory. */
 
-void initAddrSpace(struct AddrSpace *addrSpace, paddr_t physAddr)
+void initAddrSpace(struct AddrSpace *addrSpace, paddr_t *physAddr)
 {
-  addrSpace->physAddr = physAddr;
+  if(!physAddr)
+  {
+    print("Error: Page map cannot be null.\n");
+    return;
+  }
+  else if(!addrSpace)
+  {
+    print("Address space cannot be null.\n");
+    return;
+  }
+
+  addrSpace->physAddr = *physAddr;
   sbArrayCreate(&addrSpace->memoryRegions);
-  sbHashCreate(&addrSpace->addressMap, 128);
+  sbHashCreate(&addrSpace->addressMap, 1024);
 }
 
 void destroyAddrSpace(struct AddrSpace *addrSpace)
@@ -26,7 +37,7 @@ int addAddrSpace(struct AddrSpace *addrSpace)
 {
   char *a = malloc(19);
 
-  if(!a)
+  if(!addrSpace || !a)
     return -1;
 
   a[0] = '0';
@@ -37,29 +48,29 @@ int addAddrSpace(struct AddrSpace *addrSpace)
   return (addrSpace && sbHashInsert(&addrSpaces, a, addrSpace) == 0) ? 0 : -1;
 }
 
-struct AddrSpace *lookupPageMap(paddr_t physAddr)
+struct AddrSpace *lookupPageMap(paddr_t *physAddr)
 {
   struct AddrSpace *addrSpace;
   char a[19] = { '0', 'x' };
 
-  if( physAddr == NULL_PADDR )
+  if( physAddr == NULL )
     return &initsrvAddrSpace;
 
-  itoa(physAddr, &a[2], 16);
+  itoa(*physAddr, &a[2], 16);
 
   return sbHashLookup(&addrSpaces, a, (void **)&addrSpace) != 0 ? NULL : addrSpace;
 }
 
-int removeAddrSpace(paddr_t physAddr)
+int removeAddrSpace(paddr_t *physAddr)
 {
   struct AddrSpace *addrSpace;
 
   char a[19] = { '0', 'x' };
   char *storedKey;
 
-  itoa(physAddr, &a[2], 16);
+  itoa(*physAddr, &a[2], 16);
 
-  if(physAddr != NULL_PADDR && sbHashRemovePair(&addrSpaces, a, &storedKey, (void **)&addrSpace) == 0)
+  if(physAddr != NULL && sbHashRemovePair(&addrSpaces, a, &storedKey, (void **)&addrSpace) == 0)
   {
     free(storedKey);
     return 0;
@@ -74,7 +85,7 @@ int attachTid(struct AddrSpace *addrSpace, tid_t tid)
 {
   char *a = malloc(6);
 
-  if(!a)
+  if(!addrSpace || !a)
     return -1;
 
   if(!addrSpace)
@@ -191,7 +202,10 @@ int setMapping(struct AddrSpace *addrSpace, addr_t virt, page_t *page)
   char *a = malloc(10);
 
   if(!a)
+  {
+    print("malloc() failed\n");
     return -1;
+  }
 
   a[0] = '0';
   a[1] = 'x';
@@ -203,7 +217,15 @@ int setMapping(struct AddrSpace *addrSpace, addr_t virt, page_t *page)
 
   itoa((int)virt, &a[2], 16);
 
-  return (sbHashInsert(&addrSpace->addressMap, a, page) == 0) ? 0 : -1;
+  int code = sbHashInsert(&addrSpace->addressMap, a, page);
+
+  if(code != 0)
+  {
+    print("Mapping 0x"), printHex(virt), print(" to 0x"), printHex(page), print("failed with code "), printInt(code), print("\n");
+
+  }
+
+  return (code == 0) ? 0 : -1;
 }
 
 int getMapping(struct AddrSpace *addrSpace, addr_t virt, page_t **page)

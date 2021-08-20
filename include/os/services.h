@@ -116,9 +116,9 @@ struct ConnectArgs
 */
 
 addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags);
-addr_t unmapMem(addr_t addr, size_t length);
+int unmapMem(addr_t addr, size_t length);
 pid_t createPort(pid_t port, int flags);
-pid_t destroyPort(pid_t port);
+int destroyPort(pid_t port);
 int registerServer(int type);
 int unregisterServer(void);
 int registerName(const char *name);

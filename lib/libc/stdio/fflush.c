@@ -6,9 +6,10 @@ int fflush(FILE *stream)
   if( stream == NULL )
     return -1;
 
-  if( stream == stdout )
+  if( stream == stdout || stream == stderr )
   {
-//    printStrN(stream->buffer, stream->buf_pos);
+    for(size_t i=0; i < stream->buf_pos; i++)
+      asm("out %%al, %%dx\n" :: "d"(0xE9), "a"((unsigned char)stream->buffer[i]));
 
     stream->buf_pos = 0;
   }

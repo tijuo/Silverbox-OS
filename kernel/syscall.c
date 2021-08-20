@@ -12,6 +12,7 @@
 #include <kernel/interrupt.h>
 #include <oslib.h>
 #include <kernel/bits.h>
+#include <kernel/syscall.h>
 #include <os/syscalls.h>
 #include <os/msg/kernel.h>
 #include <os/msg/init.h>
@@ -19,7 +20,7 @@
 void _syscall(ExecutionState *state);
 static int sysReceive(ExecutionState *state);
 static int sysSend(ExecutionState *state);
-static int sysCall(ExecutionState *state);
+//static int sysCall(ExecutionState *state);
 
 // Privileged call
 static int sysMap(ExecutionState *state);
@@ -44,27 +45,13 @@ static int sysUnbindIrq(ExecutionState *state);
 static int sysExit(ExecutionState *state);
 static int sysWait(ExecutionState *state);
 
-#define PM_READ_ONLY            0
-#define PM_READ_WRITE           0x02
-#define PM_NOT_CACHED           0x10
-#define PM_WRITE_THROUGH        0x08
-#define PM_NOT_ACCESSED         0
-#define PM_ACCESSED             0x20
-#define PM_NOT_DIRTY            0
-#define PM_DIRTY                0x40
-#define PM_LARGE_PAGE           0x80
-#define PM_INVALIDATE           0x80000000
-
 int (*syscallTable[])(ExecutionState *) =
 {
     sysExit,
     sysWait,
     sysSend,
     sysReceive,
-    sysSend,
-    sysReceive,
-    sysCall,
-    sysCall,
+    NULL,
     sysMap,
     sysUnmap,
     sysCreateThread,
@@ -74,34 +61,58 @@ int (*syscallTable[])(ExecutionState *) =
     sysEoi,
     sysIrqWait,
     sysBindIrq,
-    sysUnbindIrq
+    sysUnbindIrq,
 };
 
 static int sysMap(ExecutionState *state)
 {
-  u32 addrSpace = (u32)state->ebx;
-  addr_t vAddr = (addr_t)state->ecx;
-  pframe_t pframe = (pframe_t)state->edx;
-  int flags = (int)state->edi;
-  size_t numPages = (size_t)state->esi;
+  paddr_t addrSpace;
+  paddr_t *aspacePtr = (paddr_t *)state->ebx;
+  addr_t vAddr = (addr_t)ALIGN_DOWN(state->ecx, PAGE_SIZE);
+  pframe_t *pframe = (pframe_t *)state->edx;
+  unsigned int flags = (unsigned int)state->edi;
+  int numPages = (int)state->esi;
   int invalidate = 0;
+  int framesMapped = 0;
+  int overwrite = 0;
+  pframe_t pframe2;
+
+  if(!(flags & PM_ARRAY))
+  {
+    pframe2 = *pframe;
+    pframe = &pframe2;
+  }
+
+  overwrite = (flags & PM_OVERWRITE) == PM_OVERWRITE;
+
+  //kprintf("Mapping phys: 0x%x to 0x%x (flags: 0x%x)\n", (addr_t)(*pframe << 12), vAddr, flags);
 
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
     pde_t pde;
     pte_t pte;
 
-    if(!addrSpace)
+    if(numPages < 0)
+      return ESYS_FAIL;
+
+    if(!aspacePtr)
     {
-      addrSpace = getRootPageMap();
+      addrSpace = (paddr_t)getRootPageMap();
       invalidate = 1;
+    }
+    else
+    {
+      addrSpace = (addr_t)*aspacePtr;
+
+      if(addrSpace == (paddr_t)getRootPageMap())
+        invalidate = 1;
     }
 
     for(; numPages--; vAddr += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE : PAGE_SIZE,
-        pframe += (flags & PM_LARGE_PAGE) ? PAGE_TABLE_SIZE / PAGE_SIZE : 1)
+        framesMapped++)
     {
       if(IS_ERROR(readPmapEntry(addrSpace, PDE_INDEX(vAddr), &pde)))
-        return ESYS_FAIL;
+        return framesMapped;
 
       if(!pde.present)
       {
@@ -116,7 +127,7 @@ static int sysMap(ExecutionState *state)
 
         if(IS_FLAG_SET(flags, PM_LARGE_PAGE))
         {
-          pde.base = (u32)pframe;
+          pde.base = (u32)*pframe;
           pde.rwPriv = IS_FLAG_SET(flags, PM_READ_WRITE);
           pde.pwt = IS_FLAG_SET(flags, PM_WRITE_THROUGH);
           pde.pcd = IS_FLAG_SET(flags, PM_NOT_CACHED);
@@ -139,25 +150,30 @@ static int sysMap(ExecutionState *state)
         {
           if(!(flags & PM_LARGE_PAGE))
             freePageFrame(addr);
-          return ESYS_FAIL;
+          return framesMapped;
         }
         else if(flags & PM_LARGE_PAGE)
         {
           if(invalidate)
             invalidatePage(vAddr & ~(PAGE_TABLE_SIZE-1));
 
+          if(flags & PM_ARRAY)
+            pframe++;
+          else
+            *pframe += 1024;
+
           continue;
-        }
+	}
       }
 
       if(IS_ERROR(readPmapEntry((paddr_t)PFRAME_TO_ADDR(pde.base), PTE_INDEX(vAddr), &pte)))
-        return ESYS_FAIL;
+        return framesMapped;
 
-      if(pte.present)
-        return ESYS_FAIL;
+      if(pte.present && !overwrite)
+        return framesMapped;
       else
       {
-        pte.base = (u32)pframe;
+        pte.base = (u32)*pframe;
         pte.rwPriv = IS_FLAG_SET(flags, PM_READ_WRITE);
         pte.usPriv = 1;
         pte.present = 1;
@@ -165,16 +181,19 @@ static int sysMap(ExecutionState *state)
         pde.pcd = IS_FLAG_SET(flags, PM_NOT_CACHED);
 
         if(IS_ERROR(writePmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(vAddr), &pte)))
-          return ESYS_FAIL;
+          return framesMapped;
 
         if(invalidate)
-          invalidatePage(ALIGN_DOWN(vAddr, PAGE_SIZE));
-
-        continue;
+          invalidatePage(vAddr);
       }
+
+      if(flags & PM_ARRAY)
+        pframe++;
+      else
+        *pframe += (flags & PM_LARGE_PAGE) ? 1024 : 1;
     }
 
-    return ESYS_OK;
+    return framesMapped;
   }
   else
     RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
@@ -184,47 +203,63 @@ static int sysMap(ExecutionState *state)
 
 static int sysUnmap(ExecutionState *state)
 {
-  u32 addrSpace = (u32)state->ebx;
+  paddr_t addrSpace;
+  paddr_t *aspacePtr = (paddr_t *)state->ebx;
   addr_t addr = (addr_t)state->ecx;
-  size_t numPages = (size_t)state->edx;
+  int numPages = (int)state->edx;
+  paddr_t *unmappedPages = (paddr_t *)state->esi;
+  int framesUnmapped = 0;
 
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
     pde_t pde;
     pte_t pte;
 
-    if(!addrSpace)
-      addrSpace = getRootPageMap();
+    if(numPages < 0)
+      return ESYS_FAIL;
+
+    if(!aspacePtr)
+      addrSpace = (paddr_t)getRootPageMap();
+    else
+      addrSpace = *aspacePtr;
 
     while(numPages--)
     {
       if(IS_ERROR(readPmapEntry(addrSpace, PDE_INDEX(addr), &pde)) || !pde.present)
-        return ESYS_FAIL;
+        return framesUnmapped;
 
       if(pde.pageSize)
       {
         pde.present = 0;
 
         if(IS_ERROR(writePmapEntry(addrSpace, PDE_INDEX(addr), &pde)))
-          return ESYS_FAIL;
+          return framesUnmapped;
 
         addr += PAGE_TABLE_SIZE;
       }
       else
       {
         if(IS_ERROR(readPmapEntry((paddr_t)PFRAME_TO_ADDR(pde.base), PTE_INDEX(addr), &pte)) || !pte.present)
-          return ESYS_FAIL;
+          return framesUnmapped;
+
+	if(unmappedPages)
+        {
+          *unmappedPages = pte.base >> 12;
+          unmappedPages++;
+        }
 
         pte.present = 0;
 
         if(IS_ERROR(writePmapEntry((paddr_t)(pde.base << 12), PTE_INDEX(addr), &pte)))
-          return ESYS_FAIL;
+          return framesUnmapped;
 
         addr += PAGE_SIZE;
       }
+
+      framesUnmapped++;
     }
 
-    return ESYS_OK;
+    return framesUnmapped;
   }
   else
     RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
@@ -234,15 +269,18 @@ static int sysCreateThread(ExecutionState *state)
 {
   tid_t desiredTid = (tid_t)state->ebx;
   addr_t entry = (addr_t)state->ecx;
-  u32 addrSpace = (u32)state->edx;
+  paddr_t addrSpace;
+  paddr_t *aspacePtr = (paddr_t *)state->edx;
   addr_t stackTop = (addr_t)state->esi;
 
   if(getTid(currentThread) == INIT_SERVER_TID)
   {
-    if(!addrSpace)
-      addrSpace = getRootPageMap();
+    if(!aspacePtr)
+      addrSpace = (paddr_t)getRootPageMap();
+    else
+      addrSpace = *aspacePtr;
 
-    tcb_t *newTcb = createThread(desiredTid, entry, (paddr_t)addrSpace, stackTop);
+    tcb_t *newTcb = createThread(desiredTid, entry, addrSpace, stackTop);
     return newTcb ? (int)getTid(newTcb) : ESYS_FAIL;
   }
   else
@@ -263,7 +301,7 @@ static int sysDestroyThread(ExecutionState *state)
 static int sysReadThread(ExecutionState *state)
 {
   tid_t tid = (tid_t)state->ebx;
-  int flags = (int)state->ecx;
+  unsigned int flags = (unsigned int)state->ecx;
   thread_info_t *info = (thread_info_t *)state->edx;
 
   if(getTid(currentThread) == INIT_SERVER_TID)
@@ -295,6 +333,8 @@ static int sysReadThread(ExecutionState *state)
         info->state.ebp = state->ebp;
         info->state.eflags = state->eflags;
         info->state.eip = state->eip;
+        info->state.cs = state->cs;
+        info->state.ss = state->userSS;
       }
       else
       {
@@ -308,6 +348,8 @@ static int sysReadThread(ExecutionState *state)
         info->state.ebp = tcb->execState.ebp;
         info->state.eflags = tcb->execState.eflags;
         info->state.eip = tcb->execState.eip;
+        info->state.cs = tcb->execState.cs;
+        info->state.ss = tcb->execState.userSS;
       }
     }
 
@@ -316,6 +358,9 @@ static int sysReadThread(ExecutionState *state)
 
     if(flags & TF_PRIORITY)
       info->priority = tcb->priority;
+
+    if(flags & TF_EXT_REG_STATE)
+      info->extRegState = (void *)tcb->extExecState;
 
     return ESYS_OK;
   }
@@ -328,7 +373,7 @@ static int sysReadThread(ExecutionState *state)
 static int sysUpdateThread(ExecutionState *state)
 {
   tid_t tid = (tid_t)state->ebx;
-  int flags = (int)state->ecx;
+  unsigned int flags = (unsigned int)state->ecx;
   thread_info_t *info = (thread_info_t *)state->edx;
 
   if(getTid(currentThread) != INIT_SERVER_TID)
@@ -355,11 +400,11 @@ static int sysUpdateThread(ExecutionState *state)
     if(tcb == currentThread)
     {
       state->eax = info->state.eax;
-      state->ebx = info->state.eax;
-      state->ecx = info->state.eax;
-      state->edx = info->state.eax;
-      state->esi = info->state.eax;
-      state->edi = info->state.eax;
+      state->ebx = info->state.ebx;
+      state->ecx = info->state.ecx;
+      state->edx = info->state.edx;
+      state->esi = info->state.esi;
+      state->edi = info->state.edi;
       state->userEsp = info->state.esp;
       state->ebp = info->state.ebp;
       state->eflags = info->state.eflags;
@@ -368,11 +413,11 @@ static int sysUpdateThread(ExecutionState *state)
     else
     {
       tcb->execState.eax = info->state.eax;
-      tcb->execState.ebx = info->state.eax;
-      tcb->execState.ecx = info->state.eax;
-      tcb->execState.edx = info->state.eax;
-      tcb->execState.esi = info->state.eax;
-      tcb->execState.edi = info->state.eax;
+      tcb->execState.ebx = info->state.ebx;
+      tcb->execState.ecx = info->state.ecx;
+      tcb->execState.edx = info->state.edx;
+      tcb->execState.esi = info->state.esi;
+      tcb->execState.edi = info->state.edi;
       tcb->execState.userEsp = info->state.esp;
       tcb->execState.ebp = info->state.ebp;
       tcb->execState.eflags = info->state.eflags;
@@ -387,6 +432,10 @@ static int sysUpdateThread(ExecutionState *state)
     initializeRootPmap(tcb->rootPageMap);
   }
 
+  if(flags & TF_EXT_REG_STATE)
+    tcb->extExecState = (addr_t *)info->extRegState;
+
+
   if((flags & TF_PRIORITY) && IS_ERROR(setPriority(tcb, info->priority)))
     RET_MSG(ESYS_FAIL, "Unable to change thread priority.");
 
@@ -395,14 +444,21 @@ static int sysUpdateThread(ExecutionState *state)
 
 static int sysExit(ExecutionState *state)
 {
-  pem_t message =
+  struct ExitMessage message =
   {
-      .subject = EXIT_MSG,
-      .who = getTid(currentThread),
-      .errorCode = (int)state->ebx
+    .who = getTid(currentThread),
+    .statusCode = (int)state->ebx
   };
 
-  sendExceptionMessage(currentThread, INIT_SERVER_TID, &message);
+  kprintf("Sending exit message (code: 0x%x)\n", message.statusCode);
+
+  if(sendKernelMessage(INIT_SERVER_TID, EXIT_MSG, &message, sizeof message) != E_OK)
+    releaseThread(currentThread);
+  else
+  {
+    detachRunQueue(currentThread);
+    currentThread->threadState = ZOMBIE;
+  }
 
   return ESYS_OK;
 }
@@ -410,7 +466,7 @@ static int sysExit(ExecutionState *state)
 static int sysBindIrq(ExecutionState *state)
 {
   tcb_t *tcb = getTcb((tid_t)state->ebx);
-  int irq = (int)state->ecx;
+  unsigned int irq = (unsigned int)state->ecx;
 
   if(getTid(currentThread) != INIT_SERVER_TID)
     RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
@@ -424,7 +480,7 @@ static int sysUnbindIrq(ExecutionState *state)
 {
   if(getTid(currentThread) != INIT_SERVER_TID)
     RET_MSG(ESYS_PERM, "Calling thread doesn't have permission to execute this system call.");
-  else if(IS_ERROR(unregisterIrq((int)state->ebx)))
+  else if(IS_ERROR(unregisterIrq((unsigned int)state->ebx)))
     RET_MSG(ESYS_FAIL, "Unable to unbind irq.");
 
   return ESYS_OK;
@@ -432,7 +488,7 @@ static int sysUnbindIrq(ExecutionState *state)
 
 static int sysEoi(ExecutionState *state)
 {
-  int irqNum = (int)state->ebx;
+  int irqNum = (unsigned int)state->ebx;
 
   if(!isValidIRQ(irqNum))
     RET_MSG(ESYS_ARG, "Invalid irq.");
@@ -459,7 +515,7 @@ static int sysEoi(ExecutionState *state)
 
 static int sysIrqWait(ExecutionState *state)
 {
-  int irqNum = (int)state->ebx;
+  int irqNum = (unsigned int)state->ebx;
   int poll = (int)state->ecx;
 
   if(irqNum == IRQ_ANY)
@@ -509,10 +565,18 @@ static int sysIrqWait(ExecutionState *state)
 
 static int sysSend(ExecutionState *state)
 {
-  tid_t remoteTid = (tid_t)(state->eax >> SYSCALL_TID_OFFSET);
-  int isBlocking = (int)((state->eax & SYSCALL_CALL_MASK) == SYS_SEND_WAIT);
+  msg_t *msg = (msg_t *)state->ebx;
+  msg->flags &= ~MSG_KERNEL;
 
-  switch(sendMessage(currentThread, state, remoteTid, isBlocking, 0))
+  if(!msg)
+    return ESYS_ARG;
+
+  msg_t *recvMsg = (msg->flags & MSG_CALL) ? (msg_t *)state->ecx : NULL;
+
+  if(recvMsg)
+    recvMsg->flags &= ~(MSG_KERNEL | MSG_NOBLOCK);
+
+  switch(sendMessage(currentThread, msg, recvMsg))
   {
     case E_OK:
       return ESYS_OK;
@@ -526,12 +590,22 @@ static int sysSend(ExecutionState *state)
   }
 }
 
+/*
 static int sysCall(ExecutionState *state)
 {
-  tid_t remoteTid = (tid_t)(state->eax >> SYSCALL_TID_OFFSET);
-  int isBlocking = (int)((state->eax & SYSCALL_CALL_MASK) == SYS_CALL_WAIT);
+  msg_t *sendMsg = (msg_t *)state->ebx;
+  msg_t *recvMsg = (msg_t *)state->ecx;
 
-  switch(sendMessage(currentThread, state, remoteTid, isBlocking, 1))
+  if(!sendMsg || !recvMsg)
+    return ESYS_ARG;
+
+  sendMsg->flags &= ~MSG_KERNEL;
+  recvMsg->flags &= ~MSG_KERNEL;
+  recvMsg->flags &= ~MSG_NOBLOCK;
+
+  sendMsg->flags |= MSG_CALL;
+
+  switch(sendMessage(currentThread, sendMsg, 1, recvMsg))
   {
     case E_OK:
       return ESYS_OK;
@@ -543,6 +617,31 @@ static int sysCall(ExecutionState *state)
     default:
       return ESYS_FAIL;
   }
+}
+*/
+int sysReceive(ExecutionState *state)
+{
+  msg_t *msg = (msg_t *)state->ebx;
+
+  if(!msg)
+    return ESYS_ARG;
+
+  msg->flags &= ~(MSG_KERNEL | MSG_CALL);
+
+  switch(receiveMessage(currentThread, msg))
+  {
+    case E_OK:
+      return ESYS_OK;
+    case E_INVALID_ARG:
+      return ESYS_ARG;
+    case E_BLOCK:
+      return ESYS_NOTREADY;
+    case E_FAIL:
+    default:
+      return ESYS_FAIL;
+  }
+
+  return ESYS_FAIL;
 }
 
 static int sysWait(ExecutionState *state)
@@ -572,51 +671,10 @@ static int sysWait(ExecutionState *state)
   }
 }
 
-int sysReceive(ExecutionState *state)
-{
-  tid_t senderTid = (tid_t)(state->eax >> SYSCALL_TID_OFFSET);
-  int isBlocking = (int)((state->eax & SYSCALL_CALL_MASK) == SYS_RECEIVE_WAIT);
-
-  switch(receiveMessage(currentThread, state, senderTid, isBlocking))
-  {
-    case E_OK:
-      return ESYS_OK;
-    case E_INVALID_ARG:
-      return ESYS_ARG;
-    case E_BLOCK:
-      return ESYS_NOTREADY;
-    case E_FAIL:
-    default:
-      return ESYS_FAIL;
-  }
-
-  return ESYS_FAIL;
-}
-
 // Handles a system call
 
 void _syscall( ExecutionState *execState )
 {
-  int retval;
-  unsigned int callIndex = execState->eax & SYSCALL_CALL_MASK;
-
-  retval = callIndex >= sizeof(syscallTable) ? ESYS_BADCALL : syscallTable[callIndex](execState);
-
-  switch(callIndex)
-  {
-    case SYS_SEND:
-    case SYS_SEND_WAIT:
-    case SYS_CALL:
-    case SYS_CALL_WAIT:
-    case SYS_RECEIVE:
-    case SYS_RECEIVE_WAIT:
-      if(retval != ESYS_OK)
-        execState->eax = (dword)retval;
-      else
-        execState->eax = (execState->eax & ~SYSCALL_RET_MASK) | ESYS_OK;
-      break;
-    default:
-      execState->eax = (dword)retval;
-      break;
-  }
+  unsigned int callIndex = SYSCALL_NUM(execState);
+  execState->eax = (callIndex >= sizeof(syscallTable) ? ESYS_BADCALL : syscallTable[callIndex](execState));
 }

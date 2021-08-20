@@ -20,7 +20,7 @@ asm_objs:
 	make -C asm/ all
 
 kernel.dmp: kernel.tmp
-	objdump -Dx -g $< > $@
+	objdump -Dx -g -M intel $< > $@
 
 kernel.dbg: kernel.tmp
 	readelf -a $< > $@

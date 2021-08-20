@@ -4,7 +4,10 @@
 #include <errno.h>
 
 size_t heapSize;
-void *heapStart, *heapEnd;
+void *heapStart, *heapEnd, *mapEnd;
+
+#define ZERO_DEV	0x00000001u
+#define MIN_MAP_PAGES	16
 
 //extern void mapVirt( void *virt, int pages );
 
@@ -14,42 +17,51 @@ extern void print(char *str);
 
 void *sbrk( int increment )
 {
-  void *prevHeap = heapEnd;
-  int pages;
+  void *prevHeapEnd = heapEnd;
+  size_t pages=0;
 
   errno = 0;
 
-  if( heapStart == NULL )
+  if(!heapEnd)
   {
-    heapStart = heapEnd = prevHeap = (void *)HEAP_START;
+    size_t startAddr = (size_t)HEAP_START;
 
-    if( mapMem((addr_t) heapStart, 0, PAGE_SIZE, 0, 0) != 0 )
-    {
-      errno = -ENOMEM;
-      return (void *)-1;
-    }
+    heapEnd = (void *)((startAddr & (PAGE_SIZE-1)) == 0 ? startAddr : (startAddr & ~(PAGE_SIZE-1)) + PAGE_SIZE);
+    heapStart = heapEnd;
+    mapEnd = heapStart;
   }
 
   if( increment == 0 )
-    return prevHeap;
+    return prevHeapEnd;
 
   heapEnd = (void *)((unsigned)heapEnd + increment);
   heapSize += increment;
 
-  pages = ((unsigned)heapEnd / PAGE_SIZE) - ((unsigned)prevHeap / PAGE_SIZE);
+  if(heapEnd > mapEnd)
+  {
+    pages = ((size_t)heapEnd / PAGE_SIZE) - ((size_t)mapEnd / PAGE_SIZE) + 1;
+    pages = (pages < MIN_MAP_PAGES ? MIN_MAP_PAGES : pages);
+  }
 
   if( pages > 0 )
   {
-    if( mapMem((addr_t)(((unsigned)prevHeap & ~(PAGE_SIZE - 1)) + PAGE_SIZE), 0, PAGE_SIZE*pages, 0, 0) != 0 )
+    if(increment > 0)
     {
-      errno = -ENOMEM;
-      return (void *)-1;
+      if( mapMem((addr_t)mapEnd, ZERO_DEV, PAGE_SIZE*pages, 0, 0) != 0 )
+      {
+        errno = -ENOMEM;
+        return (void *)-1;
+      }
+      else
+      {
+        mapEnd = (void *)((size_t)mapEnd + pages * PAGE_SIZE);
+      }
+    }
+    else if(increment < 0)
+    {
+      // XXX: Unmap pages
     }
   }
-  else if( pages < 0 )
-  {
-    // XXX: unmap pages?
-  }
 
-  return prevHeap;
+  return prevHeapEnd;
 }
