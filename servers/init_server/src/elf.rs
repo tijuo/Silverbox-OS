@@ -917,7 +917,7 @@ pub mod loader {
 
     pub fn load_module(module: &BootModule) -> Result<Tid, ()> {
         let stack_top = 0xC0000000usize;
-        let stack_size = 64*1024usize - 4096usize;
+        let stack_size = 4096*1024usize - 4096usize;
         let pmap_option = PhysPageAllocator::alloc()
             .map(|frame| PhysicalPage::from_frame(frame).as_address());
         let pmap;

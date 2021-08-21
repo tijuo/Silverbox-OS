@@ -1,6 +1,6 @@
 use crate::page::VirtualPage;
 use crate::address::{VAddr, PAddr, AlignPtr, Align};
-use hashbrown::{HashMap, HashSet};
+use alloc::collections::{BTreeMap, BTreeSet};
 use crate::Tid;
 use crate::device::DeviceId;
 use core::prelude::v1::*;
@@ -8,20 +8,20 @@ use crate::error;
 use core::cmp;
 
 pub mod manager {
-    use hashbrown::HashMap;
+    use alloc::collections::BTreeMap;
     use crate::address::PAddr;
     use super::AddrSpace;
     use crate::Tid;
     use crate::syscall::{self, INIT_TID};
     use crate::error;
 
-    static mut ADDRESS_SPACES: Option<HashMap<PAddr, AddrSpace>> = None;
+    static mut ADDRESS_SPACES: Option<BTreeMap<PAddr, AddrSpace>> = None;
 
     pub fn init() {
         unsafe {
             ADDRESS_SPACES = match ADDRESS_SPACES {
                 Some(_) => panic!("Address space map has already been initialized."),
-                None => Some(HashMap::new()),
+                None => Some(BTreeMap::new()),
             }
         }
 
@@ -41,14 +41,14 @@ pub mod manager {
         }
     }
 
-    fn addr_space_map<'a>() -> &'static HashMap<PAddr, AddrSpace> {
+    fn addr_space_map<'a>() -> &'static BTreeMap<PAddr, AddrSpace> {
         unsafe {
             ADDRESS_SPACES.as_ref()
                 .expect("Address space map hasn't been initialized yet.")
         }
     }
 
-    fn addr_space_map_mut<'a>() -> &'static mut HashMap<PAddr, AddrSpace> {
+    fn addr_space_map_mut<'a>() -> &'static mut BTreeMap<PAddr, AddrSpace> {
         unsafe {
             ADDRESS_SPACES.as_mut()
                 .expect("Address space map hasn't been initialized yet.")
@@ -99,8 +99,8 @@ impl AddressMapping {
 
 pub struct AddrSpace {
     root_page_map: PAddr,
-    vaddr_map: HashMap<VAddr, AddressMapping>,
-    attached_threads: HashSet<Tid>,
+    vaddr_map: BTreeMap<VAddr, AddressMapping>,
+    attached_threads: BTreeSet<Tid>,
 }
 
 impl AddrSpace {
@@ -113,8 +113,8 @@ impl AddrSpace {
     pub fn new(root_pmap: PAddr) -> Self {
         Self {
             root_page_map: root_pmap,
-            vaddr_map: HashMap::new(),
-            attached_threads: HashSet::new(),
+            vaddr_map: BTreeMap::new(),
+            attached_threads: BTreeSet::new(),
         }
     }
 

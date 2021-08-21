@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use hashbrown::HashMap;
+use alloc::collections::BTreeMap;
 use crate::mapping::MemoryRegion;
 use crate::CTid;
 use core::prelude::v1::*;
@@ -76,7 +76,7 @@ enum Permission {
 
 struct Port {
     creator: CTid,
-    receivers: HashMap<CTid, Binding>,
+    receivers: BTreeMap<CTid, Binding>,
     sender: Option<(CTid, Binding)>,
     flags: u32,
     acl_default: AclDefault,
@@ -94,7 +94,7 @@ impl Port {
             creator,
             flags,
             sender: None,
-            receivers: HashMap::new(),
+            receivers: BTreeMap::new(),
             acl_default: AclDefault::Whitelist,
             acl: Vec::new(),
         }

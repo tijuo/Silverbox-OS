@@ -1,40 +1,46 @@
 use crate::page::{PhysicalPage, VirtualPage};
-use crate::error::Error;
+use crate::error::{Error, NOT_IMPLEMENTED};
 use crate::address::PAddr;
-use crate::error;
+use crate::{error, Tid, message};
 use core::prelude::v1::*;
 use crate::pager::page_alloc::PhysPageAllocator;
 use crate::lowlevel::phys;
 use core::convert::TryFrom;
+use crate::message::{RawMessage, Message};
+use alloc::prelude::v1::String;
+use crate::message::init::{RegisterNameRequest, RawRegisterNameRequest, SimpleResponse};
+use crate::syscall::INIT_TID;
+use crate::eprintln;
+use alloc::boxed::Box;
 
 type DeviceMajor = u16;
 type DeviceMinor = u16;
 
 pub mod manager {
-    use hashbrown::HashMap;
+    use alloc::collections::BTreeMap;
     use super::DeviceMajor;
     use crate::Tid;
     use crate::error;
 
-    static mut DEVICE_MAP: Option<HashMap<DeviceMajor, Tid>> = None;
+    static mut DEVICE_MAP: Option<BTreeMap<DeviceMajor, Tid>> = None;
 
     pub fn init() {
         unsafe {
             DEVICE_MAP = match DEVICE_MAP {
                 Some(_) => panic!("Device map has already been initialized."),
-                None => Some(HashMap::new()),
+                None => Some(BTreeMap::new()),
             }
         }
     }
 
-    fn device_map<'a>() -> &'static HashMap<DeviceMajor, Tid> {
+    fn device_map<'a>() -> &'static BTreeMap<DeviceMajor, Tid> {
         unsafe {
             DEVICE_MAP.as_ref()
                 .expect("Device map hasn't been initialized yet.")
         }
     }
 
-    fn device_map_mut<'a>() -> &'static mut HashMap<DeviceMajor, Tid> {
+    fn device_map_mut<'a>() -> &'static mut BTreeMap<DeviceMajor, Tid> {
         unsafe {
             DEVICE_MAP.as_mut()
                 .expect("Device map hasn't been initialized yet.")
@@ -109,6 +115,18 @@ impl From<DeviceId> for u32 {
     }
 }
 
+impl From<i32> for DeviceId {
+    fn from(id: i32) -> DeviceId {
+        DeviceId::new(id as u32)
+    }
+}
+
+impl From<DeviceId> for i32 {
+    fn from(dev_id: DeviceId) -> i32 {
+        ((dev_id.major << 16) as u32 | dev_id.minor as u32) as i32
+    }
+}
+
 /// Read a block from a device into a physical page
 
 pub fn read_page(vpage: &VirtualPage) -> Result<PhysicalPage, Error> {
@@ -153,7 +171,7 @@ pub fn read_page(vpage: &VirtualPage) -> Result<PhysicalPage, Error> {
 
 /// Write a physical page to a block on a device
 
-pub fn write_page(vpage: &VirtualPage, page: &PhysicalPage) -> Result<(), Error> {
+pub fn write_page(vpage: &VirtualPage, _page: &PhysicalPage) -> Result<(), Error> {
     let major = vpage.device.major;
     let minor = vpage.device.minor;
 
@@ -179,5 +197,54 @@ pub fn write_page(vpage: &VirtualPage, page: &PhysicalPage) -> Result<(), Error>
         }
         _ =>
             Err(error::NOT_IMPLEMENTED)
+    }
+}
+
+const DATA_BUF_SIZE: usize = 32;
+
+fn handle_request(msg: Message<[u8; DATA_BUF_SIZE]>) -> Result<(), (error::Error, Option<String>)> {
+    let raw_msg = msg.raw_message();
+
+    match raw_msg.subject() {
+        _ => Err((NOT_IMPLEMENTED, None))
+    }
+}
+
+pub fn ramdisk_main() -> ! {
+    eprintln!("Starting ramdisk...");
+    let any_sender = Tid::new(RawMessage::ANY_SENDER);
+
+    {
+        let payload: Box<RawRegisterNameRequest> = Box::new(RegisterNameRequest {
+            name: "ramdisk".bytes().collect()
+        }.into());
+
+        let mut register_message: Message<RawRegisterNameRequest> = Message::new(message::init::REGISTER_NAME, Some(payload), 0);
+
+        match register_message.call::<()>(&Tid::new(INIT_TID)) {
+            Err(code) => error::log_error(code, Some(String::from("Unable to register ramdisk name"))),
+            Ok((msg, _)) => {
+                if msg.subject == RawMessage::RESPONSE_OK {
+                    eprintln!("Ramdisk registered successfully.");
+                } else {
+                    eprintln!("Unable to register ramdisk name.");
+                }
+            },
+        }
+    }
+
+    loop {
+        match message::receive::<[u8; DATA_BUF_SIZE]>(&any_sender, 0) {
+            Ok((msg, _)) => {
+                match handle_request(msg) {
+                    Ok(_) => {},
+                    Err((code, arg)) => error::log_error(code, arg),
+                }
+            },
+            Err(code) => {
+                eprintln!("Unable to receive message");
+                error::log_error(code, None);
+            }
+        }
     }
 }

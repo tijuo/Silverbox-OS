@@ -148,11 +148,13 @@ impl HeapRegion {
             let aligned_map_end = self.map_end.align(VirtualPage::SMALL_PAGE_SIZE);
             let unused_len = aligned_map_end - aligned_end;
 
+            // TODO: Reclaim memory by unmapping unused pages if it exceeds a particular count
+
             if unused_len > MAX_UNUSED_LEN {
                 let unmap_start = aligned_end + MIN_INCREMENT_PAGES * VirtualPage::SMALL_PAGE_SIZE;
                 //let pages_to_unmap = (aligned_map_end - unmap_start) / VirtualPage::SMALL_PAGE_SIZE;
 
-                // TODO: unmap would need to get an array of unmapped pages from the kernel
+                // TODO: Use the array of unmapped pages from the kernel to release pages back to the page allocator
 
                 /*
                 match syscall::unmap(None, unmap_start, pages_to_unmap) {

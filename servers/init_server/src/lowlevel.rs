@@ -49,14 +49,14 @@ macro_rules! eprintln {
     () => (eprint!("\n"));
 
     ($($arg:tt)*) => ({
-        $crate::print_debugln(format!($($arg)*).as_str());
+        $crate::lowlevel::print_debugln(format!($($arg)*).as_str());
     })
 }
 
 #[macro_export]
 macro_rules! eprint {
     ($($arg:tt)*) => ({
-        $crate::print_debug(format!($($arg)*).as_str());
+        $crate::lowlevel::print_debug(format!($($arg)*).as_str());
     });
 }
 

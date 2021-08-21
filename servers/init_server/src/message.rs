@@ -150,10 +150,8 @@ impl<T: Sized> Message<T> {
         }
     }
 
-    pub fn send(&mut self, recipient: &Tid, subject: i32, flags: i32) -> Result<usize> {
+    pub fn send(&mut self, recipient: &Tid) -> Result<usize> {
         self.recipient = recipient.clone();
-        self.subject = subject;
-        self.flags = flags;
 
         let mut raw_msg = self.raw_message();
 
@@ -166,22 +164,22 @@ impl<T: Sized> Message<T> {
         }
     }
 
-    pub fn call<U>(&mut self, recipient: &Tid, subject: i32, flags: i32) -> Result<(Message<U>, usize)> {
+    pub fn call<U>(&mut self, recipient: &Tid) -> Result<(Message<U>, usize)> {
         self.recipient = recipient.clone();
-        self.subject = subject;
-        self.flags = flags;
 
-        let u_size = mem::size_of::<T>();
+        let u_size = mem::size_of::<U>();
         let mut v: Vec<u8> = vec![0; u_size];
+        let v_ptr = if u_size == 0 { ptr::null_mut() } else { &mut v as *mut Vec<u8> as *mut c_void };
+
         let mut send_msg = self.raw_message();
         let mut recv_msg = RawMessage {
-            subject,
+            subject: 0,
             sender: Tid::null_ctid(),
             recipient: Tid::null_ctid(),
-            buffer: v.as_mut_ptr() as *mut c_void,
+            buffer: v_ptr,
             buffer_len: u_size,
             bytes_transferred: 0,
-            flags,
+            flags: 0,
         };
 
         match unsafe { syscall::sys_call(&mut send_msg as *mut RawMessage,
@@ -197,12 +195,15 @@ impl<T: Sized> Message<T> {
         }
     }
 }
+use crate::eprintln;
 
 impl<T> TryFrom<RawMessage> for Message<T> {
     type Error = i32;
 
     fn try_from(value: RawMessage) -> result::Result<Self, Self::Error> {
-        if value.buffer_len != mem::size_of::<T>() || value.buffer.is_null() && value.buffer_len != 0 {
+        if value.buffer_len != mem::size_of::<T>() || (value.buffer.is_null() && value.buffer_len != 0) {
+            eprintln!("Buffer len: {} T size: {}", value.buffer_len, mem::size_of::<T>());
+            eprintln!("value.buffer addr: {:p} ", value.buffer);
             result::Result::Err(error::PARSE_ERROR)
         } else {
             result::Result::Ok(Message {
@@ -221,13 +222,13 @@ impl<T> TryFrom<RawMessage> for Message<T> {
     }
 }
 
-pub fn send<T: Sized>(recipient: &Tid, message: &mut Message<T>, flags: i32) -> Result<usize> {
-    message.send(recipient, message.subject, flags)
+pub fn send<T: Sized>(recipient: &Tid, message: &mut Message<T>) -> Result<usize> {
+    message.send(recipient)
 }
 
-pub fn call<S, R>(recipient: &Tid, send_msg: &mut Message<S>, flags: i32) -> Result<(Message<R>, usize)>
+pub fn call<S, R>(recipient: &Tid, send_msg: &mut Message<S>) -> Result<(Message<R>, usize)>
     where S: Sized, R: Sized {
-    send_msg.call(recipient, send_msg.subject, flags)
+    send_msg.call(recipient)
 }
 
 pub fn receive<T: Sized>(sender: &Tid, flags: i32) -> Result<(Message<T>, usize)> {
@@ -501,14 +502,14 @@ pub mod init {
     }
 
     pub trait SimpleResponse {
-        fn new_message(recipient: Tid, is_success: bool) -> BlankMessage {
+        fn new_message(recipient: Tid, is_success: bool, flags: i32) -> BlankMessage {
             Message {
                 subject: if is_success { RawMessage::RESPONSE_OK } else { RawMessage::RESPONSE_FAIL },
                 sender: Tid::null(),
                 recipient: recipient.into(),
                 data: None,
                 bytes_transferred: None,
-                flags: 0
+                flags,
             }
         }
     }
@@ -585,6 +586,21 @@ pub mod init {
         }
     }
 
+    impl From<MapRequest> for RawMapRequest {
+        fn from(msg: MapRequest) -> Self {
+            RawMapRequest {
+                address: match msg.address {
+                    None => ptr::null(),
+                    Some(a) => a as *const c_void,
+                },
+                device: msg.device.into(),
+                length: msg.length,
+                offset: msg.offset,
+                flags: msg.flags as i32,
+            }
+        }
+    }
+
     impl TryFrom<RawMessage> for MapRequest {
         type Error = i32;
         fn try_from(value: RawMessage) -> result::Result<Self, Self::Error> {
@@ -621,7 +637,7 @@ pub mod init {
     pub struct MapResponse {}
 
     impl MapResponse {
-        pub fn new_message(recipient: Tid, new_address: Option<VAddr>) -> Message<VAddr> {
+        pub fn new_message(recipient: Tid, new_address: Option<VAddr>, flags: i32) -> Message<VAddr> {
             match new_address {
                 None => Message {
                     subject: RawMessage::RESPONSE_FAIL,
@@ -629,7 +645,7 @@ pub mod init {
                     recipient: recipient.clone(),
                     data: None,
                     bytes_transferred: None,
-                    flags: 0,
+                    flags,
                 },
                 Some(address) => Message {
                     subject: RawMessage::RESPONSE_OK,
@@ -637,7 +653,7 @@ pub mod init {
                     recipient: recipient.into(),
                     data: Some(Box::new(address.clone())),
                     bytes_transferred: None,
-                    flags: 0
+                    flags,
                 }
             }
         }
@@ -692,6 +708,15 @@ pub mod init {
                     address: raw_msg.address as VAddr,
                     length: raw_msg.length,
                 })
+            }
+        }
+    }
+
+    impl From<UnmapRequest> for RawUnmapRequest {
+        fn from(msg: UnmapRequest) -> Self {
+            Self {
+                address: msg.address as *const c_void,
+                length: msg.length,
             }
         }
     }
@@ -991,6 +1016,14 @@ pub mod init {
         }
     }
 
+    impl From<RegisterServerRequest> for RawRegisterServerRequest {
+        fn from(msg: RegisterServerRequest) -> Self {
+            Self {
+                server_type: msg.server_type,
+            }
+        }
+    }
+
     impl TryFrom<RawMessage> for RegisterServerRequest {
         type Error = i32;
         fn try_from(value: RawMessage) -> result::Result<Self, Self::Error> {
@@ -1047,6 +1080,24 @@ pub mod init {
             Self {
                 name: Vec::from(s)
             }
+        }
+    }
+
+    impl From<RegisterNameRequest> for RawRegisterNameRequest {
+        fn from(msg: RegisterNameRequest) -> Self {
+            let mut raw_msg = Self {
+                name: [0; MAX_NAME_LEN]
+            };
+
+            match msg.name_string() {
+                Ok(name) => {
+                    for (raw_char, name_char) in raw_msg.name.iter_mut().zip(name.into_bytes().into_iter()) {
+                        *raw_char = name_char;
+                    }
+                },
+                _ => (),
+            }
+            raw_msg
         }
     }
 
@@ -1135,6 +1186,24 @@ pub mod init {
         }
     }
 
+    impl From<UnregisterNameRequest> for RawUnregisterNameRequest {
+        fn from(msg: UnregisterNameRequest) -> Self {
+            let mut raw_msg = Self {
+                name: [0; MAX_NAME_LEN]
+            };
+
+            match msg.name_string() {
+                Ok(name) => {
+                    for (raw_char, name_char) in raw_msg.name.iter_mut().zip(name.into_bytes().into_iter()) {
+                        *raw_char = name_char;
+                    }
+                },
+                _ => (),
+            }
+            raw_msg
+        }
+    }
+
     impl NameString for UnregisterNameRequest {
         fn name_vec(&self) -> &Vec<u8> {
             &self.name
@@ -1195,6 +1264,24 @@ pub mod init {
         }
     }
 
+    impl From<LookupNameRequest> for RawLookupNameRequest {
+        fn from(msg: LookupNameRequest) -> Self {
+            let mut raw_msg = Self {
+                name: [0; MAX_NAME_LEN]
+            };
+
+            match msg.name_string() {
+                Ok(name) => {
+                    for (raw_char, name_char) in raw_msg.name.iter_mut().zip(name.into_bytes().into_iter()) {
+                        *raw_char = name_char;
+                    }
+                },
+                _ => (),
+            }
+            raw_msg
+        }
+    }
+
     impl NameString for LookupNameRequest {
         fn name_vec(&self) -> &Vec<u8> {
             &self.name
@@ -1204,7 +1291,7 @@ pub mod init {
     pub struct LookupNameResponse {}
 
     impl LookupNameResponse {
-        pub fn new_message(recipient: Tid, tid_option: Option<Tid>) -> Message<CTid> {
+        pub fn new_message(recipient: Tid, tid_option: Option<Tid>, flags: i32) -> Message<CTid> {
             match tid_option {
                 None => Message {
                     subject: RawMessage::RESPONSE_FAIL,
@@ -1212,7 +1299,7 @@ pub mod init {
                     recipient: recipient.clone(),
                     data: None,
                     bytes_transferred: None,
-                    flags: 0,
+                    flags,
                 },
                 Some(tid) => Message {
                     subject: RawMessage::RESPONSE_OK,
@@ -1220,7 +1307,7 @@ pub mod init {
                     recipient: recipient.into(),
                     data: Some(Box::new(tid.into())),
                     bytes_transferred: None,
-                    flags: 0
+                    flags,
                 }
             }
         }

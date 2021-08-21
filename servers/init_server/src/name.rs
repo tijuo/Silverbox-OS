@@ -2,13 +2,13 @@ static MAX_NAME_LEN: usize = 12;
 
 pub(crate) mod manager {
     use crate::Tid;
-    use hashbrown::HashMap;
+    use alloc::collections::BTreeMap;
     use crate::error::{ALREADY_REGISTERED, LONG_NAME};
     use super::MAX_NAME_LEN;
     use alloc::string::String;
     use alloc::vec::Vec;
 
-    static mut NAME_MAP: Option<HashMap<String, Tid>> = None;
+    static mut NAME_MAP: Option<BTreeMap<String, Tid>> = None;
 
     /// Initialize the name map. This should only be called once.
 
@@ -16,19 +16,19 @@ pub(crate) mod manager {
         unsafe {
             NAME_MAP = match NAME_MAP {
                 Some(_) => panic!("Name map has already been initialized."),
-                None => Some(HashMap::new()),
+                None => Some(BTreeMap::new()),
             }
         }
     }
 
-    fn name_map() -> &'static HashMap<String, Tid> {
+    fn name_map() -> &'static BTreeMap<String, Tid> {
         unsafe {
             NAME_MAP.as_ref()
                 .expect("Name map hasn't been initialized yet.")
         }
     }
 
-    fn name_map_mut() -> &'static mut HashMap<String, Tid> {
+    fn name_map_mut() -> &'static mut BTreeMap<String, Tid> {
         unsafe {
             NAME_MAP.as_mut()
                 .expect("Name map hasn't been initialized yet.")
@@ -177,7 +177,7 @@ pub(crate) mod manager {
 
 #[cfg(test)]
 mod test {
-    use hashbrown::HashMap;
+    use hashbrown::BTreeMap;
     use crate::Tid;
     use super::manager::{init, register, lookup, unregister, unregister_tid};
     use alloc::string::String;
