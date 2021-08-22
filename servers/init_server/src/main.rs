@@ -38,6 +38,7 @@ mod lowlevel;
 mod sbrk;
 #[allow(dead_code)]
 mod elf;
+mod ramdisk;
 
 use address::{PAddr, PSize};
 use message::RawMessage;
@@ -62,7 +63,6 @@ use crate::mapping::AddrSpace;
 use crate::page::VirtualPage;
 use crate::message::Message;
 use core::convert::TryFrom;
-use crate::error::{BAD_REQUEST, NOT_IMPLEMENTED};
 use crate::message::init::{SimpleResponse, NameString};
 use core::cmp::Ordering;
 use alloc::prelude::v1::Vec;
@@ -156,7 +156,7 @@ fn init(multiboot_info: * const RawMultibootInfo, last_free_kernel_page: PAddr) 
     device::manager::init();
 
     eprintln!("Initializing idle thread...");
-    init_threads(vec![idle_main, device::ramdisk_main]);
+    init_threads(vec![idle_main, ramdisk::ramdisk_main]);
 
     eprintln!("Loading modules...");
     let multiboot_box = elf::read_multiboot_info(multiboot_info as usize as PAddr);
@@ -205,7 +205,7 @@ fn handle_message<T>(message: Message<T>) -> Result<(), (error::Error, Option<St
                             pager::handle_page_fault(&ex_msg)
                         } else {
                             error::dump_state(&message.sender);
-                            Err((NOT_IMPLEMENTED, None))
+                            Err((error::NOT_IMPLEMENTED, None))
                         };
 
                         let subject = if result.is_ok() {

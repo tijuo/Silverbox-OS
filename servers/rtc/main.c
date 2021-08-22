@@ -120,11 +120,6 @@ int main(void)
 
   fprintf(stderr, "Starting rtc server...\n");
 
-  if(registerServer(SERVER_GENERIC) == 0)
-    fprintf(stderr, "Server registered successfully.\n");
-  else
-    fprintf(stderr, "Unable to register time server.\n");
-
   if(registerName(RTC_NAME) == 0)
     fprintf(stderr, "rtc name registered\n");
   else

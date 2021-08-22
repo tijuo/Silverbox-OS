@@ -31,24 +31,24 @@
    - clear()
 */
 
-#define SERVER_NAME 		"video"
-#define DEVICE_NAME		"video"
-#define DEV_MAJOR		5
-#define NUM_DEVICES		1
+#define SERVER_NAME 		    "video"
+#define DEVICE_NAME		        "video"
+#define DEV_MAJOR		        5
+#define NUM_DEVICES		        1
 
-#define HTAB_WIDTH 		8
+#define HTAB_WIDTH 		        8
 
-#define VID_PUTCH		0
-#define VID_GETCH		1
-#define VID_SETCURS		2
-#define VID_GET_CURS		3
-#define VID_SHOW_CURS		4
-#define VID_SCROLL		5
-#define VID_SET_ATTR		6
-#define VID_SET_MODE		7
-#define VID_RESET		8
-#define VID_CLEAR		9
-#define VID_ENAB_CURS		10
+#define VID_PUTCH		        0
+#define VID_GETCH		        1
+#define VID_SETCURS		        2
+#define VID_GET_CURS		    3
+#define VID_SHOW_CURS		    4
+#define VID_SCROLL		        5
+#define VID_SET_ATTR		    6
+#define VID_SET_MODE		    7
+#define VID_RESET		        8
+#define VID_CLEAR		        9
+#define VID_ENAB_CURS		    10
 
 #define doCarrReturn() charXPos = 0;
 

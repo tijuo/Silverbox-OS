@@ -86,14 +86,15 @@ int destroyPort(pid_t port)
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
 }
 
-int registerServer(int type)
+int registerServer(int type, int id)
 {
-  struct RegisterServerRequest request;
+  struct RegisterServerRequest request = {
+    .type = type,
+    .id = id,
+  };
 
   msg_t requestMsg = REQUEST_MSG(REGISTER_SERVER, INIT_SERVER_TID, request);
   msg_t responseMsg = EMPTY_MSG;
-
-  request.type = type;
 
   return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
            && responseMsg.subject == RESPONSE_OK) ? 0 : -1;

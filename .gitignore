@@ -13,3 +13,4 @@
 *.vs
 *.settings
 kernel/kernel
+bin/

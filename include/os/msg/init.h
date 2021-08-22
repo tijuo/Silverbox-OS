@@ -6,9 +6,10 @@
 
 #define INIT_SERVER_TID			1024
 
-#define SERVER_TYPE_DRIVER
-#define SERVER_TYPE_FS
-#define SERVER_TYPE_PAGER
+#define SERVER_TYPE_DRIVER		1
+#define SERVER_TYPE_FS			2
+#define SERVER_TYPE_PAGER		3
+
 #define MAX_NAME_LEN			32
 
 struct MapRequest
@@ -64,6 +65,7 @@ struct ReceiveMessageRequest
 struct RegisterServerRequest
 {
   int type;
+  int id;
 };
 
 struct RegisterNameRequest

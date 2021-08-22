@@ -972,6 +972,12 @@ pub mod init {
     #[repr(C)]
     pub struct RawRegisterServerRequest {
         pub server_type: i32,
+        pub id: i32,
+    }
+
+    impl RawRegisterServerRequest {
+        pub const DEVICE_DRIVER: i32 = 1;
+        pub const FILESYSTEM: i32 = 2;
     }
 
     impl TryFrom<RawMessage> for RawRegisterServerRequest {
@@ -982,14 +988,18 @@ pub mod init {
                 Err(error::PARSE_ERROR)
             } else {
                 let server_arr;
-                let server_ptr = msg.buffer as *const [u8; mem::size_of::<i32>()];
+                let id_arr;
+                let server_ptr = msg.buffer.wrapping_add(offset_of!(RawRegisterServerRequest, server_type)) as *const [u8; mem::size_of::<i32>()];
+                let id_ptr = msg.buffer.wrapping_add(offset_of!(RawRegisterServerRequest, id)) as *const [u8; mem::size_of::<i32>()];
 
                 unsafe {
                     server_arr = server_ptr.read();
+                    id_arr = id_ptr.read();
                 }
 
                 Ok(RawRegisterServerRequest {
                     server_type: i32::from_le_bytes(server_arr),
+                    id: i32::from_le_bytes(id_arr)
                 })
             }
         }
@@ -997,6 +1007,7 @@ pub mod init {
 
     pub struct RegisterServerRequest {
         pub server_type: i32,
+        pub id: i32,
     }
 
     impl RegisterServerRequest {
@@ -1012,6 +1023,7 @@ pub mod init {
         fn from(raw_msg: RawRegisterServerRequest) -> Self {
             Self {
                 server_type: raw_msg.server_type,
+                id: raw_msg.id,
             }
         }
     }
@@ -1020,6 +1032,7 @@ pub mod init {
         fn from(msg: RegisterServerRequest) -> Self {
             Self {
                 server_type: msg.server_type,
+                id: msg.id,
             }
         }
     }

@@ -1,17 +1,10 @@
 use crate::page::{PhysicalPage, VirtualPage};
-use crate::error::{Error, NOT_IMPLEMENTED};
+use crate::error::{self, Error};
 use crate::address::PAddr;
-use crate::{error, Tid, message};
 use core::prelude::v1::*;
 use crate::pager::page_alloc::PhysPageAllocator;
 use crate::lowlevel::phys;
 use core::convert::TryFrom;
-use crate::message::{RawMessage, Message};
-use alloc::prelude::v1::String;
-use crate::message::init::{RegisterNameRequest, RawRegisterNameRequest, SimpleResponse};
-use crate::syscall::INIT_TID;
-use crate::eprintln;
-use alloc::boxed::Box;
 
 type DeviceMajor = u16;
 type DeviceMinor = u16;
@@ -197,54 +190,5 @@ pub fn write_page(vpage: &VirtualPage, _page: &PhysicalPage) -> Result<(), Error
         }
         _ =>
             Err(error::NOT_IMPLEMENTED)
-    }
-}
-
-const DATA_BUF_SIZE: usize = 32;
-
-fn handle_request(msg: Message<[u8; DATA_BUF_SIZE]>) -> Result<(), (error::Error, Option<String>)> {
-    let raw_msg = msg.raw_message();
-
-    match raw_msg.subject() {
-        _ => Err((NOT_IMPLEMENTED, None))
-    }
-}
-
-pub fn ramdisk_main() -> ! {
-    eprintln!("Starting ramdisk...");
-    let any_sender = Tid::new(RawMessage::ANY_SENDER);
-
-    {
-        let payload: Box<RawRegisterNameRequest> = Box::new(RegisterNameRequest {
-            name: "ramdisk".bytes().collect()
-        }.into());
-
-        let mut register_message: Message<RawRegisterNameRequest> = Message::new(message::init::REGISTER_NAME, Some(payload), 0);
-
-        match register_message.call::<()>(&Tid::new(INIT_TID)) {
-            Err(code) => error::log_error(code, Some(String::from("Unable to register ramdisk name"))),
-            Ok((msg, _)) => {
-                if msg.subject == RawMessage::RESPONSE_OK {
-                    eprintln!("Ramdisk registered successfully.");
-                } else {
-                    eprintln!("Unable to register ramdisk name.");
-                }
-            },
-        }
-    }
-
-    loop {
-        match message::receive::<[u8; DATA_BUF_SIZE]>(&any_sender, 0) {
-            Ok((msg, _)) => {
-                match handle_request(msg) {
-                    Ok(_) => {},
-                    Err((code, arg)) => error::log_error(code, arg),
-                }
-            },
-            Err(code) => {
-                eprintln!("Unable to receive message");
-                error::log_error(code, None);
-            }
-        }
     }
 }

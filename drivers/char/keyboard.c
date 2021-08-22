@@ -7,18 +7,19 @@
 #include <os/message.h>
 #include "scancodes.h"
 #include <os/keys.h>
+#include <os/ostypes/circbuffer.h>
 
 #define MSG_TIMEOUT		3000
 
 /* Keyboard commands(via interface) */
 
-#define KB_WRITE_OUTPUT		0x90
-#define KB_VERSION_NUM		0xA1
-#define KB_GET_PASSWORD		0xA4
-#define KB_SET_PASSWORD		0xA5
-#define KB_CHECK_PASSWORD	0xA6
+#define KB_WRITE_OUTPUT		    0x90
+#define KB_VERSION_NUM		    0xA1
+#define KB_GET_PASSWORD		    0xA4
+#define KB_SET_PASSWORD		    0xA5
+#define KB_CHECK_PASSWORD	    0xA6
 #define MOUSE_DISABLE           0xA7
-#define MOUSE_ENABLE		0xA8
+#define MOUSE_ENABLE		    0xA8
 #define MOUSE_TEST              0xAA
 #define KB_TEST                 0xAB
 #define KB_DISABLE              0xAD
@@ -30,69 +31,69 @@
 #define KB_READ_OUTPUT          0xD1
 #define KB_WRITE_BUFFER         0xD2
 #define MOUSE_WRITE_BUFFER      0xD3
-#define MOUSE_WRITE		0xD4
-#define KB_READ_TEST		0xE0
-#define KB_PULSE_OUTPUT		0xF0
+#define MOUSE_WRITE		        0xD4
+#define KB_READ_TEST		    0xE0
+#define KB_PULSE_OUTPUT		    0xF0
 
 /* Mouse commands(via interface) */
 
-#define MOUSE_RESET		0xFF
-#define MOUSE_RESEND		0xFE
-#define MOUSE_DEFAULTS		0xF6
-#define MOUSE_DIS_REPORT	0xF5
-#define MOUSE_EN_REPORT		0xF4
-#define MOUSE_RATE		0xF3
-#define MOUSE_REMOTE		0xF0
-#define MOUSE_WRAP		0xEE
-#define MOUSE_RESET_WRAP	0xEC
-#define MOUSE_READ_DATA		0xEB
-#define MOUSE_STREAM		0xEA
-#define MOUSE_STATUS_REQ	0xE9
-#define MOUSE_DEVICE_ID		0xF2
-#define MOUSE_RESOLUTION	0xE8
-#define MOUSE_SCALING_2_1	0xE7
-#define MOUSE_SCALING_1_1	0xE6
+#define MOUSE_RESET		        0xFF
+#define MOUSE_RESEND		    0xFE
+#define MOUSE_DEFAULTS	    	0xF6
+#define MOUSE_DIS_REPORT	    0xF5
+#define MOUSE_EN_REPORT		    0xF4
+#define MOUSE_RATE		        0xF3
+#define MOUSE_REMOTE	    	0xF0
+#define MOUSE_WRAP		        0xEE
+#define MOUSE_RESET_WRAP    	0xEC
+#define MOUSE_READ_DATA	    	0xEB
+#define MOUSE_STREAM	    	0xEA
+#define MOUSE_STATUS_REQ    	0xE9
+#define MOUSE_DEVICE_ID	    	0xF2
+#define MOUSE_RESOLUTION	    0xE8
+#define MOUSE_SCALING_2_1	    0xE7
+#define MOUSE_SCALING_1_1       0xE6
 
 /* Low level keyboard commands */
 
-#define KB_SCANCODE		0xF0
-#define KB_RESEND		0xFE
-#define KB_RESET		0xFF
-#define KB_ENABLE_SCAN		0xF4
-#define KB_DISABLE_SCAN		0xF5
-#define KB_DEFAULTS		0xF6
-#define KB_LEDS			0xED
-#define KB_TYPERATE		0xF3
-#define KB_READ_ID		0xF2
-#define KB_ECHO			0xEE
-#define KB_MAKE			0xFD
-#define KB_MAKE_BRK		0xFC
-#define KB_TYPEMATIC		0xFB
-#define KB_ALL_TYPE_MK_BRK	0xFA
-#define KB_ALL_MAKE		0xF9
-#define KB_ALL_MAKE_BRK		0xF8
-#define KB_ALL_TYPEMATIC	0xF7
+#define KB_SCANCODE		        0xF0
+#define KB_RESEND		        0xFE
+#define KB_RESET		        0xFF
+#define KB_ENABLE_SCAN		    0xF4
+#define KB_DISABLE_SCAN		    0xF5
+#define KB_DEFAULTS		        0xF6
+#define KB_LEDS			        0xED
+#define KB_TYPERATE		        0xF3
+#define KB_READ_ID		        0xF2
+#define KB_ECHO			        0xEE
+#define KB_MAKE			        0xFD
+#define KB_MAKE_BRK		        0xFC
+#define KB_TYPEMATIC		    0xFB
+#define KB_ALL_TYPE_MK_BRK	    0xFA
+#define KB_ALL_MAKE		        0xF9
+#define KB_ALL_MAKE_BRK		    0xF8
+#define KB_ALL_TYPEMATIC	    0xF7
 
 
-#define KB_ACK			0xFA
+#define KB_ACK			        0xFA
 
-#define KB_EXT_CODE		0xE0
-#define KB_EXT_BREAK		0xF0
+#define KB_EXT_CODE		        0xE0
+#define KB_EXT_BREAK	    	0xF0
 //#define KB_
-#define KB_IO			0x60
-#define KB_STAT_CMD  		0x64
+#define KB_IO			        0x60
+#define KB_STAT_CMD  	    	0x64
 
-#define KB_ACK      		0xFA
-#define KB_NACK     		0xFE
-#define KB_DNACK    		0xFC
+#define KB_ACK      	    	0xFA
+#define KB_NACK     	       	0xFE
+#define KB_DNACK    		    0xFC
 
-#define KEYBOARD_NAME 		"keyboard"
-#define KEYBOARD_ID 		6
-#define NUM_DEVICES		1
-#define DEV_MAJOR		KEYBOARD_ID
+#define KEYBOARD_NAME 		    "keyboard"
+#define KEYBOARD_ID 		    6
+#define NUM_DEVICES		        1
+#define DEV_MAJOR		        KEYBOARD_ID
 
-#define KB_MAX_BUFSIZE          512
-#define MOUSE_MAX_BUFSIZE	768
+#define KB_MAX_BUFSIZE          2048
+#define MOUSE_MAX_BUFSIZE	    2048
 
 #define sendKB_Data(data) \
   if(waitForKbInput() == 0) \
@@ -114,19 +115,25 @@
 				sendKB_Data(comm );
 //				getAck();
 
-volatile byte kbBuffer[KB_MAX_BUFSIZE];
-volatile byte mouseBuffer[MOUSE_MAX_BUFSIZE];
-volatile int kbBuffHead = 0;
-volatile int kbBuffTail = 0;
-volatile int mouseBuffHead = 0;
-volatile int mouseBuffTail = 0;
+byte kbBufData[KB_MAX_BUFSIZE];
+byte mouseBufData[MOUSE_MAX_BUFSIZE];
+
+struct CircularBuffer kbBuffer = {
+    .data = kbBufData,
+    .ptr = kbBufData,
+    .unreadLen = 0,
+    .bufLen = KB_MAX_BUFSIZE
+};
+
+struct CircularBuffer mouseBuffer = {
+    .data = mouseBufData,
+    .ptr = mouseBufData,
+    .unreadLen = 0,
+    .bufLen = MOUSE_MAX_BUFSIZE
+};
 
 int getAck(void);
 int waitForKbInput(void);
-byte *getMouseData( void );
-int putMouseData( byte data[3] );
-int putKeyCode( byte keycode );
-int getKeyCode( void );
 
 enum ScancodeSet { XT_SET, AT_SET };
 
@@ -139,72 +146,9 @@ void handle_dev_write( struct Message *msg );
 void handle_dev_ioctl( struct Message *msg );
 void handle_dev_error( struct Message *msg );
 
-void signal_handler(int signal, int arg);
-
-extern void __dummy_sig_handler(int, int);
-
 char kbMsgBuffer[4096];
 
-/*
-int printMsg( char *msg )
-{
-  if( video_srv == NULL_TID )
-    video_srv = lookupName("video", strlen("video"));
-
-  return deviceWrite( video_srv, 0, 0, strlen(msg), 1, msg );
-}
-*/
-/* There needs to be some sort of lock for this. */
-
-int putKeyCode( byte keycode )
-{
-  if( (( kbBuffTail + 1 ) % KB_MAX_BUFSIZE) == kbBuffHead )
-    return -1;
-
-  kbBuffer[kbBuffTail] = keycode;
-  kbBuffTail = (kbBuffTail + 1) % KB_MAX_BUFSIZE;
-
-  return 0;
-}
-
-int getKeyCode( void )
-{
-  byte keycode;
-
-//  //printMsg("Yes", 3);
-
-  if( kbBuffHead == kbBuffTail )
-    return -1;
-
-  keycode = kbBuffer[kbBuffHead];
-  kbBuffHead = (kbBuffHead + 1) % KB_MAX_BUFSIZE;
-
-  return keycode;
-}
-
-int putMouseData( byte data[3] )
-{
-  if( (( mouseBuffTail + 3 ) % MOUSE_MAX_BUFSIZE) == mouseBuffHead )
-    return -1;
-
-  memcpy( (byte *)&mouseBuffer[mouseBuffTail], data, 3 );
-  mouseBuffTail = (mouseBuffTail + 3) % MOUSE_MAX_BUFSIZE;
-
-  return 0;
-}
-
-byte *getMouseData( void )
-{
-  byte *addr;
-
-  if( mouseBuffHead == mouseBuffTail )
-    return NULL;
-
-  addr = (byte *)&mouseBuffer[mouseBuffHead];
-  mouseBuffHead = (mouseBuffHead + 3) % MOUSE_MAX_BUFSIZE;
-
-  return addr;
-}
+/* Assumes buffer and outBytes are properly initialized and not NULL. */
 
 int waitForKbInput(void)
 {
@@ -514,8 +458,6 @@ int main( void )
 
   set_signal_handler(&signal_handler);
   __register_int(0x21);
-
-  /* !!! What does this do? !!! */
 
   while(1)
     handleDevRequests();

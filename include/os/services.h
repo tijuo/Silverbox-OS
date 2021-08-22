@@ -6,8 +6,8 @@
 #include <os/region.h>
 #include <os/vfs.h>
 
-#define SERVER_GENERIC		1
-#define SERVER_DEVICE		2
+#define SERVER_GENERIC		0
+#define SERVER_DEVICE		1
 
 #define MAP_MEM			1
 #define UNMAP_MEM		2
@@ -119,7 +119,7 @@ addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags);
 int unmapMem(addr_t addr, size_t length);
 pid_t createPort(pid_t port, int flags);
 int destroyPort(pid_t port);
-int registerServer(int type);
+int registerServer(int type, int id);
 int unregisterServer(void);
 int registerName(const char *name);
 tid_t lookupName(const char *name);

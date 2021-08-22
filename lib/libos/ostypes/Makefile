@@ -1,6 +1,6 @@
 include ../../../prefix.inc
 
-SRC     =cqueue.c sbarray.c sbhash.c sbstring.c
+SRC     =cqueue.c sbarray.c sbhash.c sbstring.c circbuffer.c
 OBJ     =$(SRC:.c=.o)
 OPT_FLG =-O0
 
