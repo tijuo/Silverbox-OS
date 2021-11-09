@@ -7,39 +7,39 @@
 #include <kernel/paging.h>
 #include <kernel/memory.h>
 
+#define INVALID_PFRAME             (addr_t)0xFFFFFFFFu
+
 /* FIXME: Changing any of these values may require changing
    the asm code */
 
 #define KERNEL_TCB_START	        ((addr_t)&kTcbStart)
+#define KERNEL_TCB_END		        ((addr_t)&kTcbEnd)
 #define KERNEL_VSTART       	    ((addr_t)&kVirtStart)
 #define PHYSMEM_START       	    ((addr_t)&VPhysMemStart)
 #define KERNEL_START        	    ((addr_t)&kPhysStart)
-#define RESD_PHYSMEM	    	    KERNEL_START
+#define RESD_PHYSMEM	    	    	KERNEL_START
 
 #define PAGE_STACK                  ((addr_t)&kVirtPageStack)
 
-#define KVIRT_TO_PHYS(x)	        ((x) - (KERNEL_VSTART-KERNEL_START))
+#define KVIRT_TO_PHYS(x)	        ((addr_t)(x) + (KERNEL_START-KERNEL_VSTART))
+#define KPHYS_TO_VIRT(x)					((addr_t)(x) - (KERNEL_START-KERNEL_VSTART))
 
-#define KERNEL_HEAP_START           ((addr_t)0xD0000000)
-#define KERNEL_HEAP_LIMIT           ((addr_t)0xF0000000)
+#define PHYS_MAP_LIMIT              0x40000000u
+
+#define MAX_PHYS_MEMORY							0x80000000u
 
 /* FIXME: Changing any of these values may require changing the
    asm code. */
 
-#define KMAP_AREA			((addr_t)0xF0000000)
+#define KMAP_AREA			        (0xFF000u)
 #define TEMP_PAGEADDR		    	KMAP_AREA
-#define LAPIC_VADDR                 	(TEMP_PAGEADDR + PAGE_SIZE)
-#define KERNEL_CLOCK		        (LAPIC_VADDR + PAGE_SIZE)
-
-#if DEBUG
-#define K1TO1_AREA			(KMAP_AREA + 0x100000)
-#endif /* DEBUG */
+#define LAPIC_VADDR                 (0x100000u)
 
 #define INVALID_VADDR       	    ((addr_t)0xFFFFFFFF)
 #define INVALID_ADDR        	    ((addr_t)0xFFFFFFFF)
 
 #define INIT_SERVER_STACK_TOP	    ((addr_t)KERNEL_TCB_START)
-#define INIT_SERVER_STACK_SIZE      0x400000
+#define INIT_SERVER_STACK_SIZE      0x400000u
 /** Aligns an address to the previous boundary (if not already aligned) */
 #define ALIGN_DOWN(addr, boundary)       ((addr_t)( (addr) & ~((boundary) - 1) ))
 
@@ -66,40 +66,58 @@
 /// Unmaps the temporary page
 #define unmapTemp() 	            kUnmapPage((addr_t)TEMP_PAGEADDR, NULL)
 
-HOT(int readPmapEntry(paddr_t pbase, int entry, void *buffer));
-HOT(int writePmapEntry(paddr_t pbase, int entry, void *buffer));
-
-HOT(int kMapPage( addr_t virt, paddr_t phys, u32 flags ));
-HOT(int mapPage( addr_t virt, paddr_t phys, u32 flags, paddr_t paddrSpace ));
-HOT(int kUnmapPage( addr_t virt, paddr_t *phys ));
-HOT(int kMapPageTable( addr_t virt, paddr_t phys, u32 flags ));
-HOT(int kUnmapPageTable( addr_t virt, paddr_t *phys ));
-HOT(addr_t unmapPage( addr_t virt, paddr_t addrSpace ));
-
 int initializeRootPmap(dword pmap);
 
 int peek( paddr_t, void *, size_t );
 int poke( paddr_t, void *, size_t );
 
-HOT(int peekVirt( addr_t address, size_t len, void *buffer, paddr_t paddrSpace ));
-HOT(int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t paddrSpace ));
+HOT int peekVirt( addr_t address, size_t len, void *buffer, paddr_t addrSpace );
+HOT int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t addrSpace );
 
 int clearPhysPage( paddr_t phys );
 
-bool isReadable( addr_t addr, paddr_t addrSpace );
-bool isWritable( addr_t addr, paddr_t addrSpace );
+/**
+ Can the kernel perform some memory access at some virtual address in a particular address space?
 
-void invalidateTlb(void);
-void invalidatePage( addr_t virt );
-dword getRootPageMap(void);
+ @param addr The virtual address to be tested.
+ @param pdir The physical address of the address space.
+ @param isReadOnly true if a read-only access. false for write or read/write access.
+ @return true if address is accessible. false, otherwise.
+ **/
 
-extern paddr_t *freePageStack;
-extern paddr_t *freePageStackTop;
+bool isAccessible(addr_t addr, paddr_t pdir, bool isReadOnly);
+
+/**
+ Can the kernel read data from some virtual address in a particular address space?
+
+ @param addr The virtual address to be tested.
+ @param pdir The physical address of the address space
+ @return true if address is readable. false, otherwise.
+ **/
+
+static inline bool isReadable(addr_t addr, paddr_t pdir) {
+	return isAccessible(addr, pdir, true);
+}
+
+/**
+ Can the kernel write data to some virtual address in a particular address space?
+
+ @param addr The virtual address to be tested.
+ @param pdir The physical address of the address space
+ @return true if address is writable. false, otherwise.
+ **/
+
+static inline bool isWritable(addr_t addr, paddr_t pdir) {
+	return isAccessible(addr, pdir, false);
+}
+
+extern addr_t *freePageStack;
+extern addr_t *freePageStackTop;
 
 //extern void addGDTEntry( word, addr_t, uint32, uint32 );
 
-paddr_t allocPageFrame(void);
-void freePageFrame(paddr_t frame);
+addr_t allocPageFrame(void);
+void freePageFrame(addr_t frame);
 
 extern size_t pageTableSize;
 

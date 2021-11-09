@@ -5,7 +5,6 @@ DIRS	=rtc init_server
 .PHONY:	$(DIRS) $(DEF_PHONY)
 
 all:	$(DIRS)
-	for i in $(DIRS); do make -C $$i all; done
 
 init_server:
 	make -C $@ all

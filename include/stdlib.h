@@ -68,8 +68,20 @@ void srand(unsigned int seed);
 extern unsigned int __mt_array[624];
 extern int __mt_index;
 
-char *itoa(int num, char *buf, int base);
-char *utoa(unsigned int num, char *buf, int base);
+int _itostr(int value, char *str, int base);
+int _uitostr(unsigned int value, char *str, int base);
+int _litostr(long int value, char *str, int base);
+int _ulitostr(unsigned long int value, char *str, int base);
+int _llitostr(long long int value, char *str, int base);
+int _ullitostr(unsigned long long int value, char *str, int base);
+
+#define itostr(value, str, base)      _Generic((value), \
+    long long int: _llitostr, \
+    unsigned long long int: _ullitostr, \
+    unsigned int: _uitostr, \
+    long int: _litostr, \
+    unsigned long int: _ulitostr, \
+default: _itostr)((value), (str), (base))
 
 #ifdef __cplusplus
 }

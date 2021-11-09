@@ -22,19 +22,19 @@ struct BootInfo
 {
   unsigned short num_mods;
   unsigned short num_mem_areas;
-} __PACKED__;
+} PACKED;
 
 struct MemoryArea
 {
   unsigned long base;
   unsigned long length;
-} __PACKED__;
+} PACKED;
 
 struct BootModule
 {
   unsigned long mod_start;
   unsigned long mod_end;
-} __PACKED__;
+} PACKED;
 
 enum ExeLocation { MEMORY, DISK };
 

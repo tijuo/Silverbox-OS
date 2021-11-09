@@ -1,15 +1,15 @@
 EXE     =$(SRC:.c=.exe)
-INSTALL_DIR=servers/
+INSTALL_DIR=sbos/drivers/
+
+-include Makefile.inc ../Makefile.inc ../../Makefile.inc
 
 all:    $(EXE)
 
--include Makefile.inc ../Makefile.inc ../../Makefile.inc
--include vars.mk ../vars.mk ../../vars.mk
-
-%.exe:  %.c $(SB_PREFIX)/lib/libc.a $(SB_PREFIX)/lib/libos.a
+%.exe: %.c $(SB_PREFIX)/lib/libc/libc.a $(SB_PREFIX)/lib/libos/libos.a
 	$(SB_PREFIX)/tools/makec.sh $< $@
+	@objdump -dx $@ > `basename $@ .exe`.dmp
 
-install:$(EXE)
+install: $(EXE)
 	$(SB_PREFIX)/tools/copy_files.sh $(EXE) -d $(INSTALL_DIR)
 
 clean:
@@ -18,3 +18,4 @@ clean:
 	rm -f *.dbg
 	rm -f *.exe
 
+-include vars.mk ../vars.mk ../../vars.mk

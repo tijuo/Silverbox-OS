@@ -12,5 +12,7 @@
 *.cproject
 *.vs
 *.settings
+bx_enh_dbg.ini
 kernel/kernel
 bin/
+/build/

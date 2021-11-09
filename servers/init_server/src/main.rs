@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 #![no_std]
 #![no_main]
-#![feature(alloc_error_handler)]
-#![feature(lang_items)]
-#![feature(asm)]
+#![feature(alloc_error_handler, lang_items, asm, panic_info_message)]
+#![feature(const_ptr_offset_from, const_maybe_uninit_as_ptr, const_raw_ptr_deref, const_refs_to_cell)]
 
 #[no_mangle]
 pub extern "C" fn _start(multiboot_info: *mut RawMultibootInfo, last_free_page: PAddr) -> ! {
@@ -13,9 +12,10 @@ pub extern "C" fn _start(multiboot_info: *mut RawMultibootInfo, last_free_page: 
     lowlevel::print_debug(" Last free page: 0x");
     lowlevel::print_debug_u32(last_free_page as usize as u32, 16);
     lowlevel::print_debugln(".");
-    let multiboot_box = init(multiboot_info, last_free_page);
+    let multiboot_box = init(multiboot_info as usize as PAddr,
+                             last_free_page);
     main(multiboot_box);
-    syscall::exit(0)
+    syscall::exit(1)
 }
 
 #[macro_use] extern crate core;
@@ -39,8 +39,16 @@ mod sbrk;
 #[allow(dead_code)]
 mod elf;
 mod ramdisk;
+mod thread;
+mod types;
+mod multiboot;
+mod region;
+mod phys_alloc;
+mod vfs;
+mod fat;
+mod mutex;
 
-use address::{PAddr, PSize};
+use address::PAddr;
 use message::RawMessage;
 use message::{init, kernel};
 use crate::message::init::{RegisterNameRequest, LookupNameRequest, UnregisterNameRequest,
@@ -51,8 +59,7 @@ use crate::message::kernel::{ExceptionMessage, ExitMessage};
 use syscall::c_types::{CTid, NULL_TID};
 use core::prelude::v1::*;
 use alloc::string::String;
-use crate::pager::page_alloc::PhysPageAllocator;
-use crate::elf::{RawMultibootInfo, MultibootInfo};
+use crate::multiboot::{RawMultibootInfo, MultibootInfo};
 use alloc::boxed::Box;
 use crate::syscall::c_types::ThreadInfo;
 use crate::syscall::{ThreadStruct, INIT_TID};
@@ -66,6 +73,7 @@ use core::convert::TryFrom;
 use crate::message::init::{SimpleResponse, NameString};
 use core::cmp::Ordering;
 use alloc::prelude::v1::Vec;
+use crate::phys_alloc::PhysPageAllocator;
 
 const DATA_BUF_SIZE: usize = 64;
 
@@ -138,13 +146,40 @@ impl Default for Tid {
     }
 }
 
-fn init(multiboot_info: * const RawMultibootInfo, last_free_kernel_page: PAddr) -> Option<Box<MultibootInfo>> {
-    lowlevel::print_debugln("Initializing sbrk...");
+fn init(multiboot_info: PAddr, first_free_page: PAddr) -> Option<Box<MultibootInfo>> {
+    lowlevel::print_debugln("Initializing bootstrap allocator");
 
-    sbrk::init(last_free_kernel_page);
+    PhysPageAllocator::init_bootstrap(first_free_page);
+
+    let mmap_iter = unsafe {
+        RawMultibootInfo::raw_mmap_iter(multiboot_info)
+    }.expect("Unable to read memory map from Multiboot info");
+
+    mmap_iter.clone()
+        .for_each(|mmap| {
+            lowlevel::print_debug("Mmap start: 0x");
+
+            if mmap.base_addr >= 1 << 32 {
+                lowlevel::print_debug_u32((mmap.base_addr >> 32) as u32, 16);
+            }
+            lowlevel::print_debug_u32(mmap.base_addr as u32, 16);
+            lowlevel::print_debug(" Mmap end: 0x");
+
+            if mmap.base_addr + mmap.length >= 1 << 32 {
+                lowlevel::print_debug_u32(((mmap.base_addr + mmap.length) >> 32) as u32, 16);
+            }
+
+            lowlevel::print_debug_u32((mmap.base_addr + mmap.length) as u32, 16);
+            lowlevel::print_debug(" type: ");
+            lowlevel::print_debug_u32(mmap.map_type as u32, 10);
+            lowlevel::print_debugln("");
+        });
+
+    lowlevel::print_debugln("Initializing sbrk...");
+    sbrk::init();
     lowlevel::print_debugln("Initializing page allocator...");
 
-    PhysPageAllocator::init(multiboot_info, last_free_kernel_page);
+    phys_alloc::PhysPageAllocator::init(mmap_iter);
 
     eprintln!("Initializing mapping manager...");
     mapping::manager::init();
@@ -159,7 +194,9 @@ fn init(multiboot_info: * const RawMultibootInfo, last_free_kernel_page: PAddr) 
     init_threads(vec![idle_main, ramdisk::ramdisk_main]);
 
     eprintln!("Loading modules...");
-    let multiboot_box = elf::read_multiboot_info(multiboot_info as usize as PAddr);
+    let multiboot_box = unsafe {
+        MultibootInfo::from_phys(multiboot_info)
+    };
 
     load_modules(&multiboot_box);
 
@@ -225,8 +262,13 @@ fn handle_message<T>(message: Message<T>) -> Result<(), (error::Error, Option<St
                 ExitMessage::try_from(msg)
                     .map_err(|_| (error::OPERATION_FAILED, Some(String::from("Failed to respond to kernel message."))))
                     .and_then(|_exit_msg| {
+
+                        // TODO: Notify threads that are waiting to join with the stopped thread
+
                         let result = Ok(());
 
+                        result
+/*
                         let subject = if result.is_ok() {
                             RawMessage::RESPONSE_OK
                         } else {
@@ -238,6 +280,7 @@ fn handle_message<T>(message: Message<T>) -> Result<(), (error::Error, Option<St
                         response.send(&message.sender)
                             .map_err(|code| (code, None))
                             .and(result)
+ */
                     })
             },
             _ => {

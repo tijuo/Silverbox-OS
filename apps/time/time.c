@@ -13,7 +13,7 @@ int main(void)
   fprintf(stderr, "Waiting for the time server...\n");
 
   while(lookupName(RTC_NAME) == NULL_TID)
-    sys_wait(500);
+    sys_sleep(500);
 
   time(&t);
   fprintf(stderr, "The current time is: %s\n", ctime(&t));

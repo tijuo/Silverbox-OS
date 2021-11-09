@@ -3,8 +3,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static char outStr[19];
-
 char *strdup(const char *str)
 {
   char *newStr = malloc(strlen(str)+1);
@@ -25,7 +23,8 @@ char *strndup(const char *str, size_t n)
 char *strappend(const char *str, const char *add)
 {
   char *newStr=NULL;
-  size_t s1,s2;
+  size_t s1;
+  size_t s2;
 
   if( !str )
     return strdup(add);
@@ -40,49 +39,4 @@ char *strappend(const char *str, const char *add)
   strcat(newStr, add);
 
   return newStr;
-}
-
-
-char *toOctalString( unsigned int num )
-{
-  return itoa(num, outStr, 8);
-/*
-  unsigned i = 0;
-  static char s_num[13];
-
-  do
-  {
-    s_num[i++] = (num >> 29) + '0';
-    num <<= 3;
-  } while( num != 0 );
-
-  s_num[i] = '\0';
-  return s_num;
-*/
-}
-
-char *toHexString(unsigned int num)
-{
-  return itoa(num, outStr, 16);
-/*
-  static char str[9];
-
-  if(sprintf(str, "%X", num) < 0)
-    str[0] = '\0';
-
-  return str;
-*/
-}
-
-char *toIntString(int num)
-{
-  return itoa(num, outStr, 10);
-/*
-  static char str[17];
-
-  if(sprintf(str, "%d", num) < 0)
-    str[0] = '\0';
-
-  return str;
-*/
 }

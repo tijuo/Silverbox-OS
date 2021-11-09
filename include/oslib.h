@@ -7,8 +7,6 @@
 #define INIT_EXHANDLER 		    1
 #define INIT_SERVER		        1
 
-#define NULL_PADDR          	((paddr_t)0xFFFFFFFFFFFFFFFFull)
-
 #define IRQ_ANY			        -1
 
 #define KERNEL_TID		        (tid_t)0
@@ -16,33 +14,28 @@
 
 typedef unsigned long shmid_t;
 
-typedef unsigned int pframe_t;
-
 #define MAX_MSG_LEN	MSG_LEN
 #define MSG_LEN         1024
 
 #define TCB_STATUS_INACTIVE     0u
 #define TCB_STATUS_PAUSED       1u  // Infinite blocking state
-#define TCB_STATUS_SLEEPING     2u  // Blocks until timer runs out
+#define TCB_STATUS_ZOMBIE       2u  // Thread is waiting to be released
 #define TCB_STATUS_READY        3u  // Thread is ready to be scheduled to a processor
 #define TCB_STATUS_RUNNING      4u  // Thread is already scheduled to a processor
 #define TCB_STATUS_WAIT_SEND    5u  // Thread is waiting for a sender to send a message
 #define TCB_STATUS_WAIT_RECV    6u  // Thread is waiting for a receipient to receive a message
-#define TCB_STATUS_ZOMBIE       7u  // Thread is waiting to be released
 
-#define MAX(a,b)	    ({ __typeof__(a) _a=(a); __typeof__(b) _b=b; (_a > _b) ? _a : _b; })
-#define MIN(a,b)        ({ __typeof__(a) _a=(a); __typeof__(b) _b=b; (_a < _b) ? _a : _b; })
+#define MAX(a,b)	            ({ __typeof__(a) _a=(a); __typeof__(b) _b=b; (_a > _b) ? _a : _b; })
+#define MIN(a,b)                ({ __typeof__(a) _a=(a); __typeof__(b) _b=b; (_a < _b) ? _a : _b; })
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-  char *strdup(const char *str);
-  char *strndup(const char *str, size_t n);
-  char *strappend(const char *str, const char *add);
-  char *toHexString( unsigned int num );
-  char *toIntString( int num );
-  char *toOctalString( unsigned int num );
+char *strdup(const char *str);
+char *strndup(const char *str, size_t n);
+char *strappend(const char *str, const char *add);
+
   /*
 int fatGetAttributes( const char *path, unsigned short devNum, struct FileAttributes *attrib );
 int fatGetDirList( const char *path, unsigned short devNum, struct FileAttributes *attrib,

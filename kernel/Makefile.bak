@@ -1,0 +1,52 @@
+include ../prefix.inc
+
+# COPTFLAGS are the optimized flags
+
+all:    kernel.gz kernel.dmp kernel.dbg kernel.sym
+
+include Makefile.inc
+include ../vars.mk
+
+SRC     =init.c paging.c thread.c schedule.c interrupt.c \
+		debug.c message.c syscall.c mem.c list.c
+
+OBJ     =$(SRC:.c=.o)
+LDFLAGS	=-m elf_i386 -T ../kernelLink.ld --static --exclude-libs ALL
+OPT_FLG =-O0
+
+asm_objs:
+	make -C asm/ all
+
+kernel.dmp: kernel.tmp
+	objdump -dx -g -M intel $< > $@
+
+kernel.dbg: kernel.tmp
+	readelf -a $< > $@
+
+kernel.sym: kernel.dmp
+	$(SB_PREFIX)/tools/extract_sym.pl $< > $@
+
+kernel.tmp: $(OBJ) asm_objs
+	$(LD) $(LDFLAGS) *.o asm/*.o -o $@
+
+kernel.gz: $(OBJ) asm_objs
+	$(LD) $(LDFLAGS) -s -S *.o asm/*.o -o kernel && \
+	gzip -k -f kernel
+
+install: kernel.gz
+	$(SB_PREFIX)/tools/copy_files.sh -d /boot kernel.gz
+
+check:
+	splint +gnuextensions -nolib -standard  -I$(SB_PREFIX)/include *.c
+
+clean:
+	make -C asm/ clean
+	rm -f *.o
+	rm -f *.su
+	rm -f kernel.dmp
+	rm -f kernel.tmp
+	rm -f kernel.sym
+	rm -f kernel.dbg
+	rm -f kernel
+	rm -f kernel.gz
+# DO NOT DELETE

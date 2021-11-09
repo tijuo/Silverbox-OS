@@ -1,9 +1,9 @@
 include ../../prefix.inc
 
 SRC     =strings.c sbrk.c region.c bitmap.c elf.c \
-	services.c
+	services.c kernel_services.c driver.c
 
-AS_SRC	=mutex.s state.s
+AS_SRC	=mutex.S state.S
 AS_OBJ	=$(AS_SRC:.s=.o)
 OBJ     =$(SRC:.c=.o)
 DIRS	=syscall ostypes

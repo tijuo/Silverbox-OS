@@ -4,31 +4,59 @@
 
 int setvbuf(FILE *stream, char *buf, int mode, size_t size)
 {
-  errno = 0;
-
   if(stream == NULL)
   {
     errno = -EBADF;
     return -1;
   }
+  else if(!stream->is_open)
+  {
+    errno = -ESTALE;
+    return -1;
+  }
   else
   {
-    if( mode != _IOFBF && mode != _IONBF && mode != _IOLBF )
+    switch(mode)
     {
-      errno = EINVAL;
-      return -1;
+      case _IOFBF:
+      case _IONBF:
+        stream->buffer = buf;
+        stream->buf_head = 0;
+        stream->buf_tail = 0;
+        stream->buffer_len = size;
+        break;
+      case _IOLBF:
+        stream->buffer = NULL;
+        stream->buffer_len = 0;
+        break;
+      default:
+        stream->error = 1;
+        errno = -EINVAL;
+        return -1;
     }
 
-    /* If buf is NULL and the mode is either _IOFBF or _IOLBF,
-       a new buffer will be allocated on the next read/write */
+    if(stream->write_req_buffer)
+    {
+      free(stream->write_req_buffer);
+      stream->write_req_buffer = NULL;
+    }
 
-    if( !stream->user_buf && stream->buffer != NULL )
-      free( stream->buffer );
+    if(stream->buffer)
+    {
+      stream->write_req_buffer = malloc(size + sizeof(struct DeviceOpRequest));
 
-    stream->user_buf = (buf == NULL ? 0 : 1);
-    stream->buffer = buf;
+      if(!stream->write_req_buffer)
+      {
+        stream->error = 1;
+        errno = -ENOMEM;
+        return -1;
+      }
+
+      stream->write_req_pos = 0;
+    }
+
+    stream->user_buf = !!buf;
     stream->buf_mode = mode;
-    stream->buffer_len = size;
     return 0;
   }
 }

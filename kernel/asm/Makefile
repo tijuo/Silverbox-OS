@@ -6,7 +6,7 @@ include ../../Makefile.inc
 #DEPS	=$(INC_DIR)/asm/kernel.inc $(INC_DIR)/asm/grub.inc \
 #	$(INC_DIR)/asm/context.inc $(INC_DIR)/asm/asm.inc
 
-SRC	=entry.S gdt.S idt.S cpu_state.S inthand.S io.S stack.S
+SRC	=entry.S inthand.S io.S stack.S
 OBJ	=$(SRC:.S=.o)
 DEPS	=$(INC_DIR)/asm/kernel.h $(INC_DIR)/asm/grub.h \
 	$(INC_DIR)/asm/context.h $(INC_DIR)/asm/asm.h

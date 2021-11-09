@@ -43,79 +43,28 @@
 #define GEN_REPLY_TYPE		0x80000000
 #define SHARE_MEM_REQ		0xFFF0
 
-#define	MEM_FLG_RO		0x01		// Read only
+#define	MEM_FLG_RO		    0x01		// Read only
 #define MEM_FLG_EAGER		0x02		// Map in pages immediately (instead of only when they are accessed)
 #define MEM_FLG_ALLOC		0x04		// Do not perform a phys->virt mapping (implies read-write)
-#define MEM_FLG_COW		0x08		// Mark as copy-on-write(implies read-only)
-#define MEM_FLG_IO		0x10		// Map IO memory instead
+#define MEM_FLG_COW		    0x08		// Mark as copy-on-write(implies read-only)
+#define MEM_FLG_IO		    0x10		// Map IO memory instead
+#define MEM_FLG_NOCACHE     0x20
 
 struct GenericReq
 {
   int request;
   int arg[8];
-} __PACKED__;
+} PACKED;
 
 struct ExecReq
 {
   size_t nameLen;
   size_t argsLen;
   char data[];
-} __PACKED__;
+} PACKED;
 
-/*
-struct AllocMemInfo
-{
-  void *addr;
-  unsigned pages;
-} __PACKED__;
 
-struct MapMemArgs
-{
-  void *phys;
-  void *virt;
-  unsigned pages;
-  int flags;
-} __PACKED__;
-
-struct MapTidArgs
-{
-  tid_t tid;
-  void *addr;
-} __PACKED__;
-
-struct CreateShmArgs
-{
-  shmid_t shmid;
-  unsigned int pages;
-  struct MemRegion region;
-  bool ro_perm;
-} __PACKED__;
-
-struct AttachShmRegArgs
-{
-  shmid_t shmid;
-  struct MemRegion region;
-} __PACKED__;
-
-struct DetachShmRegArgs
-{
-  shmid_t shmid;
-  struct MemRegion region;
-} __PACKED__;
-
-struct DeleteShmArgs
-{
-  shmid_t shmid;
-} __PACKED__;
-
-struct ConnectArgs
-{
-  unsigned int pages;
-  struct MemRegion region;
-} __PACKED__;
-*/
-
-addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags);
+addr_t mapMem(addr_t addr, int device, size_t length, uint64_t offset, int flags);
 int unmapMem(addr_t addr, size_t length);
 pid_t createPort(pid_t port, int flags);
 int destroyPort(pid_t port);
@@ -126,20 +75,6 @@ tid_t lookupName(const char *name);
 int unregisterName(const char *name);
 int getCurrentTime(unsigned int *time);
 
-//int mapMem( void *phys, void *virt, int numPages, int flags );
-//int allocatePages( void *address, int numPages );
-
-/*
-int registerDevice(int major, int numDevices,
-  unsigned long blockLen, int flags);
-
-int lookupDevMajor(unsigned char major, struct DeviceRecord *record);
-
-int changeIoPerm( unsigned start, unsigned stop, int set );
-*/
-//int lookupFsName( const char *name, size_t name_len, struct Filesystem *fs );
-//int registerFs( const char *name, size_t name_len, struct Filesystem *fsInfo );
-
 int listDir( const char *path, size_t maxEntries, struct FileAttributes *attrib );
 int getFileAttributes( const char *path, struct FileAttributes *attrib );
 int readFile( const char *path, int offset, char *buffer, size_t bytes );
@@ -148,5 +83,12 @@ int mountFs( int device, const char *fs, size_t fsLen, const char *path, int fla
 int unmountFs( const char *path );
 
 int exec( char *filename, char *args );
+
+
+// Kernel Services
+
+int irqBind(unsigned int irq);
+int irqUnbind(unsigned int irq);
+int irqEoi(unsigned int irq);
 
 #endif /* OS_SERVICES_H */

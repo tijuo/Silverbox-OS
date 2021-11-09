@@ -33,7 +33,7 @@ struct GenericMsgHeader
   char status;
 
   byte data[];
-} __PACKED__;
+} PACKED;
 
 struct LongMsgHeader
 {
@@ -41,7 +41,7 @@ struct LongMsgHeader
   char reply : 1;
   char fail : 1;
   char _resd : 6;
-} __PACKED__;
+} PACKED;
 
 int sendMsg( tid_t sender, struct Message *msg, int timeout );
 int receiveMsg( tid_t recipient, struct Message *msg, int timeout );

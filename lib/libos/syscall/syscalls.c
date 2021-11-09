@@ -1,5 +1,8 @@
 #include <os/syscalls.h>
 
+// todo: create a new flag: MSG_SEND to be used internally be the kernel to determine
+// todo: whether a message system call is a sysSend/sysCall or sysReceive
+
 int sys_send(msg_t *msg)
 {
   int retval;
@@ -32,37 +35,20 @@ int sys_receive(msg_t *outMsg)
   return retval;
 }
 
-void sys_exit(int code)
-{
-  asm volatile("int %0" :: "i"(SYSCALL_INT),
-                       "a"(SYS_EXIT), "b"(code));
-}
-
-int sys_wait(int timeout)
-{
-  int retval;
-
-  asm volatile("int %1" : "=a"(retval)
-                                : "i"(SYSCALL_INT),
-                                  "a"(SYS_WAIT), "b"(timeout));
-
-  return retval;
-}
-
-int sys_map(paddr_t *rootPmap, void *vaddr, pframe_t *pframes, int numPages, unsigned int flags)
+int sys_map(paddr_t *rootPmap, void *vaddr, paddr_t *paddr, int numPages, unsigned int flags)
 {
   int retval;
 
   asm volatile("int %1" : "=a"(retval)
                                 : "i"(SYSCALL_INT),
                                   "a"(SYS_MAP), "b"(rootPmap),
-                                  "c"(vaddr), "d"(pframes),
+                                  "c"(vaddr), "d"(paddr),
                                   "S"(numPages), "D"(flags) : "memory");
 
   return retval;
 }
 
-int sys_unmap(paddr_t *rootPmap, void *vaddr, int numPages, pframe_t *unmappedFrames)
+int sys_unmap(paddr_t *rootPmap, void *vaddr, int numPages, paddr_t *unmappedEntries)
 {
   int retval;
 
@@ -70,20 +56,20 @@ int sys_unmap(paddr_t *rootPmap, void *vaddr, int numPages, pframe_t *unmappedFr
                                 : "i"(SYSCALL_INT),
                                   "a"(SYS_UNMAP), "b"(rootPmap),
                                   "c"(vaddr), "d"(numPages),
-                                  "S"(unmappedFrames) : "memory");
+                                  "S"(unmappedEntries) : "memory");
 
   return retval;
 }
 
-tid_t sys_create_thread(tid_t tid, void *entry, paddr_t *rootPmap, void *stackTop)
+tid_t sys_create_thread(void *entry, paddr_t *rootPmap, void *stackTop)
 {
   int retval;
 
   asm volatile("int %1" : "=a"(retval)
                                 : "i"(SYSCALL_INT),
-                                  "a"(SYS_CREATE_THREAD), "b"(tid),
-                                  "c"(entry),
-                                  "d"(rootPmap), "S"(stackTop) : "memory");
+                                  "a"(SYS_CREATE_THREAD),
+                                  "b"(entry),
+                                  "c"(rootPmap), "d"(stackTop) : "memory");
 
   return (tid_t)retval;
 }
@@ -123,60 +109,8 @@ int sys_update_thread(tid_t tid, unsigned int flags, thread_info_t *info)
   return retval;
 }
 
-int sys_bind_irq(tid_t tid, unsigned int irqNum)
+int sys_poll(int mask, int isBlocking)
 {
-  int retval;
-
-  asm volatile("int %1" : "=a"(retval)
-                                : "i"(SYSCALL_INT),
-                                  "a"(SYS_BIND_IRQ), "b"(tid),
-                                  "c"(irqNum));
-
-  return retval;
-}
-
-int sys_unbind_irq(unsigned int irqNum)
-{
-  int retval;
-
-  asm volatile("int %1" : "=a"(retval)
-                                : "i"(SYSCALL_INT),
-                                  "a"(SYS_UNBIND_IRQ), "b"(irqNum));
-
-  return retval;
-}
-
-int sys_eoi(unsigned int irqNum)
-{
-  int retval;
-
-  asm volatile("int %1" : "=a"(retval)
-                                : "i"(SYSCALL_INT),
-                                  "a"(SYS_EOI), "b"(irqNum));
-
-  return retval;
-}
-
-int sys_wait_irq(unsigned int irqNum)
-{
-  int retval;
-
-  asm volatile("int %1" : "=a"(retval)
-                                : "i"(SYSCALL_INT),
-                                  "a"(SYS_IRQ_WAIT), "b"(irqNum),
-                                  "c"(0));
-
-  return retval;
-}
-
-int sys_poll_irq(unsigned int irqNum)
-{
-  int retval;
-
-  asm volatile("int %1" : "=a"(retval)
-                                : "i"(SYSCALL_INT),
-                                  "a"(SYS_IRQ_WAIT), "b"(irqNum),
-                                  "c"(1));
-
-  return retval;
+  asm volatile("mov %%esp, %%edx\n"
+               "sysenter\n"  :: "i"(SYSCALL_POLL), "b"(mask), "c"(ret));
 }

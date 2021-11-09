@@ -11,6 +11,7 @@ struct CircularBuffer {
 };
 
 int initCircBuffer(struct CircularBuffer *buffer, void *data, size_t bufferSize);
+int createCircBuffer(struct CircularBuffer *buffer, size_t bufferSize);
 size_t readCircBuffer(struct CircularBuffer *buffer, size_t bytes, void *outData);
 size_t writeCircBuffer(struct CircularBuffer *buffer, size_t bytes, void *data);
 

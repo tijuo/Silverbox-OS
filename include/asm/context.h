@@ -1,7 +1,7 @@
 .ifndef CONTEXT_H
 .set CONTEXT_H, 1
 
-.include "asm/kernel.h"
+#include <asm/kernel.h>
 
 IMPORT switchStacks
 

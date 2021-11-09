@@ -1,22 +1,21 @@
 #![allow(dead_code)]
 
-use c_types::{CPageFrame, CTid, ThreadInfo};
+use c_types::{CTid, ThreadInfo};
 use crate::message::{RawMessage};
 use crate::error::Error;
-use crate::address::{PAddr, PageFrame};
+use crate::address::{PAddr};
 use crate::Tid;
 use crate::page::{PhysicalPage};
 use crate::error;
 use core::ffi::c_void;
 use core::cmp::min;
-use flags::map::PM_ARRAY;
 
 pub const INIT_TID: CTid = 1024;
+pub const IRQ0_TID: CTid = 1;
 
 pub mod c_types {
     pub type CAddr = u32;
     pub type CPhysAddr = u64;
-    pub type CPageFrame = u32;
     pub type CTid = u16;
 
     pub const NULL_TID: CTid = 0;
@@ -37,6 +36,10 @@ pub mod c_types {
         pub eip: u32,
         pub eflags: u32,
         pub cs: u16,
+        pub ds: u16,
+        pub es: u16,
+        pub fs: u16,
+        pub gs: u16,
         pub ss: u16,
     }
 
@@ -131,7 +134,7 @@ impl ThreadStruct {
         if self.flags & ThreadInfo::PMAP == 0 {
             None
         } else {
-            PhysicalPage::new(self.info.root_page_map as PAddr)
+            Some(PhysicalPage::new(self.info.root_page_map as PAddr))
         }
     }
 
@@ -164,20 +167,45 @@ pub mod status {
 
 pub mod flags {
     pub mod map {
-        pub const PM_PRESENT: u32 = 0x01;
-        pub const PM_NOT_PRESENT: u32 = 0;
-        pub const PM_READ_ONLY: u32 = 0;
-        pub const PM_READ_WRITE: u32 = 0x02;
-        pub const PM_NOT_CACHED: u32 = 0x10;
+        pub const PRESENT: u32 = 0x01;
+        pub const NOT_PRESENT: u32 = 0;
+        pub const READ_ONLY: u32 = 0;
+        pub const READ_WRITE: u32 = 0x02;
         pub const PM_WRITE_THROUGH: u32 = 0x08;
-        pub const PM_NOT_ACCESSED: u32 = 0;
+        pub const PM_NOT_CACHED: u32 = 0x10;
         pub const PM_ACCESSED: u32 = 0x20;
-        pub const PM_NOT_DIRTY: u32 = 0;
         pub const PM_DIRTY: u32 = 0x40;
         pub const PM_LARGE_PAGE: u32 = 0x80;
-        pub const PM_OVERWRITE: u32 = 0x20000000;
-        pub const PM_ARRAY: u32 = 0x40000000;
-        pub const PM_INVALIDATE: u32 = 0x80000000;
+        pub const OVERWRITE: u32 = 0x20000000;  // if set to 1, then sys_map() will not fail
+                                                // if an address maps to a previous entry that's already
+                                                // marked as present.
+
+        pub const ARRAY: u32 = 0x40000000;      // if set to 1, then an array of physical frames
+                                                // is passed as input. Otherwise a pointer to a
+                                                // starting physical frame will be used.
+        pub const INVALIDATE: u32 = 0x80000000;
+
+        pub const PAGE_FLAG_MASK: u64 = 0xFFF;
+        pub const LARGE_PAGE_FLAG_MASK: u64 = 0x1FFF;
+    }
+
+    pub mod unmap {
+        pub const WAS_LARGE_PAGE: u64 = 0x01;   // indicates whether the unmapped pages was 4 kB (0) or 4 MB (1)
+        pub const READ_ONLY: u64 = 0x00;
+        pub const READ_WRITE: u64 = 0x02;
+        pub const KERNEL: u64 = 0x00;
+        pub const USER: u64 = 0x04;
+        pub const WRITE_THROUGH: u64 = 0x08;
+        pub const NOT_CACHED: u64 = 0x10;
+        pub const ACCESSED: u64 = 0x20;
+        pub const DIRTY: u64 = 0x40;
+        pub const LARGE_PAGE: u64 = 0x80;
+        pub const PTE_PAT: u64 = 0x80;      // only valid if WAS_LARGE_FLAG bit = 0
+        pub const GLOBAL: u64 = 0x100;
+        pub const PDE_PAT: u64 = 0x1000;   // only valid if WAS_LARGE_FLAG bit = 1
+
+        pub const PAGE_FLAG_MASK: u64 = 0xFFF;
+        pub const LARGE_PAGE_FLAG_MASK: u64 = 0x1FFF;
     }
 
     pub mod thread {
@@ -193,8 +221,8 @@ pub fn exit(code: i32) -> ! {
     unsafe { sys_exit(code) }
 }
 
-pub fn wait(timeout: i32) -> Result<(), Error> {
-    let result = unsafe { sys_wait(timeout) };
+pub fn sleep(timeout: u32) -> Result<(), Error> {
+    let result = unsafe { sys_sleep(timeout) };
 
     match result {
         status::OK => Ok(()),
@@ -202,8 +230,32 @@ pub fn wait(timeout: i32) -> Result<(), Error> {
     }
 }
 
-pub unsafe fn map(root_map: Option<PAddr>, vaddr: *mut c_void, page_frames: &[PageFrame], num_pages: i32, flags: u32)
--> Result<i32, Error> {
+pub unsafe fn map(root_map: Option<PAddr>, vaddr: *mut c_void, paddr: PAddr, num_pages: i32, flags: u32)
+                         -> Result<i32, Error> {
+    let result = {
+        let pmap = match root_map {
+            Some(a) => &a as *const PAddr,
+            None => core::ptr::null()
+        };
+
+        let frame = [PhysicalPage::new(paddr)];
+
+        sys_map(pmap,
+                vaddr,
+                frame.as_ptr() as *const PAddr,
+                num_pages,
+                flags & !self::flags::map::ARRAY)
+    };
+
+    if result >= 0 {
+        Ok(result)
+    } else {
+        Err(result)
+    }
+}
+
+pub unsafe fn map_frames(root_map: Option<PAddr>, vaddr: *mut c_void, page_frames: &[PAddr], num_pages: i32, flags: u32)
+                         -> Result<i32, Error> {
     let result = {
         let pmap = match root_map {
             Some(a) => &a as *const PAddr,
@@ -213,16 +265,16 @@ pub unsafe fn map(root_map: Option<PAddr>, vaddr: *mut c_void, page_frames: &[Pa
         if page_frames.len() == 1 {
             sys_map(pmap,
                     vaddr,
-                    page_frames.as_ptr() as *const CPageFrame,
+                    &page_frames[0] as *const PAddr,
                     num_pages,
-                    flags & !PM_ARRAY)
+                    flags & !self::flags::map::ARRAY)
         }
         else {
             sys_map(pmap,
             vaddr,
-            page_frames.as_ptr() as *const CPageFrame,
+            page_frames.as_ptr() as *const PAddr,
             min(num_pages, page_frames.len() as i32),
-            flags | PM_ARRAY)
+            flags | self::flags::map::ARRAY)
         }
     };
 
@@ -233,23 +285,40 @@ pub unsafe fn map(root_map: Option<PAddr>, vaddr: *mut c_void, page_frames: &[Pa
     }
 }
 
-pub unsafe fn unmap(root_map: Option<PAddr>, vaddr: *const c_void, num_pages: i32, unmapped_frames: Option<&mut [PageFrame]>)
-       -> Result<i32, Error> {
+pub unsafe fn unmap(root_map: Option<PAddr>, vaddr: *const c_void, num_pages: i32, mut unmapped_frames: Option<(&mut [u64], &mut [u64])>) -> Result<i32, Error> {
     let result = {
-        let pmap = match root_map {
-            Some(a) => &a as *const PAddr,
-            None => core::ptr::null()
-        };
+        let r;
 
-        let unmapped = match unmapped_frames {
-            Some(frames) => frames.as_ptr() as *mut CPageFrame,
-            None => core::ptr::null_mut()
-        };
+        {
+            let pmap = match root_map {
+                Some(a) => &a as *const PAddr,
+                None => core::ptr::null()
+            };
 
-        sys_unmap(pmap,
-                  vaddr,
-                  num_pages,
-        unmapped)
+            let unmapped = match &unmapped_frames {
+                Some((frames, entries)) => {
+                    if frames.len() != entries.len() {
+                        return Err(error::BAD_ARGUMENT)
+                    }
+
+                    (*frames).as_ptr() as *mut PAddr
+                },
+                None => core::ptr::null_mut()
+            };
+
+            r = sys_unmap(pmap, vaddr, num_pages, unmapped)
+        }
+
+        if let Some((uframes, uentries)) = &mut unmapped_frames {
+            for i in 0..uframes.len() {
+                let is_large_page = uframes[i] & self::flags::unmap::WAS_LARGE_PAGE != 0;
+
+                uentries[i] = uframes[i] & if is_large_page { !self::flags::unmap::LARGE_PAGE_FLAG_MASK } else { !self::flags::unmap::PAGE_FLAG_MASK };
+                uframes[i] &= if is_large_page { !self::flags::unmap::LARGE_PAGE_FLAG_MASK } else { !self::flags::unmap::PAGE_FLAG_MASK };
+            }
+        }
+
+        r
     };
 
     if result >= 0 {
@@ -300,20 +369,15 @@ extern "C" {
     pub fn sys_call(in_msg: *mut RawMessage, out_msg: *mut RawMessage) -> i32;
     pub fn sys_receive(out_msg: *mut RawMessage) -> i32;
     pub fn sys_exit(code: i32) -> !;
-    pub fn sys_wait(timeout: i32) -> i32;
+    pub fn sys_sleep(timeout: u32) -> i32;
     pub fn sys_map(root_map: * const PAddr, vaddr: * const c_void,
-                   page_frames: * const CPageFrame, num_pages: i32,
+                   page_frames: * const PAddr, num_pages: i32,
                    flags: u32) -> i32;
     pub fn sys_unmap(root_map: * const PAddr, vaddr: * const c_void,
-                     num_pages: i32, unmapped_frames: * mut CPageFrame) -> i32;
+                     num_pages: i32, unmapped_frames: * mut PAddr) -> i32;
     pub fn sys_create_thread(tid: CTid, entry: * const c_void, root_pmap: * const PAddr,
                          stack_top: * const c_void) -> CTid;
     pub fn sys_destroy_thread(tid: CTid) -> i32;
     pub fn sys_read_thread(tid: CTid, flags: u32, info: *mut ThreadInfo) -> i32;
     pub fn sys_update_thread(tid: CTid, flags: u32, info: *const ThreadInfo) -> i32;
-    pub fn sys_bind_irq(tid: CTid, irq_num: u32) -> i32;
-    pub fn sys_unbind_irq(irq_num: u32) -> i32;
-    pub fn sys_eoi(irq_num: u32) -> i32;
-    pub fn sys_wait_irq(irq_num: u32) -> i32;
-    pub fn sys_poll_irq(irq_num: u32) -> i32;
 }

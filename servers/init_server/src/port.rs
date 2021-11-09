@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use alloc::collections::BTreeMap;
-use crate::mapping::MemoryRegion;
+use alloc::collections::btree_map::BTreeMap;
+use crate::region::MemoryRegion;
 use crate::CTid;
 use core::prelude::v1::*;
 use alloc::vec::Vec;
@@ -52,7 +52,7 @@ enum Status {
 }
 
 struct Binding {
-    buffer: MemoryRegion,
+    buffer: MemoryRegion<usize>,
     status: Status,
 }
 

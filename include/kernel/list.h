@@ -4,32 +4,25 @@
 #include <kernel/list_struct.h>
 #include <kernel/thread.h>
 
-typedef struct Node
-{
-  union {
-    struct Node *prev;
-    int delta;
-  };
-  struct Node *next;
-} node_t;
+void listInsertAtEnd(list_t *list, tcb_t *thread, int atTail);
+tcb_t *listRemoveFromEnd(list_t *list, int atTail);
+void listRemove(list_t *list, tcb_t *thread);
 
-extern node_t threadNodes[];
+//int listEnqueue(list_t *list, tcb_t *thread);
+//tcb_t *listDequeue(list_t *list);
+//int listRemove(list_t *list, tcb_t *thread);
 
-/*
-int listPush(list_t *list, tcb_t *thread);
-tcb_t *listPop(list_t *list);
-*/
+// Inserts a thread at the head of a list.
+#define listEnqueue(list, thread)   listInsertAtEnd(list, thread, 0)
 
-int listEnqueue(list_t *list, tcb_t *thread);
-tcb_t *listDequeue(list_t *list);
-int listRemove(list_t *list, tcb_t *thread);
+// Removes a thread from the tail of a list
+#define listDequeue(list)           listRemoveFromEnd(list, 1)
 
-int deltaListPush(list_t *list, tcb_t *thread, int delta);
-tcb_t *deltaListPop(list_t *list);
-int deltaListRemove(list_t *list, tcb_t *thread);
+// Pushes a thread to the head of the list
+#define listPush(list, thread)      listInsertAtEnd(list, thread, 0)
 
-node_t *getHeadNode(list_t *list);
-node_t *getTailNode(list_t *tail);
+// Pops a thread from the head of the list
+#define listPop(list)               listRemoveFromEnd(list, 0)
 
 #define isListEmpty(list)       ((list)->headTid == NULL_TID)
 #endif /* KERNEL_LIST_H */

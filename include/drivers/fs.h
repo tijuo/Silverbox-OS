@@ -39,6 +39,6 @@ struct DirEntry
   size_t fileLen;
   date_t timeStamp;
   char fileName[];
-} __PACKED__;
+} PACKED;
 */
 #endif

@@ -1,45 +1,25 @@
-include prefix.inc
+include Makefile.inc
 
-.PHONY:  kernel lib drivers apps servers all clean install depend dep
+.PHONY: all kernel libs apps servers drivers tests clean
 
-.SILENT :
-
-DIRS	=lib apps kernel servers
-
-all:	$(DIRS)
-
-apps:
-	make -C $@ all
-
-servers:
-	make -C $@ all
+all: kernel libs apps servers drivers tests
 
 kernel:
-	make -C $@ all
-	@cp kernel/kernel* bin/
-	@rm -f bin/kernel.tmp
+	$(MAKE) -C kernel all
 
-kernel-docs:
-	doxygen kernel.cfg
+libs:
+	$(MAKE) -C libs all
 
-lib:
-	make -C $@ all
+apps:
+
+servers:
 
 drivers:
-	make -C $@ all
 
-dep:
-	make depend
-
-depend:
-	for i in $(DIRS); do make -C $$i depend; done
-
-install: $(DIRS)
-	for i in $(DIRS); do make -C $$i install; done
+tests:
+	$(MAKE) -C kernel tests
+	$(MAKE) -C libs tests
 
 clean:
-	for i in $(DIRS); do make -C $$i clean; done
-	cd tools && rm -f *.o
-	rm -rf doc/
-	rm -f bin/*
-# DO NOT DELETE
+	$(MAKE) -C kernel clean
+	$(MAKE) -C libs all

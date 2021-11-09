@@ -76,7 +76,7 @@ struct FAT32_BPB
   byte  fs_type[8];
   byte  bootstrap[410];
   word  signature;
-} __PACKED__;
+} PACKED;
 
 struct FAT12_BPB
 {
@@ -102,7 +102,7 @@ struct FAT12_BPB
   byte  fs_type[8];
   byte  bootstrap[448];
   word  signature;
-} __PACKED__;
+} PACKED;
 
 struct FAT16_BPB {
   byte  jmp_bootstrap[3];
@@ -127,7 +127,7 @@ struct FAT16_BPB {
   byte  fs_type[8];
   byte  bootstrap[426];
   word  signature;
-} __PACKED__;
+} PACKED;
 
 struct FAT_DirEntry
 {
@@ -138,7 +138,7 @@ struct FAT_DirEntry
   word  date;
   word  start_clus;
   dword file_size;
-} __PACKED__;
+} PACKED;
 
 union FAT_BPB
 {

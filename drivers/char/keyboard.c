@@ -3,11 +3,12 @@
 #include <os/io.h>
 #include <os/services.h>
 #include <os/dev_interface.h>
-#include <os/signal.h>
 #include <os/message.h>
 #include "scancodes.h"
 #include <os/keys.h>
 #include <os/ostypes/circbuffer.h>
+#include <drivers/keyboard.h>
+#include <os/msg/init.h>
 
 #define MSG_TIMEOUT		3000
 
@@ -87,8 +88,7 @@
 #define KB_NACK     	       	0xFE
 #define KB_DNACK    		    0xFC
 
-#define KEYBOARD_NAME 		    "keyboard"
-#define KEYBOARD_ID 		    6
+#define KEYBOARD_ID 		    KEYBOARD_MAJOR
 #define NUM_DEVICES		        1
 #define DEV_MAJOR		        KEYBOARD_ID
 
@@ -409,11 +409,11 @@ void handleDevRequests( void )
 
 int main( void )
 {
-  struct Device dev;
+//  struct Device dev;
   int status;
 
-  changeIoPerm( KB_IO, KB_IO, 1 );
-  changeIoPerm( KB_STAT_CMD, KB_STAT_CMD, 1 );
+//  changeIoPerm( KB_IO, KB_IO, 1 );
+//  changeIoPerm( KB_STAT_CMD, KB_STAT_CMD, 1 );
 
 //  __map(0xB8000,0xB8000, 8);
 
@@ -422,14 +422,12 @@ int main( void )
 //  __register_int( 0x21 );
 //  __register_int( 0x2C );
 
-/* As of now registerName() doesn't work. */
-
   for( int i=0; i < 5; i++ )
   {
     status = registerName(KEYBOARD_NAME, strlen(KEYBOARD_NAME));
 
     if( status != 0 )
-      __sleep( (i*i+1) * 500 );
+      sys_sleep( (i*i+1) * 500 );
     else
       break;
   }
@@ -437,6 +435,7 @@ int main( void )
   if( status != 0 )
     return 1;
 
+  /*
   dev.major = DEV_MAJOR;
   dev.numDevices = NUM_DEVICES;
   dev.dataBlkLen = 1;
@@ -455,9 +454,11 @@ int main( void )
 
   if( status != 0 )
     return 1;
+*/
 
-  set_signal_handler(&signal_handler);
-  __register_int(0x21);
+  //set_signal_handler(&signal_handler);
+  //__register_int(0x21);
+  registerIrq(0x21);
 
   while(1)
     handleDevRequests();

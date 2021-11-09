@@ -36,7 +36,7 @@ struct State
    dword edx;
    dword ecx;
    dword eax;
-} __PACKED__;
+} PACKED;
 
 struct _UThread
 {

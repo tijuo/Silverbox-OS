@@ -3,11 +3,14 @@
 
 int fseek(FILE *stream, long offset, int whence)
 {
-  errno = 0;
-
   if( stream == NULL )
   {
     errno = -EBADF;
+    return -1;
+  }
+  else if(!stream->is_open)
+  {
+    errno = -ESTALE;
     return -1;
   }
   else if( whence != SEEK_SET && whence != SEEK_END && whence != SEEK_CUR )

@@ -4,7 +4,7 @@
 #include <util.h>
 #include <types.h>
 
-#define INIT_SERVER_TID			1024
+#define INIT_SERVER_TID			256u
 
 #define SERVER_TYPE_DRIVER		1
 #define SERVER_TYPE_FS			2
@@ -16,8 +16,8 @@ struct MapRequest
 {
   addr_t addr;
   int device;
+  uint64_t offset;
   size_t length;
-  size_t offset;
   int flags;
 };
 

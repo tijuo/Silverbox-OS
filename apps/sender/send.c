@@ -20,7 +20,7 @@ int main(void)
     if(receiverTid != NULL_TID)
       break;
 
-    sys_wait(500);
+    sys_sleep(500);
   }
 
   if(receiverTid == NULL_TID)
@@ -39,9 +39,8 @@ int main(void)
     return EXIT_FAILURE;
   }
 
-
   msg_t msg = {
-    .subject = 69,
+    .subject = 123456789,
     .recipient = receiverTid,
     .buffer = ibuf,
     .bufferLen = 20,
@@ -72,7 +71,7 @@ int main(void)
 
     if(sys_send(&msg2) == ESYS_OK)
     {
-      fprintf(stderr, "Messages sent successfully");
+      fprintf(stderr, "Messages sent successfully\n");
       free(buf);
       return EXIT_SUCCESS;
     }

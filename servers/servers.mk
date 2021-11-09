@@ -5,7 +5,6 @@ INSTALL_DIR=sbos/servers/
 
 all: $(OUTPUT)
 	@objdump -Dx $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
-	make install
 
 $(OUTPUT): $(OBJ) $(SB_PREFIX)/lib/libc/libc.a $(SB_PREFIX)/lib/libos/libos.a
 	$(SB_PREFIX)/tools/makec.sh $(SRC) $(OUTPUT)

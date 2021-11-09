@@ -4,12 +4,8 @@ SECTIONS
 {
   kPhysCode  = 0x00100000;
   kPhysStart = 0x00100000;
-  kVirtCode  = 0xC0800000;
-  kVirtStart = 0xC0800000;
-  kTcbStart =  0xC0000000;
-  kTcbEnd    = kTcbStart + 128*65536;
-
-  kTcbTableSize = kTcbEnd - kTcbStart;
+  kVirtCode  = 0x80100000;
+  kVirtStart = 0x80100000;
 
   kVirtToPhys = kPhysStart + ~kVirtStart + 1;
   kPhysToVirt = kVirtStart - kPhysStart;
@@ -23,48 +19,47 @@ SECTIONS
      *(.text*)
      *(.rodata*)
      *(.comment)
-     . = ALIGN(4096);
   }
-  
-  kPhysData = . + kVirtToPhys;
-  kVirtData = .;
 
   .data : ALIGN(4096) {
+     kPhysData = . + kVirtToPhys;
+     kVirtData = .;
      kData = .;
      *(.data*)
-     . = ALIGN(4096);
+     *(.tssIoBmp)
   }
 
-  kPhysDisc = . + kVirtToPhys;
-  kVirtDisc = .;
-
-  .disc : ALIGN(4096) {
+  .init : ALIGN(4096) {
+    kPhysDisc = . + kVirtToPhys;
+    kVirtDisc = .;
     kdCode = .;
     *(.dtext)
+    . = ALIGN(4);
     kdData = .;
     *(.ddata)
-    . = ALIGN(4096);
-    *(.dpages)
-    . = ALIGN(4096);
   }
-
-  kPhysBss = . + kVirtToPhys;
-  kVirtBss = .;
-
+  
   .bss : ALIGN(4096) {
+    kPhysBss = . + kVirtToPhys;
+    kVirtBss = .;
     kBss = .;
-    *(.pages)
     *(.bss)
     *(.COMMON)
-    . = ALIGN(4096);
+    . = ALIGN(4);
     kernelStacksBottom = .;
     *(.stacks)
-    . = ALIGN(4096);
     kernelStacksTop = .;
+    kVirtPageStack = .;
   }
-
-  kEnd = ALIGN(4096);
-  kSize = kEnd - kCode;
   
-  kVirtPageStack = .;
+  .tcb : ALIGN(0x400000) {
+    kTcbStart = .;
+  	*(.tcb)
+  	kTcbEnd = .;
+  }
+  
+  kEnd = .;
+  kTcbTableSize = kTcbEnd - kTcbStart;
+  
+  kSize = kEnd - kCode;
 }

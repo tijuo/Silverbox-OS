@@ -11,7 +11,7 @@ DIRS	=char block bus
 
 all:    $(DIRS) $(EXE)
 
-%.exe:  %.c $(SB_PREFIX)/lib/libc.a $(SB_PREFIX)/lib/libos.a
+%.exe:  %.o $(SB_PREFIX)/lib/libc.a $(SB_PREFIX)/lib/libos.a
 	$(SB_PREFIX)/tools/makec.sh $< $@
 
 char:

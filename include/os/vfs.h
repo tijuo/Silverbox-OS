@@ -18,14 +18,15 @@
 #define FS_ONLINE	0x080
 #define FS_COMPRESS	0x100
 #define FS_ENCRYPT	0x200
+#define FS_DEVICE   0x400
 
 typedef sbarray_t SBFilePath;
 
 struct FileAttributes
 {
   int flags;
-  long long timestamp; // number of microseconds since Jan. 1, 1950 CE
-  long long size;
+  uint64_t timestamp; // number of microseconds since Jan. 1, 1970 CE
+  uint64_t size;
   unsigned char name_len;
   char name[255];
 };

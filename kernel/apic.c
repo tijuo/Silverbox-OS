@@ -11,15 +11,15 @@ void enable_apic(void);
 
 void send_apic_eoi(void)
 {
-  volatile unsigned *eoi_reg = (volatile unsigned *)(LAPIC_EOI + LAPIC_VADDR);
+  volatile unsigned int *eoi_reg = (volatile unsigned int *)(LAPIC_EOI + LAPIC_VADDR);
 
   *eoi_reg = 0;
 }
 
 void init_apic_timer(void)
 {
-  volatile unsigned *timer_reg = (volatile unsigned *)(LAPIC_TIMER + LAPIC_VADDR);
-  volatile unsigned *div_conf_reg = (volatile unsigned *)(LAPIC_TIMER_DCR + LAPIC_VADDR);
+  volatile unsigned int *timer_reg = (volatile unsigned int *)(LAPIC_TIMER + LAPIC_VADDR);
+  volatile unsigned int *div_conf_reg = (volatile unsigned int *)(LAPIC_TIMER_DCR + LAPIC_VADDR);
 
 //  *timer_reg = LAPIC_PERIODIC | LAPIC_UNMASKED | 0x32;
 //  *div_conf_reg = 0; // Divide counter by 2
@@ -28,11 +28,11 @@ void init_apic_timer(void)
 void enable_apic(void)
 {
   #define IA32_APIC_BASE MSR = 0x1Bu;
-  unsigned apic_result = 0;
+  uint32_t apic_result = 0;
 
-  __asm__ volatile("rdmsr\n"
-		   "mov	%%eax, %1\n" : "=ecx"(IA32_APIC_BASE_MSR),
-                                       "=m"(apic_result) :: "eax", "edx");
+  asm volatile("rdmsr\n"
+		       "mov	%%eax, %1\n" : "=ecx"(IA32_APIC_BASE_MSR),
+                                   "=m"(apic_result) :: "eax", "edx");
 
   if( (apic_result & (1u << 8)) != 0 )
   {
@@ -48,7 +48,7 @@ void enable_apic(void)
     kprintf("APIC disabled\n");
   }
 
-  kprintf("APIC Base: 0x%x\n", apic_result & ~0xFFFu);
+  kprintf("APIC Base: 0x%p\n", apic_result & ~0xFFFu);
 
   // TODO: Here, actually *set up* the LAPIC
   kMapPage( (addr_t)LAPIC_VADDR, (addr_t)LAPIC_BASE, PAGING_RW | PAGING_PCD | PAGING_PWT );

@@ -12,7 +12,7 @@
 struct PortOpRequest
 {
   char type; // create, listen, lookup, destroy
-}  __PACKED__;
+}  PACKED;
 
 struct Port
 {

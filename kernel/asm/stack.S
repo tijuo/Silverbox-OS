@@ -1,3 +1,4 @@
+.file "stack.S"
 .code32
 .section .stacks, "aw", @nobits
 

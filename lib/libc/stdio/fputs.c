@@ -5,11 +5,10 @@ int fputs(const char *s, FILE *stream)
 {
   size_t len = strlen(s);
 
-  while(len)
+  while(len--)
   {
     if( fputc(*s++, stream) == EOF )
       return EOF;
-    len--;
   }
 
   return 0;

@@ -256,9 +256,14 @@ pub fn receive<T: Sized>(sender: &Tid, flags: i32) -> Result<(Message<T>, usize)
 }
 
 pub mod kernel {
-    pub const EXCEPTION: i32 = 0xF0;
-    pub const IRQ: i32 = 0xF1;
-    pub const EXIT: i32 = 0xF2;
+    pub const EXCEPTION: i32 = -1;
+    pub const IRQ: i32 = -2;
+    pub const EXIT: i32 = -3;
+    pub const EOI: i32 = -4;
+    pub const MEMORY: i32 = -5;
+    pub const BIND_IRQ: i32 = -6;
+    pub const UNBIND_IRQ: i32 = -7;
+
     use super::RawMessage;
     use crate::Tid;
     use crate::address::VAddr;
@@ -519,8 +524,8 @@ pub mod init {
     pub struct RawMapRequest {
         pub address: *const c_void,
         pub device: i32,
+        pub offset: u64,
         pub length: usize,
-        pub offset: usize,
         pub flags: i32,
     }
 
@@ -540,7 +545,7 @@ pub mod init {
                 let address_ptr = (msg.buffer.wrapping_add(offset_of!(RawMapRequest, address))) as *const [u8; mem::size_of::<usize>()];
                 let device_ptr = (msg.buffer.wrapping_add(offset_of!(RawMapRequest, device))) as *const [u8; mem::size_of::<i32>()];
                 let length_ptr = (msg.buffer.wrapping_add(offset_of!(RawMapRequest, length))) as *const [u8; mem::size_of::<usize>()];
-                let offset_ptr = (msg.buffer.wrapping_add(offset_of!(RawMapRequest, offset))) as *const [u8; mem::size_of::<usize>()];
+                let offset_ptr = (msg.buffer.wrapping_add(offset_of!(RawMapRequest, offset))) as *const [u8; mem::size_of::<u64>()];
                 let flags_ptr = (msg.buffer.wrapping_add(offset_of!(RawMapRequest, flags))) as *const [u8; mem::size_of::<i32>()];
 
                 unsafe {
@@ -555,7 +560,7 @@ pub mod init {
                     address: usize::from_le_bytes(address_arr) as *const c_void,
                     device: i32::from_le_bytes(device_arr),
                     length: usize::from_le_bytes(length_arr),
-                    offset: usize::from_le_bytes(offset_arr),
+                    offset: u64::from_le_bytes(offset_arr),
                     flags: i32::from_le_bytes(flags_arr)
                 })
             }
@@ -565,8 +570,8 @@ pub mod init {
     pub struct MapRequest {
         pub address: Option<VAddr>,
         pub device: DeviceId,
+        pub offset: u64,
         pub length: usize,
-        pub offset: usize,
         pub flags: u32,
     }
 

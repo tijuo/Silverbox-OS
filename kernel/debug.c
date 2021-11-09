@@ -8,10 +8,13 @@
 #include <os/syscalls.h>
 #include <kernel/interrupt.h>
 #include <kernel/bits.h>
+#include <string.h>
+#include <limits.h>
+#include <stdint.h>
 
 #ifdef DEBUG
 
-#define KITOA_BUF_LEN   12
+#define KITOA_BUF_LEN   65
 
 #define SCREEN_HEIGHT   25
 #define SCREEN_WIDTH    80
@@ -45,23 +48,65 @@ enum TextColors { BLACK, BLUE, GREEN, CYAN, RED, MAGENTA, BROWN, GRAY,
 #define CHAR_OF(c)			((c) & 0xFF)
 #define COLOR_OF(c)			(((c) >> 8) & 0xFF)
 
-bool useLowMem;
+#define itoa(value, str, base)		_Generic((value), \
+    long long int: kllitoa, \
+    unsigned long long int: kullitoa, \
+    unsigned int: kuitoa, \
+    long int: klitoa, \
+    unsigned long int: kulitoa, \
+default: kitoa)((value), (str), (base))
+
+enum PrintfLength { DEFAULT=0, CHAR, SHORT_INT, LONG_INT, LONG_LONG_INT, INTMAX, SIZE, PTRDIFF, LONG_DOUBLE };
+enum PrintfParseState { FLAGS=0, WIDTH, PRECISION, LENGTH, SPECIFIER };
+
+struct PrintfState
+{
+  unsigned short int isZeroPad : 1;
+  unsigned short int usePrefix : 1;
+  unsigned short int isLeftJustify : 1;
+  unsigned short int isForcedPlus : 1;
+  unsigned short int isBlankPlus : 1;
+  unsigned short int inPercent : 1;
+  unsigned short int isError : 1;
+  unsigned short int isNegative : 1;
+  unsigned short int printfState : 4;
+  unsigned short int length : 4;
+  char prefix[2];
+  size_t width;
+  int precision;
+  size_t percentIndex;
+  size_t argLength;
+  char *string;
+};
+
 bool badAssertHlt;
 dword upper1;
 dword lower1;
 dword upper2;
 dword lower2;
 
-void kprintAt( const char *str, int x, int y );
-void kprintf( const char *str, ... );
+unsigned int cursorX=0;
+unsigned int cursorY=0;
+
+void resetPrintfState(struct PrintfState *state);
+
+static void printChar(int c);
+static void _kprintf(void (*writeFunc)(int), const char *str, va_list args);
+void kprintf(const char *str, ...) __attribute__((format(printf, 1, 2)));
+void kprintfAt(unsigned int x, unsigned int y, const char *str, ...) __attribute__((format(printf, 3, 4)));
 static int scroll(int up);
 static void setScroll(word addr);
 void resetScroll( void );
 void scrollUp( void );
 int scrollDown( void );
 void doNewLine( int *x, int *y );
-char *kitoa(int value, char *str, int base, int unSigned);
-//char *klltoa(long long int value, char *str, int base, int unSigned);
+int kitoa(int value, char *str, int base);
+int kuitoa(unsigned int value, char *str, int base);
+int klitoa(long int value, char *str, int base);
+int kulitoa(unsigned long int value, char *str, int base);
+int kllitoa(long long int value, char *str, int base);
+int kullitoa(unsigned long long int value, char *str, int base);
+
 void _putChar( char c, int x, int y, unsigned char attrib );
 void putChar( char c, int x, int y );
 void dump_regs( const tcb_t *thread, const ExecutionState *state, int intNum, int errorCode);
@@ -152,142 +197,275 @@ if( sx >= SCREEN_WIDTH )
    */
 }
 
-char *kitoa(int value, char *str, int base, int unSigned)
+int kitoa(int value, char *str, int base)
 {
-  unsigned int num = (unsigned int)value;
-  size_t str_end=0;
-  int negative = base == 10 && !unSigned && (value & 0x80000000);
+  size_t strEnd=0;
+  int negative = base == 10 && value < 0;
+  int charsWritten=0;
+
+  if( !str || base < 2 || base > 36)
+    return -1;
 
   if(negative)
-    num = ~num + 1;
-
-  if( !str )
-    return NULL;
-  else if( base >= 2 && base <= 36 )
   {
-    do
+    if(value == INT_MIN)
     {
-      unsigned int quot = base * (num / base);
-
-      str[str_end++] = _digits[num - quot];
-      num = quot / base;
-    } while( num );
-
-    if(negative)
-      str[str_end++] = '-';
-  }
-
-  str[str_end] = '\0';
-
-  if( str_end )
-  {
-    str_end--;
-
-    for( size_t i=0; i < str_end; i++, str_end-- )
-    {
-      char tmp = str[i];
-      str[i] = str[str_end];
-      str[str_end] = tmp;
+      memcpy(str, "-2147483648", 11);
+      return 11;
     }
+    else
+      value = ~value + 1;
   }
-  return str;
-}
 
-/*
-char *klltoa(long long int value, char *str, int base, int unSigned)
-{
-  unsigned long long int num = (unsigned long long int)value;
-  size_t str_end=0;
-  int negative = !unSigned && (value & 0x8000000000000000ull);
+  do
+  {
+    unsigned int quot = base * ((unsigned int)value / base);
+
+    str[strEnd++] = _digits[value - quot];
+    value = quot / base;
+  } while( value );
 
   if(negative)
-    num = ~num + 1;
+    str[strEnd++] = '-';
 
-  if( !str )
-    return NULL;
-  else if( base >= 2 && base <= 36 )
+  charsWritten = strEnd;
+
+  if( strEnd )
   {
-    if(negative)
-      str[str_end++] = '-';
+    strEnd--;
 
-    do
-    {
-      unsigned long long int quot = base * (num / base);
-
-      str[str_end++] = _digits[num - quot];
-      num = quot / base;
-    } while( num );
-  }
-
-  str[str_end] = '\0';
-
-  if( str_end )
-  {
-    str_end--;
-
-    for( size_t i=0; i < str_end; i++, str_end-- )
+    for( size_t i=0; i < strEnd; i++, strEnd-- )
     {
       char tmp = str[i];
-      str[i] = str[str_end];
-      str[str_end] = tmp;
+      str[i] = str[strEnd];
+      str[strEnd] = tmp;
     }
   }
-  return str;
-}
- */
 
-/*
-char *klltoa(long long int value, char *str, int base)
+  return charsWritten;
+}
+
+int kuitoa(unsigned int value, char *str, int base)
 {
-  unsigned long long int num = (unsigned long long int)value;
-  size_t str_end=0;
+  size_t strEnd=0;
+  int charsWritten=0;
 
-  if( !str )
-    return NULL;
-  else if( base >= 2 && base <= 36 )
+  if( !str || base < 2 || base > 36)
+    return -1;
+
+  do
   {
-    if( base == 10 && value < 0 )
-    {
-      str[str_end++] = '-';
-    }
-    do
-    {
-      unsigned long long int quot = base * (num / base);
+    unsigned int quot = base * ((unsigned int)value / base);
 
-      str[str_end++] = _digits[num - quot];
-      num = quot / base;
-    } while( num );
-  }
+    str[strEnd++] = _digits[value - quot];
+    value = quot / base;
+  } while( value );
 
-  str[str_end] = '\0';
+  charsWritten = strEnd;
 
-  if( str_end )
+  if( strEnd )
   {
-    str_end--;
+    strEnd--;
 
-    for( size_t i=0; i < str_end; i++, str_end-- )
+    for( size_t i=0; i < strEnd; i++, strEnd-- )
     {
       char tmp = str[i];
-      str[i] = str[str_end];
-      str[str_end] = tmp;
+      str[i] = str[strEnd];
+      str[strEnd] = tmp;
     }
   }
-  return str;
+
+  return charsWritten;
 }
- */
+
+int klitoa(long int value, char *str, int base)
+{
+  size_t strEnd=0;
+  int negative = base == 10 && value < 0;
+  int charsWritten=0;
+
+  if( !str || base < 2 || base > 36)
+    return -1;
+
+  if(negative)
+  {
+    if(value == (long int)LONG_MIN)
+    {
+#if __LONG_LEN__ == 8
+      memcpy(str, "-9223372036854775808", 20);
+      return 20;
+#else
+      memcpy(str, "-2147483648", 11);
+      return 11;
+#endif /* __LONG__LEN == 8 */
+
+    }
+    else
+      value = ~value + 1;
+  }
+
+  do
+  {
+    long int quot = base * (value / base);
+
+    str[strEnd++] = _digits[value - quot];
+    value = quot / base;
+  } while( value );
+
+  if(negative)
+    str[strEnd++] = '-';
+
+  charsWritten = strEnd;
+
+  if( strEnd )
+  {
+    strEnd--;
+
+    for( size_t i=0; i < strEnd; i++, strEnd-- )
+    {
+      char tmp = str[i];
+      str[i] = str[strEnd];
+      str[strEnd] = tmp;
+    }
+  }
+
+  return charsWritten;
+}
+
+int kulitoa(unsigned long int value, char *str, int base)
+{
+  size_t strEnd=0;
+  int charsWritten=0;
+
+  if( !str || base < 2 || base > 36)
+    return -1;
+
+  do
+  {
+    unsigned long int quot = base * ((unsigned long int)value / base);
+
+    str[strEnd++] = _digits[value - quot];
+    value = quot / base;
+  } while( value );
+
+  charsWritten = strEnd;
+
+  if( strEnd )
+  {
+    strEnd--;
+
+    for( size_t i=0; i < strEnd; i++, strEnd-- )
+    {
+      char tmp = str[i];
+      str[i] = str[strEnd];
+      str[strEnd] = tmp;
+    }
+  }
+
+  return charsWritten;
+}
+
+int kllitoa(long long int value, char *str, int base)
+{
+  size_t strEnd=0;
+  int negative = base == 10 && value < 0;
+  int charsWritten=0;
+  unsigned int v[2] = { (unsigned int)(value & 0xFFFFFFFFu), (unsigned int)(value >> 32) };
+
+  assert(base == 2 || base == 4 || base == 8 || base == 16 || base == 32);
+
+  if( !str || base < 2 || base > 36)
+    return -1;
+
+  if(negative)
+  {
+    if(value == (long long int)LLONG_MIN)
+    {
+      memcpy(str, "-9223372036854775808", 20);
+      return 20;
+    }
+    else
+      value = ~value + 1;
+  }
+
+  for(int i=0; i < 2; i++)
+  {
+    if(i == 1 && v[i] == 0)
+      break;
+
+    do
+    {
+      unsigned int quot = base * ((unsigned int)v[i] / base);
+
+      str[strEnd++] = _digits[v[i] - quot];
+      v[i] = quot / base;
+    } while( v[i] );
+  }
+
+  if(negative)
+    str[strEnd++] = '-';
+
+  charsWritten = strEnd;
+
+  if( strEnd )
+  {
+    strEnd--;
+
+    for( size_t i=0; i < strEnd; i++, strEnd-- )
+    {
+      char tmp = str[i];
+      str[i] = str[strEnd];
+      str[strEnd] = tmp;
+    }
+  }
+
+  return charsWritten;
+}
+
+int kullitoa(unsigned long long int value, char *str, int base)
+{
+  size_t strEnd=0;
+  int charsWritten=0;
+  unsigned int v[2] = { (unsigned int)(value & 0xFFFFFFFFu), (unsigned int)(value >> 32) };
+
+  if( !str || base < 2 || base > 36)
+    return -1;
+
+  for(int i=0; i < 2; i++)
+  {
+    if(i == 1 && v[i] == 0)
+      break;
+
+    do
+    {
+      unsigned int quot = base * ((unsigned int)v[i] / base);
+
+      str[strEnd++] = _digits[v[i] - quot];
+      v[i] = quot / base;
+    } while( v[i] );
+  }
+
+  charsWritten = strEnd;
+
+  if( strEnd )
+  {
+    strEnd--;
+
+    for( size_t i=0; i < strEnd; i++, strEnd-- )
+    {
+      char tmp = str[i];
+      str[i] = str[strEnd];
+      str[strEnd] = tmp;
+    }
+  }
+
+  return charsWritten;
+}
+
 void initVideo( void )
 {
-  useLowMem = true;
   badAssertHlt = true;//false; // true;
   outByte(MISC_OUTPUT_WR_REG, inByte(MISC_OUTPUT_RD_REG) | FROM_FLAG_BIT(0));
-}
-
-/** Sets the flag to use conventional memory for printing instead
-    of virtual memory.
- */
-void setVideoLowMem( bool value )
-{
-  useLowMem = value;
 }
 
 /// Sets the flag to halt the system on a failed assertion
@@ -359,32 +537,31 @@ int scrollDown( void )
   return scroll(DOWN_DIR);
 }
 
-void kprintAt( const char *str, int x, int y )
+void kprintfAt(unsigned int x, unsigned int y, const char *str, ...)
 {
-  volatile word *vidmem = (volatile word *)VIDMEM_START;
+  unsigned int _cursorX=cursorX, _cursorY=cursorY;
+  va_list args;
 
-  if( !useLowMem )
-    vidmem += PHYSMEM_START;
+  cursorX = x;
+  cursorY = y;
 
-  while(*str)
-  {
-    word w = VGA_CHAR_AT(vidmem, y, x);
-    VGA_CHAR_AT(vidmem, y, x) = (w & COLOR_MASK) | *(str++);
+  va_start(args, str);
+  _kprintf(&printChar, str, args);
+  va_end(args);
 
-    x = (x+1) % SCREEN_WIDTH;
-
-    if(!x)
-       y = (y+1) % MAX_LINES;
-  }
+  cursorX = _cursorX;
+  cursorY = _cursorY;
 }
 
 
 void printAssertMsg(const char *exp, const char *file, const char *func, int line)
 {
+  tcb_t *currentThread = getCurrentThread();
+
   kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
 
   if( currentThread )
-    dump_regs((tcb_t *)currentThread, &currentThread->execState, -1, 0);
+    dump_regs((tcb_t *)currentThread, &currentThread->userExecState, -1, 0);
 
   if( badAssertHlt )
   {
@@ -402,11 +579,9 @@ void printAssertMsg(const char *exp, const char *file, const char *func, int lin
 CALL_COUNTER(incSchedCount)
 void incSchedCount( void )
 {
-  volatile word *vidmem = ( volatile word * )(VIDMEM_START);
-  char buf[KITOA_BUF_LEN];
+  tcb_t *currentThread = getCurrentThread();
 
-  if( !useLowMem )
-    vidmem += PHYSMEM_START;
+  volatile word *vidmem = ( volatile word * )(VIDMEM_START);
 
   word w = VGA_CHAR_AT(vidmem, 0, 0);
 
@@ -416,11 +591,8 @@ void incSchedCount( void )
 
   if( currentThread )
   {
-    kprintAt("tid:       pri:     quant:     cr3:         ", 2, 0);
-    kprintAt( kitoa((int)getTid(currentThread), buf, 10, 0), 7, 0 );
-    kprintAt( kitoa((int)currentThread->priority, buf, 10, 0), 18, 0 );
-    kprintAt( kitoa((int)currentThread->quantaLeft, buf, 10, 0), 28, 0 );
-    kprintAt( kitoa(currentThread->rootPageMap, buf, 16, 0), 37, 0 );
+    kprintfAt(2, 0, "tid: %5u cr3: %p",
+              getTid(currentThread), (void *)currentThread->rootPageMap);
   }
 }
 
@@ -431,20 +603,10 @@ void incSchedCount( void )
 void incTimerCount( void )
 {
   volatile word *vidmem = ( volatile word * ) ( VIDMEM_START );
-  char buf[KITOA_BUF_LEN];
-
-  if( !useLowMem )
-    vidmem += PHYSMEM_START;
 
   word w = VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1);
 
   VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH-1) = VGA_CHAR(CHAR_OF(w + 1), GREEN, GRAY);
-
-  if(currentThread)
-  {
-    kprintAt( "   ", 28, 0);
-    kprintAt( kitoa((int)currentThread->quantaLeft, buf, 10, 0), 28, 0 );
-  }
 }
 
 /// Blanks the screen
@@ -452,9 +614,6 @@ void incTimerCount( void )
 void clearScreen( void )
 {
   volatile word *vidmem = ( volatile word * ) ( VIDMEM_START );
-
-  if( !useLowMem )
-    vidmem += PHYSMEM_START;
 
   for(int col=0; col < SCREEN_WIDTH; col++)
     VGA_CHAR_AT(vidmem, 0, col) = VGA_CHAR(' ', BLACK, GRAY);
@@ -465,7 +624,7 @@ void clearScreen( void )
       VGA_CHAR_AT(vidmem, line, col) = VGA_CHAR(' ', GRAY, BLACK);
   }
 
- // memset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
+  // memset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
 
   resetScroll();
 }
@@ -480,13 +639,24 @@ void doNewLine( int *x, int *y )
     *y = 0;
 }
 
+void printChar(int c)
+{
+  volatile word *vidmem = (volatile word *)VIDMEM_START + cursorY * SCREEN_WIDTH + cursorX;
+
+  *vidmem = (*vidmem & 0xFF00) | (unsigned char)c;
+
+  cursorX++;
+
+  if(cursorX >= SCREEN_WIDTH)
+  {
+    cursorX = 0;
+    cursorY++;
+  }
+}
 
 void _putChar( char c, int x, int y, unsigned char attrib )
 {
   volatile word *vidmem = (volatile word *)(VIDMEM_START);
-
-  if( !useLowMem )
-    vidmem += PHYSMEM_START;
 
   VGA_CHAR_AT(vidmem, y, x) = VGA_CHAR(c, attrib & 0x0F, (attrib >> 4) & 0x0F);
 }
@@ -496,117 +666,511 @@ void putChar( char c, int x, int y )
   _putChar( c, x, y, COLOR_ATTR(GRAY, BLACK) );
 }
 
+void resetPrintfState(struct PrintfState *state)
+{
+  clearMemory(state, sizeof *state);
+  state->precision = -1;
+}
+
+void kprintf(const char *str, ...)
+{
+  va_list args;
+
+  va_start(args, str);
+  _kprintf(&putDebugChar, str, args);
+  va_end(args);
+}
 
 /** A simplified stdio printf() for debugging use
+    @param writeFunc The function to be used to output characters.
     @param str The formatted string to print with format specifiers
     @param ... The arguments to the specifiers
  */
 
-void kprintf( const char *str, ... )
+void _kprintf(void (*writeFunc)(int), const char *str, va_list args)
 {
-  int longCounter=0;
-  int unSigned=0;
-  int percent = 0;
-  va_list args;
+  struct PrintfState state;
   char buf[KITOA_BUF_LEN];
   size_t i;
+  int charsWritten = 0;
 
-  va_start(args, str);
+  resetPrintfState(&state);
 
   for(i=0; str[i]; i++ )
   {
-    if( percent )
+    if( state.inPercent )
     {
       switch( str[i] )
       {
-        case 'l':
-          longCounter++;
-          break;
-        case '%':
-          putDebugChar('%');
-          longCounter = 0;
-          unSigned = 0;
-          percent = 0;
-          break;
-        case 'c':
-          putDebugChar((char)va_arg(args,char));
-          longCounter = 0;
-          unSigned = 0;
-          percent = 0;
-          break;
-        case 'p':
-        case 'x':
-        case 'X':
-          if(longCounter >= 2)
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          switch(state.printfState)
           {
-            long long int arg = va_arg(args, long long int);
+            case FLAGS:
+            case WIDTH:
+              if(state.printfState == FLAGS)
+              {
+                if(str[i] == '0')
+                  state.isZeroPad = 1;
 
-            if(arg >> 32)
-              kprintf(kitoa((int)(arg >> 32), buf, 16, 0));
+                state.printfState = WIDTH;
+              }
 
-            kprintf(kitoa((int)(arg & 0xFFFFFFFF), buf, 16, 0));
+              state.width = 10 * state.width + str[i] - '0';
+              continue;
+            case PRECISION:
+              state.precision = 10 * state.precision + str[i] - '0';
+              continue;
+            case LENGTH:
+            default:
+              state.isError = 1;
+              break;
           }
-          else
-            kprintf(kitoa(va_arg(args, int), buf, 16, 0));
+          break;
+            case 'l':
+              if(state.printfState == LENGTH)
+              {
+                state.length = LONG_LONG_INT;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else if(state.printfState < LENGTH)
+              {
+                state.length = LONG_INT;
+                state.printfState = LENGTH;
+                continue;
+              }
+              else
+              {
+                state.isError = 1;
+                break;
+              }
+              break;
+            case 'h':
+              if(state.printfState == LENGTH)
+              {
+                state.length = SHORT_INT;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else if(state.printfState < LENGTH)
+              {
+                state.length = CHAR;
+                state.printfState = LENGTH;
+                continue;
+              }
+              else
+              {
+                state.isError = 1;
+                break;
+              }
+              break;
+            case 'j':
+              if(state.printfState != SPECIFIER)
+              {
+                state.length = INTMAX;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else
+              {
+                state.isError = 1;
+                break;
+              }
+              break;
+            case 'z':
+              if(state.printfState != SPECIFIER)
+              {
+                state.length = SIZE;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else
+              {
+                state.isError = 1;
+                break;
+              }
+              break;
+            case 't':
+              if(state.printfState != SPECIFIER)
+              {
+                state.length = PTRDIFF;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else
+              {
+                state.isError = 1;
+                break;
+              }
+              break;
+            case 'L':
+              if(state.printfState != SPECIFIER)
+              {
+                state.length = LONG_DOUBLE;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else
+              {
+                state.isError = 1;
+                break;
+              }
+              break;
+            case 'c':
+            case '%':
+              if(str[i] == 'c')
+              {/*
+            if(state.length == LONG_INT)
+              buf[0] = (char)va_arg(args, wint_t);
+            else
+               */
+                buf[0] = (char)va_arg(args, int);
+              }
+              else
+                buf[0] = '%';
 
-          longCounter = 0;
-          unSigned = 0;
-          percent = 0;
-          break;
-        case 's':
-          kprintf(va_arg(args, char *));
-          percent=0;
-          longCounter=0;
-          unSigned = 0;
-          break;
-        case 'u':
-          unSigned = 1;
-          break;
-        case 'd':
-        case 'i':
-          /*
-          if(longCounter >= 2)
-            kprintf(klltoa(va_arg(args, long long int), buf, 10));
-          else
-           */
-          kprintf(kitoa(va_arg(args, int), buf, 10, unSigned));
+              state.string = buf;
+              state.argLength = 1;
+              break;
+            case '.':
+              switch(state.printfState)
+              {
+                case FLAGS:
+                case WIDTH:
+                  state.precision = 0;
+                  state.printfState = PRECISION;
+                  continue;
+                default:
+                  state.isError = 1;
+                  break;
+              }
+              break;
+                case 'p':
+                case 'x':
+                case 'X':
+                  if(str[i] == 'p')
+                    state.precision = 2 * sizeof(void *);
 
-          percent = 0;
-          longCounter = 0;
-          unSigned = 0;
-          break;
-        default:
-          break;
+                  switch(state.length)
+                  {
+                    case LONG_LONG_INT:
+                      state.argLength = itoa(va_arg(args, unsigned long long int), buf, 16);
+                      break;
+                    case CHAR:
+                      state.argLength = itoa((unsigned char)va_arg(args, unsigned int), buf, 16);
+                      break;
+                    case SHORT_INT:
+                      state.argLength = itoa((unsigned short int)va_arg(args, unsigned int), buf, 16);
+                      break;
+                    case LONG_INT:
+                      state.argLength = itoa((unsigned long int)va_arg(args, unsigned long int), buf, 16);
+                      break;
+                    case DEFAULT:
+                    default:
+                      state.argLength = itoa(va_arg(args, unsigned int), buf, 16);
+                      break;
+                  }
+
+                  if(state.usePrefix)
+                  {
+                    state.prefix[0] = '0';
+                    state.prefix[1] = str[i] != 'X' ? 'x' : 'X';
+                  }
+
+                  if(str[i] == 'X')
+                  {
+                    for(size_t pos=0; pos < state.argLength; pos++)
+                    {
+                      if(buf[pos] >= 'a' && buf[pos] <= 'z')
+                        buf[pos] -= 'a' - 'A';
+                    }
+                  }
+
+                  state.string = buf;
+                  break;
+                    case 'o':
+                      switch(state.length)
+                      {
+                        case LONG_LONG_INT:
+                          state.argLength = itoa(va_arg(args, unsigned long long int), buf, 8);
+                          break;
+                        case CHAR:
+                          state.argLength = itoa((unsigned char)va_arg(args, unsigned int), buf, 8);
+                          break;
+                        case SHORT_INT:
+                          state.argLength = itoa((unsigned short int)va_arg(args, unsigned int), buf, 8);
+                          break;
+                        case LONG_INT:
+                          state.argLength = itoa((unsigned long int)va_arg(args, unsigned long int), buf, 8);
+                          break;
+                        case DEFAULT:
+                        default:
+                          state.argLength = itoa(va_arg(args, unsigned int), buf, 8);
+                          break;
+                      }
+
+                      if(state.usePrefix)
+                      {
+                        state.prefix[0] = '0';
+                        state.prefix[1] = '\0';
+                      }
+
+                      state.string = buf;
+                      break;
+                        case 's':
+                          state.string = va_arg(args, char *);
+
+                          if(state.precision == -1)
+                            for(state.argLength=0; state.string[state.argLength]; state.argLength++);
+                          else
+                            state.argLength = state.precision;
+
+                          break;
+                        case 'u':
+                          switch(state.length)
+                          {
+                            case LONG_LONG_INT:
+                              state.argLength = itoa(va_arg(args, unsigned long long int), buf, 10);
+                              break;
+                            case CHAR:
+                              state.argLength = itoa((unsigned char)va_arg(args, unsigned int), buf, 10);
+                              break;
+                            case SHORT_INT:
+                              state.argLength = itoa((unsigned short int)va_arg(args, unsigned int), buf, 10);
+                              break;
+                            case LONG_INT:
+                              state.argLength = itoa((unsigned long int)va_arg(args, unsigned long int), buf, 10);
+                              break;
+                            case DEFAULT:
+                            default:
+                              state.argLength = itoa(va_arg(args, unsigned int), buf, 10);
+                              break;
+                          }
+
+                          state.string = buf;
+                          break;
+                            case 'd':
+                            case 'i':
+                              switch(state.length)
+                              {
+                                case LONG_LONG_INT:
+                                  state.argLength = itoa(va_arg(args, long long int), buf, 10);
+                                  break;
+                                case CHAR:
+                                  state.argLength = itoa((signed char)va_arg(args, int), buf, 10);
+                                  break;
+                                case SHORT_INT:
+                                  state.argLength = itoa((short int)va_arg(args, int), buf, 10);
+                                  break;
+                                case LONG_INT:
+                                  state.argLength = itoa((long int)va_arg(args, long int), buf, 10);
+                                  break;
+                                case DEFAULT:
+                                default:
+                                  state.argLength = itoa(va_arg(args, int), buf, 10);
+                                  break;
+                              }
+
+                              state.isNegative = buf[0] == '-';
+                              state.string = buf;
+
+                              break;
+                                case '#':
+                                  if(state.printfState == FLAGS)
+                                  {
+                                    state.usePrefix = 1;
+                                    continue;
+                                  }
+                                  else
+                                    state.isError = 1;
+                                  break;
+                                case '-':
+                                  if(state.printfState == FLAGS)
+                                  {
+                                    state.isLeftJustify = 1;
+                                    continue;
+                                  }
+                                  else
+                                    state.isError = 1;
+                                  break;
+                                case '+':
+                                  if(state.printfState == FLAGS)
+                                  {
+                                    state.isForcedPlus = 1;
+                                    continue;
+                                  }
+                                  else
+                                    state.isError = 1;
+                                  break;
+                                case ' ':
+                                  if(state.printfState == FLAGS)
+                                  {
+                                    state.isBlankPlus = 1;
+                                    continue;
+                                  }
+                                  else
+                                    state.isError = 1;
+                                  break;
+                                case '*':
+                                  switch(state.printfState)
+                                  {
+                                    case WIDTH:
+                                      state.width = (size_t)va_arg(args, int);
+                                      continue;
+                                    case PRECISION:
+                                      state.precision = (size_t)va_arg(args, int);
+                                      continue;
+                                    default:
+                                      state.isError = 1;
+                                      break;
+                                  }
+                                  break;
+                                    case 'n':
+                                      if(state.printfState == WIDTH || state.printfState == PRECISION
+                                          || state.isForcedPlus || state.isBlankPlus || state.isZeroPad
+                                          || state.usePrefix || state.isLeftJustify)
+                                      {
+                                        state.isError = 1;
+                                        break;
+                                      }
+                                      else
+                                      {
+                                        switch(state.length)
+                                        {
+                                          case LONG_LONG_INT:
+                                            *va_arg(args, long long int *) = charsWritten;
+                                            break;
+                                          case CHAR:
+                                            *va_arg(args, signed char *) = charsWritten;
+                                            break;
+                                          case SHORT_INT:
+                                            *va_arg(args, short int *) = charsWritten;
+                                            break;
+                                          case LONG_INT:
+                                            *va_arg(args, long int *) = charsWritten;
+                                            break;
+                                          case INTMAX:
+                                            *va_arg(args, intmax_t *) = charsWritten;
+                                            break;
+                                          case SIZE:
+                                            *va_arg(args, size_t*) = charsWritten;
+                                            break;
+                                          case PTRDIFF:
+                                            *va_arg(args, ptrdiff_t *) = charsWritten;
+                                            break;
+                                          case DEFAULT:
+                                          default:
+                                            *va_arg(args, int *) = charsWritten;
+                                            break;
+                                        }
+                                      }
+                                      continue;
+                                    default:
+                                      state.isError = 1;
+                                      break;
       }
+
+      if(state.isError)
+      {
+        for(size_t j=state.percentIndex; j <= i; j++, charsWritten++)
+          writeFunc(str[j]);
+      }
+      else
+      {
+        size_t argLength = state.argLength - (state.isNegative ? 1 : 0);
+        size_t signLength = (state.isNegative || state.isForcedPlus || state.isBlankPlus) ? 1 : 0;
+        size_t prefixLength;
+        size_t zeroPadLength;
+        size_t spacePadLength;
+
+        if(state.usePrefix)
+          prefixLength =state.prefix[0] == '\0' ? 0 : (state.prefix[1] == '\0' ? 1 : 2);
+        else
+          prefixLength = 0;
+
+        if(str[i] == 's' || state.precision == -1 || argLength > INT_MAX || (int)argLength >= state.precision)
+          zeroPadLength = 0;
+        else
+          zeroPadLength = state.precision - argLength;
+
+        if(argLength + signLength + prefixLength + zeroPadLength < state.width)
+          spacePadLength = state.width - argLength - signLength - prefixLength - zeroPadLength;
+        else
+          spacePadLength = 0;
+
+        if(!state.isLeftJustify)
+        {
+          for(; spacePadLength > 0; spacePadLength--, charsWritten++)
+            writeFunc(' ');
+        }
+
+        if(state.isNegative)
+        {
+          writeFunc('-');
+          charsWritten++;
+        }
+        else if(state.isForcedPlus)
+        {
+          writeFunc('+');
+          charsWritten++;
+        }
+        else if(state.isBlankPlus)
+        {
+          writeFunc(' ');
+          charsWritten++;
+        }
+
+        for(size_t pos=0; pos < prefixLength; pos++, charsWritten++)
+          writeFunc(state.prefix[pos]);
+
+        for(; zeroPadLength > 0; zeroPadLength--, charsWritten++)
+          writeFunc('0');
+
+        for(size_t pos=(state.isNegative ? 1 : 0); argLength > 0; argLength--, pos++, charsWritten++)
+          writeFunc(state.string[pos]);
+
+        if(state.isLeftJustify)
+        {
+          for(; spacePadLength > 0; spacePadLength--, charsWritten++)
+            writeFunc(' ');
+        }
+      }
+      resetPrintfState(&state);
     }
     else
     {
       switch( str[i] )
       {
         case '%':
-          percent = 1;
+          state.percentIndex = i;
+          state.inPercent = 1;
+          memset(buf, 0, KITOA_BUF_LEN);
           break;
-
         case '\n':
-          //doNewLine( x, y );
-          putDebugChar('\r');
-          putDebugChar('\n');
+          writeFunc('\r');
+          writeFunc('\n');
+          charsWritten += 2;
           break;
-          /*
         case '\r':
-           *x = 0;
+          writeFunc('\r');
+          charsWritten++;
           break;
-           */
         default:
-          putDebugChar( str[i] );
-
-          //  if( ++(*x) == SCREEN_WIDTH )
-          //    doNewLine( x, y );
+          writeFunc( str[i] );
+          charsWritten++;
           break;
       }
     }
   }
-  va_end(args);
 }
 
 void dump_state( const ExecutionState *execState, int intNum, int errorCode )
@@ -617,14 +1181,10 @@ void dump_state( const ExecutionState *execState, int intNum, int errorCode )
     return;
   }
 
-  if( intNum == SYSCALL_INT )
-    kprintf("Syscall");
-  else if( intNum < IRQ0 )
+  if( intNum < IRQ_BASE )
     kprintf("Exception %d", intNum);
-  else if( intNum >= IRQ0 && intNum <= IRQ15 )
-    kprintf("IRQ%d", intNum - IRQ0);
   else
-    kprintf("Software Interrupt %d", intNum);
+    kprintf("IRQ%d", intNum - IRQ_BASE);
 
   kprintf(" @ EIP: 0x%x", execState->eip);
 
@@ -681,20 +1241,20 @@ void dump_stack( addr_t stackFramePtr, addr_t addrSpace )
   @param execState The saved execution state that was pushed to the stack upon context switch
   @param intNum The interrupt vector (if applicable)
   @param errorCode The error code provided by the processor (if applicable)
-*/
+ */
 
 void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum, int errorCode )
 {
   dword stackFramePtr;
 
-  kprintf( "Thread: 0x%x (TID: %d) ", thread, getTid(thread));
+  kprintf( "Thread: %p (TID: %u) ", thread, getTid(thread));
 
   dump_state(execState, intNum, errorCode);
 
   if( !execState )
     kprintf("\n");
 
-  kprintf( "Thread CR3: 0x%x Current CR3: 0x%x\n", *(unsigned *)&thread->rootPageMap, getCR3() );
+  kprintf( "Thread CR3: %#x Current CR3: %#x\n", *(unsigned *)&thread->rootPageMap, getCR3() );
 
   if( !execState || intNum < 0)
   {
@@ -716,9 +1276,9 @@ void dump_regs( const tcb_t *thread, const ExecutionState *execState, int intNum
 
 #endif /* DEBUG */
 
-void abort(void);
+noreturn void abort(void);
 
-void abort(void)
+noreturn void abort(void)
 {
   addr_t stackFramePtr;
 
@@ -729,7 +1289,7 @@ void abort(void)
   __asm__("hlt");
 }
 
-void printPanicMsg(const char *msg, const char *file, const char *func, int line)
+noreturn void printPanicMsg(const char *msg, const char *file, const char *func, int line)
 {
   addr_t stackFramePtr;
   kprintf("\nKernel panic - %s(): %d (%s). %s\nSystem halted\n", func, line, file, msg);

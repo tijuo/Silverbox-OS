@@ -4,71 +4,25 @@
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
 #include <kernel/lowlevel.h>
-#include <kernel/pic.h>
 #include <kernel/paging.h>
 #include <kernel/interrupt.h>
 #include <kernel/error.h>
 #include <os/msg/kernel.h>
 #include <os/msg/init.h>
 #include <kernel/bits.h>
+#include <os/msg/message.h>
+#include <stdint.h>
 
-static int handleHeapPageFault(int errorCode);
+//static int handleHeapPageFault(int errorCode);
 
 #define FIRST_VALID_PAGE        0x1000u
 
 // The threads that are responsible for handling IRQs
 
 tcb_t *irqHandlers[NUM_IRQS];
-u32 pendingIrqBitmap[IRQ_BITMAP_COUNT];
-
-/** Notify the interrupt controller that the IRQ has been handled and to re-enable the generation of IRQs.
-
-   @param irqNum The IRQ number to re-enable.
-*/
-
-void endIRQ(unsigned int irqNum)
-{
-  enableIRQ(irqNum);
-  sendEOI();
-}
-
-/** Set the IRQ handler for an IRQ.
-
-   @param thread The thread that will handle the IRQ.
-   @param irqnum The IRQ number.
-*/
-
-int registerIrq(tcb_t *thread, unsigned int irqNum)
-{
-  assert(thread != NULL);
-  assert(isValidIRQ(irqNum));
-
-  if(irqHandlers[irqNum])
-    RET_MSG(irqHandlers[irqNum] == thread ? E_DONE : E_FAIL, "IRQ Handler has already been set");
-
-  kprintf("TID %d registered IRQ: 0x%x\n", getTid(thread), irqNum);
-
-  CLEAR_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
-  irqHandlers[irqNum] = thread;
-  enableIRQ(irqNum);
-  return E_OK;
-}
-
-/** Reset the IRQ handler for an IRQ.
-
-   @param irqnum The IRQ number.
-*/
-
-int unregisterIrq(unsigned int irqNum)
-{
-  assert(isValidIRQ(irqNum));
-
-  irqHandlers[irqNum] = NULL;
-  return E_OK;
-}
 
 /**
-   Processor exception handler for IRQs (from 0 to 15).
+   Processor exception handler for IRQs (from 0 to 31).
 
    If an IRQ occurs, the kernel will set a flag for which the
    corresponding IRQ handling thread can poll.
@@ -77,31 +31,43 @@ int unregisterIrq(unsigned int irqNum)
    @param state The saved execution state of the processor before the exception occurred.
 */
 
-void handleIRQ(unsigned int irqNum, ExecutionState *state)
+void handleIRQ(unsigned int intNum, ExecutionState *state)
 {
+  tcb_t *currentThread = getCurrentThread();
+
   assert(state != NULL);
 
-  if(irqNum == TIMER_IRQ && !irqHandlers[TIMER_IRQ])
-    timerInt(state);
-  else if(irqNum == SPURIOUS_IRQ && !irqHandlers[SPURIOUS_IRQ])
-    sendEOI(); // Stops the spurious IRQ7
-  else
-  {
-    tcb_t *handler = irqHandlers[irqNum];
+  //int irqNum = getInServiceIRQ();
 
-    sendEOI();
-    disableIRQ(irqNum);
+  intNum -= IRQ_BASE;
+  tcb_t *handler = irqHandlers[intNum];
 
-    if(handler && handler->threadState == IRQ_WAIT)
+      /*
+#ifdef DEBUG
+      if(irqNum == 0)
+        incTimerCount();
+#endif / * DEBUG * /
+
+      disableIRQ((unsigned int)irqNum);
+      sendEOI((unsigned int)irqNum);
+*/
+    if(handler)
     {
-      CLEAR_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
-      setPriority(handler, HIGHEST_PRIORITY);
-      handler->execState.eax = irqNum;
-      startThread(handler);
+      __asm__("xsave %2\n" :: "a"(0x3), "d"(0), "m"(currentThread->xsaveState));
+      __asm__("movd %0, %%mm0\n" :: "m"(intNum));
+
+      if(IS_ERROR(sendMessage(currentThread, getTid(handler), IRQ_MSG, MSG_STD)))
+      {
+        kprintf("Unable to send irq %u message to handler.\n", intNum);
+        __asm__("emms\n");
+      }
     }
-    else
-      SET_FLAG(pendingIrqBitmap[irqNum / sizeof(u32)], FROM_FLAG_BIT(irqNum & (sizeof(u32)-1)));
-  }
+
+  __asm__("leave\n"
+          "ret\n"
+          "add $4, %esp\n");
+  RESTORE_STATE;
+  __asm__("iret\n");
 }
 
 /**
@@ -113,6 +79,10 @@ void handleIRQ(unsigned int irqNum, ExecutionState *state)
           occurred outside of the kernel heap. E_OK on success.
 */
 
+/*
+ * The kernel doesn't have a heap.
+ *
+ *
 int handleHeapPageFault(int errorCode)
 {
   if(IS_FLAG_SET(errorCode, PAGING_ERR_PRES) || IS_FLAG_SET(errorCode, PAGING_ERR_USER))
@@ -126,10 +96,7 @@ int handleHeapPageFault(int errorCode)
   if(faultAddr < FIRST_VALID_PAGE)
     RET_MSG(E_PERM, "Error: NULL page access.");
 
-  //kprintf("Page fault at 0x%x\n", faultAddr);
-
-  if(faultAddr >= PAGETAB)
-    RET_MSG(E_FAIL, "Page fault occurred in page table/directory region.");
+  //kprintf("Page fault at %#x\n", faultAddr);
 
   if(faultAddr >= KERNEL_HEAP_START && faultAddr <= KERNEL_HEAP_LIMIT)
   {
@@ -166,6 +133,7 @@ int handleHeapPageFault(int errorCode)
 
   return E_OK;
 }
+*/
 
 /**
    Handles CPU exceptions. If the kernel is unable to handle an exception, it's
@@ -179,16 +147,17 @@ int handleHeapPageFault(int errorCode)
 
 void handleCPUException(unsigned int exNum, int errorCode, ExecutionState *state)
 {
-  tcb_t *tcb = currentThread;
+  tcb_t *tcb = getCurrentThread();
 
   assert(state);
 
+  /*
   // Handle page faults due to non-present pages in kernel heap
 
   if(exNum == PAGE_FAULT_INT && !IS_ERROR(handleHeapPageFault(errorCode)))
       return;
-
-  #if DEBUG
+*/
+  #ifdef DEBUG
 
   if(tcb)
   {
@@ -201,14 +170,16 @@ void handleCPUException(unsigned int exNum, int errorCode, ExecutionState *state
         if(faultAddress >= INIT_SERVER_STACK_TOP - INIT_SERVER_STACK_SIZE && faultAddress < INIT_SERVER_STACK_TOP && (errorCode & PAGING_PRES) == 0
            && kMapPage(faultAddress, allocPageFrame(), PAGING_RW | PAGING_USER) == 0)
         {
-          return;
+          goto leave;
         }
       }
 
       kprintf("Exception for initial server. System Halted.\n");
       dump_regs( tcb, state, exNum, errorCode );
-      __asm__("hlt\n");
-      return;
+
+      while(1)
+        __asm__("cli\n"
+                "hlt\n");
     }
 //    else
 //      dump_regs( tcb, state, exNum, errorCode );
@@ -219,31 +190,41 @@ void handleCPUException(unsigned int exNum, int errorCode, ExecutionState *state
   {
     kprintf("NULL tcb. Unable to handle exception. System halted.\n");
     dump_state(state, exNum, errorCode);
-    __asm__("hlt\n");
-    return;
+
+    while(1)
+      __asm__("cli\n"
+              "hlt\n");
   }
 
-  struct ExceptionMessage message = {
-    .intNum       = exNum,
-    .who          = getTid(tcb),
-    .errorCode    = errorCode,
-    .faultAddress = exNum == 14 ? getCR2() : 0
+  struct ExceptionMessage messageData = {
+      .intNum = exNum,
+      .who = getTid(tcb),
+      .errorCode = errorCode,
+      .faultAddress = exNum == PAGE_FAULT_INT ? getCR2() : 0
   };
 
-  //kprintf("Sending exception %d message (err code: 0x%x, fault addr: 0x%x)\n", exNum, errorCode, exNum == 14 ? getCR2() : 0);
+  uint64_t *ptr = (uint64_t *)&messageData;
 
-/*
-  if(state->cs == 0x08)
+  __asm__("xsave %2\n" :: "a"(0x3), "d"(0), "m"(tcb->xsaveState));
+  __asm__("movq (%%eax), %%mm0\n"
+          "movq 8(%%eax), %%mm1\n" :: "a"(ptr));
+
+  //kprintf("Sending exception %u message (err code: %#x, fault addr: %#x)\n", exNum, errorCode, exNum == 14 ? getCR2() : 0);
+
+  if(IS_ERROR(sendMessage(tcb, tcb->exHandler, EXCEPTION_MSG, MSG_STD)))
   {
-    kprintf("Exception in kernel:\n");
+    kprintf("Unable to send exception message to exception handler.\n");
+
     dump_regs( tcb, state, exNum, errorCode );
-  }
-*/
-  if(IS_ERROR(sendKernelMessage(INIT_SERVER_TID, EXCEPTION_MSG, &message, sizeof message)))
-  {
-    kprintf("Unable to send exception message to intial server\n");
-    dump_regs( tcb, state, exNum, errorCode );
+    __asm__("emms\n");
 
     releaseThread(tcb);
   }
+
+leave:
+  __asm__("leave\n"
+          "ret\n"
+          "add $8, %esp\n");
+  RESTORE_STATE;
+  __asm__("iret\n");
 }

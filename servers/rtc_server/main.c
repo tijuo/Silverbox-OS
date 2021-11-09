@@ -136,6 +136,8 @@ int main(void)
       .bufferLen = 0,
     };
 
+    failureCount = 0;
+
     if(sys_receive(&requestMsg) != ESYS_OK)
     {
       if(failureCount > 5)
@@ -143,8 +145,6 @@ int main(void)
       else
         failureCount++;
     }
-
-    failureCount = 0;
 
     msg_t responseMsg = {
       .recipient = requestMsg.sender,

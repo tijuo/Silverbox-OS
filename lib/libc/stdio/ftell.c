@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <errno.h>
+#include <limits.h>
 
 long ftell(FILE *stream)
 {
@@ -8,6 +9,19 @@ long ftell(FILE *stream)
     errno = -EBADF;
     return -1;
   }
+  else if(!stream->is_open)
+  {
+    errno = -ESTALE;
+    return -1;
+  }
   else
-    return stream->file_pos;
+  {
+    if(stream->file_pos > ULONG_MAX)
+    {
+      errno = -EOVERFLOW;
+      return -1;
+    }
+    else
+      return (long)stream->file_pos;
+  }
 }

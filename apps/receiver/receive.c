@@ -20,7 +20,7 @@ int main(void)
     if(senderTid != NULL_TID)
       break;
 
-    sys_wait(500);
+    sys_sleep(500);
   }
 
   if(senderTid == NULL_TID)
@@ -38,16 +38,16 @@ int main(void)
     return EXIT_FAILURE;
   }
 
-  msg_t msg =
-  {
-    .sender = ANY_SENDER,
-    .buffer = buf,
-    .bufferLen = 4096,
-    .flags = 0
-  };
-
   while(1)
   {
+    msg_t msg =
+    {
+      .sender = ANY_SENDER,
+      .buffer = buf,
+      .bufferLen = 4096,
+      .flags = 0
+    };
+
     if(sys_receive(&msg) == ESYS_OK)
     {
       fprintf(stderr, "Received a message (subj: %d) from tid: %d of length %d bytes\n", msg.subject, msg.sender, msg.bytesTransferred);
@@ -79,7 +79,7 @@ int main(void)
 
     }
     else
-      sys_wait(300);
+      sys_sleep(300);
 
 /*
     else

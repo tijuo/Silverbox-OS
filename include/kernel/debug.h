@@ -1,11 +1,13 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
+#include <stdnoreturn.h>
+
 #ifdef DEBUG
 
 #include <kernel/mm.h>
 #include <kernel/thread.h>
-#define  VIDMEM_START   (K1TO1_AREA + (0xB8000u-0xA0000u))
+#define  VIDMEM_START   KPHYS_TO_VIRT(0xB8000u)
 
 #define PRINT_DEBUG(msg)      ({ kprintf("<'%s' %s: %d> %s", \
                               __FILE__, __func__, __LINE__, (msg)); })
@@ -17,7 +19,7 @@
 #define CALL_COUNTER(fname)			unsigned int fname ## _counter;
 #define INC_COUNT()				__func__ _counter++
 
-#define BREAKPOINT()		asm volatile("xchgw %bx, %bx\n")
+#define BOCHS_BREAKPOINT		asm volatile("xchgw %bx, %bx\n")
 
 void init_serial(void);
 int getDebugChar(void);
@@ -45,6 +47,10 @@ void _putChar( char, int, int, unsigned char );
 void printString(const char *, ...);
 void initVideo( void );
 
+/* Note: RDTSCP should be used instead due to possible out of order execution.
+ * Alternatively, CPUID or MFENCE,LFENCE can be used before RDTSC
+ */
+
 #define rdtsc( upper, lower ) asm __volatile__( "rdtsc\n" : "=a"( *lower ), "=d"( *upper ) )
 
 void startTimeStamp(void);
@@ -57,9 +63,14 @@ unsigned int getTimeDifference(void);
   stopTimeStamp();\
   ret = getTimeDifference();
 
-#define assert(exp)  { __typeof__ (exp) _exp=(exp); \
-                       if(_exp) ; \
-                       else { BREAKPOINT(); printAssertMsg( #exp, __FILE__, __func__, __LINE__ );} }
+#define assert(exp)  { \
+	__typeof__ (exp) _exp=(exp); \
+  if(_exp) { \
+  } else { \
+  	BOCHS_BREAKPOINT; \
+    printAssertMsg( #exp, __FILE__, __func__, __LINE__ ); \
+  } \
+}
 
 #else
 
@@ -87,9 +98,10 @@ unsigned int getTimeDifference(void);
 #define PRINT_DEBUG(msg)            ({})
 #define RET_MSG(x, y)	return (x)
 #define CALL_COUNTER(ret_type, fname, arg)	ret_type fname(arg);
+#define BOCHS_BREAKPOINT
 #endif /* DEBUG */
 
-void printPanicMsg(const char *msg, const char *file, const char *func, int line);
+noreturn void printPanicMsg(const char *msg, const char *file, const char *func, int line);
 
 #define panic(msg)     printPanicMsg( msg, __FILE__, __func__, __LINE__ )
 

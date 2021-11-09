@@ -1,54 +1,42 @@
-use crate::address::{PAddr, PSize, PageFrame, FrameOffset};
+use crate::address::{PAddr, PSize};
 use crate::device::DeviceId;
-use core::convert::TryFrom;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PhysicalPage(PAddr);
 
 impl PhysicalPage {
     pub const SMALL_PAGE_SIZE: PSize = 0x1000;
-    pub const LARGE_PAGE_SIZE: PSize = 0x200000;
-    pub const NON_PAE_LARGE_PAGE_SIZE: PSize = 0x400000;
+    pub const PAE_LARGE_PAGE_SIZE: PSize = 0x200000;
+    pub const PSE_LARGE_PAGE_SIZE: PSize = 0x400000;
     pub const HUGE_PAGE_SIZE: PSize = 0x40000000;
 
-    pub fn new(address: PAddr) -> Option<Self> {
-        if address > 0xfffffffff {
-            None
-        } else {
-            Some(Self(address))
-        }
+    pub fn new(address: PAddr) -> Self {
+        Self(address)
     }
 
-    pub fn from_frame(frame: PageFrame) -> Self {
-        Self::from((frame, 0))
+    pub fn components(&self) -> (u64, u64) {
+        (self.0 / Self::SMALL_PAGE_SIZE, self.0 % Self::SMALL_PAGE_SIZE)
     }
 
-    pub fn components(&self) -> (PageFrame, FrameOffset) {
-        ((self.0 / Self::SMALL_PAGE_SIZE) as PageFrame, (self.0 % Self::SMALL_PAGE_SIZE) as FrameOffset)
-    }
-
-    pub fn frame(&self) -> PageFrame {
+    pub fn frame(&self) -> u64 {
         self.components().0
     }
 
-    pub fn offset(&self) -> FrameOffset {
+    pub fn offset(&self) -> u64 {
         self.components().1
     }
 
     pub fn as_address(&self) -> PAddr { self.0 }
 }
 
-impl TryFrom<PAddr> for PhysicalPage {
-    type Error = ();
-
-    fn try_from(addr: PAddr) -> Result<Self, Self::Error> {
+impl From<PAddr> for PhysicalPage {
+    fn from(addr: PAddr) -> Self {
         PhysicalPage::new(addr)
-            .ok_or(())
     }
 }
 
-impl From<(PageFrame, FrameOffset)> for PhysicalPage {
-    fn from(components: (PageFrame, FrameOffset)) -> Self {
+impl From<(u64, u64)> for PhysicalPage {
+    fn from(components: (u64, u64)) -> Self {
         Self((components.0 as PAddr * Self::SMALL_PAGE_SIZE as PAddr
             + components.1 as PAddr) as PAddr)
     }
@@ -60,10 +48,10 @@ impl From<PhysicalPage> for PAddr {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct VirtualPage {
     pub device: DeviceId,
-    pub offset: usize,
+    pub offset: u64,
     pub flags: u32,
 }
 
@@ -78,10 +66,10 @@ impl VirtualPage {
     const UNSWAPPABLE: u32 = 0x00000008;
 
     pub const SMALL_PAGE_SIZE: usize = PhysicalPage::SMALL_PAGE_SIZE as usize;
-    pub const LARGE_PAGE_SIZE: usize = PhysicalPage::LARGE_PAGE_SIZE as usize;
+    pub const LARGE_PAGE_SIZE: usize = PhysicalPage::PAE_LARGE_PAGE_SIZE as usize;
     pub const HUGE_PAGE_SIZE: usize = PhysicalPage::HUGE_PAGE_SIZE as usize;
 
-    pub(crate) fn new(device: DeviceId, offset: usize, flags: u32) -> VirtualPage {
+    pub(crate) fn new(device: DeviceId, offset: u64, flags: u32) -> VirtualPage {
         VirtualPage {
             device,
             offset,
@@ -95,6 +83,14 @@ impl VirtualPage {
             Self::LARGE_PAGE => Self::LARGE_PAGE_SIZE,
             Self::HUGE_PAGE => Self::HUGE_PAGE_SIZE,
             _ => Self::SMALL_PAGE_SIZE,
+        }
+    }
+
+    pub fn add_offset(&self, offset2: u64) -> VirtualPage {
+        Self {
+            device: self.device.clone(),
+            offset: self.offset + offset2,
+            flags: self.flags,
         }
     }
 }

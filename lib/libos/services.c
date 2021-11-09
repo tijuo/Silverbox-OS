@@ -11,21 +11,102 @@
 #include <os/msg/message.h>
 #include <os/msg/init.h>
 #include <os/msg/rtc.h>
+#include <drivers/video.h>
 
-/*
-addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags);
-addr_t unmapMem(addr_t addr, size_t length);
-pid_t createPort(pid_t port, int flags);
-pid_t destroyPort(pid_t port);
-int registerDriver(int major, int numDevices, int type, size_t blockSize);
-int unregisterDriver(int major);
-*/
+static tid_t videoTid = NULL_TID;
+static tid_t rtcTid = NULL_TID;
 
-#define EMPTY_REQUEST_MSG(subj, recv) { .subject = subj, .sender = NULL_TID, .recipient = recv, .buffer = NULL, .bufferLen = 0, .flags = 0, .bytesTransferred = 0 }
-#define REQUEST_MSG(subj, recv, request) { .subject = subj, .sender = NULL_TID, .recipient = recv, .buffer = &request, .bufferLen = sizeof request, .flags = 0, .bytesTransferred = 0 }
-#define RESPONSE_MSG(response)	{ .subject = 0, .sender = NULL_TID, .recipient = NULL_TID, .buffer = &response, .bufferLen = sizeof response, .flags = 0, .bytesTransferred = 0 }
+static int _lookupVideoTid(void);
+static int _lookupRtcTid(void);
 
-addr_t mapMem(addr_t addr, int device, size_t length, size_t offset, int flags)
+int _lookupVideoTid(void)
+{
+  if(videoTid == NULL_TID)
+  {
+    videoTid = lookupName(VIDEO_NAME);
+
+    if(videoTid == NULL_TID)
+      return -1;
+  }
+
+  return 0;
+}
+
+int _lookupRtcTid(void)
+{
+  if(rtcTid == NULL_TID)
+  {
+    rtcTid = lookupName(RTC_NAME);
+
+    if(rtcTid == NULL_TID)
+      return -1;
+  }
+
+  return 0;
+}
+
+int videoSetScroll(unsigned int offset)
+{
+  if(_lookupVideoTid() != 0)
+    return -1;
+
+  struct VideoSetScrollRequest request = {
+      .row = offset
+  };
+
+  msg_t requestMsg = REQUEST_MSG(VSET_SCROLL, videoTid, request);
+  msg_t responseMsg = EMPTY_MSG;
+
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
+          && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
+}
+
+int videoSetCursor(unsigned int x, unsigned int y)
+{
+  if(_lookupVideoTid() != 0)
+    return -1;
+
+  struct VideoSetCursorRequest request = {
+      .x = x,
+      .y = y
+  };
+
+  msg_t requestMsg = REQUEST_MSG(VSET_CURSOR, videoTid, request);
+  msg_t responseMsg = EMPTY_MSG;
+
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
+          && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
+}
+
+int videoEnableCursor(int enable)
+{
+  if(_lookupVideoTid() != 0)
+    return -1;
+
+  struct VideoEnableCursorRequest request = {
+      .enable = enable
+  };
+
+  msg_t requestMsg = REQUEST_MSG(VENABLE_CURSOR, videoTid, request);
+  msg_t responseMsg = EMPTY_MSG;
+
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
+          && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
+}
+
+int videoClearScreen(void)
+{
+  if(_lookupVideoTid() != 0)
+    return -1;
+
+  msg_t requestMsg = EMPTY_REQUEST_MSG(VSET_CURSOR, videoTid);
+  msg_t responseMsg = EMPTY_MSG;
+
+  return (sys_call(&requestMsg, &responseMsg) == ESYS_OK
+          && responseMsg.subject == RESPONSE_OK) ? 0 : -1;
+}
+
+addr_t mapMem(addr_t addr, int device, size_t length, uint64_t offset, int flags)
 {
   struct MapRequest request;
   struct MapResponse response;
@@ -162,12 +243,7 @@ int getCurrentTime(unsigned int *time)
 {
   struct GetTimeResponse response;
 
-  if(!time)
-    return -1;
-
-  tid_t rtcTid = lookupName(RTC_NAME);
-
-  if(rtcTid == NULL_TID)
+  if(!time || _lookupRtcTid() != 0)
     return -1;
 
   msg_t requestMsg = EMPTY_REQUEST_MSG(GET_TIME_MSG, rtcTid);

@@ -154,8 +154,8 @@
 				&& (_img->identifier[EI_MAG3] == ELFMAG3); })
 
 
-#define OK			0
-#define INVALID_ELF		1
+#define OK			        0
+#define INVALID_ELF		    1
 #define INVALID_CLASS		2
 #define INVALID_VERSION		3
 #define INVALID_MACHINE		4
@@ -165,9 +165,9 @@
 
 extern unsigned _GLOBAL_OFFSET_TABLE_[];
 
-/* unsigned long elf_hash(const unsigned char *name)
+/* unsigned int elf_hash(const unsigned char *name)
 {
-  unsigned long h = 0, g;
+  unsigned int h = 0, g;
 
   while(*name){
     h = (h << 4) + *name++;
@@ -179,39 +179,39 @@ extern unsigned _GLOBAL_OFFSET_TABLE_[];
 } */
 
 struct ELF_Dynamic {
-  signed long	tag;
+  signed int	tag;
   union	{
-    unsigned long val;
-    unsigned	  ptr;
+    unsigned int val;
+    unsigned int  ptr;
   }d_un;
 } __attribute__((packed));
 
 typedef struct ELF_Dynamic elf_dyn_t;
 
-extern unsigned Elf_Dyn_DYNAMIC[];
+extern unsigned int Elf_Dyn_DYNAMIC[];
 
 struct ELF_Program_Header {
-  unsigned long	type;
-  unsigned	offset;
-  unsigned	vaddr;
-  unsigned	paddr;
-  unsigned long filesz;
-  unsigned long memsz;
-  unsigned long flags;
-  unsigned long align;
+  unsigned int type;
+  unsigned int offset;
+  unsigned int vaddr;
+  unsigned int paddr;
+  unsigned int filesz;
+  unsigned int memsz;
+  unsigned int flags;
+  unsigned int align;
 } __attribute__((packed));
 
 typedef struct ELF_Program_Header elf_pheader_t;
 
 typedef struct {
-  unsigned	offset;
-  unsigned long info;
+  unsigned int offset;
+  unsigned int info;
 } elf_rel_t;
 
 typedef struct {
-  unsigned	offset;
-  unsigned long info;
-  signed long	addend;
+  unsigned int offset;
+  unsigned int info;
+  int addend;
 } elf_rela_t;
 
 #define ELF_R_SYM(i)		((i)>>8)
@@ -219,42 +219,42 @@ typedef struct {
 #define ELF_R_INFO(s,t)		(((s)<<8) + (unsigned char)(t))
 
 typedef struct {
-  unsigned long name;
-  unsigned	value;
-  unsigned long size;
+  unsigned int name;
+  unsigned int value;
+  unsigned int size;
   unsigned char info;
   unsigned char other;
   unsigned short int shndx;
 } elf_sym_t;
 
 typedef struct {
-  unsigned long name;
-  unsigned long type;
-  unsigned long flags;
-  unsigned	addr;
-  unsigned	offset;
-  unsigned long size;
-  unsigned long link;
-  unsigned long info;
-  unsigned long addralign;
-  unsigned long entsize;
+  unsigned int name;
+  unsigned int type;
+  unsigned int flags;
+  unsigned int addr;
+  unsigned int offset;
+  unsigned int size;
+  unsigned int link;
+  unsigned int info;
+  unsigned int addralign;
+  unsigned int entsize;
 } elf_sheader_t;
 
 struct ELF_Header {
   char		 	identifier[EI_NIDENT];
-  unsigned short	int type;
-  unsigned short 	int machine;
-  unsigned long		version;
-  unsigned  		entry;
-  unsigned		phoff;
-  unsigned		shoff;
-  unsigned long		flags;
-  unsigned short	ehsize;
-  unsigned short	phentsize;
-  unsigned short	phnum;
-  unsigned short	shentsize;
-  unsigned short	shnum;
-  unsigned short	shstrndx;
+  unsigned short int    type;
+  unsigned short int    machine;
+  unsigned int		version;
+  unsigned int		entry;
+  unsigned int          phoff;
+  unsigned int          shoff;
+  unsigned int		flags;
+  unsigned short int	ehsize;
+  unsigned short int	phentsize;
+  unsigned short int	phnum;
+  unsigned short int	shentsize;
+  unsigned short int	shnum;
+  unsigned short int	shstrndx;
 } __attribute__((packed));
 
 typedef struct ELF_Header elf_header_t;

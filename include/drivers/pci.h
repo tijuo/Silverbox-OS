@@ -16,14 +16,14 @@ union PCI_bar
     dword location : 2; // 0 - 32-bit; 1 - < 1 MB; 2 - 64-bit
     dword prefetch : 1;
     dword base_addr : 28;
-  } memory __PACKED__;
+  } memory PACKED;
 
   struct
   {
     dword type : 1; // 1 for I/0
     dword _resd : 1;
     dword base_addr : 30;
-  } io __PACKED__;
+  } io PACKED;
 };
 
 struct PCI_config_header {
@@ -48,7 +48,7 @@ struct PCI_config_header {
   byte  interrupt_pin;
   byte  min_gnt;
   byte  max_lat;
-} __PACKED__;
+} PACKED;
 
 /*
 static struct {

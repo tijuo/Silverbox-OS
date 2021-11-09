@@ -1,21 +1,25 @@
 #include <oslib.h>
 #include <os/io.h>
-#include <os/message.h>
+#include <os/msg/message.h>
 #include <drivers/video.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <os/dev_interface.h>
 #include <os/services.h>
 #include <string.h>
-#include <os/signal.h>
+#include <stdio.h>
+#include <os/syscalls.h>
 
-#define MSG_TIMEOUT		3000
+#define MSG_TIMEOUT		    3000
+
+#define VIDEO_RAM           0xB8000
+#define BIOS_ROM            0xC0000
+
+#define VIDEO_RAM_SIZE      (BIOS_ROM-VIDEO_RAM)
 
 /* Video operations:
    Low-level:
-   - putAttr( int attr, int pos )
-   - putCh( char c, int pos )
-   - putCh2( int c, int pos ) // puts character with attribute
+   - putAttrAt( unsigned char attr, unsigned char pos )
    - setCursorPos( int pos )
    - setScreenOffset( int offset )
    - showCursor( bool val )
@@ -50,101 +54,142 @@
 #define VID_CLEAR		        9
 #define VID_ENAB_CURS		    10
 
-#define doCarrReturn() charXPos = 0;
+#define SEND_EMPTY_RESPONSE(to, subj) \
+({ \
+    msg_t _response_message = { \
+      .subject = subj, \
+      .recipient = to, \
+      .buffer = NULL, \
+      .bufferLen = 0, \
+      .flags = MSG_NOBLOCK \
+  }; \
+  sys_send(&_response_message); \
+})
 
-#define doNewline() \
-  charXPos = 0; \
-  charYPos++; \
-  if( charYPos >= 25 ) scrollToLine( charYPos - 24 );
+struct TextCharacter {
+  unsigned char codePoint;
 
-/* Go to nearest multiple of 8. */
+  union CharAttribute {
+    struct {
+      unsigned char fgColor : 4;
+      unsigned char bgColor: 3;
+      unsigned char blink : 1;
+    };
+    unsigned char value;
+  } attrib;
+};
 
-#define doHTab() \
-  charXPos += (HTAB_WIDTH - charXPos % HTAB_WIDTH); \
-  charYPos = ((charXPos >= maxWidth) ? (charYPos + 1) : charYPos); \
-  charXPos %= maxWidth;
-
-#define doFormFeed() \
-  charXPos = charYPos = 0; \
-
-#define doVTab() \
-  charYPos = charYPos + 1;
-
-#define doBacksp() \
-  charYPos -= ((charXPos == 0 && charYPos > 0) ? 1 : 0); \
-  charXPos = ((charXPos == 0) ? maxWidth - 1 : charXPos - 1);
-
-#define setAttr( attr ) attrib = attr;
+typedef struct TextCharacter textchar_t;
 
 char videoMsgBuffer[4096];
 
-static int charXPos, charYPos;
-static int charXPos, charYPos;
-static int maxWidth, maxHeight;
-static int maxLines;
-static bool cursorOn, cursorVisible;
-static int attrib;
+static unsigned int charXPos = 0;
+static unsigned int charYPos = 0;
+static unsigned int maxWidth = 80;
+static unsigned int maxHeight = 25;
+static unsigned int maxLines;
+static int defaultAttrib = ATTRIB( GRAY, BLACK, NO_BLINK );
+static textchar_t *cursorPtr = (textchar_t *)VIDEO_RAM;
 
-void _printChar( char c );
-int putChar( char c, int xPos, int yPos );
-int setCursor( int xPos, int yPos );
-int setColor( int color, int xPos, int yPos );
-void clearScreen( int attrib );
-void initVideo( void );
+//int putChar( char c, int xPos, int yPos );
+int setCursor( unsigned int xPos, unsigned int yPos );
+int setCursorPos( unsigned int pos );
+int setColor( unsigned int color, unsigned int xPos, unsigned int yPos );
+void clearScreen( unsigned int attrib );
+int initVideo( void );
 int handleIoctl( int command, int numArgs, void *args );
-inline int checkPos( int x, int y );
-inline int setCharPos( int x, int y );
+inline int checkPos( unsigned int x, unsigned int y );
+inline int setCharPos( unsigned int x, unsigned int y );
 
-void handleDevRequests( void );
-void handle_dev_read( struct Message *msg );
-void handle_dev_write( struct Message *msg );
-void handle_dev_ioctl( struct Message *msg );
-void handle_dev_error( struct Message *msg );
+int handleDeviceRead( msg_t *msg );
+int handleDeviceWrite(msg_t *msg);
+int handle_dev_ioctl( msg_t *msg );
+int handleDeviceError( msg_t *msg );
 
 int addr_offset=0;
 
-void scrollToLine( unsigned line );
-void scroll( int lines );
+void scrollToLine( unsigned int line );
+void scroll( unsigned int lines );
+
+int setScreenOffset( unsigned int offset );
+
+//void putChar(char c);
+int putCharAt( char c, unsigned int pos );
+int putCharAtXY( char c, unsigned int x, unsigned int y );
 
 
-int setScreenOffset( int offset );
+int putAttrAt( unsigned char attr, unsigned int pos );
+int putAttrAtXY( unsigned char attr, unsigned int x, unsigned int y );
 
-int putAttr( char attr, int pos )
+void _putChar(char c)
 {
-  char *vidmem = (char *)COLOR_TXT_ADDR;
+  cursorPtr->codePoint = (unsigned char)c;
+  cursorPtr->attrib.value = defaultAttrib;
+  cursorPtr++;
 
-  if( pos < 0 || pos >= 0x8000 / 2 )
+  if(cursorPtr >= (textchar_t *)VIDEO_RAM + maxLines * maxWidth)
+  {
+    cursorPtr = (textchar_t *)VIDEO_RAM;
+    charXPos = 0;
+    charYPos = 0;
+
+    scrollToLine(0);
+    setScreenOffset(0);
+  }
+  else
+  {
+    charXPos++;
+
+    if(charXPos >= maxWidth)
+    {
+      charXPos = 0;
+      charYPos++;
+
+      if(charYPos >= maxHeight)
+        charYPos = maxHeight - 1;
+
+      scroll(1);
+    }
+  }
+
+  setCursorPos((int)(cursorPtr - (textchar_t *)VIDEO_RAM));
+}
+
+int putAttrAt( unsigned char attr, unsigned int pos )
+{
+  if(pos >= VIDEO_RAM_SIZE / 2 )
     return -1;
 
-  vidmem[pos*2+1] = attr;
+  textchar_t *vidmem = (textchar_t *)VIDEO_RAM + pos;
+
+  vidmem->attrib.value = attr;
   return 0;
 }
 
-int putCh( char c, int pos )
+int putAttrAtXY(unsigned char attr, unsigned int x, unsigned int y)
 {
-  char *vidmem = (char *)COLOR_TXT_ADDR;
+  return putAttrAt(attr, x + y*maxWidth);
+}
 
-  if( pos < 0 || pos >= 0x8000 / 2 )
+int putCharAt( char c, unsigned int pos )
+{
+  if(pos >= VIDEO_RAM_SIZE / 2 )
     return -1;
 
-  vidmem[pos*2] = c;
+  textchar_t *vidmem = (textchar_t *)VIDEO_RAM + pos;
+
+  vidmem->codePoint = (unsigned char)c;
   return 0;
 }
 
-int putCh2( short int c, int pos )
+int putCharAtXY( char c, unsigned int x, unsigned int y )
 {
-  short int *vidmem = (short int *)COLOR_TXT_ADDR;
-
-  if( pos < 0 || pos >= 0x8000 / 2 )
-    return -1;
-
-  vidmem[pos] = c;
-  return 0;
+  return putCharAt(c, y*maxWidth + x);
 }
 
-int setCursorPos( int pos )
+int setCursorPos( unsigned int pos )
 {
-  if( pos < 0 || pos >= 0x8000 / 2 )
+  if(pos >= VIDEO_RAM_SIZE / 2 )
     return -1;
 
   outByte( CRTC_INDEX, CURSOR_LOC_LOW );
@@ -154,12 +199,15 @@ int setCursorPos( int pos )
   return 0;
 }
 
-int setScreenOffset( int offset )
+int setCursorXY( unsigned int x, unsigned int y )
 {
-  if( offset < 0 || offset >= 0x8000 )
-    return -1;
+  return setCursorPos(x + y * maxWidth);
+}
 
-  addr_offset &= 0xFFFF;
+int setScreenOffset( unsigned int offset )
+{
+  if(offset >= (unsigned int)((uintptr_t)BIOS_ROM - 2*maxWidth*maxHeight))
+    return -1;
 
   outByte( CRTC_INDEX, START_ADDRESS_LOW );
   outByte( CRTC_DATA, addr_offset & 0xFF );
@@ -177,9 +225,9 @@ int showCursor( bool val )
   data = inByte( CRTC_DATA );
 
   if( val )
-    data |= 0x10;
+    data &= ~0x20;
   else
-    data &= ~0x10;
+    data |= 0x20;
 
   outByte( CRTC_INDEX, CURSOR_START );
   outByte( CRTC_DATA, data );
@@ -190,116 +238,138 @@ int showCursor( bool val )
 /* ==========================================================================
    ========================================================================== */
 
-void scroll( int lines )
+void scroll( unsigned int lines )
 {
-  if( addr_offset + lines * 80 < 0 )
-    addr_offset = 0;
-  else if( addr_offset + lines * 80 >= 0x8000 )
-    addr_offset = 0x8000 - 80;
-  else
-    addr_offset += lines * 80;
+  ptrdiff_t line = ((uintptr_t)cursorPtr - VIDEO_RAM - charXPos*sizeof(textchar_t)) / maxWidth;
 
-  setScreenOffset( addr_offset );
+  scrollToLine(line + lines);
 }
 
-void scrollToLine( unsigned line )
+void scrollToLine( unsigned int line )
 {
-  addr_offset = line * 80;
+  ptrdiff_t offset = (ptrdiff_t)((textchar_t *)VIDEO_RAM + line * maxWidth);
 
-  if( addr_offset >= 0x8000 )
-    addr_offset = 0x8000 - 80;
+  offset = offset < 0 ? 0 : (offset > (maxLines-maxHeight)*maxWidth ? (maxLines-maxHeight)*maxWidth : offset);
 
-  setScreenOffset( addr_offset );
+  setScreenOffset( sizeof(textchar_t) * offset );
 }
 
-int checkPos( int x, int y )
+int checkPos( unsigned int x, unsigned int y )
 {
-  return ( ( x < 0 || y < 0 || x >= maxWidth || y >= 0x8000 / 2 / 80 /*|| y >= maxHeight*/ ) ? -1 : 0 );
+  return (x >= maxWidth || y >= maxLines) ? -1 : 0;
 }
 
-int setCharPos( int x, int y )
+int setCharPos( unsigned int x, unsigned int y )
 {
   if( checkPos( x, y ) != 0 )
     return -1;
-  else
-  {
-    charXPos = x;
-    charYPos = y;
-  }
+
+  charXPos = x;
+  charYPos = y;
+  cursorPtr = (textchar_t *)VIDEO_RAM + (y*maxWidth + x);
+
   return 0;
 }
 
-void _printChar( char c )
+#define doNewline() \
+  charXPos = 0; \
+  charYPos++; \
+  if( charYPos >= 25 ) scrollToLine( charYPos - 24 );
+
+/* Go to nearest multiple of 8. */
+
+#define doHTab() \
+  charXPos += (HTAB_WIDTH - charXPos % HTAB_WIDTH); \
+  charYPos = ((charXPos >= maxWidth) ? (charYPos + 1) : charYPos); \
+  charXPos %= maxWidth;
+
+#define doVTab() \
+  charYPos = charYPos + 1;
+
+#define doBacksp() \
+  charYPos -= ((charXPos == 0 && charYPos > 0) ? 1 : 0); \
+  charXPos = ((charXPos == 0) ? maxWidth - 1 : charXPos - 1);
+
+/*
+void putChar(char c)
 {
-  if( putChar( c, charXPos, charYPos ) == 0 )
-  {
-    if( ++charXPos == maxWidth )
-    {
-      doNewline();
-    }
-  }
-
-  if( cursorOn )
-    setCursor( charXPos, charYPos );
-}
-
-int putChar( register char c, int xPos, int yPos )
-{
-  char *vidmem = (char *)COLOR_TXT_ADDR;
-
-  if( checkPos( xPos, yPos ) == -1 )
-    return -1;
-
-  switch( c )
+  switch(c)
   {
     case '\n':
-      doNewline();
+      charYPos++;
+      charXPos = 0;
       break;
     case '\t':
-      doHTab();
+      charXPos += TAB_WIDTH - (charXPos % TAB_WIDTH);
       break;
     case '\b':
-      doBacksp();
+      if(charXPos == 0)
+      {
+        if(charYPos)
+        {
+          charXPos = maxWidth - 1;
+          charYPos--;
+        }
+      }
+      else
+        charXPos--;
       break;
     case '\f':
-      doFormFeed();
+      charXPos = 0;
+      charYPos = 0;
       break;
     case '\r':
-      doCarrReturn();
+      charXPos = 0;
       break;
     case '\v':
-      doVTab();
+      charYPos++;
       break;
     case '\0':
     case '\a':
       break;
     default:
-      vidmem[(xPos + yPos * maxWidth) << 1] = c;
-      vidmem[((xPos + yPos * maxWidth) << 1) + 1] = attrib;
-      return 0;
+      _putChar(c);
+      break;
   }
 
-  return 1;
-}
+  if(charXPos == maxWidth)
+  {
+    charXPos = 0;
+    charYPos++;
+  }
 
-int setCursor( int xPos, int yPos )
+  if(charYPos >= maxHeight)
+  {
+    if(charYPos >= maxLines)
+    {
+      charYPos = 0;
+      charXPos = 0;
+
+      scrollToLine(0);
+    }
+    else
+    {
+      scroll(maxHeight - charYPos);
+      charYPos = maxHeight - 1;
+    }
+  }
+
+  cursorPtr = charXPos + charYPos*maxWidth;
+
+  if(isCursorOn && isCursorVisible)
+    setCursor(charXPos, charYPos);
+}
+*/
+int setCursor( unsigned int xPos, unsigned int yPos )
 {
-    int location;
+  if( checkPos( xPos, yPos ) == -1 )
+    return -1;
 
-    if( checkPos( xPos, yPos ) == -1 )
-      return -1;
-
-    location = xPos + yPos * maxWidth;
-
-    setCursorPos(location);
-
-    charXPos = xPos;
-    charYPos = yPos;
-
-    return 0;
+  setCursorPos(xPos + yPos * maxWidth);
+  return 0;
 }
 
-int setColor( int color, int xPos, int yPos )
+int setColor( unsigned int color, unsigned int xPos, unsigned int yPos )
 {
   char *vidmem = (char *)COLOR_TXT_ADDR;
 
@@ -311,157 +381,208 @@ int setColor( int color, int xPos, int yPos )
   return 0;
 }
 
-void clearScreen( int attrib )
-{
-  register int i;
 
-  for( i=0; i < maxHeight; i++ )
-  {
-    for( int j=0; j < maxWidth; j++ )
-    {
-      putChar( ' ', j, i );
-      setColor( attrib, j, i );
-    }
+void clearScreen( unsigned int attrib )
+{
+  textchar_t c = {
+      .codePoint = ' ',
+      .attrib = { .value = attrib }
+  };
+
+  textchar_t *ptr = (cursorPtr - charXPos - charYPos*maxWidth);
+
+  for( register size_t i=0; i < maxHeight*maxWidth; i++ )
+    *ptr++ = c;
+}
+
+int initVideo( void )
+{
+  int pmemDevice = 0x00010000;
+
+  if(mapMem((addr_t)VIDEO_RAM, pmemDevice, (size_t)((uintptr_t)BIOS_ROM-(uintptr_t)VIDEO_RAM),
+         VIDEO_RAM, MEM_FLG_NOCACHE) != 0) {
+    fprintf(stderr, "Unable to map video RAM.\n");
+    return -1;
   }
+
+  defaultAttrib = ATTRIB( GRAY, BLACK, NO_BLINK );
+
+//  changeIoPerm( CRTC_INDEX, CRTC_DATA, 1 );
+
+  setCursor( 0, 0 );
+  setCharPos( 0, 0 );
+
+  clearScreen( defaultAttrib );
+
+  return 0;
 }
 
-void initVideo( void )
+int handleDeviceRead(msg_t *msg)
 {
-  maxHeight = 25;
-  maxWidth = 80;
-  maxLines = maxHeight * 8;
-  cursorVisible = true;
-  cursorOn = true;
-  setAttr( ATTRIB( GRAY, BLACK, NO_BLINK ) );
+  struct DeviceWriteResponse response = { .bytesTransferred = 0 };
+  msg_t responseMsg = {
+      .subject = RESPONSE_OK,
+      .recipient = msg->sender,
+      .buffer = &response,
+      .bufferLen = sizeof response,
+      .flags = MSG_NOBLOCK,
+  };
 
-  changeIoPerm( CRTC_INDEX, CRTC_DATA, 1 );
+  struct DeviceOpRequest *request = msg->buffer;
+  size_t length = msg->bufferLen < request->length ? request->length : msg->bufferLen;
 
-  //__map( (void *)COLOR_TXT_ADDR, (void *)COLOR_TXT_ADDR, 8 );
-//  mapMem( (void *)COLOR_TXT_ADDR, (void *)COLOR_TXT_ADDR, 8, 0 );
-
-  setCursor( 0, 1 );
-  setCharPos( 0, 1 );
-
-//  clearScreen( attrib );
-}
-
-void handle_dev_read( struct Message *msg )
-{
-  handle_dev_error(msg);
-}
-
-void handle_dev_write( struct Message *msg )
-{
-  struct DeviceMsg *req = (struct DeviceMsg *)msg->data;
-  size_t count;
-  tid_t tid = msg->sender;
-
-  msg->length = sizeof *req;
-
-  req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_SUCCESS;
-
-  if( sendMsg( tid, msg, MSG_TIMEOUT ) < 0 )
-    return;
-
-  count = receiveLong( tid, videoMsgBuffer, sizeof videoMsgBuffer, MSG_TIMEOUT );
-
-  if( count < 0 )
-    return;
-
-  for(int i=0; i < count; i++)
-    _printChar(videoMsgBuffer[i]);
-}
-
-void handle_dev_ioctl( struct Message *msg )
-{
-  handle_dev_error(msg);
-}
-
-void handle_dev_error( struct Message *msg )
-{
-  struct DeviceMsg *req = (struct DeviceMsg *)msg->data;
-  tid_t tid = msg->sender;
-
-  msg->length = 0;
-  req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_ERROR;
-
-  if( sendMsg( tid, msg, MSG_TIMEOUT ) < 0 )
-    return;
-}
-
-void handleDevRequests( void )
-{
-  struct Message msg;
-  struct DeviceMsg *req = (struct DeviceMsg *)msg.data;
-
-  while(1)
+  switch(request->deviceMinor)
   {
-    if( receiveMsg(NULL_TID, &msg, -1) < 0 )
-      return;
-
-    if( msg.protocol == MSG_PROTO_DEVICE && (req->msg_type & 0x80) == DEVICE_REQUEST )
-    {
-      switch(req->msg_type)
+    case 0:
+      if(request->offset > BIOS_ROM-VIDEO_RAM)
       {
-        case DEVICE_WRITE:
-          handle_dev_write(&msg);
-          break;
-        case DEVICE_READ:
-          handle_dev_read(&msg);
-          break;
-        case DEVICE_IOCTL:
-          handle_dev_ioctl(&msg);
-          break;
-        default:
-          print("Received bad request\n");
-          handle_dev_error(&msg);
-          break;
+        response.bytesTransferred = 0;
+        responseMsg.subject = DEVICE_NOMORE;
       }
-    }
+      else
+      {
+        uintptr_t offset = VIDEO_RAM + request->offset;
+
+        response.bytesTransferred = length < (size_t)(BIOS_ROM-offset) ? length : (size_t)(BIOS_ROM-offset);
+        memcpy(msg->buffer, (void *)offset, response.bytesTransferred);
+      }
+
+      return sys_send(&responseMsg) == ESYS_OK ? 0 : -1;
+    default:
+      return handleDeviceError(msg);
   }
 }
 
-int main( void )
+int handleDeviceWrite(msg_t *msg)
 {
-  struct Device dev;
-  int status;
+  struct DeviceWriteResponse response = { .bytesTransferred = 0 };
+  msg_t responseMsg = {
+      .subject = RESPONSE_OK,
+      .recipient = msg->sender,
+      .buffer = &response,
+      .bufferLen = sizeof response,
+      .flags = MSG_NOBLOCK,
+  };
 
-  initVideo();
+  struct DeviceOpRequest *request = (struct DeviceOpRequest *)msg->buffer;
+  size_t length = msg->bufferLen < request->length ? request->length : msg->bufferLen;
 
-  for( int i=0; i < 5; i++ )
+  switch(request->deviceMinor)
   {
-    status = registerName(SERVER_NAME, strlen(SERVER_NAME));
+    case 0:
+      if(request->offset > BIOS_ROM-VIDEO_RAM)
+      {
+        response.bytesTransferred = 0;
+        responseMsg.subject = DEVICE_NOMORE;
+      }
+      else
+      {
+        uintptr_t offset = VIDEO_RAM + request->offset;
 
-    if( status != 0 )
-      __sleep( (i*i+1) * 500 );
-    else
-      break;
+        response.bytesTransferred = length < (size_t)(BIOS_ROM-offset) ? length : (size_t)(BIOS_ROM-offset);
+        memcpy((void *)offset, request->payload, response.bytesTransferred);
+      }
+
+      return sys_send(&responseMsg) == ESYS_OK ? 0 : -1;
+    default:
+      return handleDeviceError(msg);
+  }
+}
+
+int handle_dev_ioctl( msg_t *msg )
+{
+  return handleDeviceError(msg);
+}
+
+int handleDeviceError( msg_t *msg )
+{
+  return SEND_EMPTY_RESPONSE(msg->sender, RESPONSE_ERROR) == ESYS_OK ? 0 : -1;
+}
+
+int main(void)
+{
+  int retval;
+
+  maxLines = VIDEO_RAM_SIZE / (maxWidth * 2);
+
+  if(initVideo() != 0)
+  {
+    fprintf(stderr, "Unable to initialize video driver.\n");
+    return EXIT_FAILURE;
   }
 
-  if( status != 0 )
-    return 1;
+  size_t bufferLen = BIOS_ROM-VIDEO_RAM;
+  void *buffer = malloc(bufferLen);
 
-  dev.major = DEV_MAJOR;
-  dev.numDevices = NUM_DEVICES;
-  dev.dataBlkLen = 1;
-  dev.type = CHAR_DEV;
-  dev.cacheType = NO_CACHE;
-
-  for( int i=0; i < 5; i++ )
+  if(!buffer)
   {
-    status = registerDevice(DEVICE_NAME, strlen(DEVICE_NAME), &dev);
-
-    if( status != 0 )
-      __sleep( (i*i+1) * 500 );
-    else
-      break;
+    fprintf(stderr, "Unable to allocate memory for buffer.\n");
+    return EXIT_FAILURE;
   }
 
-  if( status != 0 )
-    return 1;
+  if(registerName(SERVER_NAME) != 0)
+  {
+    fprintf(stderr, "Unable to register %s server.\n", SERVER_NAME);
+    free(buffer);
+    return EXIT_FAILURE;
+  }
 
-  while(1)
-    handleDevRequests();
+  while(true)
+  {
+    msg_t msg = {
+        .sender = ANY_SENDER,
+        .buffer = buffer,
+        .bufferLen = bufferLen,
+        .flags = 0
+    };
 
-  return 1;
+    if(sys_receive(&msg) != ESYS_OK)
+      continue;
+
+    switch(msg.subject)
+    {
+      case DEVICE_READ:
+        retval = handleDeviceRead(&msg);
+        break;
+      case DEVICE_WRITE:
+        retval = handleDeviceWrite(&msg);
+        break;
+      case VSET_SCROLL:
+      {
+        struct VideoSetScrollRequest *scrollRequest = buffer;
+        scrollToLine(scrollRequest->row);
+        retval = SEND_EMPTY_RESPONSE(msg.sender, RESPONSE_OK) == ESYS_OK ? 0 : -1;
+        break;
+      }
+      case VSET_CURSOR:
+      {
+        struct VideoSetCursorRequest *cursorRequest = buffer;
+        int response = setCursor(cursorRequest->x, cursorRequest->y);
+        retval = SEND_EMPTY_RESPONSE(msg.sender, response == 0 ? RESPONSE_OK : RESPONSE_FAIL) == ESYS_OK ? 0 : -1;
+        break;
+      }
+      case VSHOW_CURSOR:
+      {
+        struct VideoEnableCursorRequest *cursorRequest = buffer;
+        int response = showCursor(!!cursorRequest->enable);
+        retval = SEND_EMPTY_RESPONSE(msg.sender, response == 0 ? RESPONSE_OK : RESPONSE_FAIL) == ESYS_OK ? 0 : -1;
+        break;
+      }
+      case VCLEAR_SCREEN:
+      {
+        clearScreen(defaultAttrib);
+        retval = SEND_EMPTY_RESPONSE(msg.sender, RESPONSE_OK) == ESYS_OK ? 0 : -1;
+        break;
+      }
+      default:
+        retval = handleDeviceError(&msg);
+        break;
+    }
+
+    if(retval != 0)
+      fprintf(stderr, "Error while handling request 0x%x.\n", msg.subject);
+  }
+
+  free(buffer);
+  return EXIT_FAILURE;
 }

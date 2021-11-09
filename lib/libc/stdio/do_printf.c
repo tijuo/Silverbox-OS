@@ -1,637 +1,572 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <stdbool.h>
 #include <stdarg.h>
-#include <ctype.h>
+#include <stdlib.h>
 #include <stdint.h>
-#include <stddef.h>
+#include <string.h>
 
-#define STATE_NONE		0
-#define STATE_FORMAT		1
-#define STATE_FLAGS		2
-#define STATE_WIDTH		3
-#define STATE_DOT		4
-#define STATE_PRECISION		5
-#define STATE_LENGTH		6
-#define STATE_LENGTH_H		7
-#define STATE_LENGTH_L		8
-#define STATE_TYPE		9
+#define ITOSTR_BUF_LEN      65
 
-#define	FLAGS_FLAG		1
-#define PRECISION_FLAG		2
-#define LENGTH_FLAG		4
-#define WIDTH_FLAG		8
-#define LEFT_ALIGN_FLAG		16
-#define ALT_FLAG		32
-#define THOUSANDS_SEP_FLAG	64
-#define WIDTH_ARG_FLAG		128
-#define PRECISION_ARG_FLAG	256
-#define STRING_FLAG		512
-#define ITOA_FLAG		1024
+enum PrintfLength { DEFAULT=0, CHAR, SHORT_INT, LONG_INT, LONG_LONG_INT, INTMAX, SIZE, PTRDIFF, LONG_DOUBLE };
+enum PrintfParseState { FLAGS=0, WIDTH, PRECISION, LENGTH, SPECIFIER };
 
-#define LENGTH_CHAR		1
-#define LENGTH_SHORT		2
-#define LENGTH_LONG		3
-#define LENGTH_LONG_LONG	4
-#define LENGTH_DOUBLE_LONG	5
-#define LENGTH_SIZE_T		6
-#define LENGTH_INTMAX_T		7
-#define LENGTH_PTRDIFF_T	8
-
-extern char *itoa(int c, char *buf, int base);
-
-static int isFlagChar(int c);
-static int isLengthChar(int c);
-static int isTypeChar(int c);
-static int min(int a, int b);
-static int max(int a, int b);
-
-int do_printf(void *s, const char *format, va_list ap, int isStream);
-
-static int min(int a, int b)
+struct PrintfState
 {
-  return a < b ? a : b;
+  bool isZeroPad;
+  bool usePrefix;
+  bool isLeftJustify;
+  bool isForcedPlus;
+  bool isBlankPlus;
+  bool inPercent;
+  bool isError;
+  bool isNegative;
+  size_t width;
+  int precision;
+  enum PrintfParseState printfState;
+  enum PrintfLength length;
+  size_t percentIndex;
+  char prefix[2];
+  size_t argLength;
+  char *string;
+};
+
+int do_printf(void **s, int (*writeFunc)(int, void **), const char *formatStr, va_list args);
+void resetPrintfState(struct PrintfState *state);
+
+void resetPrintfState(struct PrintfState *state)
+{
+  memset(state, 0, sizeof *state);
+  state->precision = -1;
 }
 
-static int max(int a, int b)
+int do_printf(void **s, int (*writeFunc)(int, void **), const char *formatStr, va_list args)
 {
-  return a > b ? a : b;
-}
+  struct PrintfState state;
+  char buf[ITOSTR_BUF_LEN];
+  size_t i;
+  int charsWritten = 0;
 
-static int add_char(int c, void **s, int isStream)
-{
-  if(!c)
-    return 0;
+  resetPrintfState(&state);
 
-  if( isStream )
+  for(i=0; formatStr[i]; i++ )
   {
-    FILE *stream = *(FILE **)s;
-    return fputc( c, stream );
-  }
-  else
-  {
-    char **_s = (char **)s;
-
-    **_s = c;
-    (*_s)++;
-  }
-  return 0;
-}
-
-static int isFlagChar(int c)
-{
-  switch(c)
-  {
-    case '-':
-    case '+':
-    case '0':
-    case ' ':
-    case '#':
-    case '\'':
-      return 1;
-    default:
-      return 0;
-  }
-}
-
-static int isLengthChar(int c)
-{
-  switch(c)
-  {
-    case 'h':
-    case 'l':
-    case 'L':
-    case 'z':
-    case 'j':
-    case 't':
-      return 1;
-    default:
-      return 0;
-  }
-}
-
-static int isTypeChar(int c)
-{
-  switch(c)
-  {
-    case '%':
-    case 'd':
-    case 'u':
-    case 'i':
-    case 'f':
-    case 'F':
-    case 'e':
-    case 'E':
-    case 'g':
-    case 'G':
-    case 'x':
-    case 'X':
-    case 'O':
-    case 's':
-    case 'c':
-    case 'p':
-    case 'a':
-    case 'A':
-    case 'n':
-      return 1;
-    default:
-      return 0;
-  }
-}
-
-int do_printf(void *s, const char *format, va_list aplist, int isStream)
-{
-  int flags=0, length=0, base=0;
-  int width=0, precision=0;
-  int state=STATE_NONE;
-  const char *ptr=format;
-  char positiveChar='\0', spaceChar=' ';
-  int writeCount=0;
-  char buf[65];
-  char *prefix="";
-
-  if(!s)
-    return -1;
-
-  while(*ptr)
-  {
-    int c = *ptr;
-
-    // First read formatted type substring (with associated flags, width, etc.)
-
-    switch(state)
+    if( state.inPercent )
     {
-      case STATE_NONE:
-        if(c == '%')
-        {
-          state = STATE_FORMAT;
-          flags = 0;
-          width = 0;
-          precision = 0;
-          length = 0;
-          base = 0;
-          spaceChar = ' ';
-          positiveChar = '\0';
-          prefix = "";
-          buf[0] = '\0';
-        }
-        else
-        {
-          add_char(c, &s, isStream);
-          writeCount++;
-        }
-        ptr++;
-        break;
-      case STATE_FLAGS:
-        if(isFlagChar(c))
-        {
-          switch(c)
+      switch( formatStr[i] )
+      {
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          switch(state.printfState)
           {
-            case '-':
-              flags |= LEFT_ALIGN_FLAG;
-              break;
-            case '+':
-              positiveChar = '+';
-              break;
-            case '0':
-              spaceChar = '0';
-              break;
-            case ' ':
-              if(positiveChar != '+')
-                positiveChar = ' ';
-              break;
-            case '#':
-              flags |= ALT_FLAG;
-              break;
-            case '\'':
-              flags |= THOUSANDS_SEP_FLAG;
-              break;
+            case FLAGS:
+            case WIDTH:
+              if(state.printfState == FLAGS)
+              {
+                if(formatStr[i] == '0')
+                  state.isZeroPad = true;
+
+                state.printfState = WIDTH;
+              }
+
+              state.width = 10 * state.width + formatStr[i] - '0';
+              continue;
+            case PRECISION:
+              state.precision = 10 * state.precision + formatStr[i] - '0';
+              continue;
+            case LENGTH:
             default:
+              state.isError = true;
               break;
           }
-         ptr++;
-        }
-        else
-          goto check_width;
-        break;
-      case STATE_WIDTH:
-        if(c == '*')
-        {
-          if(!(flags & WIDTH_ARG_FLAG) && !(flags & WIDTH_FLAG))
-          {
-            flags |= WIDTH_ARG_FLAG;
-            ptr++;
-          }
-          else
-            goto invalid_format;
-        }
-        else if(isdigit(c))
-        {
-          if(flags & WIDTH_ARG_FLAG)
-            goto invalid_format;
-
-          width = width * 10 + (c - '0');
-          flags |= WIDTH_FLAG;
-          ptr++;
-        }
-        else
-          goto check_dot;
-        break;
-      case STATE_DOT:
-        if(isdigit(c) || c == '*')
-          state = STATE_PRECISION;
-        else
-          goto invalid_format;
-        break;
-      case STATE_PRECISION:
-        if(isdigit(c))
-        {
-          if(flags & PRECISION_ARG_FLAG)
-            goto invalid_format;
-          else
-          {
-            precision = precision * 10 + (c - '0');
-            flags |= PRECISION_FLAG;
-            ptr++;
-          }
-        }
-        else if(c == '*')
-        {
-          if(!(flags & PRECISION_FLAG) && !(flags & PRECISION_ARG_FLAG))
-          {
-            flags |= PRECISION_ARG_FLAG;
-            ptr++;
-          }
-          else
-            goto invalid_format;
-        }
-        else
-          goto check_length;
-        break;
-      case STATE_LENGTH:
-        switch(c)
-        {
-          case 'h':
-            state = STATE_LENGTH_H;
-            break;
-          case 'l':
-            state = STATE_LENGTH_L;
-            break;
-          case 'L':
-            length = LENGTH_LONG_LONG;
-            state = STATE_TYPE;
-            break;
-          case 'z':
-            length = LENGTH_SIZE_T;
-            state = STATE_TYPE;
-            break;
-          case 'j':
-            length = LENGTH_INTMAX_T;
-            state = STATE_TYPE;
-            break;
-          case 't':
-            length = LENGTH_PTRDIFF_T;
-            state = STATE_TYPE;
-            break;
-          default:
-            goto invalid_format;
-        }
-
-        flags |= LENGTH_FLAG;
-        ptr++;
-        break;
-      case STATE_LENGTH_H:
-        if(c == 'h')
-        {
-          length = LENGTH_CHAR;
-          state = STATE_TYPE;
-          ptr++;
-        }
-        else
-        {
-          length = LENGTH_SHORT;
-          goto check_type;
-        }
-        break;
-      case STATE_LENGTH_L:
-        if(c == 'l')
-        {
-          length = LENGTH_LONG_LONG;
-          state = STATE_TYPE;
-          ptr++;
-        }
-        else
-        {
-          length = LENGTH_LONG;
-          goto check_type;
-        }
-        break;
-      case STATE_TYPE:
-        if(isTypeChar(c))
-        {
-          if(flags & WIDTH_ARG_FLAG)
-          {
-            width = va_arg(aplist, int);
-            flags |= WIDTH_FLAG;
-          }
-
-          if(flags & PRECISION_ARG_FLAG)
-          {
-            precision = va_arg(aplist, int);
-            flags |= PRECISION_FLAG;
-          }
-
-          switch(c)
-          {
-            case '%':
-              buf[0] = '%';
-              buf[1] = '\0';
-              add_char('%', &s, isStream);
-              flags &= ~(WIDTH_ARG_FLAG | WIDTH_FLAG | PRECISION_FLAG | PRECISION_ARG_FLAG | ALT_FLAG | THOUSANDS_SEP_FLAG | LENGTH_FLAG);
-              writeCount++;
-              break;
-            case 'd':
-            case 'i':
-              flags |= ITOA_FLAG;
-              base = 10;
-              break;
-            case 'u':
-              flags |= ITOA_FLAG;
-              base = -10;
-              break;
-            case 'f':
-              break;
-            case 'F':
-              break;
-            case 'e':
-              break;
-            case 'E':
-              break;
-            case 'g':
-              break;
-            case 'G':
-              break;
-            case 'p':
-              prefix = "0x";
-              flags |= ITOA_FLAG;
-              base = 16;
-              break;
-            case 'x':
-              if(flags & ALT_FLAG)
-                prefix = "0x";
-              flags |= ITOA_FLAG;
-              base = 16;
-              break;
-            case 'X':
-              if(flags & ALT_FLAG)
-                prefix = "0X";
-              flags |= ITOA_FLAG;
-              base = 16;
-              break;
-            case 'o':
-              if(flags & ALT_FLAG)
-                prefix = "0";
-              flags |= ITOA_FLAG;
-              base = 8;
-              break;
-            case 'b':
-              if(flags & ALT_FLAG)
-                prefix = "0b";
-              flags |= ITOA_FLAG;
-              base = 2;
-              break;
-            case 's':
-              flags &= ~(ALT_FLAG | LENGTH_FLAG);
-              flags |= STRING_FLAG;
-              break;
-            case 'c':
-              buf[0] = (char)va_arg(aplist, int);
-              buf[1] = '\0';
-              flags &= ~(LENGTH_FLAG | THOUSANDS_SEP_FLAG | PRECISION_FLAG | ALT_FLAG | PRECISION_ARG_FLAG);
-              break;
-            case 'a':
-              break;
-            case 'A':
-              break;
-            case 'n':
-            {
-              if(!(flags & LENGTH_FLAG))
-                *(int *)va_arg(aplist, int *) = writeCount;
+          break;
+            case 'l':
+              if(state.printfState == LENGTH)
+              {
+                state.length = LONG_LONG_INT;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else if(state.printfState < LENGTH)
+              {
+                state.length = LONG_INT;
+                state.printfState = LENGTH;
+                continue;
+              }
               else
               {
-                switch(length)
-                {
-                  case LENGTH_CHAR:
-                    *(signed char *)va_arg(aplist, signed char *) = writeCount;
-                    break;
-                  case LENGTH_SHORT:
-                    *(short int *)va_arg(aplist, short int *) = writeCount;
-                    break;
-                  case LENGTH_LONG:
-                    *(long int *)va_arg(aplist, long int *) = writeCount;
-                    break;
-                  case LENGTH_LONG_LONG:
-                    *(long long int *)va_arg(aplist, long long int *) = writeCount;
-                    break;
-                  case LENGTH_INTMAX_T:
-                    *(intmax_t *)va_arg(aplist, intmax_t *) = writeCount;
-                    break;
-                  case LENGTH_PTRDIFF_T:
-                    *(ptrdiff_t *)va_arg(aplist, ptrdiff_t *) = writeCount;
-                    break;
-                  case LENGTH_SIZE_T:
-                    *(size_t *)va_arg(aplist, size_t *) = writeCount;
-                    break;
-                  default:
-                    *(int *)va_arg(aplist, int *) = writeCount;
-                    break;
-                }
+                state.isError = true;
+                break;
               }
               break;
-            }
-            default:
-              goto invalid_format;
-          }
-
-          if(flags & ITOA_FLAG)
-          {
-            if(!(flags & LENGTH_FLAG))
-              itoa(va_arg(aplist, int), buf, base);
-            else
-            {
-              switch(length)
+            case 'h':
+              if(state.printfState == LENGTH)
               {
-                case LENGTH_CHAR:
-                  itoa((va_arg(aplist, int) & 0xFF), buf, base);
-                  break;
-                case LENGTH_SHORT:
-                  itoa((va_arg(aplist, int) & 0xFFFF), buf, base);
-                  break;
-                case LENGTH_LONG:
-                  //ltoa(va_arg(aplist, long int), buf, base);
-                  break;
-                case LENGTH_LONG_LONG:
-                  //lltoa(va_arg(aplist, long long int), buf, base);
-                  break;
-                case LENGTH_INTMAX_T:
-                  //intmaxtoa(va_arg(aplist, intmax_t), buf, base);
-                  break;
-                case LENGTH_PTRDIFF_T:
-                  //ptrdifftoa(va_arg(aplist, ptrdiff_t), buf, base);
-                  break;
-                case LENGTH_SIZE_T:
-                  //sizetoa(va_arg(aplist, size_t), buf, base);
-                  break;
+                state.length = SHORT_INT;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else if(state.printfState < LENGTH)
+              {
+                state.length = CHAR;
+                state.printfState = LENGTH;
+                continue;
+              }
+              else
+              {
+                state.isError = true;
+                break;
+              }
+              break;
+            case 'j':
+              if(state.printfState != SPECIFIER)
+              {
+                state.length = INTMAX;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else
+              {
+                state.isError = true;
+                break;
+              }
+              break;
+            case 'z':
+              if(state.printfState != SPECIFIER)
+              {
+                state.length = SIZE;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else
+              {
+                state.isError = true;
+                break;
+              }
+              break;
+            case 't':
+              if(state.printfState != SPECIFIER)
+              {
+                state.length = PTRDIFF;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else
+              {
+                state.isError = true;
+                break;
+              }
+              break;
+            case 'L':
+              if(state.printfState != SPECIFIER)
+              {
+                state.length = LONG_DOUBLE;
+                state.printfState = SPECIFIER;
+                continue;
+              }
+              else
+              {
+                state.isError = true;
+                break;
+              }
+              break;
+            case 'c':
+            case '%':
+              if(formatStr[i] == 'c')
+                buf[0] = formatStr[i] == 'c' ? (char)va_arg(args, int) : '%';
+
+              state.string = buf;
+              state.argLength = 1;
+              break;
+            case '.':
+              switch(state.printfState)
+              {
+                case FLAGS:
+                case WIDTH:
+                  state.precision = 0;
+                  state.printfState = PRECISION;
+                  continue;
                 default:
-                  itoa(va_arg(aplist, int), buf, base);
+                  state.isError = true;
                   break;
               }
-            }
-          }
+              break;
+                case 'p':
+                case 'x':
+                case 'X':
+                {
+                  int argLen;
 
-          if(flags & STRING_FLAG)
-          {
-            char *str = (char *)va_arg(aplist, char *);
-            size_t strLen = strlen(str);
-            size_t precisionLen = ((flags & PRECISION_FLAG) ? (size_t)min((int)strLen, precision) : strLen);
-            int spaceLen = max(width - precisionLen, 0);
+                  if(formatStr[i] == 'p')
+                    state.precision = 2 * sizeof(void *);
 
-            if(!(flags & LEFT_ALIGN_FLAG))
-            {
-              for(int i=0; i < spaceLen; i++, writeCount++)
-                add_char(spaceChar, &s, isStream);
-            }
+                  switch(state.length)
+                  {
+                    case LONG_LONG_INT:
+                      argLen = itostr(va_arg(args, unsigned long long int), buf, 16);
+                      break;
+                    case CHAR:
+                      argLen = itostr((unsigned char)va_arg(args, unsigned int), buf, 16);
+                      break;
+                    case SHORT_INT:
+                      argLen = itostr((unsigned short int)va_arg(args, unsigned int), buf, 16);
+                      break;
+                    case LONG_INT:
+                      argLen = itostr((unsigned long int)va_arg(args, unsigned long int), buf, 16);
+                      break;
+                    case DEFAULT:
+                    default:
+                      argLen = itostr(va_arg(args, unsigned int), buf, 16);
+                      break;
+                  }
 
-            for(size_t n=0; n < strLen; n++, str++)
-            {
-              if(!(flags & PRECISION_FLAG) || n < (size_t)precision)
-                add_char(*str, &s, isStream);
+                  if(argLen > 0)
+                  {
+                    state.argLength = argLen;
 
-              writeCount++;
-            }
+                    if(state.usePrefix)
+                    {
+                      state.prefix[0] = '0';
+                      state.prefix[1] = formatStr[i] != 'X' ? 'x' : 'X';
+                    }
 
-            if(flags & LEFT_ALIGN_FLAG)
-            {
-              for(int i=0; i < spaceLen; i++, writeCount++)
-                add_char(spaceChar, &s, isStream);
-            }
-          }
-          else
-          {
-            // If number width is less than precision, then pad the number with zeros until number width is at least precision chars long
-            // If number width (including prefixes, sign, and thousands separators) is less than field width, then add spaces (or zeros) until number width matches
-            // field width
+                    if(formatStr[i] == 'X')
+                    {
+                      for(size_t pos=0; pos < state.argLength; pos++)
+                      {
+                        if(buf[pos] >= 'a' && buf[pos] <= 'z')
+                          buf[pos] -= 'a' - 'A';
+                      }
+                    }
 
-            int signLen, numberWidth, prefixLen, precisionLen, spaceLen, zeroLen;
-            int nonDecimalLen, thousandsLen, bufLen;
+                    state.string = buf;
+                  }
+                  break;
+                }
+                case 'o':
+                {
+                  int argLen;
 
-            char *decimalLoc = strchr(buf, '.');
+                  switch(state.length)
+                  {
+                    case LONG_LONG_INT:
+                      argLen = itostr(va_arg(args, unsigned long long int), buf, 8);
+                      break;
+                    case CHAR:
+                      argLen = itostr((unsigned char)va_arg(args, unsigned int), buf, 8);
+                      break;
+                    case SHORT_INT:
+                      argLen = itostr((unsigned short int)va_arg(args, unsigned int), buf, 8);
+                      break;
+                    case LONG_INT:
+                      argLen = itostr((unsigned long int)va_arg(args, unsigned long int), buf, 8);
+                      break;
+                    case DEFAULT:
+                    default:
+                      argLen = itostr(va_arg(args, unsigned int), buf, 8);
+                      break;
+                  }
 
-            signLen = buf[0] == '-' ? 1 : 0;
-            bufLen = strlen(buf);
-            numberWidth = bufLen - signLen;
+                  if(argLen > 0)
+                  {
+                    state.argLength = (size_t)argLen;
 
-            if(!decimalLoc)
-              nonDecimalLen = numberWidth;
-            else
-              nonDecimalLen = decimalLoc - buf;
+                    if(state.usePrefix)
+                    {
+                      state.prefix[0] = '0';
+                      state.prefix[1] = '\0';
+                    }
+                  }
 
-            prefixLen = strlen(prefix) + ((signLen || positiveChar != '\0') ? 1 : 0);
-            precisionLen = ((flags & PRECISION_FLAG) ? max(precision, numberWidth) : numberWidth);
-            thousandsLen = ((flags & THOUSANDS_SEP_FLAG) ? (nonDecimalLen-1) / 3 : 0);
-            spaceLen = ((flags & WIDTH_FLAG) ? max(0, width - (precisionLen + prefixLen + thousandsLen)) : 0);
-            zeroLen = ((flags & PRECISION_FLAG) ? max(0, precisionLen - numberWidth) : 0);
+                  state.string = buf;
+                }
+                break;
+                case 's':
+                  state.string = va_arg(args, char *);
 
-            // Convert string to upper case if format type is uppercase
+                  if(state.precision == -1)
+                    for(state.argLength=0; state.string[state.argLength]; state.argLength++);
+                  else
+                    state.argLength = state.precision;
 
-            if(isupper(c))
-            {
-              for(int i=0; i < bufLen; i++)
-              {
-                if(islower(buf[i]))
-                  buf[i] = toupper(buf[i]);
-              }
-            }
+                  break;
+                case 'u':
+                {
+                  int argLen;
 
+                  switch(state.length)
+                  {
+                    case LONG_LONG_INT:
+                      argLen = itostr(va_arg(args, unsigned long long int), buf, 10);
+                      break;
+                    case CHAR:
+                      argLen = itostr((unsigned char)va_arg(args, unsigned int), buf, 10);
+                      break;
+                    case SHORT_INT:
+                      argLen = itostr((unsigned short int)va_arg(args, unsigned int), buf, 10);
+                      break;
+                    case LONG_INT:
+                      argLen = itostr((unsigned long int)va_arg(args, unsigned long int), buf, 10);
+                      break;
+                    case DEFAULT:
+                    default:
+                      argLen = itostr(va_arg(args, unsigned int), buf, 10);
+                      break;
+                  }
 
-            if(!(flags & LEFT_ALIGN_FLAG))
-            {
-              for(int n=0; n < spaceLen; n++, writeCount++)
-                add_char(spaceChar, &s, isStream);
-            }
+                  if(argLen > 0)
+                    state.argLength = (size_t)argLen;
 
-            add_char(buf[0] == '-' ? '-' : positiveChar, &s, isStream);
+                  state.string = buf;
+                }
+                break;
+                case 'd':
+                case 'i':
+                {
+                  int argLen;
 
-            if(buf[0] == '-' || positiveChar != '\0')
-              writeCount++;
+                  switch(state.length)
+                  {
+                    case LONG_LONG_INT:
+                      argLen = itostr(va_arg(args, long long int), buf, 10);
+                      break;
+                    case CHAR:
+                      argLen = itostr((signed char)va_arg(args, int), buf, 10);
+                      break;
+                    case SHORT_INT:
+                      argLen = itostr((short int)va_arg(args, int), buf, 10);
+                      break;
+                    case LONG_INT:
+                      argLen = itostr((long int)va_arg(args, long int), buf, 10);
+                      break;
+                    case DEFAULT:
+                    default:
+                      argLen = itostr(va_arg(args, int), buf, 10);
+                      break;
+                  }
 
-            for(char *ch=prefix; *ch; ch++, writeCount++)
-              add_char(*ch, &s, isStream);
+                  if(argLen > 0)
+                  {
+                    state.argLength = (size_t)argLen;
+                    state.isNegative = buf[0] == '-';
+                  }
+                  state.string = buf;
+                }
+                break;
+                case '#':
+                  if(state.printfState == FLAGS)
+                  {
+                    state.usePrefix = true;
+                    continue;
+                  }
+                  else
+                    state.isError = true;
+                  break;
+                case '-':
+                  if(state.printfState == FLAGS)
+                  {
+                    state.isLeftJustify = true;
+                    continue;
+                  }
+                  else
+                    state.isError = true;
+                  break;
+                case '+':
+                  if(state.printfState == FLAGS)
+                  {
+                    state.isForcedPlus = true;
+                    continue;
+                  }
+                  else
+                    state.isError = true;
+                  break;
+                case ' ':
+                  if(state.printfState == FLAGS)
+                  {
+                    state.isBlankPlus = true;
+                    continue;
+                  }
+                  else
+                    state.isError = true;
+                  break;
+                case '*':
+                  switch(state.printfState)
+                  {
+                    case WIDTH:
+                      state.width = (size_t)va_arg(args, int);
+                      continue;
+                    case PRECISION:
+                      state.precision = (size_t)va_arg(args, int);
+                      continue;
+                    default:
+                      state.isError = true;
+                      break;
+                  }
+                  break;
+                    case 'n':
+                      if(state.printfState == WIDTH || state.printfState == PRECISION
+                          || state.isForcedPlus || state.isBlankPlus || state.isZeroPad
+                          || state.usePrefix || state.isLeftJustify)
+                      {
+                        state.isError = true;
+                        break;
+                      }
+                      else
+                      {
+                        switch(state.length)
+                        {
+                          case LONG_LONG_INT:
+                            *va_arg(args, long long int *) = charsWritten;
+                            break;
+                          case CHAR:
+                            *va_arg(args, signed char *) = charsWritten;
+                            break;
+                          case SHORT_INT:
+                            *va_arg(args, short int *) = charsWritten;
+                            break;
+                          case LONG_INT:
+                            *va_arg(args, long int *) = charsWritten;
+                            break;
+                          case INTMAX:
+                            *va_arg(args, intmax_t *) = charsWritten;
+                            break;
+                          case SIZE:
+                            *va_arg(args, size_t*) = charsWritten;
+                            break;
+                          case PTRDIFF:
+                            *va_arg(args, ptrdiff_t *) = charsWritten;
+                            break;
+                          case DEFAULT:
+                          default:
+                            *va_arg(args, int *) = charsWritten;
+                            break;
+                        }
+                      }
+                      continue;
+                    default:
+                      state.isError = true;
+                      break;
+      }
 
-            for(int n=0; n < zeroLen; n++, writeCount++)
-              add_char('0', &s, isStream);
-
-            for(int n=0; n < numberWidth; n++, writeCount++)
-            {
-              add_char(buf[signLen+n], &s, isStream);
-
-              if((flags & THOUSANDS_SEP_FLAG) && (numberWidth-n-1) % 3 == 0 && n != numberWidth - 1)
-              {
-                add_char(',', &s, isStream);
-                writeCount++;
-              }
-            }
-
-            if(flags & LEFT_ALIGN_FLAG)
-            {
-              for(int n=0; n < spaceLen; n++, writeCount++)
-                add_char(spaceChar, &s, isStream);
-            }
-          }
-          state = STATE_NONE;
-          ptr++;
+      if(state.isError)
+      {
+        for(size_t j=state.percentIndex; j <= i; j++, charsWritten++)
+        {
+          if(writeFunc(formatStr[j], s) != 0)
+            return -1;
         }
+      }
+      else
+      {
+        size_t argLength = state.argLength - (state.isNegative ? 1 : 0);
+        size_t signLength = (state.isNegative || state.isForcedPlus || state.isBlankPlus) ? 1 : 0;
+        size_t prefixLength;
+        size_t zeroPadLength;
+        size_t spacePadLength;
+
+        if(state.usePrefix)
+          prefixLength =state.prefix[0] == '\0' ? 0 : (state.prefix[1] == '\0' ? 1 : 2);
         else
-          goto invalid_format;
-        break;
-      case STATE_FORMAT:
-        if(isFlagChar(c))
+          prefixLength = 0;
+
+        if(formatStr[i] == 's' || state.precision == -1 || argLength > INT_MAX || (int)argLength >= state.precision)
+          zeroPadLength = 0;
+        else
+          zeroPadLength = state.precision - argLength;
+
+        if(argLength+signLength+prefixLength+zeroPadLength < state.width)
+          spacePadLength = state.width - argLength - signLength - prefixLength - zeroPadLength;
+        else
+          spacePadLength = 0;
+
+        if(!state.isLeftJustify)
         {
-          state = STATE_FLAGS;
-          break;
+          for(; spacePadLength > 0; spacePadLength--, charsWritten++)
+          {
+            if(writeFunc(' ', s) != 0)
+              return -1;
+          }
         }
-check_width:
-        if(isdigit(c) || c == '*')
+
+        if(state.isNegative)
         {
-          state = STATE_WIDTH;
-          break;
+          if(writeFunc('-', s) != 0)
+            return -1;
+          charsWritten++;
         }
-check_dot:
-        if(c == '.')
+        else if(state.isForcedPlus)
         {
-          state = STATE_DOT;
-          ptr++;
-          break;
+          if(writeFunc('+', s) != 0)
+            return -1;
+          charsWritten++;
         }
-check_length:
-        if(isLengthChar(c))
+        else if(state.isBlankPlus)
         {
-          state = STATE_LENGTH;
-          break;
+          if(writeFunc(' ', s) != 0)
+            return -1;
+          charsWritten++;
         }
-check_type:
-        if(isTypeChar(c))
+
+        for(size_t pos=0; pos < prefixLength; pos++, charsWritten++)
         {
-          state = STATE_TYPE;
-          break;
+          if(writeFunc(state.prefix[pos], s) != 0)
+            return -1;
         }
-invalid_format:
-        state = STATE_NONE;
-        break;
-      default:
-        break;
+
+        for(; zeroPadLength > 0; zeroPadLength--, charsWritten++)
+        {
+          if(writeFunc('0', s) != 0)
+            return -1;
+        }
+
+        for(size_t pos=(state.isNegative ? 1 : 0); argLength > 0; argLength--, pos++, charsWritten++)
+        {
+          if(writeFunc(state.string[pos], s) != 0)
+            return -1;
+        }
+
+        if(state.isLeftJustify)
+        {
+          for(; spacePadLength > 0; spacePadLength--, charsWritten++)
+          {
+            if(writeFunc(' ', s) != 0)
+              return -1;
+          }
+        }
+      }
+      resetPrintfState(&state);
+    }
+    else
+    {
+      switch( formatStr[i] )
+      {
+        case '%':
+          state.percentIndex = i;
+          state.inPercent = true;
+          memset(buf, 0, ITOSTR_BUF_LEN);
+          break;
+        case '\n':
+          if(writeFunc('\r', s) != 0 || writeFunc('\n', s) != 0)
+            return -1;
+          charsWritten += 2;
+          break;
+        case '\r':
+          if(writeFunc('\r', s) != 0)
+            return -1;
+          charsWritten++;
+          break;
+        default:
+          if(writeFunc( formatStr[i], s ) != 0)
+            return -1;
+          charsWritten++;
+          break;
+      }
     }
   }
-
-  return writeCount;
 }

@@ -2,7 +2,7 @@ static MAX_NAME_LEN: usize = 12;
 
 pub(crate) mod manager {
     use crate::Tid;
-    use alloc::collections::BTreeMap;
+    use alloc::collections::btree_map::BTreeMap;
     use crate::error::{ALREADY_REGISTERED, LONG_NAME};
     use super::MAX_NAME_LEN;
     use alloc::string::String;

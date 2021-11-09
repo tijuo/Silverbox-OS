@@ -3,6 +3,7 @@
 
 #include <types.h>
 #include <kernel/multiboot.h>
+#include <kernel/bits.h>
 
 #define MODE_BIT_WIDTH  32
 
@@ -11,8 +12,8 @@
 #define UCODE           (0x18u | 0x03u)
 #define UDATA           (0x20u | 0x03u)
 #define TSS             0x28u
-#define BKCODE		    0x30u
-#define BKDATA		    0x38u
+#define BKCODE          0x30u
+#define BKDATA          0x38u
 
 #define TRAP_GATE       (I_TRAP << 16)
 #define INT_GATE        (I_INT  << 16)
@@ -54,26 +55,15 @@
 
 #define FP_SEG(addr)    (((addr_t)(addr) & 0xF0000u) >> 4)
 #define FP_OFF(addr)    ((addr_t)(addr) & 0xFFFFu)
+#define FAR_PTR(seg, off) ((((seg) & 0xFFFFu) << 4) + ((off) & 0xFFFFu))
 
-#define IRQ0            0x20
-#define IRQ1            (IRQ0 + 1)
-#define IRQ2            (IRQ0 + 2)
-#define IRQ3            (IRQ0 + 3)
-#define IRQ4            (IRQ0 + 4)
-#define IRQ5            (IRQ0 + 5)
-#define IRQ6            (IRQ0 + 6)
-#define IRQ7            (IRQ0 + 7)
-#define IRQ8            0x28
-#define IRQ9            (IRQ8 + 1)
-#define IRQ10           (IRQ8 + 2)
-#define IRQ11           (IRQ8 + 3)
-#define IRQ12           (IRQ8 + 4)
-#define IRQ13           (IRQ8 + 5)
-#define IRQ14           (IRQ8 + 6)
-#define IRQ15           (IRQ8 + 7)
+#define IRQ_BASE	0x20
+
+#define IRQ(num) (IRQ_BASE + (uint8_t)num)
 
 #define EFLAGS_DEFAULT	0x02
 #define EFLAGS_CF	(1 << 0)
+#define EFLAGS_RESD (1 << 1)
 #define EFLAGS_PF	(1 << 2)
 #define EFLAGS_AF	(1 << 4)
 #define EFLAGS_ZF	(1 << 6)
@@ -94,8 +84,14 @@
 #define EFLAGS_VIP	(1 << 20)
 #define EFLAGS_ID	(1 << 21)
 
+#define CR4_OSXSAVE (1 << 18)
+
 #define PCID_BITS   12
 #define PCID_MASK   0xFFFu
+
+#define SYSENTER_CS_MSR     0x174u
+#define SYSENTER_ESP_MSR    0x175u
+#define SYSENTER_EIP_MSR    0x176u
 
 #define enableInt()     __asm__ __volatile__("sti\n")
 #define disableInt()    __asm__ __volatile__("cli\n")
@@ -106,184 +102,222 @@
 
 struct TSS_Struct
 {
-	word	backlink;
-	word	_resd1;
-	dword	esp0;
-	word	ss0;
-	word	_resd2;
-	dword	esp1;
-	word	ss1;
-	word	_resd3;
-	dword	esp2;
-	word	ss2;
-	word	_resd4;
-	dword	cr3;
-	dword	eip;
-	dword	eflags;
-	dword	eax;
-	dword 	ecx;
-	dword	edx;
-	dword	ebx;
-	dword	esp;
-	dword	ebp;
-	dword	esi;
-	dword	edi;
-	word	es;
-	word	_resd5;
-	word	cs;
-	word	_resd6;
-	word	ss;
-	word	_resd7;
-	word	ds;
-	word	_resd8;
-	word	fs;
-	word	_resd9;
-	word	gs;
-	word	_resd10;
-	word	ldt;
-	word	_resd11;
-	word	trap : 1;
-	word	_resd12 : 15;
-	word	ioMap;
-} __PACKED__;
+	uint16_t	backlink;
+	uint16_t	_resd1;
+	uint32_t	esp0;
+	uint16_t	ss0;
+	uint16_t	_resd2;
+	uint32_t	esp1;
+	uint16_t	ss1;
+	uint16_t	_resd3;
+	uint32_t	esp2;
+	uint16_t	ss2;
+	uint16_t	_resd4;
+	uint32_t	cr3;
+	uint32_t	eip;
+	uint32_t	eflags;
+	uint32_t	eax;
+	uint32_t 	ecx;
+	uint32_t	edx;
+	uint32_t	ebx;
+	uint32_t	esp;
+	uint32_t	ebp;
+	uint32_t	esi;
+	uint32_t	edi;
+	uint16_t	es;
+	uint16_t	_resd5;
+	uint16_t	cs;
+	uint16_t	_resd6;
+	uint16_t	ss;
+	uint16_t	_resd7;
+	uint16_t	ds;
+	uint16_t	_resd8;
+	uint16_t	fs;
+	uint16_t	_resd9;
+	uint16_t	gs;
+	uint16_t	_resd10;
+	uint16_t	ldt;
+	uint16_t	_resd11;
+	uint16_t	trap : 1;
+	uint16_t	_resd12 : 15;
+	uint16_t	ioMap;
+} PACKED;
+
+// 48 bytes
 
 typedef struct
 {
-  dword edi;
-  dword esi;
-  dword ebp;
-  dword ebx;
-  dword edx;
-  dword ecx;
-  dword eax;
-  dword eip;
-  dword cs;
-  dword eflags;
-  dword userEsp;
-  dword userSS;
+  uint32_t edi;
+  uint32_t esi;
+  uint32_t ebp;
+  uint32_t ebx;
+  uint32_t edx;
+  uint32_t ecx;
+  uint32_t eax;
+  uint32_t eip;
+  uint16_t cs;
+  uint16_t avail;
+  uint32_t eflags;
+  uint32_t userEsp;
+  uint16_t userSS;
+  uint16_t avail2;
 } ExecutionState;
 
-typedef struct
-{
-  word fcw;
-  word fsw;
-  byte ftw;
-  byte _resd1;
-  word fop;
-  dword fpuIp;
-  word cs;
-  word _resd2;
-  dword fpu_dp;
-  word ds;
-  word _resd3;
-  dword _mxcsr;
-  dword mxcsv_mask;
-
-  byte mm0[10];
-  byte _resd4[6];
-
-  word mm1[10];
-  byte _resd5[6];
-
-  word mm2[10];
-  byte _resd6[6];
-
-  word mm3[10];
-  byte _resd7[6];
-
-  word mm4[10];
-  byte _resd8[6];
-
-  word mm5[10];
-  byte _resd9[6];
-
-  word mm6[10];
-  byte _resd10[6];
-
-  word mm7[10];
-  byte _resd11[6];
-
-  byte xmm0[16];
-  byte xmm1[16];
-  byte xmm2[16];
-  byte xmm3[16];
-  byte xmm4[16];
-  byte xmm5[16];
-  byte xmm6[16];
-  byte xmm7[16];
-  byte xmm8[16];
-  byte xmm9[16];
-  byte xmm10[16];
-  byte xmm11[16];
-  byte xmm12[16];
-  byte xmm13[16];
-  byte xmm14[16];
-  byte xmm15[16];
-  byte xmm16[16];
-
-  byte _resd12[48];
-  byte _avail[48];
-
-} XSaveState;
+// 288 bytes
 
 typedef struct
 {
-  byte ymm0[16];
-  byte ymm1[16];
-  byte ymm2[16];
-  byte ymm3[16];
-  byte ymm4[16];
-  byte ymm5[16];
-  byte ymm6[16];
-  byte ymm7[16];
-  byte ymm8[16];
-  byte ymm9[16];
-  byte ymm10[16];
-  byte ymm11[16];
-  byte ymm12[16];
-  byte ymm13[16];
-  byte ymm14[16];
-  byte ymm15[16];
-  byte ymm16[16];
+  uint16_t fcw;
+  uint16_t fsw;
+  uint8_t ftw;
+  uint8_t _resd1;
+  uint16_t fop;
+  uint32_t fpuIp;
+  uint16_t fpuCs;
+  uint16_t _resd2;
 
-} XSaveYMMState;
+  uint32_t fpuDp;
+  uint16_t fpuDs;
+  uint16_t _resd3;
+  uint32_t mxcsr;
+  uint32_t mxcsrMask;
+
+  union {
+    struct MMX_Register {
+      uint64_t value;
+      uint64_t _resd;
+    } mm[8];
+
+    struct FPU_Register {
+      uint8_t value[10];
+      uint8_t _resd[6];
+    } st[8];
+  };
+
+  struct XMM_Register {
+    uint64_t low;
+    uint64_t high;
+  } xmm[8];
+
+  // Even though the area is reserved, the processor won't access the reserved bits in 32-bit mode
+  /*
+  uint8_t _resd12[176];
+  uint8_t available[48];
+  */
+} xsave_state_t;
 
 extern void atomicInc( volatile void * );
 extern void atomicDec( volatile void *);
 extern int testAndSet( volatile void *, volatile int );
 
-extern void setCR0( dword );
-extern void setCR3( dword );
-extern void setCR4( dword );
-extern void setEflags( dword );
-extern dword getCR0( void );
-extern dword getCR2( void );
-extern dword getCR3( void ) __attribute__((fastcall));
-extern dword getCR4( void ) ;
-extern dword getEflags( void );
-extern bool intIsEnabled( void );
+static inline void setCR0(uint32_t newCR0)
+{
+  __asm__("mov %0, %%cr0" :: "r"(newCR0));
+}
+
+static inline void setCR3(uint32_t newCR3)
+{
+  __asm__("mov %0, %%cr3" :: "r"(newCR3));
+}
+
+static inline void setCR4(uint32_t newCR4)
+{
+  __asm__("mov %0, %%cr4" :: "r"(newCR4));
+}
+
+static inline void setEflags(uint32_t newEflags)
+{
+  __asm__("pushl %0\n"
+          "popf\n" :: "r"(newEflags) : "flags");
+}
+
+static inline uint32_t getCR0(void)
+{
+  uint32_t cr0;
+
+  __asm__("mov %%cr0, %0" : "=r"(cr0));
+  return cr0;
+}
+
+static inline uint32_t getCR2(void)
+{
+  uint32_t cr2;
+
+  __asm__("mov %%cr2, %0" : "=r"(cr2));
+  return cr2;
+}
+
+static inline uint32_t getCR3(void)
+{
+  uint32_t cr3;
+
+  __asm__("mov %%cr3, %0" : "=r"(cr3));
+  return cr3;
+}
+
+static inline uint32_t getCR4(void)
+{
+  uint32_t cr4;
+
+  __asm__("mov %%cr4, %0" : "=r"(cr4));
+  return cr4;
+}
+
+static inline uint32_t getEflags(void)
+{
+  uint32_t eflags;
+
+  __asm__("pushf\n"
+          "popl %0\n" : "=r"(eflags));
+
+  return eflags;
+}
+
+static inline bool isXSaveSupported(void)
+{
+  return IS_FLAG_SET(getCR4(), CR4_OSXSAVE);
+}
+
+static inline bool intIsEnabled(void)
+{
+  return IS_FLAG_SET(getEflags(), EFLAGS_IF);
+}
 
 extern void loadGDT( void );
 
-extern void intHandler0( void );
-extern void intHandler1( void );
-extern void intHandler2( void );
-extern void intHandler3( void );
-extern void intHandler4( void );
-extern void intHandler5( void );
-extern void intHandler6( void );
-extern void intHandler7( void );
-extern void intHandler8( void );
-extern void intHandler9( void );
-extern void intHandler10( void );
-extern void intHandler11( void );
-extern void intHandler12( void );
-extern void intHandler13( void );
-extern void intHandler14( void );
-extern void intHandler16( void );
-extern void intHandler17( void );
-extern void intHandler18( void );
-extern void intHandler19( void );
+extern void cpuEx0Handler( void );
+extern void cpuEx1Handler( void );
+extern void cpuEx2Handler( void );
+extern void cpuEx3Handler( void );
+extern void cpuEx4Handler( void );
+extern void cpuEx5Handler( void );
+extern void cpuEx6Handler( void );
+extern void cpuEx7Handler( void );
+extern void cpuEx8Handler( void );
+extern void cpuEx9Handler( void );
+extern void cpuEx10Handler( void );
+extern void cpuEx11Handler( void );
+extern void cpuEx12Handler( void );
+extern void cpuEx13Handler( void );
+extern void cpuEx14Handler( void );
+extern void cpuEx15Handler( void );
+extern void cpuEx16Handler( void );
+extern void cpuEx17Handler( void );
+extern void cpuEx18Handler( void );
+extern void cpuEx19Handler( void );
+extern void cpuEx20Handler( void );
+extern void cpuEx21Handler( void );
+extern void cpuEx22Handler( void );
+extern void cpuEx23Handler( void );
+extern void cpuEx24Handler( void );
+extern void cpuEx25Handler( void );
+extern void cpuEx26Handler( void );
+extern void cpuEx27Handler( void );
+extern void cpuEx28Handler( void );
+extern void cpuEx29Handler( void );
+extern void cpuEx30Handler( void );
+extern void cpuEx31Handler( void );
+
 extern void irq0Handler( void );
 extern void irq1Handler( void );
 extern void irq2Handler( void );
@@ -300,15 +334,27 @@ extern void irq12Handler( void );
 extern void irq13Handler( void );
 extern void irq14Handler( void );
 extern void irq15Handler( void );
+extern void irq16Handler( void );
+extern void irq17Handler( void );
+extern void irq18Handler( void );
+extern void irq19Handler( void );
+extern void irq20Handler( void );
+extern void irq21Handler( void );
+extern void irq22Handler( void );
+extern void irq23Handler( void );
+extern void irq24Handler( void );
+extern void irq25Handler( void );
+extern void irq26Handler( void );
+extern void irq27Handler( void );
+extern void irq28Handler( void );
+extern void irq29Handler( void );
+extern void irq30Handler( void );
+extern void irq31Handler( void );
 
-extern void invalidIntHandler( void );
-extern void loadIDT( void );
+extern void irqHandler( void );
+
 extern void syscallHandler( void );
-extern void timerHandler( void );
-
-extern void addIDTEntry( void *addr, uint32 num, uint32 flags);
-
-//extern multiboot_info_t *getMultibootInfo( void );
+extern void invalidIntHandler( void );
 
 #define EXT_PTR(var)    (void *)( &var )
 
@@ -317,6 +363,7 @@ extern const void * const kData;
 extern const void * const kBss;
 extern const void * const kEnd;
 extern const void * const kTcbStart;
+extern const void * const kTcbEnd;
 extern const void * const kPhysStart;
 extern const void * const kVirtStart;
 extern const void * const kdCode;
@@ -341,7 +388,6 @@ extern const unsigned int initKrnlPDir;
 extern const unsigned int lowMemPageTable;
 extern const unsigned int k1To1PageTable;
 extern const unsigned int bootStackTop;
-extern const unsigned int kernelStackTop;
 
 extern const unsigned int kCodeSel;
 extern const unsigned int kDataSel;
@@ -349,7 +395,6 @@ extern const unsigned int uCodeSel;
 extern const unsigned int uDataSel;
 extern const unsigned int kTssSel;
 
-extern const unsigned int kernelStack;
 extern unsigned int tssEsp0;
 extern const unsigned int kVirtToPhys;
 extern const unsigned int kPhysToVirt;

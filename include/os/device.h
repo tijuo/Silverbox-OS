@@ -29,7 +29,7 @@
 struct DeviceRecord
 {
   int numDevices;
-  unsigned long blockLen;
+  unsigned int blockLen;
   int flags;
 };
 
@@ -38,7 +38,7 @@ struct Device
 //  char name[MAX_DEV_NAME_LEN + 1];
   unsigned char numDevices;
   pid_t owner;
-  unsigned long blockLen;
+  unsigned long int blockLen;
   int flags : 31;
   int used : 1;
 };

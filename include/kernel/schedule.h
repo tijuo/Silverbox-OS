@@ -1,32 +1,18 @@
 #ifndef KERNEL_SCHEDULE_H
 #define KERNEL_SCHEDULE_H
 
+#include <kernel/lowlevel.h>
 #include <kernel/thread.h>
-#include <kernel/list.h>
 
-/** The number of run queues used for the scheduler. */
+#define NUM_PRIORITIES          5
+#define MIN_PRIORITY            0
+#define MAX_PRIORITY            4
+#define NORMAL_PRIORITY         2
 
-#define NUM_PRIORITIES		7
-#define NUM_RUN_QUEUES		NUM_PRIORITIES
+tcb_t *schedule(unsigned int processorId);
+HOT void switchStacks(ExecutionState *state);
 
-#define HIGHEST_PRIORITY 	(NUM_PRIORITIES - 1)
-#define NORMAL_PRIORITY 	(NUM_PRIORITIES / 2)
-#define LOWEST_PRIORITY		0
-
-#define MSECS_PER_QUANTUM   1000
-
-int attachPausedQueue( tcb_t *thread );
-int detachPausedQueue( tcb_t *thread );
-tcb_t *attachRunQueue( tcb_t *thread );
-tcb_t *detachRunQueue( tcb_t *thread );
-
-int setPriority( tcb_t *thread, unsigned int level );
-
-HOT(tcb_t *schedule(void));
-HOT(void timerInt(UNUSED_PARAM ExecutionState *state));
-HOT(void switchStacks(ExecutionState *state));
-
-extern list_t runQueues[NUM_RUN_QUEUES];
-extern list_t timerQueue;
+extern tcb_t *runningThreads[MAX_PROCESSORS];
+extern list_t runQueues[NUM_PRIORITIES];
 
 #endif /* KERNEL_SCHEDULE_H */

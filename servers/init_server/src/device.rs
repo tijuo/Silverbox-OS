@@ -1,16 +1,16 @@
 use crate::page::{PhysicalPage, VirtualPage};
 use crate::error::{self, Error};
-use crate::address::PAddr;
 use core::prelude::v1::*;
-use crate::pager::page_alloc::PhysPageAllocator;
 use crate::lowlevel::phys;
 use core::convert::TryFrom;
+use crate::phys_alloc::{self, BlockSize};
+use crate::{eprintln, println};
 
 type DeviceMajor = u16;
 type DeviceMinor = u16;
 
 pub mod manager {
-    use alloc::collections::BTreeMap;
+    use alloc::collections::btree_map::BTreeMap;
     use super::DeviceMajor;
     use crate::Tid;
     use crate::error;
@@ -104,7 +104,7 @@ impl From<u32> for DeviceId {
 
 impl From<DeviceId> for u32 {
     fn from(dev_id: DeviceId) -> u32 {
-        (dev_id.major << 16) as u32 | dev_id.minor as u32
+        ((dev_id.major as u32) << 16) | dev_id.minor as u32
     }
 }
 
@@ -132,12 +132,13 @@ pub fn read_page(vpage: &VirtualPage) -> Result<PhysicalPage, Error> {
                 pseudo::NULL_MINOR => Err(error::ZERO_LENGTH),   // handle a read from /dev/null
                 pseudo::ZERO_MINOR => {  // handle a read from /dev/zero
 
-                    PhysPageAllocator::alloc()
-                        .ok_or_else(|| { error::OUT_OF_MEMORY })
-                        .and_then(|new_frame| {
+                    phys_alloc::alloc_phys(BlockSize::Block4k)
+                        .map_err(|_| { error::OUT_OF_MEMORY })
+                        .and_then(|(new_addr, _)| {
+
                             unsafe {
-                                phys::clear_frame(&new_frame)
-                                    .map(|_| PhysicalPage::from_frame(new_frame))
+                                phys::clear_frame(new_addr)
+                                    .map(|_| PhysicalPage::new(new_addr))
                             }
                         })
                 },
@@ -149,7 +150,7 @@ pub fn read_page(vpage: &VirtualPage) -> Result<PhysicalPage, Error> {
         mem::MAJOR => {
             match minor {
                 mem::PMEM_MINOR => {  // handle a read from /dev/pmem
-                    PhysicalPage::try_from(vpage.offset as PAddr)
+                    PhysicalPage::try_from(vpage.offset)
                         .map_err(|_| error::DEVICE_NOT_EXIST)
                 },
                 _ => {  // handle reads from ramdisk

@@ -1,19 +1,26 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 int fclose(FILE *stream)
 {
   if( !stream )
-    return EOF;
-
-  fflush(stream);
-
-  if( !stream->user_buf )
   {
-    free(stream->buffer);
+    errno = -EINVAL;
+    return EOF;
+  }
+  else if(!stream->is_open)
+  {
+    errno = -ESTALE;
+    return EOF;
   }
 
-  free(stream);
+  int ret = fflush(stream);
 
-  return 0;
+  if(stream->write_req_buffer)
+    free(stream->write_req_buffer);
+
+  stream->is_open = 0;
+
+  return ret;
 }

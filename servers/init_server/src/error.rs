@@ -31,6 +31,7 @@ pub const OPERATION_FAILED: Error = 270;
 pub const DEVICE_NOT_EXIST: Error = 271;
 pub const END_OF_FILE: Error = 272;
 pub const PARSE_ERROR: Error = 273;
+pub const BAD_ARGUMENT: Error = 274;
 
 pub fn log_error(code: Error, arg: Option<String>) {
     let explanation = match code {
@@ -59,6 +60,7 @@ pub fn log_error(code: Error, arg: Option<String>) {
         DEVICE_NOT_EXIST => "Device does not exist",
         END_OF_FILE => "End of file",
         PARSE_ERROR => "Parse error",
+        BAD_ARGUMENT => "Bad argument",
         _ => "Something went wrong"
     };
 

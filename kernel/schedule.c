@@ -2,159 +2,48 @@
 #include <kernel/debug.h>
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
-#include <kernel/pic.h>
 #include <kernel/paging.h>
 #include <kernel/lowlevel.h>
 #include <kernel/error.h>
+#include <kernel/list.h>
 
-list_t runQueues[NUM_RUN_QUEUES];
-list_t timerQueue;
+list_t runQueues[NUM_PRIORITIES];
+tcb_t *runningThreads[MAX_PROCESSORS];
 
-int setPriority(tcb_t *thread, unsigned int level);
-tcb_t *attachRunQueue(tcb_t *thread);
-tcb_t *detachRunQueue(tcb_t *thread);
+// Assumes processor id is valid
 
-/* TODO: There might be a more efficient way of scheduling threads */
-
-/**
-  Picks the best thread to run next.
-
-  This scheduler picks a thread according to priority. Higher priority threads
-  will always run before lower priority threads (given that they are ready-to-run).
-  Higher priority threads are given shorter time slices than lower priority threads.
-  This assumes that high priority threads are IO-bound threads and lower priority
-  threads are CPU-bound. If a thread uses up too much of its time slice, then its
-  priority level is decreased.
-
-  @return A pointer to the TCB of the newly scheduled thread on success. NULL on failure.
- */
-
-tcb_t *schedule(void)
+tcb_t *schedule(unsigned int processorId)
 {
-  int priority;
-  int lowestPriority = LOWEST_PRIORITY;
-  tcb_t *newThread = NULL;
-  tcb_t *oldThread = currentThread;
+  tcb_t *currentThread = runningThreads[processorId];
+  int minPriority = currentThread ? currentThread->priority : MIN_PRIORITY;
 
-  /* Threads with higher priority *MUST* execute before threads
-     with lower priority. Warning: This may cause starvation
-     if incorrectly set. */
-
-  if(oldThread)
-  {
-    if(oldThread->threadState == RUNNING)
-      oldThread->threadState = READY;
-
-    if(oldThread->threadState == READY)
-      lowestPriority = oldThread->priority;
-  }
-
-  for(priority=HIGHEST_PRIORITY; priority >= lowestPriority; priority--)
+  for(int priority=MAX_PRIORITY; minPriority; priority--)
   {
     if(!isListEmpty(&runQueues[priority]))
     {
-      newThread = listDequeue(&runQueues[priority]);
-      assert(newThread->threadState == READY);
-      break;
-    }
-  }
+      tcb_t *newThread = listDequeue(&runQueues[priority]);
 
-  if(!newThread && !oldThread)
-    RET_MSG(NULL, "Unable to schedule any threads!");
-  else if(newThread) // If a thread was found, then run it(assumes that the thread is ready since it's in the ready queue)
-  {
-    currentThread = newThread;
+      // If the currently running thread has been preempted, then
+      // simply place it back onto its run queue
 
-    if(oldThread && oldThread->threadState == READY)
-    {
-#ifdef DEBUG
-      assert(attachRunQueue(oldThread) == oldThread);
-#else
-      attachRunQueue(oldThread);
-#endif
-    }
-
-    incSchedCount();
-  }
-  else
-  {
-    assert(oldThread != NULL);
-    newThread = oldThread;
-  }
-
-  assert(newThread != NULL);
-
-
-  newThread->threadState = RUNNING;
-  newThread->quantaLeft = newThread->priority + 1;
-
-  return newThread;
-}
-
-void switchStacks(ExecutionState *state)
-{
-  tcb_t *oldTcb = currentThread;
-
-  assert(state != NULL);
-
-  if(!oldTcb)
-    return;
-
-  if(oldTcb->threadState != RUNNING || !oldTcb->quantaLeft)
-  {
-    tcb_t *newTcb = schedule();
-
-    if(newTcb != oldTcb && newTcb) // if switching to a new thread
-    {
-//      kprintf("switchStacks: %d -> %d\n", getTid(oldTcb), getTid(newTcb));
-
-      // Switch to the new address space
-
-      if((oldTcb->rootPageMap & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
-        asm volatile("mov %0, %%cr3" :: "r"(newTcb->rootPageMap));
-
-      if(oldTcb->kernelStack)
-        _saveAndSwitchContext(oldTcb, newTcb);
-      else
+      if(currentThread)
       {
-        oldTcb->execState = *state;
-
-        if(newTcb->extExecState)
-          asm volatile("xrstor (%0)" :: "a"(0xFFFFFFFF), "d"(0xFFFFFFFF), "m"(newTcb->extExecState));
-
-        if(newTcb->kernelStack)
-          switchContext(newTcb);
-        else
-          *state = newTcb->execState;
-
-        //switchContext(newTcb);
+        currentThread->threadState = READY;
+        listEnqueue(&runQueues[currentThread->priority], currentThread);
       }
+
+      newThread->threadState = RUNNING;
+      runningThreads[processorId] = newThread;
+
+      return newThread;
     }
   }
-  else if(oldTcb->kernelStack)
-  {
-    addr_t *oldStack = *((addr_t **)oldTcb->kernelStack);
 
-    if(!oldStack)
-    {
-      //kprintf("switchStacks: Releasing kernel stack for tid: %d\n", getTid(oldTcb));
-      releaseKernelStack(oldTcb->kernelStack);
-      oldTcb->kernelStack = NULL;
-
-     // XXX: This won't work because an exception would result in the old state being placed back onto the stack
-
-     // *state = oldTcb->execState; // it's possible that a system call modified the thread's state in the tcb
-                                    // so, load the updated values
-    }
-    else
-    {
-      switchContext(oldTcb);
-      //kprintf("switchStacks: %d Returning to kernel mode\n", getTid(oldTcb));
-      //BREAKPOINT();
-    }
-  }
+  if(currentThread)
+    return currentThread;
+  else // todo: Have a minimum priority kernel idle thread that does nothing
+    panic("No more threads to run.");
 }
-
 
 /**
   Switch to a new stack (and thus perform a context switch to a new thread),
@@ -163,227 +52,36 @@ void switchStacks(ExecutionState *state)
   @param The saved execution state of the processor.
  */
 
-/*
 void switchStacks(ExecutionState *state)
 {
-  tcb_t *oldTcb = currentThread;
+  tcb_t *oldTcb = getCurrentThread();
 
   assert(state != NULL);
 
-  // Do not switch stacks if the scheduler hasn't been initialized yet.
-
-  if(!oldTcb)
-    return;
-
-  if(oldTcb->threadState != RUNNING || !oldTcb->quantaLeft)
+  if(!oldTcb || oldTcb->threadState != RUNNING)
   {
-    tcb_t *newTcb = schedule();
+    tcb_t *newTcb = schedule(getCurrentProcessor());
 
     if(newTcb != oldTcb && newTcb) // if switching to a new thread
     {
-      kprintf("%d -> %d\n", getTid(oldTcb), getTid(newTcb));
+//      kprintf("switchStacks: %u -> %u\n", getTid(oldTcb), getTid(newTcb));
 
       // Switch to the new address space
 
-      if((oldTcb->rootPageMap & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
+      if((getCR3() & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
         asm volatile("mov %0, %%cr3" :: "r"(newTcb->rootPageMap));
 
-      if(state->cs == KCODE) // old thread was running in kernel mode (due to an exception while handling a system call, for example)
+      if(oldTcb)
       {
-        // Save the state to the stack, and have the old thread claim this stack
-       // dword oldStack;
-       // asm volatile("lea 4(%%ebp), %0" : "=r"(oldStack));
-
-        oldTcb->kernelStack = ((addr_t *)state) - 2;//oldStack;
-        kprintf("Saving state to kernel stack (0x%x) for tid: %d\n", oldTcb->kernelStack, getTid(oldTcb));
-
-        if(newTcb->kernelStack) // kernel->kernel context switch (just load the new kernel stack), this doesn't continue in this function
-        {
-          kprintf("1. Switching to %d's kernel stack at 0x%x\n", getTid(newTcb), newTcb->kernelStack);
-          asm volatile("mov %0, %%esp\nret" :: "r"(newTcb->kernelStack));
-        }
-        else // kernel->user context switch (create a new kernel stack for all subsequent user->kernel mode switches)
-        {
-          // Restore extended register state
-
-          if(newTcb->extExecState)
-            __asm__ __volatile__("xrstor (%0)" :: "a"(0xFFFFFFFF), "d"(0xFFFFFFFF), "m"(newTcb->extExecState));
-
-          tssEsp0 = (dword)allocateKernelStack();
-          kprintf("Setting tss to 0x%x\n", tssEsp0);
-          assert(tssEsp0 != 0);
-          ExecutionState *newState = (ExecutionState *)tssEsp0;
-
-          newState -=1;
-          *newState = newTcb->execState;
-
-          dword *ptr = (dword *)newState;
-          dword returnAddr;
-          *(ptr-1) = (dword)ptr;
-          ptr -= 2;
-
-          // *(ptr-2) = (dword)(((dword*)state)-1);
-
-          // Copy the return address into this new stack
-
-          asm volatile("mov 4(%%ebp), %0" : "=r"(returnAddr));
-          *ptr = returnAddr;
-          asm volatile("mov %0, %%esp\nret" :: "m"(ptr));
-        }
-      }
-      else // old thread was running in user mode
-      {
-        // Save the state to the thread's TCB
-        oldTcb->execState = *state;
-
-        if(newTcb->kernelStack) // user->kernel context switch (just load the new kernel stack), this doesn't continue in this function
-        {
-          kprintf("2. Switching to %d's kernel stack at 0x%x\n", getTid(newTcb), newTcb->kernelStack);
-          asm volatile("mov %0, %%esp\nret" :: "r"(newTcb->kernelStack));
-        }
-        else // user->user context switch (replace the old execution state on the kernel stack with the new state)
-          *state = newTcb->execState;
+        oldTcb->userExecState = *state;
+        __asm__("fxsave %0" :: "m"(oldTcb->xsaveState));
       }
 
-      // Restore extended register state
+      asm volatile("fxrstor %0\n" :: "m"(newTcb->xsaveState));
 
-      if(newTcb->extExecState)
-        __asm__ __volatile__("xrstor (%0)" :: "a"(0xFFFFFFFF), "d"(0xFFFFFFFF), "m"(newTcb->extExecState));
+      *state = newTcb->userExecState;
     }
+    else if(!newTcb)
+      panic("No more threads to schedule.");
   }
-  else if(oldTcb->kernelStack)
-  {
-    if(state->cs == UCODE)
-    {
-      kprintf("Releasing kernel stack for tid: %d\n", getTid(oldTcb));
-      releaseKernelStack(oldTcb->kernelStack);
-      oldTcb->kernelStack = NULL;
-      *state = oldTcb->execState; // it's possible that a system call modified the thread's state in the tcb
-                                  // so, load the updated values
-    }
-  }
-}
-*/
-
-/**
-    Adjust the priority level of a thread.
-
-    If the thread is already on a run queue, then it will
-    be detached from its current run queue and attached to the
-    run queue associated with the new priority level.
-
-    @param thread The thread of a TCB.
-    @param level The new priority level.
-    @return E_OK on success. E_FAIL on failure. E_DONE if priority would remain unchanged.
- */
-
-int setPriority(tcb_t *thread, unsigned int level)
-{
-  assert(thread != NULL);
-  assert(level < NUM_PRIORITIES);
-
-  if(thread->priority == level)
-    RET_MSG(E_DONE, "Thread is already set to the desired priority level");
-
-  // Detach the thread from the run queue if it hasn't been detached already
-
-  if(thread->threadState == READY)
-    detachRunQueue(thread);
-
-  thread->priority = level;
-
-  if(thread->threadState == READY && !attachRunQueue(thread))
-    RET_MSG(E_FAIL, "Unable to attach thread to new run queue");
-
-  if(level < currentThread->priority && currentThread->threadState == RUNNING)
-    currentThread->threadState = READY;
-
-  return E_OK;
-}
-
-/**
-    Adds a thread to the run queue.
-
-    @param thread The TCB of the thread to attach.
-    @return The TCB of the attached thread. NULL on failure.
- */
-
-
-tcb_t *attachRunQueue(tcb_t *thread)
-{
-  assert(thread != NULL);
-  assert(thread->priority <= HIGHEST_PRIORITY && thread->priority >= LOWEST_PRIORITY);
-  assert(thread->threadState == READY);
-
-  if(thread->threadState != READY)
-    RET_MSG(NULL, "Attempted to attach a thread to the run queue that wasn't ready.");
-  else if(IS_ERROR(listEnqueue(&runQueues[thread->priority], thread)))
-    RET_MSG(NULL, "Unable to attach thread to the run queue.");
-  else
-    return thread;
-}
-
-/**
-    Removes a thread from the run queue.
-
-    @param thread The TCB of the thread to detach.
-    @return The TCB of the detached thread. NULL on failure or if the thread isn't on a run queue
- */
-
-tcb_t *detachRunQueue(tcb_t *thread)
-{
-  assert(thread != NULL);
-  assert(thread->priority < NUM_PRIORITIES);
-
-  if(IS_ERROR(listRemove(&runQueues[thread->priority], thread)))
-    RET_MSG(NULL, "Unable to remove thread from the run queue.");
-  else
-    return thread;
-}
-
-/**
-  Handles a timer interrupt.
-
-  @note This function should only be called by low-level IRQ handler routines.
-
-  The timer interrupt handler does periodic things like updating kernel
-  clocks/timers and decreasing a thread's quanta.
-
-  @note Since this is an interrupt handler, there should not be too much
-        code here and it should execute quickly.
-
-  @param state The saved execution state of the processor.
- */
-
-void timerInt(UNUSED_PARAM ExecutionState *state)
-{
-  tcb_t *wokenThread;
-  node_t *node = getHeadNode(&timerQueue);
-
-  if(currentThread && currentThread->quantaLeft)
-    currentThread->quantaLeft--;
-
-  incTimerCount();
-
-  if(node && node->delta)
-    node->delta--;
-
-  for(; node && node->delta <= 0; node=getHeadNode(&timerQueue))
-  {
-    wokenThread = deltaListPop(&timerQueue);
-
-    assert(wokenThread != NULL);
-    assert(wokenThread->threadState != READY && wokenThread->threadState != RUNNING);
-    assert(wokenThread != currentThread);
-
-    wokenThread->threadState = READY;
-
-#ifndef DEBUG
-    attachRunQueue(wokenThread);
-#else
-    assert(attachRunQueue(wokenThread) != NULL);
-#endif /* DEBUG */
-  }
-
-  sendEOI();
 }

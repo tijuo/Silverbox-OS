@@ -7,7 +7,7 @@ struct List
 {
   tid_t headTid;
   tid_t tailTid;
-} __PACKED__;
+} PACKED;
 
 typedef struct List list_t;
 

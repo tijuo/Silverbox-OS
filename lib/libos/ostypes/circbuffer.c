@@ -1,6 +1,7 @@
 #include <os/ostypes/circbuffer.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 int initCircBuffer(struct CircularBuffer *buffer, void *data, size_t bufferSize)
 {
@@ -12,6 +13,11 @@ int initCircBuffer(struct CircularBuffer *buffer, void *data, size_t bufferSize)
   buffer->unreadLen = 0;
 
   return 0;
+}
+
+int createCircBuffer(struct CircularBuffer *buffer, size_t bufferSize)
+{
+  return initCircBuffer(buffer, malloc(bufferSize), bufferSize);
 }
 
 size_t readCircBuffer(struct CircularBuffer *buffer, size_t bytes, void *outData)

@@ -1,15 +1,30 @@
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 int fread(void *ptr, size_t size, size_t count, FILE *stream)
 {
   int bytes_read = 0;
 
-  if( !stream || !ptr || feof(stream))
+  if(!stream || !ptr)
+  {
+    errno = -EINVAL;
     return EOF;
+  }
+  else if(stream->eof)
+  {
+    errno = -EIO;
+    return EOF;
+  }
+  else if(!stream->is_open)
+  {
+    errno = -ESTALE;
+    return EOF;
+  }
 
   if( !stream->buffer || !(stream->access & ACCESS_RD))
   {
+    errno = -EIO;
     stream->error = 1;
     return EOF;
   }

@@ -6,8 +6,8 @@
 
 #define EOF			((int)-1)
 #define BUFSIZ			1024
-#define FILENAME_MAX		256
-#define FOPEN_MAX		16
+#define FILENAME_MAX    256
+#define FOPEN_MAX		64
 
 // Buffer modes
 #define _IOFBF			1		// Fully-buffered
@@ -24,48 +24,81 @@
   #define NULL 0
 #endif /* NULL */
 
-#define SEEK_CUR	0
-#define SEEK_END	1
-#define SEEK_SET	2
+#define SEEK_CUR	        0
+#define SEEK_END	        1
+#define SEEK_SET	        2
 
-#define TMP_MAX		30
+#define TMP_MAX		        30
 
-#define ACCESS_RD		1
-#define ACCESS_WR		2
-#define ACCESS_RD_WR		3
+#define ACCESS_RD		    1
+#define ACCESS_WR		    2
+#define ACCESS_AP           3
 
 struct _STDIO_FILE
 {
-  unsigned is_binary : 1;
-  unsigned access    : 2;
-  unsigned buf_mode  : 2;
-  unsigned eof       : 1;
-  unsigned error     : 1;
-  unsigned user_buf  : 1;
-  unsigned is_device : 1;
-  unsigned orientation : 2;
+  unsigned int is_open         : 1;
+  unsigned int is_binary       : 1;
+  unsigned int access          : 2;
+  unsigned int buf_mode        : 2;
+  unsigned int eof             : 1;
+  unsigned int error           : 1;
+  unsigned int user_buf        : 1;   // 1 if 'buffer' has been supplied by the user
+  unsigned int is_device       : 1;
+  unsigned int orientation     : 2;
+  unsigned int is_buf_full     : 1;   // 1 if the buffer cannot be written to (because it's full)
+  unsigned int is_update       : 1;   // 1 if the fopen() mode string included a '+'
+                                      // in update mode, buffers are flushed/repositioned immediately
+                                      // before a write if reads have been performed. buffers are
+                                      // repositioned immediately before a read if writes have been
+                                      // performed
+  unsigned int performed_read  : 1;   // 1 if the last operation performed was a read
+  unsigned int performed_write : 1;   // 1 if the last operation performed was a write
+
   char filename[FILENAME_MAX];
   size_t filename_len;
-  size_t file_pos;
-  size_t file_len;
-  short dev_num; // the device corresponding to the file
-  char *buffer;
-  size_t buffer_len; // the size of the buffer
-  size_t buf_pos; // current position of the buffer
+
+  uint64_t file_pos;            // current position in the file
+
+  uint64_t file_len;            // length of the file in bytes
+
+  unsigned short int   dev_minor; // the device corresponding to the file
+  tid_t dev_server;             // tid of the device server
+  struct DeviceOpRequest *write_req_buffer; // the buffer that will be used to send the write request to the device server
+
+  size_t write_req_pos;         // current offset of the write request (only valid if user_buf = 1)
+
+  char *buffer;                 // the buffer used for reads/writes. if user_buf = 0, then
+                                // buffer is a pointer into write_req_pos
+                                // (i.e. buffer = &stream->write_req_pos[sizeof (struct DeviceOpRequest)])
+
+  size_t buffer_len;            // the size of the buffer
+
+  size_t buf_head;              // the position of the write cursor. Writing to the buffer advances
+                                // the cursor by 1 and will wrap around to zero if it will equal
+                                // 'buffer_len'.
+
+  size_t buf_tail;              // the position of the read cursor. Reading from the buffer advances
+                                // the cursor by 1 and will wrap around to zero if it will equal
+                                // 'buffer_len'.
 };
+
+#define DEBUG_DEVICE        0xFFFF
 
 typedef struct _STDIO_FILE FILE;
 typedef unsigned long long fpos_t;
 
-extern FILE _std_files[3];
+extern FILE _stdio_open_files[FOPEN_MAX];
 
-#define stdin	(&_std_files[0])
-#define stdout  (&_std_files[1])
-#define stderr   (&_std_files[2])
+#define stdin	(&_stdio_open_files[0])
+#define stdout  (&_stdio_open_files[1])
+#define stderr  (&_stdio_open_files[2])
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+
+#define getc(stream)       fgetc(stream)
+#define putc(c, stream)    fputc(c, stream)
 
 void clearerr(FILE *stream);
 int fclose(FILE *stream);
@@ -80,12 +113,9 @@ int fputs(const char *s, FILE *stream);
 int fread(void *ptr, size_t size, size_t count, FILE *stream);
 int fseek(FILE *stream, long offset, int whence);
 long ftell(FILE *stream);
-int getc(FILE *stream);
 int getchar(void);
-char *gets(char *s);
 void perror(const char *prefix);
 int printf(const char *format, ...);
-int putc(int c, FILE *stream);
 int putchar(int c);
 int puts(const char *s);
 void rewind(FILE *stream);

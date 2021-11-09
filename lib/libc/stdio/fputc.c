@@ -1,63 +1,57 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <os/dev_interface.h>
-// #include <os/services.h>
-//#include <os/console.h>
+#include <errno.h>
+
+int _writeCharToFile(FILE *stream, int c);
 
 int fputc(int c, FILE *stream)
 {
-  if( stream == NULL )
-    return EOF;
-
-  if( stream->buf_mode != _IONBF && stream->buffer == NULL )
+  if( stream == NULL)
   {
-    stream->buffer = malloc(stream->buffer_len);
-    stream->user_buf = 0;
-    stream->buf_pos = 0;
-    stream->buffer_len = BUFSIZ;
+    errno = -EINVAL;
+    return EOF;
+  }
+  else if(!stream->is_open)
+  {
+    errno = -ESTALE;
+    return EOF;
+  }
+  else if(stream->eof)
+  {
+    errno = -EIO;
+    return EOF;
+  }
 
-    if( stream->buffer == NULL )
-      return EOF;
+  if(stream->performed_read)
+  {
+    stream->performed_read = 0;
+    // todo: reposition file pos (if applicable)
+
   }
 
   if( stream->buf_mode != _IONBF )
   {
-    if( stream->buf_pos == stream->buffer_len )
-    {
-      fflush(stream);
+    if( stream->is_buf_full && fflush(stream) == EOF )
+      return EOF;
 
-      if( stream->buf_pos == stream->buffer_len )
-        return EOF;
-    }
+    stream->buffer[stream->buf_head++] = (char)c;
 
-    stream->buffer[stream->buf_pos++] = (char)c;
+    if(stream->buf_head == stream->buffer_len)
+      stream->buf_head = 0;
 
-    if( stream->buf_mode == _IOLBF && (char)c == '\n' )
-      fflush(stream);
+    if(stream->buf_head == stream->buf_tail)
+      stream->is_buf_full = 1;
 
-    return c;
-  }
-  else
-  {
-    if(stream == stderr || stream == stdout)
-      asm("out %%al, %%dx\n" :: "d"(0xE9), "a"((unsigned char)c));
-  }
-/*
-  if( stream == stdout || stream == stderr )
-  {
-    
-
-    if( stream->buf_mode == _IOLBF )
-    {
-      
-    }
-
-    if( printChar((char)c) < 0 )
+    if( stream->buf_mode == _IOLBF && (char)c == '\n' && fflush(stream) == EOF )
       return EOF;
     else
-      return (int)c;
+      return c;
   }
-*/
+  else if(_writeCharToFile(stream, c) == 0)
+    return c;
+
+  errno = -EIO;
+  stream->error = 1;
   return EOF;
 }

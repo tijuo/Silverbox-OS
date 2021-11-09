@@ -11,7 +11,6 @@ pub type VSize = usize;
 pub type VsSize = isize;
 pub type PSize = u64;
 
-pub type PageFrame = u32;
 pub type FrameOffset = u32;
 
 pub const NULL_VADDR: VAddr = ptr::null();

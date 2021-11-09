@@ -32,7 +32,7 @@ pub fn ramdisk_main() -> ! {
             Err(code) => error::log_error(code, Some(String::from("Unable to register ramdisk name"))),
             Ok((msg, _)) => {
                 if msg.subject == RawMessage::RESPONSE_OK {
-                    eprintln!("Ramdisk registered successfully.");
+                    eprintln!("Ramdisk name registered successfully.");
                 } else {
                     eprintln!("Unable to register ramdisk name.");
                 }
@@ -52,7 +52,7 @@ pub fn ramdisk_main() -> ! {
             Err(code) => error::log_error(code, Some(String::from("Unable to register ramdisk name"))),
             Ok((msg, _)) => {
                 if msg.subject == RawMessage::RESPONSE_OK {
-                    eprintln!("Ramdisk registered successfully.");
+                    eprintln!("Ramdisk server registered successfully.");
                 } else {
                     eprintln!("Unable to register ramdisk name.");
                 }

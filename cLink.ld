@@ -2,28 +2,30 @@ OUTPUT_FORMAT("elf32-i386")
 ENTRY(_start)
 SECTIONS
 {
-  virtual = 0x1000000;
+  . = 0x400000;
 
-  .text virtual : {
-    __code = .;
+  imageStart = .;
+
+  .text : {
+    codeStart = .;
     *(.text)
     *(.comment)
     *(.rodata*)
-    . = ALIGN(4096);
-  }
-  
-  .data . : {
-    __data = .;
-    *(.rdata)
-    *(.data)
-    . = ALIGN(4096);
+    codeEnd = .;
   }
 
-  .bss . : {
-    __bss = .;
+  .data : ALIGN(4096) {
+    dataStart = .;
+    *(.data)
+    dataEnd = .;
+  }
+
+  .bss : ALIGN(4096) {
+    bssStart = .;
     *(.bss)
     *(.common)
-    . = ALIGN(4096);
+    bssEnd = .;
   }
-  __end = .;
+
+  imageEnd = .;
 }

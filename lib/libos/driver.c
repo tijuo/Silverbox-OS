@@ -2,48 +2,72 @@
 #include <os/dev_interface.h>
 #include <string.h>
 #include <os/message.h>
+#include <os/msg/message.h>
+#include <os/syscalls.h>
+#include <stdlib.h>
 
-#define MSG_TIMEOUT	15000
-
-int deviceRead(pid_t pid, unsigned char device, unsigned offset,
-                size_t num_blks, shmid_t shmid, size_t *blocks_read)
+int deviceRead(tid_t tid, struct DeviceOpRequest *request, void *buffer, size_t *blocksRead)
 {
-  int in_args[5] = { DEVICE_READ, device, num_blocks, offset, shmid };
-  int out_args[5];
+  if(!request)
+    return -1;
 
-  int result = sys_rpc(pid, in_args, out_args, MSG_TIMEOUT);
+  msg_t requestMsg = {
+    .recipient = tid,
+    .subject = DEVICE_READ,
+    .buffer = request,
+    .bufferLen = sizeof *request,
+    .flags = 0,
+  };
 
-  if(result < 0)
-    return result;
-  else
+  msg_t responseMsg = EMPTY_MSG;
+
+  responseMsg.buffer = buffer;
+  responseMsg.bufferLen = request->length;
+
+  int ret = sys_call(&requestMsg, &responseMsg);
+
+  if(blocksRead && ret == ESYS_OK && responseMsg.subject == RESPONSE_OK)
   {
-    if(blocks_read)
-      *blocks_read = (size_t)out_args[0];
+    if(blocksRead)
+      *blocksRead = responseMsg.bytesTransferred;
 
     return 0;
   }
+  else
+    return -1;
 }
 
-int deviceWrite(tid_t tid, unsigned char device, unsigned offset,
-                size_t num_blks, shmid_t shmid, size_t *blocks_written)
+int deviceWrite(tid_t tid, struct DeviceOpRequest *request, size_t *blocksWritten)
 {
-  int in_args[4] = { (int)(device << 8) | DEVICE_WRITE,
-                  num_blocks, offset, shmid };
-  int out_args[4];
+  if(!request)
+    return -1;
 
-  int result = sys_rpc(tid, in_args, out_args, MSG_TIMEOUT);
+  msg_t requestMsg = {
+    .recipient = tid,
+    .subject = DEVICE_WRITE,
+    .buffer = request,
+    .bufferLen = sizeof *request + request->length,
+    .flags = 0,
+  };
 
-  if(result < 0)
-    return result;
-  else
+  msg_t responseMsg = EMPTY_MSG;
+
+  responseMsg.buffer = blocksWritten;
+  responseMsg.bufferLen = blocksWritten ? sizeof(size_t) : 0;
+
+  int ret = sys_call(&requestMsg, &responseMsg);
+
+  if(ret == ESYS_OK && responseMsg.subject == RESPONSE_OK)
   {
-    if(blocks_written)
-      *blocks_written = (size_t)out_args[0];
-
+    if(blocksWritten)
+      *blocksWritten = responseMsg.bytesTransferred;
     return 0;
   }
+
+  return -1;
 }
 
+/*
 int deviceIoctl(tid_t tid, unsigned char device, short int command, 
                 void *in_buffer, size_t args_len, void *out_buffer)
 {
@@ -54,3 +78,4 @@ int deviceIoctl(tid_t tid, unsigned char device, short int command,
 
   return sys_rpc(tid, in_args, (int *)out_buffer, MSG_TIMEOUT);
 }
+*/

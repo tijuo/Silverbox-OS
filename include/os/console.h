@@ -3,6 +3,8 @@
 
 #include <types.h>
 
+#define TAB_WIDTH           4
+
 int printChar( char c );
 int printStrN( char *str, size_t len );
 int printMsg( char *msg );

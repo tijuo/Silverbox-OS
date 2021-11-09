@@ -5,9 +5,7 @@
 source `dirname $0`/set_variables.sh
 
 C_STUB="cstart"
-#SIG="_sig"
-#SIG2="_sig2"
-CFLAGS="-O0 -Wall -m32 -std=gnu99 -fno-builtin -nostdlib -ffreestanding -nostartfiles -nodefaultlibs"
+CFLAGS="-O0 -Wall -m32 -std=gnu11 -fno-builtin -nostdlib -ffreestanding -nostartfiles -nodefaultlibs"
 ASFLAGS="-O0 -f elf"
 
 #Note: Final slash after directory is important!
@@ -30,20 +28,6 @@ fi
     exit 1
   fi
   i686-elf-gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $TOOLS/$C_STUB.c -o $TOOLS/$C_STUB.o
-#fi
-
-#if ! [ -f "$TOOLS/$SIG2.asm" ]; then
-#    echo "Missing $SIG2.asm"
-#    exit 1
-#  fi
-#  nasm $ASFLAGS $TOOLS/$SIG2.asm -o $TOOLS/$SIG2.o
-
-#if ! [ -f "$TOOLS/$SIG.o" ]; then
-#  if ! [ -f "$TOOLS/$SIG.c" ]; then
-#    echo "Missing $SIG.c"
-#    exit 1
-#  fi
-#  gcc -c `for i in $INCLUDES; do echo -n "-I $i "; done` $CFLAGS $TOOLS/$SIG.c -o $TOOLS/$SIG.o
 #fi
 
 files="`echo $* | cut --complement -d ' ' -f $#`"

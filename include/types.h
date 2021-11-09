@@ -1,5 +1,5 @@
 #ifndef TYPES_H
-# define TYPES_H
+#define TYPES_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,20 +11,20 @@ extern "C" {
 
 #include <util.h>
 
-typedef unsigned char u8;
-typedef signed char s8;
+typedef uint8_t u8;
+typedef int8_t s8;
 
-typedef unsigned short u16;
-typedef signed short s16;
+typedef uint16_t u16;
+typedef int16_t s16;
 
-typedef unsigned int u32;
-typedef signed int s32;
+typedef uint32_t u32;
+typedef int32_t s32;
 
-typedef unsigned long long u64;
-typedef signed long long s64;
+typedef uint64_t u64;
+typedef int64_t s64;
 
-typedef u32 addr_t;
-typedef u64 paddr_t;
+typedef uintptr_t addr_t;
+typedef uint32_t paddr_t;
 
 typedef u8  byte;
 typedef u16 word;
@@ -51,8 +51,10 @@ typedef s64 quad;
 typedef unsigned short int tid_t;
 typedef unsigned short int pid_t;
 
-#define NULL_TID  ((tid_t)0)
-#define NULL_PID  ((pid_t)0)
+#define NULL_TID  					((tid_t)0)
+#define NULL_PID  					((pid_t)0)
+#define NULL_PADDR					((paddr_t)0xFFFFFFFFu)
+#define CURRENT_ROOT_PMAP   NULL_PADDR
 
 #ifndef __cplusplus
 /* typedef char _Bool; */
