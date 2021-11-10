@@ -20,3 +20,5 @@ tests:
 clean:
 	rm -f $(OBJ)
 	rm -f $(BIN)
+
+include ../Makefile_post.inc

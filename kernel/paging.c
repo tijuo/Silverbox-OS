@@ -197,7 +197,7 @@ bool read) {
 	size_t buffer_offset = 0;
 
 	assert(buffer != NULL);
-	assert(address != NULL);
+	assert(address);
 
 	while(len) {
 		paddr_t baseAddress;
@@ -295,7 +295,7 @@ int peekVirt(addr_t address, size_t len, void *buffer, paddr_t pdir) {
  */
 
 int kMapPage(addr_t virt, paddr_t phys, u32 flags) {
-	assert(virt != NULL);
+	assert(virt);
 	assert(phys != NULL_PADDR);
 	assert(phys < MAX_PHYS_MEMORY);
 
@@ -374,7 +374,7 @@ int kUnmapPage(addr_t virt, paddr_t *phys) {
 				*phys = LARGE_PDE_BASE(pmapEntry.largePde)
 					| (pmapEntry.value & LARGE_PDE_FLAG_MASK);
 
-			pmapEntry.largePde.present = 0;
+			pmapEntry.largePde.isPresent = 0;
 
 			if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
 				RET_MSG(E_FAIL, "Unable to write PDE.");

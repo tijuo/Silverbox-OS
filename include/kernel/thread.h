@@ -65,7 +65,7 @@ struct ThreadControlBlock
   // 384-byte offset
 
   uint8_t available2[128];
-} PACKED;
+};
 
 tcb_t *createThread(void *entryAddr, uint32_t addrSpace, void *stackTop);
 

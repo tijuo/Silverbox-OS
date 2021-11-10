@@ -33,8 +33,8 @@ void kprintf( const char *str, ... );
 void printAssertMsg(const char *exp, const char *file, const char *func, int line);
 void setBadAssertHlt( bool value );
 void setVideoLowMem( bool value );
-void dump_regs( const tcb_t *thread, const ExecutionState *state, int intNum, int errorCode );
-void dump_state( const ExecutionState *state, int intNum, int errorCode );
+void dump_regs( const tcb_t *thread, const ExecutionState *state, unsigned int intNum, unsigned int errorCode );
+void dump_state( const ExecutionState *state, unsigned int intNum, unsigned int errorCode );
 
 /*
 char *_toHexString(unsigned int num);

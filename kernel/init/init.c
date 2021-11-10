@@ -16,15 +16,14 @@
 #include <kernel/bits.h>
 #include <kernel/syscall.h>
 #include <kernel/io.h>
+#include <kernel/lowlevel.h>
 #include <cpuid.h>
-#include <ia32intrin.h>
+#include <x86gprintrin.h>
 
 #define KERNEL_IDT_LEN	(64 * sizeof(struct IdtEntry))
 
 #define RSDP_SIGNATURE  "RSD PTR "
 #define PARAGRAPH_LEN   16
-
-extern pmap_entry_t kPageDir[PMAP_ENTRY_COUNT];
 
 struct RSDPointer {
   char signature[8]; // should be "RSD PTR "
@@ -48,7 +47,7 @@ struct ACPI_DT_Header {
   uint32_t oemRevision;
   uint32_t creatorId;
   uint32_t creatorRevision;
-} PACKED;
+};
 
 #define MP_SIGNATURE    "_MP_"
 
@@ -62,7 +61,7 @@ struct MP_FloatingHeader {
   uint8_t _resd :7;
   uint8_t icmrPresent :1;
   uint8_t _resd2[3];
-} PACKED;
+};
 
 #define MP_CT_SIGNATURE "PCMP"
 
@@ -80,7 +79,7 @@ struct MP_CT_Header {
   uint16_t extTableLength;
   uint8_t extChecksum;
   uint8_t _resd;
-} PACKED;
+};
 
 #define MP_ENTRY_PROCESSOR  0
 #define MP_ENTRY_BUS        1
@@ -101,13 +100,13 @@ struct MP_Processor {
   uint32_t _resd3;
 } PACKED;
 
-#define EBDA                0x80000
-#define VGA_RAM             0xA0000
-#define VGA_COLOR_TEXT      0xB8000
-#define ISA_EXT_ROM         0xC0000
-#define BIOS_EXT_ROM        0xE0000
-#define BIOS_ROM            0xF0000
-#define EXTENDED_MEMORY     0x100000
+#define EBDA                0x80000u
+#define VGA_RAM             0xA0000u
+#define VGA_COLOR_TEXT      0xB8000u
+#define ISA_EXT_ROM         0xC0000u
+#define BIOS_EXT_ROM        0xE0000u
+#define BIOS_ROM            0xF0000u
+#define EXTENDED_MEMORY     0x100000u
 
 #define DISC_CODE(X) X SECTION(".dtext")
 
@@ -136,8 +135,11 @@ static inline void enterContext(paddr_t addrSpace, ExecutionState state) {
       "iret\n" :: "r"(s), "r"(addrSpace) : "memory");
 }
 
-DISC_CODE(pmap_entry_t kPageDir[PMAP_ENTRY_COUNT]) ALIGNED(PAGE_SIZE); // The initial page directory used by the kernel on bootstrap
-DISC_CODE(pte_t kPageTab[PTE_ENTRY_COUNT]) ALIGNED(PAGE_SIZE);
+DISC_DATA(pmap_entry_t kPageDir[PMAP_ENTRY_COUNT]) ALIGNED(PAGE_SIZE); // The initial page directory used by the kernel on bootstrap
+DISC_DATA(pte_t kPageTab[PTE_ENTRY_COUNT]) ALIGNED(PAGE_SIZE);
+
+extern gdt_entry_t kernelGDT[8];
+extern idt_entry_t kernelIDT[NUM_EXCEPTIONS + NUM_IRQS];
 
 extern tcb_t *initServerThread;
 extern addr_t *freePageStack;
@@ -145,6 +147,7 @@ extern addr_t *freePageStackTop;
 extern uint8_t *kernelStackTop;
 
 //static bool DISC_CODE(isValidAcpiHeader(paddr_t physAddress));
+DISC_CODE(void initPaging(void));
 static tcb_t* DISC_CODE(loadElfExe( addr_t, uint32_t, void * ));
 static bool DISC_CODE(isValidElfExe( elf_header_t *image ));
 static void DISC_CODE(initInterrupts( void ));
@@ -825,7 +828,7 @@ char* strchr(char *s, int c) {
 void addIDTEntry(void (*f)(void), unsigned int entryNum, unsigned int dpl) {
   assert(entryNum < 256);
 
-  struct IdtEntry *newEntry = &kernelIDT[entryNum];
+  idt_entry_t *newEntry = &kernelIDT[entryNum];
 
   newEntry->offsetLower = (uint16_t)((uint32_t)f & 0xFFFFu);
   newEntry->selector = KCODE_SEL;
@@ -847,10 +850,10 @@ void loadIDT(void) {
 }
 
 void setupGDT(void) {
-  struct GdtEntry *tssDescriptor = &kernelGDT[TSS_SEL / sizeof(struct GdtEntry)];
+  gdt_entry_t *tssDescriptor = &kernelGDT[TSS_SEL / sizeof(gdt_entry_t)];
   struct GdtPointer gdtPointer = {
     .base = (uint32_t)kernelGDT,
-    .limit = 6 * sizeof(struct GdtEntry)
+    .limit = 6 * sizeof(gdt_entry_t)
   };
 
   tssDescriptor->base1 = (uint32_t)&tss & 0xFFFFu;
@@ -964,10 +967,6 @@ tcb_t* loadElfExe(addr_t img, addr_t addrSpace, void *uStack) {
   peek(img, &image, sizeof image);
   pte.isPresent = 0;
 
-#ifdef DEBUG
-  int result;
-#endif /* DEBUG */
-
   if(!isValidElfExe(&image)) {
     kprintf("Not a valid ELF executable.\n");
     return NULL;
@@ -1048,7 +1047,7 @@ struct InitStackArgs {
   multiboot_info_t *multibootInfo;
   addr_t firstFreePage;
   unsigned char code[4];
-} PACKED;
+};
 
 /**
  Bootstraps the initial server and passes necessary boot data to it.
@@ -1308,7 +1307,7 @@ void showCPU_Features(void) {
     "???"
   };
 
-  _cpuid(1, procVersion.value, additionalInfo.value, features2, features);
+  __cpuid(1, procVersion.value, additionalInfo.value, features2, features);
 
   kprintf("CPUID Features:\n");
 
@@ -1370,17 +1369,17 @@ void initStructures(multiboot_info_t *info) {
 }
 
 void initPaging(void) {
-  clearMemory(kPageDir);
-  clearMemory(kPageTab);
-  clearMemory(kMapAreaPTab);
+  clearMemory(kPageDir, PAGE_SIZE);
+  clearMemory(kPageTab, PAGE_SIZE);
+  clearMemory(kMapAreaPTab, PAGE_SIZE);
 
-  for(size_t i = 0; i < PTE_ENTRY(EXTENDED_MEMORY); i++) {
+  for(size_t i = 0; i < PTE_INDEX(EXTENDED_MEMORY); i++) {
     pte_t *pte = &kPageTab[i];
 
-    if(i < PTE_ENTRY(BIOS_ROM)) {
+    if(i < PTE_INDEX(BIOS_ROM)) {
       pte->isReadWrite = 1;
 
-      if(i >= PTE_ENTRY(VGA_RAM)) {
+      if(i >= PTE_INDEX(VGA_RAM)) {
         pte->pcd = 1;
         pte->pwt = 1;
       }
@@ -1390,7 +1389,11 @@ void initPaging(void) {
     pte->isPresent = 1;
   }
 
-  kPageDir[0].pde = kPageTab;
+  pde_t *pde = &kPageDir[0].pde;
+
+  pde->base = PADDR_TO_PDE_BASE(KVIRT_TO_PHYS(kPageTab));
+  pde->isPresent = 1;
+  pde->isReadWrite = 1;
 
   /* Map lower 2 GiB of physical memory to kernel space.
    * The kernel has to be careful not to write to read-only or non-existent areas.
@@ -1398,19 +1401,19 @@ void initPaging(void) {
 
   paddr_t physAddr = 0;
 
-  for(size_t pdeIndex = LARGE_PDE_ENTRY(KERNEL_VSTART);
+  for(size_t pdeIndex = PDE_INDEX(KERNEL_VSTART);
       pdeIndex < LARGE_PDE_ENTRY_COUNT; pdeIndex++, physAddr += LARGE_PAGE_SIZE)
   {
     large_pde_t *largePde = &kPageDir[pdeIndex].largePde;
 
     setLargePdeBase(largePde, (paddr_t)NDX_TO_VADDR(physAddr, 0, 0));
 
-    if(pdeIndex < LARGE_PDE_ENTRY(KERNEL_VEND))
+    if(pdeIndex < PDE_INDEX(KERNEL_VEND))
       largePde->global = 1;
 
     largePde->isLargePage = 1;
-    largePde->rwPriv = 1;
-    largePde->present = 1;
+    largePde->isReadWrite = 1;
+    largePde->isPresent = 1;
   }
 
   // Set the page directory

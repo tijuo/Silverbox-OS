@@ -134,9 +134,9 @@ int kullitoa(unsigned long long int value, char *str, int base);
 
 void _putChar(char c, int x, int y, unsigned char attrib);
 void putChar(char c, int x, int y);
-void dump_regs(const tcb_t *thread, const ExecutionState *state, int intNum,
-               int errorCode);
-void dump_state(const ExecutionState *state, int intNum, int errorCode);
+void dump_regs(const tcb_t *thread, const ExecutionState *state, unsigned int intNum,
+               unsigned int errorCode);
+void dump_state(const ExecutionState *state, unsigned int intNum, unsigned int errorCode);
 void dump_stack(addr_t, addr_t);
 static const char *_digits = "0123456789abcdefghijklmnopqrstuvwxyz";
 
@@ -299,6 +299,7 @@ int klitoa(long int value, char *str, int base) {
 
   if(negative) {
     if(value == (long int)LONG_MIN) {
+#ifdef __LONG_LEN__
 #if __LONG_LEN__ == 8
       memcpy(str, "-9223372036854775808", 20);
       return 20;
@@ -306,7 +307,10 @@ int klitoa(long int value, char *str, int base) {
       memcpy(str, "-2147483648", 11);
       return 11;
 #endif /* __LONG__LEN == 8 */
-
+#else
+      memcpy(str, "-2147483648", 11);
+      return 11;
+#endif /* __LONG_LEN__ */
     }
     else
       value = ~value + 1;
@@ -1100,50 +1104,50 @@ void _kprintf(void (*writeFunc)(int), const char *str, va_list args) {
   }
 }
 
-void dump_state(const ExecutionState *execState, int intNum, int errorCode) {
+void dump_state(const ExecutionState *execState, unsigned int intNum, unsigned int errorCode) {
   if(execState == NULL) {
     kprintf("Unable to show execution state.\n");
     return;
   }
 
   if(intNum < IRQ_BASE)
-    kprintf("Exception %d", intNum);
+    kprintf("Exception %u", intNum);
   else
-    kprintf("IRQ%d", intNum - IRQ_BASE);
+    kprintf("IRQ%u", intNum - IRQ_BASE);
 
-  kprintf(" @ EIP: 0x%x", execState->eip);
+  kprintf(" @ EIP: 0x%lx", execState->eip);
 
-  kprintf("\nEAX: 0x%x EBX: 0x%x ECX: 0x%x EDX: 0x%x", execState->eax,
+  kprintf("\nEAX: 0x%lx EBX: 0x%lx ECX: 0x%lx EDX: 0x%lx", execState->eax,
           execState->ebx, execState->ecx, execState->edx);
-  kprintf("\nESI: 0x%x EDI: 0x%x EBP: 0x%x", execState->esi, execState->edi,
+  kprintf("\nESI: 0x%lx EDI: 0x%lx EBP: 0x%lx", execState->esi, execState->edi,
           execState->ebp);
-  kprintf("\nCS: 0x%x", execState->cs);
+  kprintf("\nCS: 0x%hhx", execState->cs);
 
   if(intNum == PAGE_FAULT_INT)
-    kprintf(" CR2: 0x%x", getCR2());
+    kprintf(" CR2: 0x%lx", getCR2());
 
   kprintf(" error code: 0x%x\n", errorCode);
 
-  kprintf("EFLAGS: 0x%x ", execState->eflags);
+  kprintf("EFLAGS: 0x%lx ", execState->eflags);
 
   if(execState->cs == UCODE_SEL)
-    kprintf("ESP: 0x%x User SS: 0x%x\n", execState->userEsp, execState->userSS);
+    kprintf("ESP: 0x%lx User SS: 0x%hhx\n", execState->userEsp, execState->userSS);
 }
 
 void dump_stack(addr_t stackFramePtr, addr_t addrSpace) {
   kprintf("\n\nStack Trace:\n<Stack Frame>: [Return-EIP] args*\n");
 
   while(stackFramePtr) {
-    kprintf("<0x%x>:", stackFramePtr);
+    kprintf("<0x%lx>:", stackFramePtr);
 
     if(isReadable(stackFramePtr + sizeof(dword), addrSpace))
-      kprintf(" [0x%x]", *(dword*)(stackFramePtr + sizeof(dword)));
+      kprintf(" [0x%lx]", *(dword*)(stackFramePtr + sizeof(dword)));
     else
       kprintf(" [???]");
 
     for(int i = 2; i < 8; i++) {
       if(isReadable(stackFramePtr + sizeof(dword) * i, addrSpace))
-        kprintf(" 0x%x", *(dword*)(stackFramePtr + sizeof(dword) * i));
+        kprintf(" 0x%lx", *(dword*)(stackFramePtr + sizeof(dword) * i));
       else
         break;
     }
@@ -1151,7 +1155,7 @@ void dump_stack(addr_t stackFramePtr, addr_t addrSpace) {
     kprintf("\n");
 
     if(!isReadable(*(dword*)stackFramePtr, addrSpace)) {
-      kprintf("<0x%x (invalid)>:\n", *(dword*)stackFramePtr);
+      kprintf("<0x%lx (invalid)>:\n", *(dword*)stackFramePtr);
       break;
     }
     else
@@ -1166,8 +1170,8 @@ void dump_stack(addr_t stackFramePtr, addr_t addrSpace) {
  @param errorCode The error code provided by the processor (if applicable)
  */
 
-void dump_regs(const tcb_t *thread, const ExecutionState *execState, int intNum,
-               int errorCode) {
+void dump_regs(const tcb_t *thread, const ExecutionState *execState, unsigned int intNum,
+               unsigned int errorCode) {
   dword stackFramePtr;
 
   kprintf("Thread: %p (TID: %u) ", thread, getTid(thread));
@@ -1177,10 +1181,10 @@ void dump_regs(const tcb_t *thread, const ExecutionState *execState, int intNum,
   if(!execState)
     kprintf("\n");
 
-  kprintf("Thread CR3: %#x Current CR3: %#x\n",
-          *(unsigned*)&thread->rootPageMap, getCR3());
+  kprintf("Thread CR3: %#lx Current CR3: %#lx\n",
+          *(const uint32_t *)&thread->rootPageMap, getCR3());
 
-  if(!execState || intNum < 0) {
+  if(!execState) {
     __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
 
     if(!isReadable(*(dword*)stackFramePtr, thread->rootPageMap)) {
@@ -1207,7 +1211,11 @@ noreturn void abort(void) {
   __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
   dump_stack(stackFramePtr, getRootPageMap());
 
-  __asm__("hlt");
+  while(1)
+  {
+    disableInt();
+    halt();
+  }
 }
 
 noreturn void printPanicMsg(const char *msg, const char *file, const char *func,
@@ -1219,7 +1227,9 @@ noreturn void printPanicMsg(const char *msg, const char *file, const char *func,
   __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
   dump_stack(stackFramePtr, getRootPageMap());
 
-  disableInt();
-  __asm__("hlt");
-  disableInt();
+  while(1)
+  {
+    disableInt();
+    halt();
+  }
 }

@@ -46,18 +46,18 @@
 #define PAGING_ERR_SUPERVISOR			0u
 #define PAGING_ERR_USER		    		(1u << 2)
 
-#define PMAP_FLAG_BITS          				12
-#define PTE_FLAG_BITS                   12
-#define PDE_FLAG_BITS                   12
-#define LARGE_PDE_FLAG_BITS             13
+#define PMAP_FLAG_BITS          				12u
+#define PTE_FLAG_BITS                   12u
+#define PDE_FLAG_BITS                   12u
+#define LARGE_PDE_FLAG_BITS             13u
 
-#define PFRAME_BITS											12
-#define LARGE_PFRAME_BITS								22
+#define PFRAME_BITS											12u
+#define LARGE_PFRAME_BITS								22u
 
-#define PMAP_FLAG_MASK              	((1 << PMAP_FLAG_BITS)-1)
-#define PTE_FLAG_MASK               	((1 << PMAP_FLAG_BITS)-1)
-#define PDE_FLAG_MASK               	((1 << PMAP_FLAG_BITS)-1)
-#define LARGE_PDE_FLAG_MASK         	((1 << PMAP_FLAG_BITS)-1)
+#define PMAP_FLAG_MASK              	((1u << PMAP_FLAG_BITS)-1)
+#define PTE_FLAG_MASK               	((1u << PMAP_FLAG_BITS)-1)
+#define PDE_FLAG_MASK               	((1u << PMAP_FLAG_BITS)-1)
+#define LARGE_PDE_FLAG_MASK         	((1u << PMAP_FLAG_BITS)-1)
 
 #define PFRAME_TO_ADDR(frame)   			(addr_t)((frame) << PFRAME_BITS)
 #define ADDR_TO_PFRAME(addr)    			(unsigned int)(((uintptr_t)(addr)) >> PFRAME_BITS)
@@ -150,8 +150,8 @@ typedef struct PageDirEntry pde_t;
 struct LargePageDirEntry {
   union {
     struct {
-      uint32_t present :1;
-      uint32_t rwPriv :1;
+      uint32_t isPresent :1;
+      uint32_t isReadWrite :1;
       uint32_t usPriv :1;
       uint32_t pwt :1;
       uint32_t pcd :1;
@@ -299,7 +299,7 @@ CONST static inline paddr_t getPdeBase(pde_t pde) {
 }
 
 static inline void setLargePdeBase(large_pde_t *largePde, paddr_t paddr) {
-  largePde->baseLower = (uint32_t)((paddr >> LARGE_PFRAME_BITS) & 0x3FF);
+  largePde->baseLower = (uint32_t)((paddr >> LARGE_PFRAME_BITS) & 0x3FFu);
   largePde->baseUpper = 0; /*(uint32_t)((_paddr >> 32) & 0xFF)*/
 }
 

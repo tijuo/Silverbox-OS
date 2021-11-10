@@ -4,28 +4,28 @@
 #include <types.h>
 #include <kernel/bits.h>
 
-#define MODE_BIT_WIDTH  32
+#define MODE_BIT_WIDTH  32u
 
-#define RING0_DPL           0
-#define RING1_DPL           1
-#define RING2_DPL           2
-#define RING3_DPL           3
+#define RING0_DPL           0u
+#define RING1_DPL           1u
+#define RING2_DPL           2u
+#define RING3_DPL           3u
 
-#define KCODE_SEL           (0x08 | RING0_DPL)
-#define KDATA_SEL           (0x10 | RING0_DPL)
-#define UCODE_SEL           (0x18 | RING3_DPL)
-#define UDATA_SEL           (0x20 | RING3_DPL)
-#define TSS_SEL             0x28
-#define BKCODE_SEL          (0x30 | RING0_DPL)
-#define BKDATA_SEL          (0x38 | RING0_DPL)
+#define KCODE_SEL           (0x08u | RING0_DPL)
+#define KDATA_SEL           (0x10u | RING0_DPL)
+#define UCODE_SEL           (0x18u | RING3_DPL)
+#define UDATA_SEL           (0x20u | RING3_DPL)
+#define TSS_SEL             0x28u
+#define BKCODE_SEL          (0x30u | RING0_DPL)
+#define BKDATA_SEL          (0x38u | RING0_DPL)
 
 #define TRAP_GATE       (I_TRAP << 16)
 #define INT_GATE        (I_INT  << 16)
 #define TASK_GATE       (I_TASK << 16)
 
-#define I_TRAP          0x0F
-#define I_INT           0x0E
-#define I_TASK          0x05
+#define I_TRAP          0x0Fu
+#define I_INT           0x0Eu
+#define I_TASK          0x05u
 
 #define I_DPL0           ( RING0_DPL << 21 )
 #define I_DPL1           ( RING1_DPL << 21 )
@@ -37,44 +37,44 @@
 #define GDT_DPL2           ( RING2_DPL << 5 )
 #define GDT_DPL3           ( RING3_DPL << 5 )
 
-#define GDT_BYTE_GRAN     0x0
-#define GDT_PAGE_GRAN     0x8
-#define GDT_BIG           0x4
-#define GDT_CODE64        0x2
+#define GDT_BYTE_GRAN     0x0u
+#define GDT_PAGE_GRAN     0x8u
+#define GDT_BIG           0x4u
+#define GDT_CODE64        0x2u
 
-#define GDT_SYS           0x00
-#define GDT_NONSYS        0x10
+#define GDT_SYS           0x00u
+#define GDT_NONSYS        0x10u
 
-#define GDT_NONCONF       0x00
-#define GDT_CONF          0x04
+#define GDT_NONCONF       0x00u
+#define GDT_CONF          0x04u
 
-#define GDT_EXPUP         0x00
-#define GDT_EXPDOWN       0x04
+#define GDT_EXPUP         0x00u
+#define GDT_EXPDOWN       0x04u
 
-#define GDT_READ          0x02
-#define GDT_EXONLY        0x00
+#define GDT_READ          0x02u
+#define GDT_EXONLY        0x00u
 
-#define GDT_RDWR          0x02
-#define GDT_RDONLY        0x00
+#define GDT_RDWR          0x02u
+#define GDT_RDONLY        0x00u
 
-#define GDT_ACCESSED      0x01
+#define GDT_ACCESSED      0x01u
 
-#define GDT_CODE          0x08
-#define GDT_DATA          0x00
+#define GDT_CODE          0x08u
+#define GDT_DATA          0x00u
 
-#define GDT_PRESENT       0x80
+#define GDT_PRESENT       0x80u
 
-#define GDT_TSS           0x09
+#define GDT_TSS           0x09u
 
 #define FP_SEG(addr)    (((addr_t)(addr) & 0xF0000u) >> 4)
 #define FP_OFF(addr)    ((addr_t)(addr) & 0xFFFFu)
 #define FAR_PTR(seg, off) ((((seg) & 0xFFFFu) << 4) + ((off) & 0xFFFFu))
 
-#define IRQ_BASE	0x20
+#define IRQ_BASE	0x20u
 
 #define IRQ(num) (IRQ_BASE + (uint8_t)num)
 
-#define EFLAGS_DEFAULT	0x02
+#define EFLAGS_DEFAULT	0x02u
 #define EFLAGS_CF	(1u << 0)
 #define EFLAGS_RESD (1u << 1)
 #define EFLAGS_PF	(1u << 2)
@@ -272,6 +272,8 @@ struct IdtEntry {
   uint16_t offsetUpper;
 };
 
+typedef struct IdtEntry idt_entry_t;
+
 struct IdtPointer {
   uint16_t limit;
   uint32_t base;
@@ -376,8 +378,10 @@ static inline uint16_t getSs(void) {
 }
 
 static inline void setCs(uint16_t cs) {
-  __asm__("jmp %0:1f\n"
-      "1:\n" :: "r"(cs) : "memory");
+  __asm__("push %0\n"
+          "push $1f\n"
+          "retf\n"
+          "1:\n" :: "r"(cs) : "memory");
 }
 
 static inline void setDs(uint16_t ds) {
@@ -481,7 +485,7 @@ extern void irqHandler(void);
 extern void syscallHandler(void);
 extern void invalidIntHandler(void);
 
-#define EXT_PTR(var)    (void *)( &var )
+#define EXT_PTR(var)    (const void * const)( &var )
 
 extern const void *const kCode;
 extern const void *const kData;

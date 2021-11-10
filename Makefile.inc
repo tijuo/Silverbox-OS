@@ -27,14 +27,22 @@ export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
 		-Werror=nonnull -Winit-self -Wnull-dereference \
 		-Wmisleading-indentation -Wswitch-enum -Wswitch-default \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
-		-Wcast-qual -Wcast-align -Wconversion -Wdangling-else \
+		-Wcast-qual -Wcast-align -Wdangling-else \
 		-Wlogical-op -Wpacked
 
 export LDFLAGS	:=-static -nostdlib -nodefaultlibs -nostartfiles
 TOP		=$(shell if [ -f "Makefile.top" ]; then echo 1; else echo ""; fi)
+DEPDIR		:=.deps
+DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 
-.c.o:
-	$(CC) -c $(CFLAGS) $< -o $@
+#%.o: %.c
+%.o: %.c $(DEPDIR)/%.d | $(DEPDIR)
+	$(CC) -c $(DEPFLAGS) $(CFLAGS) $< -o $@
 
 .S.o:
-	$(CC) -c $(ASFLAGS) $< -o $@
+	$(CC) -c $(DEPFLAGS) $(ASFLAGS) $< -o $@
+
+$(DEPDIR): ; @mkdir -p $@
+
+DEPFILES	:= $(SRC:%.c=$(DEPDIR)/%.d)
+$(DEPFILES):
