@@ -15,6 +15,7 @@
 #define KERNEL_TCB_START	        ((addr_t)&kTcbStart)
 #define KERNEL_TCB_END		        ((addr_t)&kTcbEnd)
 #define KERNEL_VSTART       	    ((addr_t)&kVirtStart)
+#define KERNEL_VEND               ((addr_t)&kEnd)
 #define PHYSMEM_START       	    ((addr_t)&VPhysMemStart)
 #define KERNEL_START        	    ((addr_t)&kPhysStart)
 #define RESD_PHYSMEM	    	    	KERNEL_START

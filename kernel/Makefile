@@ -1,8 +1,8 @@
 include ../Makefile.inc
 
-SRC	:=init.c list.c message.c pic.c syscall.c debug.c \
+SRC	:=list.c message.c pic.c syscall.c debug.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
-#	asm/entry.S asm/inthand.S asm/io.S
+	init/init.c init/entry.S
 OBJ	:=$(SRC:%.c=%.o)
 BIN	:=kernel.elf
 

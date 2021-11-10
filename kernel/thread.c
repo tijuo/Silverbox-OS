@@ -151,8 +151,8 @@ tcb_t *createThread(void *entryAddr, addr_t addrSpace, void *stackTop)
   thread->userExecState.eip = ( dword ) entryAddr;
 
   thread->userExecState.userEsp = (dword)stackTop;
-  thread->userExecState.cs = UCODE;
-  thread->userExecState.userSS = UDATA;
+  thread->userExecState.cs = UCODE_SEL;
+  thread->userExecState.userSS = UDATA_SEL;
 
   thread->priority = NORMAL_PRIORITY;
 
@@ -267,7 +267,7 @@ void switchContext(tcb_t *thread, int doXSave)
 
   // Restore user state
 
-  ExecutionState *state = (ExecutionState *)tssEsp0 - 1;
+  ExecutionState *state = (ExecutionState *)tss.esp0 - 1;
   *state = thread->userExecState;
 
   asm volatile("mov %1, %%esp\n"
@@ -281,5 +281,5 @@ void switchContext(tcb_t *thread, int doXSave)
                "pop %%edx\n"
                "pop %%ecx\n"
                "pop %%eax\n"
-               "iret" :: "i"(UDATA), "r"(state) : "eax");
+               "iret" :: "i"(UDATA_SEL), "r"(state) : "eax");
 }

@@ -26,7 +26,8 @@ SECTIONS
      kVirtData = .;
      kData = .;
      *(.data*)
-     *(.tssIoBmp)
+     . = ALIGN(4096);
+     *(.tss)
   }
 
   .init : ALIGN(4096) {
@@ -46,9 +47,11 @@ SECTIONS
     *(.bss)
     *(.COMMON)
     . = ALIGN(4);
+    /*
     kernelStacksBottom = .;
     *(.stacks)
     kernelStacksTop = .;
+    */
     kVirtPageStack = .;
   }
   

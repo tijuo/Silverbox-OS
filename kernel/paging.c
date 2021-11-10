@@ -309,7 +309,7 @@ int kMapPage(addr_t virt, paddr_t phys, u32 flags) {
 
 		pmap_entry_t pmapEntry = { .pde = pde };
 
-		SET_LARGE_PDE_BASE(&pmapEntry.largePde, phys);
+		setLargePdeBase(&pmapEntry.largePde, phys);
 		pmapEntry.value |= (flags & LARGE_PDE_FLAG_MASK) | PAGING_PRES;
 
 		if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
@@ -412,7 +412,7 @@ int kMapPageTable(addr_t virt, paddr_t phys, u32 flags) {
 	}
 
 	if(IS_FLAG_SET(flags, PAGING_4MB_PAGE)) {
-		SET_LARGE_PDE_BASE(&pmapEntry.largePde, phys);
+		setLargePdeBase(&pmapEntry.largePde, phys);
 		pmapEntry.value |= (flags & LARGE_PDE_FLAG_MASK) | PAGING_PRES;
 	} else
 		pmapEntry.value = (uint32_t)phys | (flags & PDE_FLAG_MASK) | PAGING_PRES;
