@@ -1,7 +1,8 @@
-.PHONY: set-release-flags set-debug-flags
+.PHONY:	all clean
 
+export RELEASE		=
 export SHELL		:=/bin/bash
-export ROOT_DIR		:=$(CURDIR)
+export ROOT_DIR		=$(CURDIR)/$(ROOT_PATH)
 export BUILD_DIR	=$(ROOT_DIR)/build
 export BIN_DIR		=$(ROOT_DIR)/bin
 export TARGET		:=i686-elf
@@ -12,8 +13,8 @@ export ASFLAGS		=-I$(ROOT_DIR)/include \
 			-Wa,-I$(ROOT_DIR)/include,--32
 export DEPEND		:=makedepend
 export DD		:=dd
-export EN_DEBUG		:=
-export OPT_LEVEL	:=2
+export EN_DEBUG		:=$(if $(RELEASE),"","-DDEBUG -g")
+export OPT_LEVEL	:=$(if $(RELEASE),2,0)
 export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
 	     	-fno-leading-underscore -ffreestanding \
 		-fno-stack-protector -fno-stack-check \
@@ -30,14 +31,7 @@ export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
 		-Wlogical-op -Wpacked
 
 export LDFLAGS	:=-static -nostdlib -nodefaultlibs -nostartfiles
-
-set-release-flags:
-	eval EN_DEBUG=""
-	eval OPT_LEVEL=2
-
-set-debug-flags:
-	eval EN_DEBUG="-DDEBUG -g"
-	eval OPT_LEVEL=0
+TOP		=$(shell if [ -f "Makefile.top" ]; then echo 1; else echo ""; fi)
 
 .c.o:
 	$(CC) -c $(CFLAGS) $< -o $@

@@ -92,7 +92,7 @@ struct CR3_Struct {
 
     uint32_t value;
   };
-} PACKED;
+};
 
 typedef struct CR3_Struct cr3_t;
 
@@ -117,7 +117,7 @@ struct PageTableEntry {
 
     uint32_t value;
   };
-} PACKED;
+};
 
 typedef struct PageTableEntry pte_t;
 
@@ -140,7 +140,7 @@ struct PageDirEntry {
 
     uint32_t value;
   };
-} PACKED;
+};
 
 typedef struct PageDirEntry pde_t;
 
@@ -168,7 +168,7 @@ struct LargePageDirEntry {
 
     uint32_t value;
   };
-} PACKED;
+};
 
 typedef struct LargePageDirEntry large_pde_t;
 
@@ -185,7 +185,7 @@ typedef struct PageMapEntry pmap_entry_t;
 
 HOT pmap_entry_t readPmapEntry(uint32_t pbase, unsigned int entry);
 HOT int writePmapEntry(uint32_t pbase, unsigned int entry,
-    pmap_entry_t pmapEntry);
+                       pmap_entry_t pmapEntry);
 
 int kMapPage(addr_t virt, paddr_t phys, u32 flags);
 int mapPage(addr_t virt, paddr_t phys, u32 flags, uint32_t addrSpace);
@@ -247,7 +247,9 @@ static inline pde_t readPDE(unsigned int entryNum, paddr_t pageDir) {
  */
 
 static inline int writePDE(unsigned int entryNum, pde_t pde, paddr_t pageDir) {
-  pmap_entry_t pmapEntry = {.pde = pde};
+  pmap_entry_t pmapEntry = {
+    .pde = pde
+  };
   return writePmapEntry(pageDir, entryNum, pmapEntry);
 }
 
@@ -272,23 +274,28 @@ static inline pte_t readPTE(unsigned int entryNum, paddr_t pageTable) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-static inline int writePTE(unsigned int entryNum, pte_t pte, paddr_t pageTable) {
-  pmap_entry_t pmapEntry = {.pte = pte};
+static inline int writePTE(unsigned int entryNum, pte_t pte, paddr_t pageTable)
+{
+  pmap_entry_t pmapEntry = {
+    .pte = pte
+  };
   return writePmapEntry(pageTable, entryNum, pmapEntry);
 }
 
-static inline unsigned int getPdeFrameNumber(pde_t pde) CONST {
-  pmap_entry_t entry = {.pde = pde};
+CONST static inline uint32_t getPdeFrameNumber(pde_t pde) {
+  pmap_entry_t entry = {
+    .pde = pde
+  };
 
   return
-      entry.pde.isLargePage ?
-        entry.largePde.baseLower | (entry.largePde.baseUpper << 10) :
-        entry.pde.base;
+      (entry.pde.isLargePage ?
+          entry.largePde.baseLower | (entry.largePde.baseUpper << 10) :
+          entry.pde.base);
 }
 
-static inline paddr_t getPdeBase(pde_t pde) {
+CONST static inline paddr_t getPdeBase(pde_t pde) {
   return getPdeFrameNumber(pde)
-    << (pde.isLargePage ? LARGE_PFRAME_BITS : PFRAME_BITS);
+      << (pde.isLargePage ? LARGE_PFRAME_BITS : PFRAME_BITS);
 }
 
 static inline void setLargePdeBase(large_pde_t *largePde, paddr_t paddr) {

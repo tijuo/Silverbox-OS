@@ -3,11 +3,10 @@
 
 #include <types.h>
 
-struct List
-{
+struct List {
   tid_t headTid;
   tid_t tailTid;
-} PACKED;
+};
 
 typedef struct List list_t;
 

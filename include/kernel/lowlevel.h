@@ -6,26 +6,26 @@
 
 #define MODE_BIT_WIDTH  32
 
-#define RING0_DPL           0u
-#define RING1_DPL           1u
-#define RING2_DPL           2u
-#define RING3_DPL           3u
+#define RING0_DPL           0
+#define RING1_DPL           1
+#define RING2_DPL           2
+#define RING3_DPL           3
 
-#define KCODE_SEL           (0x08u | RING0_DPL)
-#define KDATA_SEL           (0x10u | RING0_DPL)
-#define UCODE_SEL           (0x18u | RING3_DPL)
-#define UDATA_SEL           (0x20u | RING3_DPL)
-#define TSS_SEL             0x28u
-#define BKCODE_SEL          (0x30u | RING0_DPL)
-#define BKDATA_SEL          (0x38u | RING0_DPL)
+#define KCODE_SEL           (0x08 | RING0_DPL)
+#define KDATA_SEL           (0x10 | RING0_DPL)
+#define UCODE_SEL           (0x18 | RING3_DPL)
+#define UDATA_SEL           (0x20 | RING3_DPL)
+#define TSS_SEL             0x28
+#define BKCODE_SEL          (0x30 | RING0_DPL)
+#define BKDATA_SEL          (0x38 | RING0_DPL)
 
 #define TRAP_GATE       (I_TRAP << 16)
 #define INT_GATE        (I_INT  << 16)
 #define TASK_GATE       (I_TASK << 16)
 
-#define I_TRAP          0x0Fu
-#define I_INT           0x0Eu
-#define I_TASK          0x05u
+#define I_TRAP          0x0F
+#define I_INT           0x0E
+#define I_TASK          0x05
 
 #define I_DPL0           ( RING0_DPL << 21 )
 #define I_DPL1           ( RING1_DPL << 21 )
@@ -37,34 +37,34 @@
 #define GDT_DPL2           ( RING2_DPL << 5 )
 #define GDT_DPL3           ( RING3_DPL << 5 )
 
-#define GDT_BYTE_GRAN     0x00u
-#define GDT_PAGE_GRAN     0x80u
-#define GDT_BIG           0x40u
-#define GDT_CODE64        0x20u
+#define GDT_BYTE_GRAN     0x0
+#define GDT_PAGE_GRAN     0x8
+#define GDT_BIG           0x4
+#define GDT_CODE64        0x2
 
-#define GDT_SYS           0x00u
-#define GDT_NONSYS        0x10u
+#define GDT_SYS           0x00
+#define GDT_NONSYS        0x10
 
-#define GDT_NONCONF       0x00u
-#define GDT_CONF          0x04u
+#define GDT_NONCONF       0x00
+#define GDT_CONF          0x04
 
-#define GDT_EXPUP         0x00u
-#define GDT_EXPDOWN       0x04u
+#define GDT_EXPUP         0x00
+#define GDT_EXPDOWN       0x04
 
-#define GDT_READ          0x02u
-#define GDT_EXONLY        0x00u
+#define GDT_READ          0x02
+#define GDT_EXONLY        0x00
 
-#define GDT_RDWR          0x02u
-#define GDT_RDONLY        0x00u
+#define GDT_RDWR          0x02
+#define GDT_RDONLY        0x00
 
-#define GDT_ACCESSED      0x01u
+#define GDT_ACCESSED      0x01
 
-#define GDT_CODE          0x08u
-#define GDT_DATA          0x00u
+#define GDT_CODE          0x08
+#define GDT_DATA          0x00
 
-#define GDT_PRESENT       0x80u
+#define GDT_PRESENT       0x80
 
-#define GDT_TSS           0x09u
+#define GDT_TSS           0x09
 
 #define FP_SEG(addr)    (((addr_t)(addr) & 0xF0000u) >> 4)
 #define FP_OFF(addr)    ((addr_t)(addr) & 0xFFFFu)
@@ -177,7 +177,7 @@ struct TSS_Struct {
   uint16_t _resd12 :15;
   uint16_t ioMap;
   uint8_t tssIoBitmap[8088];
-} PACKED;
+};
 
 // 48 bytes
 
@@ -249,7 +249,8 @@ union GdtEntry {
     uint8_t limit2 :4;
     uint8_t flags2 :4;
     uint8_t base3;
-  } PACKED;
+  };
+
   uint64_t value;
 };
 
@@ -269,7 +270,7 @@ struct IdtEntry {
   uint8_t dpl :2;
   uint8_t isPresent :1;
   uint16_t offsetUpper;
-} PACKED;
+};
 
 struct IdtPointer {
   uint16_t limit;
