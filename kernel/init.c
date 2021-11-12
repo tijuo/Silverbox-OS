@@ -116,27 +116,11 @@ struct MP_Processor {
 
 extern pte_t kMapAreaPTab[PTE_ENTRY_COUNT];
 
-DISC_DATA(uint8_t kBootStack[4 * PAGE_SIZE]) ALIGNED(PAGE_SIZE);
+ALIGNED(PAGE_SIZE) DISC_DATA(uint8_t kBootStack[4 * PAGE_SIZE]);
 DISC_DATA(void *kBootStackTop) = kBootStack + sizeof kBootStack;
 
-static inline void enterContext(paddr_t addrSpace, ExecutionState state) {
-  ExecutionState *s = &state;
-
-  __asm__ __volatile__(
-      "mov %0, %%esp\n"
-      "mov %1, %%cr3\n"
-      "pop %%edi\n"
-      "pop %%esi\n"
-      "pop %%ebp\n"
-      "pop %%ebx\n"
-      "pop %%edx\n"
-      "pop %%ecx\n"
-      "pop %%eax\n"
-      "iret\n" :: "r"(s), "r"(addrSpace) : "memory");
-}
-
-DISC_DATA(pmap_entry_t kPageDir[PMAP_ENTRY_COUNT]) ALIGNED(PAGE_SIZE); // The initial page directory used by the kernel on bootstrap
-DISC_DATA(pte_t kPageTab[PTE_ENTRY_COUNT]) ALIGNED(PAGE_SIZE);
+ALIGNED(PAGE_SIZE) DISC_DATA(pmap_entry_t kPageDir[PMAP_ENTRY_COUNT]); // The initial page directory used by the kernel on bootstrap
+ALIGNED(PAGE_SIZE) DISC_DATA(pte_t kPageTab[PTE_ENTRY_COUNT]);
 
 extern gdt_entry_t kernelGDT[8];
 extern idt_entry_t kernelIDT[NUM_EXCEPTIONS + NUM_IRQS];
@@ -182,7 +166,7 @@ static bool DISC_CODE(isReservedPage(paddr_t addr, multiboot_info_t * info,
 static void DISC_CODE(initPageAllocator(multiboot_info_t * info));
 DISC_DATA(static addr_t lastKernelFreePage);
 
-DISC_DATA(static void (*cpuExHandlers[32])(void)) = {
+DISC_DATA(static void (*cpuExHandlers[NUM_EXCEPTIONS])(void)) = {
   cpuEx0Handler, cpuEx1Handler, cpuEx2Handler, cpuEx3Handler, cpuEx4Handler, cpuEx5Handler,
   cpuEx6Handler, cpuEx7Handler, cpuEx8Handler, cpuEx9Handler, cpuEx10Handler, cpuEx11Handler,
   cpuEx12Handler, cpuEx13Handler, cpuEx14Handler, cpuEx15Handler, cpuEx16Handler, cpuEx17Handler,
@@ -190,13 +174,12 @@ DISC_DATA(static void (*cpuExHandlers[32])(void)) = {
   cpuEx24Handler, cpuEx25Handler, cpuEx26Handler, cpuEx27Handler, cpuEx28Handler, cpuEx29Handler,
   cpuEx30Handler, cpuEx31Handler};
 
-DISC_DATA(static void (*irqIntHandlers[32])(void)) = {
+DISC_DATA(static void (*irqIntHandlers[NUM_IRQS])(void)) = {
   irq0Handler, irq1Handler, irq2Handler, irq3Handler, irq4Handler, irq5Handler,
   irq6Handler, irq7Handler, irq8Handler, irq9Handler, irq10Handler, irq11Handler,
   irq12Handler, irq13Handler, irq14Handler, irq15Handler, irq16Handler, irq17Handler,
-  irq18Handler, irq19Handler, irq20Handler, irq21Handler, irq22Handler, irq23Handler,
-  irq24Handler, irq25Handler, irq26Handler, irq27Handler, irq28Handler, irq29Handler,
-  irq30Handler, irq31Handler};
+  irq18Handler, irq19Handler, irq20Handler, irq21Handler, irq22Handler, irq23Handler
+};
 
 /*
  void readPhysMem(addr_t address, addr_t buffer, size_t len)
@@ -936,7 +919,7 @@ int initMemory(multiboot_info_t *info) {
  */
 
 void initInterrupts(void) {
-  for(unsigned int i = 0; i < 32; i++)
+  for(unsigned int i = 0; i < NUM_EXCEPTIONS; i++)
     addIDTEntry(cpuExHandlers[i], i, 0);
 
   for(unsigned int i = 0; i < NUM_IRQS; i++)
@@ -1583,29 +1566,6 @@ void init(multiboot_info_t *info) {
   /*
    kprintf("Initializing timer.\n");
    initTimer();
-
-   kprintf("Initializing IRQ threads.\n");
-
-   for(int irq=0, tid=IRQ0_TID; irq <= 15; irq++, tid++)
-   {
-   tcb_t *newThread;
-   struct ExecutionState irqExecState;
-
-   uint32_t *stackTop = (uint32_t *)allocateKernelStack();
-   *--stackTop = 0x90900B0F; // instructions: ud2 nop nop
-   *--stackTop = irq;
-   --stackTop;
-   *stackTop = (uint32_t)(stackTop+2);
-
-   newThread = createKernelThread(tid,
-   (irq == 0 || irq == 7) ? ignoreIrqThreadMain : irqThreadMain,
-   stackTop, &irqExecState);
-
-   // todo: irqExecState must be saved somewhere
-
-   if(!newThread)
-   kprintf("Unable to create thread with tid: %d", tid);
-   }
    */
 
   bootstrapInitServer(info);
@@ -1675,35 +1635,20 @@ void init(multiboot_info_t *info) {
 
   // Set the single kernel stack that will be shared between threads
 
-  tss.esp0 = (uint32_t)kernelStackTop;
-
   // Initialize FPU to a known state
-  __asm__("fninit\n");
+  __asm__("fninit\n"
+          "fxsave %0\n" :: "m"(initServerThread->xsaveState));
 
   // Set MSRs to enable sysenter/sysexit functionality
 
-  __asm__ __volatile__(
-      "mov %0, %%ecx\n"
-      "xor %%edx, %%edx\n"
-      "mov %1, %%eax\n"
-      "wrmsr\n"
-
-      "mov %2, %%ecx\n"
-      "xor %%edx, %%edx\n"
-      "mov %3, %%eax\n"
-      "wrmsr\n"
-
-      "mov %4, %%ecx\n"
-      "xor %%edx, %%edx\n"
-      "mov %5, %%eax\n"
-      "wrmsr\n"
-      :: "i"(SYSENTER_CS_MSR), "r"(KCODE_SEL), "i"(SYSENTER_ESP_MSR), "r"(kernelStackTop),
-      "i"(SYSENTER_EIP_MSR), "r"(sysenter));
+  wrmsr(SYSENTER_CS_MSR, KCODE_SEL);
+  wrmsr(SYSENTER_ESP_MSR, (uint64_t)(uintptr_t)kernelStackTop);
+  wrmsr(SYSENTER_EIP_MSR, (uint64_t)(uintptr_t)sysenter);
 
   kprintf("Context switching...\n");
   while(1)
     ;
 
-  enterContext(initServerThread->rootPageMap, initServerThread->userExecState);
+  switchContext(initServerThread, 0);
   stopInit("Error: Context switch failed.");
 }

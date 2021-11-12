@@ -298,6 +298,7 @@ CONST static inline paddr_t getPdeBase(pde_t pde) {
       << (pde.isLargePage ? LARGE_PFRAME_BITS : PFRAME_BITS);
 }
 
+NON_NULL_PARAMS
 static inline void setLargePdeBase(large_pde_t *largePde, paddr_t paddr) {
   largePde->baseLower = (uint32_t)((paddr >> LARGE_PFRAME_BITS) & 0x3FFu);
   largePde->baseUpper = 0; /*(uint32_t)((_paddr >> 32) & 0xFF)*/

@@ -12,6 +12,7 @@ tcb_t *runningThreads[MAX_PROCESSORS];
 
 // Assumes processor id is valid
 
+RETURNS_NON_NULL
 tcb_t *schedule(unsigned int processorId)
 {
   tcb_t *currentThread = runningThreads[processorId];
@@ -52,11 +53,9 @@ tcb_t *schedule(unsigned int processorId)
   @param The saved execution state of the processor.
  */
 
-void switchStacks(ExecutionState *state)
+NON_NULL_PARAMS void switchStacks(ExecutionState *state)
 {
   tcb_t *oldTcb = getCurrentThread();
-
-  assert(state != NULL);
 
   if(!oldTcb || oldTcb->threadState != RUNNING)
   {

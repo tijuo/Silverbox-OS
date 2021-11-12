@@ -12,7 +12,7 @@
 *.cproject
 *.vs
 *.settings
-*.deps
+.deps/
 bx_enh_dbg.ini
 kernel/kernel
 bin/

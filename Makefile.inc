@@ -30,19 +30,21 @@ export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
 		-Wcast-qual -Wcast-align -Wdangling-else \
 		-Wlogical-op -Wpacked
 
-export LDFLAGS	:=-static -nostdlib -nodefaultlibs -nostartfiles
+export LDFLAGS	:=-static -nostdlib -z nodefaultlib
 TOP		=$(shell if [ -f "Makefile.top" ]; then echo 1; else echo ""; fi)
 DEPDIR		:=.deps
 DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 
-#%.o: %.c
 %.o: %.c $(DEPDIR)/%.d | $(DEPDIR)
 	$(CC) -c $(DEPFLAGS) $(CFLAGS) $< -o $@
 
-.S.o:
+%.o: %.S $(DEPDIR)/%.d | $(DEPDIR)
 	$(CC) -c $(DEPFLAGS) $(ASFLAGS) $< -o $@
 
-$(DEPDIR): ; @mkdir -p $@
+%.dmp: %.elf
+	objdump -Dx -M intel $< -o $@
 
-DEPFILES	:= $(SRC:%.c=$(DEPDIR)/%.d)
-$(DEPFILES):
+%.sym: %elf
+	
+
+DEPFILES	:= $(SRC:%.c=$(DEPDIR)/%.d) $(ASM_SRC:%.S=$(DEPDIR)/%.d)

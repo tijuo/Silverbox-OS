@@ -11,9 +11,7 @@ addr_t *freePageStack = (addr_t*)PAGE_STACK;
 addr_t *freePageStackTop;
 bool tempMapped = false;
 
-pte_t kMapAreaPTab[PTE_ENTRY_COUNT] ALIGNED(PAGE_SIZE);
-uint8_t kernelStack[PAGE_SIZE] ALIGNED(PAGE_SIZE); // The single kernel stack used by all threads (assumes a uniprocessor system)
-uint8_t *kernelStackTop = kernelStack + PAGE_SIZE;
+ALIGNED(PAGE_SIZE) pte_t kMapAreaPTab[PTE_ENTRY_COUNT];
 
 gdt_entry_t kernelGDT[8] = {
   // Null Descriptor (0x00)
@@ -123,7 +121,7 @@ struct IdtEntry kernelIDT[NUM_EXCEPTIONS + NUM_IRQS];
 
 alignas(PAGE_SIZE) struct TSS_Struct tss SECTION(".tss");
 
-void clearMemory(void *ptr, size_t len) {
+NON_NULL_PARAMS void clearMemory(void *ptr, size_t len) {
 #ifdef DEBUG
   if((size_t)ptr % 4 != 0 || len % 4 != 0) {
     kprintf(
@@ -136,6 +134,7 @@ void clearMemory(void *ptr, size_t len) {
   __asm__ __volatile__("rep stosl\n" :: "a"(0), "c"(len / 4), "D"(ptr) : "memory");
 }
 
+NON_NULL_PARAMS RETURNS_NON_NULL
 void* memset(void *ptr, int value, size_t num) {
   char *p = (char*)ptr;
 
@@ -150,6 +149,7 @@ void* memset(void *ptr, int value, size_t num) {
 
 // XXX: Assumes that the memory regions don't overlap
 
+NON_NULL_PARAMS RETURNS_NON_NULL
 void* memcpy(void *dest, const void *src, size_t num) {
   char *d = (char*)dest;
   const char *s = (const char*)src;

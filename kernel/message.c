@@ -17,13 +17,11 @@
   @return E_OK on success. E_FAIL on failure.
  */
 
-int attachSendWaitQueue(tcb_t *sender, tid_t recipientTid)
+NON_NULL_PARAMS int attachSendWaitQueue(tcb_t *sender, tid_t recipientTid)
 {
   assert(recipientTid != NULL_TID);
 
   tcb_t *recipient = getTcb(recipientTid);
-
-  assert(sender);
 
   listEnqueue(&recipient->senderWaitQueue, sender);
   sender->threadState = WAIT_FOR_RECV;
@@ -42,11 +40,9 @@ int attachSendWaitQueue(tcb_t *sender, tid_t recipientTid)
   @return E_OK on success. E_FAIL on failure.
  */
 
-int attachReceiveWaitQueue(tcb_t *recipient, tid_t senderTid)
+NON_NULL_PARAMS int attachReceiveWaitQueue(tcb_t *recipient, tid_t senderTid)
 {
   tcb_t *sender = getTcb(senderTid);
-
-  assert(recipient);
 
   // If sender is NULL, then the kernel sent the message. No need to attach to a wait queue
 
@@ -65,9 +61,8 @@ int attachReceiveWaitQueue(tcb_t *recipient, tid_t senderTid)
   @return E_OK on success. E_FAIL on failure.
  */
 
-int detachSendWaitQueue(tcb_t *sender)
+NON_NULL_PARAMS int detachSendWaitQueue(tcb_t *sender)
 {
-  assert(sender);
   tcb_t *recipient = getTcb(sender->waitTid);
 
   sender->waitTid = NULL_TID;
@@ -84,9 +79,8 @@ int detachSendWaitQueue(tcb_t *sender)
   @return E_OK on success. E_FAIL on failure.
  */
 
-int detachReceiveWaitQueue(tcb_t *recipient)
+NON_NULL_PARAMS int detachReceiveWaitQueue(tcb_t *recipient)
 {
-  assert(recipient);
   tcb_t *sender = getTcb(recipient->waitTid);
 
   recipient->waitTid = NULL_TID;
@@ -121,14 +115,13 @@ int detachReceiveWaitQueue(tcb_t *recipient)
 // XXX: receive should return with E_INTERRUPT. And any subsequent
 // XXX: receive()s from that TID should result in E_INTERRUPT.
 
+NON_NULL_PARAMS
 int _sendAndReceiveMessage(tcb_t *sender, tid_t recipientTid, tid_t replierTid, uint32_t subject,
                           uint32_t sendFlags, uint32_t recvFlags, bool sendOnly)
 {
   tid_t senderTid = getTid(sender);
   tcb_t *recipient;
   int isKernelMessage = IS_FLAG_SET(sendFlags, MSG_KERNEL);
-
-  assert(sender);
 
 //  kprintf("sendMessage(): %d->%d subject %#x flags: %#x\n", senderTid, msg->target.recipient, msg->subject, msg->flags);
 
@@ -206,13 +199,13 @@ int _sendAndReceiveMessage(tcb_t *sender, tid_t recipientTid, tid_t replierTid, 
           E_BLOCK if no messages are pending to be received (and non-blocking).
  */
 
+NON_NULL_PARAMS
 int receiveMessage( tcb_t *recipient, tid_t senderTid, uint32_t flags )
 {
   tcb_t *sender = getTcb(senderTid);
   tid_t recipientTid = getTid(recipient);
   int isKernelMessage = IS_FLAG_SET(flags, MSG_KERNEL);
 
-  assert( recipient != NULL );
   //kprintf("%d: receiveMessage()\n", recipientTid);
 
   // TODO: Do not allow cycles to form in wait queues.

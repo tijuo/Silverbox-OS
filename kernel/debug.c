@@ -2,7 +2,7 @@
 #include <kernel/memory.h>
 #include <kernel/mm.h>
 #include <kernel/thread.h>
-#include <kernel/io.h>
+#include <os/io.h>
 #include <stdarg.h>
 #include <kernel/lowlevel.h>
 #include <os/syscalls.h>
@@ -113,30 +113,33 @@ dword lower2;
 unsigned int cursorX = 0;
 unsigned int cursorY = 0;
 
-void resetPrintfState(struct PrintfState *state);
+NON_NULL_PARAMS void resetPrintfState(struct PrintfState *state);
 
 static void printChar(int c);
-static void _kprintf(void (*writeFunc)(int), const char *str, va_list args);
-void kprintf(const char *str, ...) __attribute__((format(printf, 1, 2)));
-void kprintfAt(unsigned int x, unsigned int y, const char *str, ...) __attribute__((format(printf, 3, 4)));
+NON_NULL_PARAMS static void _kprintf(void (*writeFunc)(int), const char *str,
+                                     va_list args);
+NON_NULL_PARAM(1) void kprintf(const char *str, ...) __attribute__((format(printf, 1, 2)));
+NON_NULL_PARAM(3) void kprintfAt(unsigned int x, unsigned int y, const char *str,
+                               ...) __attribute__((format(printf, 3, 4)));
 static int scroll(int up);
 static void setScroll(word addr);
 void resetScroll(void);
 void scrollUp(void);
 int scrollDown(void);
-void doNewLine(int *x, int *y);
+NON_NULL_PARAMS void doNewLine(int *x, int *y);
 int kitoa(int value, char *str, int base);
-int kuitoa(unsigned int value, char *str, int base);
-int klitoa(long int value, char *str, int base);
-int kulitoa(unsigned long int value, char *str, int base);
-int kllitoa(long long int value, char *str, int base);
-int kullitoa(unsigned long long int value, char *str, int base);
+NON_NULL_PARAMS int kuitoa(unsigned int value, char *str, int base);
+NON_NULL_PARAMS int klitoa(long int value, char *str, int base);
+NON_NULL_PARAMS int kulitoa(unsigned long int value, char *str, int base);
+NON_NULL_PARAMS int kllitoa(long long int value, char *str, int base);
+NON_NULL_PARAMS int kullitoa(unsigned long long int value, char *str, int base);
 
 void _putChar(char c, int x, int y, unsigned char attrib);
 void putChar(char c, int x, int y);
-void dump_regs(const tcb_t *thread, const ExecutionState *state, unsigned int intNum,
-               unsigned int errorCode);
-void dump_state(const ExecutionState *state, unsigned int intNum, unsigned int errorCode);
+NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const ExecutionState *state,
+                               unsigned int intNum, unsigned int errorCode);
+NON_NULL_PARAMS void dump_state(const ExecutionState *state,
+                                unsigned int intNum, unsigned int errorCode);
 void dump_stack(addr_t, addr_t);
 static const char *_digits = "0123456789abcdefghijklmnopqrstuvwxyz";
 
@@ -171,25 +174,25 @@ unsigned int getTimeDifference(void) {
 }
 
 void init_serial(void) {
-  outByte(COMBASE + 3, inByte(COMBASE + 3) | 0x80u); // Set DLAB for
+  outPort8(COMBASE + 3, inPort8(COMBASE + 3) | 0x80u); // Set DLAB for
   // DLLB access
-  outByte(COMBASE, 0x03u); /* 38400 baud */
-  outByte(COMBASE + 1, 0u); // Disable interrupts
-  outByte(COMBASE + 3, inByte(COMBASE + 3) & 0x7fu); // Clear DLAB
-  outByte(COMBASE + 3, 3u); // 8-N-1
+  outPort8(COMBASE, 0x03u); /* 38400 baud */
+  outPort8(COMBASE + 1, 0u); // Disable interrupts
+  outPort8(COMBASE + 3, inPort8(COMBASE + 3) & 0x7fu); // Clear DLAB
+  outPort8(COMBASE + 3, 3u); // 8-N-1
 }
 
 int getDebugChar(void) {
-  while(!(inByte(COMBASE + 5) & 0x01u))
+  while(!(inPort8(COMBASE + 5) & 0x01u))
     ;
-  return inByte(COMBASE);
+  return inPort8(COMBASE);
 }
 
 void putDebugChar(int ch) {
-  outByte(0xE9, (byte)ch); // Use E9 hack to output characters
-  while(!(inByte(COMBASE + 5) & 0x20u))
+  outPort8(0xE9, (byte)ch); // Use E9 hack to output characters
+  while(!(inPort8(COMBASE + 5) & 0x20u))
     ;
-  outByte(COMBASE, (byte)ch);
+  outPort8(COMBASE, (byte)ch);
   /*
    if( ch == '\r' )
    {
@@ -218,12 +221,12 @@ void putDebugChar(int ch) {
    */
 }
 
-int kitoa(int value, char *str, int base) {
+NON_NULL_PARAMS int kitoa(int value, char *str, int base) {
   size_t strEnd = 0;
   int negative = base == 10 && value < 0;
   int charsWritten = 0;
 
-  if(!str || base < 2 || base > 36)
+  if(base < 2 || base > 36)
     return -1;
 
   if(negative) {
@@ -260,11 +263,11 @@ int kitoa(int value, char *str, int base) {
   return charsWritten;
 }
 
-int kuitoa(unsigned int value, char *str, int base) {
+NON_NULL_PARAMS int kuitoa(unsigned int value, char *str, int base) {
   size_t strEnd = 0;
   int charsWritten = 0;
 
-  if(!str || base < 2 || base > 36)
+  if(base < 2 || base > 36)
     return -1;
 
   do {
@@ -289,12 +292,12 @@ int kuitoa(unsigned int value, char *str, int base) {
   return charsWritten;
 }
 
-int klitoa(long int value, char *str, int base) {
+NON_NULL_PARAMS int klitoa(long int value, char *str, int base) {
   size_t strEnd = 0;
   int negative = base == 10 && value < 0;
   int charsWritten = 0;
 
-  if(!str || base < 2 || base > 36)
+  if(base < 2 || base > 36)
     return -1;
 
   if(negative) {
@@ -341,11 +344,11 @@ int klitoa(long int value, char *str, int base) {
   return charsWritten;
 }
 
-int kulitoa(unsigned long int value, char *str, int base) {
+NON_NULL_PARAMS int kulitoa(unsigned long int value, char *str, int base) {
   size_t strEnd = 0;
   int charsWritten = 0;
 
-  if(!str || base < 2 || base > 36)
+  if(base < 2 || base > 36)
     return -1;
 
   do {
@@ -370,16 +373,18 @@ int kulitoa(unsigned long int value, char *str, int base) {
   return charsWritten;
 }
 
-int kllitoa(long long int value, char *str, int base) {
+NON_NULL_PARAMS int kllitoa(long long int value, char *str, int base) {
   size_t strEnd = 0;
   int negative = base == 10 && value < 0;
   int charsWritten = 0;
   unsigned int v[2] = {
-      (unsigned int)(value & 0xFFFFFFFFu), (unsigned int)(value >> 32) };
+    (unsigned int)(value & 0xFFFFFFFFu),
+    (unsigned int)(value >> 32)
+  };
 
   assert(base == 2 || base == 4 || base == 8 || base == 16 || base == 32);
 
-  if(!str || base < 2 || base > 36)
+  if(base < 2 || base > 36)
     return -1;
 
   if(negative) {
@@ -421,13 +426,16 @@ int kllitoa(long long int value, char *str, int base) {
   return charsWritten;
 }
 
-int kullitoa(unsigned long long int value, char *str, int base) {
+NON_NULL_PARAMS int kullitoa(unsigned long long int value, char *str, int base)
+{
   size_t strEnd = 0;
   int charsWritten = 0;
   unsigned int v[2] = {
-      (unsigned int)(value & 0xFFFFFFFFu), (unsigned int)(value >> 32) };
+    (unsigned int)(value & 0xFFFFFFFFu),
+    (unsigned int)(value >> 32)
+  };
 
-  if(!str || base < 2 || base > 36)
+  if(base < 2 || base > 36)
     return -1;
 
   for(int i = 0; i < 2; i++) {
@@ -459,7 +467,7 @@ int kullitoa(unsigned long long int value, char *str, int base) {
 
 void initVideo(void) {
   badAssertHlt = true; //false; // true;
-  outByte(MISC_OUTPUT_WR_REG, inByte(MISC_OUTPUT_RD_REG) | FROM_FLAG_BIT(0));
+  outPort8(MISC_OUTPUT_WR_REG, inPort8(MISC_OUTPUT_RD_REG) | FROM_FLAG_BIT(0));
 }
 
 /// Sets the flag to halt the system on a failed assertion
@@ -472,10 +480,10 @@ static void setScroll(word addr) {
   byte high = (addr >> 8) & 0xFFu;
   byte low = addr & 0xFFu;
 
-  outByte( CRT_CONTR_INDEX, START_ADDR_HIGH);
-  outByte( CRT_CONTR_DATA, high);
-  outByte( CRT_CONTR_INDEX, START_ADDR_LOW);
-  outByte( CRT_CONTR_DATA, low);
+  outPort8( CRT_CONTR_INDEX, START_ADDR_HIGH);
+  outPort8( CRT_CONTR_DATA, high);
+  outPort8( CRT_CONTR_INDEX, START_ADDR_LOW);
+  outPort8( CRT_CONTR_DATA, low);
 }
 
 void resetScroll(void) {
@@ -488,10 +496,10 @@ static int scroll(int up) {
   byte low;
   word address;
 
-  outByte( CRT_CONTR_INDEX, START_ADDR_HIGH);
-  high = inByte( CRT_CONTR_DATA);
-  outByte( CRT_CONTR_INDEX, START_ADDR_LOW);
-  low = inByte( CRT_CONTR_DATA);
+  outPort8( CRT_CONTR_INDEX, START_ADDR_HIGH);
+  high = inPort8( CRT_CONTR_DATA);
+  outPort8( CRT_CONTR_INDEX, START_ADDR_LOW);
+  low = inPort8( CRT_CONTR_DATA);
   address = (((word)high << 8) | low);
 
   if(up) {
@@ -522,8 +530,11 @@ int scrollDown(void) {
   return scroll(DOWN_DIR);
 }
 
-void kprintfAt(unsigned int x, unsigned int y, const char *str, ...) {
-  unsigned int _cursorX = cursorX, _cursorY = cursorY;
+NON_NULL_PARAM(3) void kprintfAt(unsigned int x, unsigned int y, const char *str,
+                               ...)
+{
+  unsigned int _cursorX = cursorX;
+  unsigned int _cursorY = cursorY;
   va_list args;
 
   cursorX = x;
@@ -537,8 +548,9 @@ void kprintfAt(unsigned int x, unsigned int y, const char *str, ...) {
   cursorY = _cursorY;
 }
 
-void printAssertMsg(const char *exp, const char *file, const char *func,
-                    int line) {
+NON_NULL_PARAMS void printAssertMsg(const char *exp, const char *file,
+                                    const char *func, int line)
+{
   tcb_t *currentThread = getCurrentThread();
 
   kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
@@ -606,7 +618,7 @@ void clearScreen(void) {
   resetScroll();
 }
 
-void doNewLine(int *x, int *y) {
+NON_NULL_PARAMS void doNewLine(int *x, int *y) {
   (*y)++;
   *x = 0;
 
@@ -643,7 +655,7 @@ void resetPrintfState(struct PrintfState *state) {
   state->precision = -1;
 }
 
-void kprintf(const char *str, ...) {
+NON_NULL_PARAM(1) void kprintf(const char *str, ...) {
   va_list args;
 
   va_start(args, str);
@@ -657,7 +669,9 @@ void kprintf(const char *str, ...) {
  @param ... The arguments to the specifiers
  */
 
-void _kprintf(void (*writeFunc)(int), const char *str, va_list args) {
+NON_NULL_PARAMS void _kprintf(void (*writeFunc)(int), const char *str,
+                              va_list args)
+{
   struct PrintfState state;
   char buf[KITOA_BUF_LEN];
   size_t i;
@@ -1104,12 +1118,9 @@ void _kprintf(void (*writeFunc)(int), const char *str, va_list args) {
   }
 }
 
-void dump_state(const ExecutionState *execState, unsigned int intNum, unsigned int errorCode) {
-  if(execState == NULL) {
-    kprintf("Unable to show execution state.\n");
-    return;
-  }
-
+NON_NULL_PARAMS void dump_state(const ExecutionState *execState,
+                                unsigned int intNum, unsigned int errorCode)
+{
   if(intNum < IRQ_BASE)
     kprintf("Exception %u", intNum);
   else
@@ -1131,7 +1142,8 @@ void dump_state(const ExecutionState *execState, unsigned int intNum, unsigned i
   kprintf("EFLAGS: 0x%lx ", execState->eflags);
 
   if(execState->cs == UCODE_SEL)
-    kprintf("ESP: 0x%lx User SS: 0x%hhx\n", execState->userEsp, execState->userSS);
+    kprintf("ESP: 0x%lx User SS: 0x%hhx\n", execState->userEsp,
+            execState->userSS);
 }
 
 void dump_stack(addr_t stackFramePtr, addr_t addrSpace) {
@@ -1170,34 +1182,18 @@ void dump_stack(addr_t stackFramePtr, addr_t addrSpace) {
  @param errorCode The error code provided by the processor (if applicable)
  */
 
-void dump_regs(const tcb_t *thread, const ExecutionState *execState, unsigned int intNum,
-               unsigned int errorCode) {
-  dword stackFramePtr;
-
+NON_NULL_PARAMS void dump_regs(const tcb_t *thread,
+                               const ExecutionState *execState,
+                               unsigned int intNum, unsigned int errorCode)
+{
   kprintf("Thread: %p (TID: %u) ", thread, getTid(thread));
 
   dump_state(execState, intNum, errorCode);
 
-  if(!execState)
-    kprintf("\n");
-
   kprintf("Thread CR3: %#lx Current CR3: %#lx\n",
-          *(const uint32_t *)&thread->rootPageMap, getCR3());
+          *(const uint32_t*)&thread->rootPageMap, getCR3());
 
-  if(!execState) {
-    __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
-
-    if(!isReadable(*(dword*)stackFramePtr, thread->rootPageMap)) {
-      kprintf("Unable to dump the stack\n");
-      return;
-    }
-
-    stackFramePtr = *(dword*)stackFramePtr;
-  }
-  else
-    stackFramePtr = (dword)execState->ebp;
-
-  dump_stack((addr_t)stackFramePtr, (addr_t)thread->rootPageMap);
+  dump_stack((addr_t)execState->ebp, (addr_t)thread->rootPageMap);
 }
 
 #endif /* DEBUG */
@@ -1211,24 +1207,23 @@ noreturn void abort(void) {
   __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
   dump_stack(stackFramePtr, getRootPageMap());
 
-  while(1)
-  {
+  while(1) {
     disableInt();
     halt();
   }
 }
 
-noreturn void printPanicMsg(const char *msg, const char *file, const char *func,
-                            int line) {
+NON_NULL_PARAMS noreturn void printPanicMsg(const char *msg, const char *file, const char *func,
+    int line)
+{
   addr_t stackFramePtr;
   kprintf("\nKernel panic - %s(): %d (%s). %s\nSystem halted\n", func, line,
-          file, msg);
+      file, msg);
 
   __asm__("mov %%ebp, %0\n" : "=m"(stackFramePtr));
   dump_stack(stackFramePtr, getRootPageMap());
 
-  while(1)
-  {
+  while(1) {
     disableInt();
     halt();
   }

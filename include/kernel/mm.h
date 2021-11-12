@@ -69,11 +69,15 @@
 
 int initializeRootPmap(dword pmap);
 
-int peek( paddr_t, void *, size_t );
-int poke( paddr_t, void *, size_t );
+NON_NULL_PARAMS int peek( paddr_t, void *, size_t );
 
-HOT int peekVirt( addr_t address, size_t len, void *buffer, paddr_t addrSpace );
-HOT int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t addrSpace );
+NON_NULL_PARAMS int poke( paddr_t, void *, size_t );
+
+NON_NULL_PARAMS HOT
+int peekVirt( addr_t address, size_t len, void *buffer, paddr_t addrSpace );
+
+NON_NULL_PARAMS HOT
+int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t addrSpace );
 
 int clearPhysPage( paddr_t phys );
 

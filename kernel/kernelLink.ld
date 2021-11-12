@@ -30,7 +30,7 @@ SECTIONS
      *(.tss)
   }
 
-  .init : ALIGN(4096) {
+  .boot : ALIGN(4096) {
     kPhysDisc = . + kVirtToPhys;
     kVirtDisc = .;
     kdCode = .;
@@ -57,8 +57,9 @@ SECTIONS
   
   .tcb : ALIGN(0x400000) {
     kTcbStart = .;
-  	*(.tcb)
-  	kTcbEnd = .;
+    tcbTable = .;
+    *(.tcb)
+    kTcbEnd = .;
   }
   
   kEnd = .;

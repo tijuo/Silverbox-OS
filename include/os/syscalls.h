@@ -219,8 +219,7 @@ extern "C" {
 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNU__MINOR__ >= 9)
 
 #define SYSCALL1(syscallName, type1, arg1) \
-int sys_##syscallName(type1 arg1); \
-int sys_##syscallName(type1 arg1) { \
+static inline int sys_##syscallName(type1 arg1) { \
 	int retVal; \
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
@@ -243,9 +242,9 @@ int sys_##syscallName(type1 arg1) { \
 // Dummy variable has to be used because input-only arguments can't be modified
 
 #define SYSCALL2(syscallName, type1, arg1, type2, arg2) \
-int sys_##syscallName(type1 arg1, type2 arg2); \
-int sys_##syscallName(type1 arg1, type2 arg2) { \
-	int retVal, dummy; \
+static inline int sys_##syscallName(type1 arg1, type2 arg2) { \
+	int retVal; \
+	int dummy; \
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \
@@ -265,9 +264,9 @@ int sys_##syscallName(type1 arg1, type2 arg2) { \
 }
 
 #define SYSCALL3(syscallName, type1, arg1, type2, arg2, type3, arg3) \
-int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3); \
-int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3) { \
-	int retVal, dummy; \
+static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3) { \
+	int retVal; \
+	int dummy; \
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \
@@ -287,9 +286,9 @@ int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3) { \
 }
 
 #define SYSCALL4(syscallName, type1, arg1, type2, arg2, type3, arg3, type4, arg4) \
-int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4); \
-int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4) { \
-	int retVal, dummy; \
+static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4) { \
+	int retVal; \
+  int dummy; \
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \
@@ -309,9 +308,9 @@ int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4) { \
 }
 
 #define SYSCALL4_PACKED_B1(syscallName, type1, arg1, type2, arg2, type3, arg3, type4, arg4, bArg) \
-int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4, uint8_t bArg); \
-int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4, uint8_t bArg) { \
-	int retVal, dummy; \
+static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4, uint8_t bArg) { \
+	int retVal; \
+	int dummy; \
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \

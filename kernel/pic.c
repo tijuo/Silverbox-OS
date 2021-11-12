@@ -1,4 +1,5 @@
-#include <kernel/io.h>
+#include <os/io.h>
+#include <stdbool.h>
 #include <kernel/pic.h>
 #include <kernel/bits.h>
 #include <kernel/error.h>
@@ -11,8 +12,8 @@
 void sendAutoEOI(void)
 {
   // Send OCW2 (non-specific EOI)
-  outByte(PIC1_PORT, PIC_NON_SPEC_EOI);
-  outByte(PIC2_PORT, PIC_NON_SPEC_EOI);
+  outPort8(PIC1_PORT, PIC_NON_SPEC_EOI);
+  outPort8(PIC2_PORT, PIC_NON_SPEC_EOI);
 }
 
 /** Send a specific EOI to the PIC(s)
@@ -26,11 +27,11 @@ void sendEOI(unsigned int irq)
 
   if(irq >= PIC2_IRQ_START)
   {
-    outByte(PIC1_PORT, PIC_EOI | SLAVE_IRQ);
-    outByte(PIC2_PORT, PIC_EOI | (irq-PIC2_IRQ_START));
+    outPort8(PIC1_PORT, PIC_EOI | SLAVE_IRQ);
+    outPort8(PIC2_PORT, PIC_EOI | (irq-PIC2_IRQ_START));
   }
   else
-    outByte(PIC1_PORT, PIC_EOI | irq);
+    outPort8(PIC1_PORT, PIC_EOI | irq);
 }
 
 /**
@@ -46,9 +47,9 @@ void enableIRQ(unsigned int irq)
   // Send OCW1 (set IRQ mask)
 
   if(irq < PIC2_IRQ_START)
-    outByte(PIC1_PORT | 0x01, inByte(PIC1_PORT | 0x01) & (byte)~FROM_FLAG_BIT(irq));
+    outPort8(PIC1_PORT | 0x01, inPort8(PIC1_PORT | 0x01) & (uint8_t)~FROM_FLAG_BIT(irq));
   else
-    outByte(PIC2_PORT | 0x01, inByte(PIC2_PORT | 0x01) & (byte)~FROM_FLAG_BIT(irq-PIC2_IRQ_START));
+    outPort8(PIC2_PORT | 0x01, inPort8(PIC2_PORT | 0x01) & (uint8_t)~FROM_FLAG_BIT(irq-PIC2_IRQ_START));
 }
 
 /**
@@ -64,9 +65,9 @@ void disableIRQ(unsigned int irq)
   // Send OCW1 (set IRQ mask)
 
   if(irq < PIC2_IRQ_START)
-    outByte( PIC1_PORT | 0x01, inByte(PIC1_PORT | 0x01) | (byte)FROM_FLAG_BIT(irq));
+    outPort8( PIC1_PORT | 0x01, inPort8(PIC1_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq));
   else
-    outByte(PIC2_PORT | 0x01, inByte(PIC2_PORT | 0x01) | (byte)FROM_FLAG_BIT(irq-PIC2_IRQ_START));
+    outPort8(PIC2_PORT | 0x01, inPort8(PIC2_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq-PIC2_IRQ_START));
 }
 
 /**
@@ -80,28 +81,31 @@ int getInServiceIRQ(void)
   uint8_t pic1Byte;
   unsigned int pic1Bit;
 
-  outByte(PIC1_PORT, PIC_READ_ISR);
-  pic1Byte = inByte(PIC1_PORT);
+  outPort8(PIC1_PORT, PIC_READ_ISR);
+  pic1Byte = inPort8(PIC1_PORT);
 
   if(pic1Byte == 0)
     return E_FAIL;
   else
   {
-    asm("bsf %1, %0" : "=r"(pic1Bit) : "r"((unsigned int)pic1Byte));
+    pic1Bit = _bit_scan_forward(pic1Byte);
+
+    //__asm__("bsf %1, %0" : "=r"(pic1Bit) : "r"((unsigned int)pic1Byte));
 
     if(pic1Bit == SLAVE_IRQ)
     {
       uint8_t pic2Byte;
       unsigned int pic2Bit;
 
-      outByte(PIC2_PORT, PIC_READ_ISR);
-      pic2Byte = inByte(PIC2_PORT);
+      outPort8(PIC2_PORT, PIC_READ_ISR);
+      pic2Byte = inPort8(PIC2_PORT);
 
       if(pic2Byte == 0)
         return E_FAIL;
       else
       {
-        asm("bsf %1, %0" : "=r"(pic2Bit) : "r"((unsigned int)pic2Byte));
+        pic2Bit = _bit_scan_forward(pic2Byte);
+        //asm("bsf %1, %0" : "=r"(pic2Bit) : "r"((unsigned int)pic2Byte));
         return PIC2_IRQ_START + pic2Bit;
       }
     }
@@ -112,13 +116,13 @@ int getInServiceIRQ(void)
 
 bool isIRQInService(unsigned int irq)
 {
-  outByte(PIC1_PORT, PIC_READ_ISR);
-  uint8_t pic1Byte = inByte(PIC1_PORT);
+  outPort8(PIC1_PORT, PIC_READ_ISR);
+  uint8_t pic1Byte = inPort8(PIC1_PORT);
 
   if(irq >= PIC2_IRQ_START)
   {
-    outByte(PIC2_PORT, PIC_READ_ISR);
-    uint8_t pic2Byte = inByte(PIC2_PORT);
+    outPort8(PIC2_PORT, PIC_READ_ISR);
+    uint8_t pic2Byte = inPort8(PIC2_PORT);
 
     return IS_FLAG_SET(pic1Byte, (1 << SLAVE_IRQ)) && IS_FLAG_SET(pic2Byte, (1 << (irq - PIC2_IRQ_START)));
   }

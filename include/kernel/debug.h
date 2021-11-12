@@ -29,12 +29,12 @@ DECL_CALL_COUNTER(incSchedCount)
 void incSchedCount( void );
 void incTimerCount( void );
 void clearScreen( void );
-void kprintf( const char *str, ... );
-void printAssertMsg(const char *exp, const char *file, const char *func, int line);
+NON_NULL_PARAM(1) void kprintf( const char *str, ... );
+NON_NULL_PARAMS void printAssertMsg(const char *exp, const char *file, const char *func, int line);
 void setBadAssertHlt( bool value );
 void setVideoLowMem( bool value );
-void dump_regs( const tcb_t *thread, const ExecutionState *state, unsigned int intNum, unsigned int errorCode );
-void dump_state( const ExecutionState *state, unsigned int intNum, unsigned int errorCode );
+NON_NULL_PARAMS void dump_regs( const tcb_t *thread, const ExecutionState *state, unsigned int intNum, unsigned int errorCode );
+NON_NULL_PARAMS void dump_state( const ExecutionState *state, unsigned int intNum, unsigned int errorCode );
 
 /*
 char *_toHexString(unsigned int num);
@@ -44,7 +44,7 @@ char *__toIntString(int, int);
 void putChar( char, int, int );
 void _putChar( char, int, int, unsigned char );
 */
-void printString(const char *, ...);
+NON_NULL_PARAMS void printString(const char *, ...);
 void initVideo( void );
 
 /* Note: RDTSCP should be used instead due to possible out of order execution.
@@ -78,7 +78,7 @@ unsigned int getTimeDifference(void);
 #define incSchedCount()     ({})
 #define incTimerCount()     ({})
 #define clearScreen()       ({})
-#define kprintf( x, ... )   ({})
+#define kprintf( ... )   ({})
 #define printAssertMsg( w, x, y, z )    ({})
 #define setBadAssertHlt( val )      ({})
 #define setVideoLowMem( val )       ({})
@@ -101,7 +101,7 @@ unsigned int getTimeDifference(void);
 #define BOCHS_BREAKPOINT
 #endif /* DEBUG */
 
-noreturn void printPanicMsg(const char *msg, const char *file, const char *func, int line);
+NON_NULL_PARAMS noreturn void printPanicMsg(const char *msg, const char *file, const char *func, int line);
 
 #define panic(msg)     printPanicMsg( msg, __FILE__, __func__, __LINE__ )
 

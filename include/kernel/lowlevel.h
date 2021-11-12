@@ -134,6 +134,37 @@
 
 //#define IOMAP_LAZY_OFFSET	0xFFFF
 
+union InterruptStackFrame {
+  struct {
+    uint32_t eip;
+    uint16_t cs;
+    uint16_t _resd;
+    uint32_t eflags;
+    uint16_t ss;
+    uint16_t _resd2;
+    uint32_t esp;
+  };
+
+  struct {
+    uint32_t eip;
+    uint16_t cs;
+    uint16_t _resd;
+    uint32_t eflags;
+  } samePriv;
+
+  struct {
+    uint32_t eip;
+    uint16_t cs;
+    uint16_t _resd;
+    uint32_t eflags;
+    uint16_t ss;
+    uint16_t _resd2;
+    uint32_t esp;
+  } changePriv;
+};
+
+typedef union InterruptStackFrame interrupt_frame_t;
+
 /** Represents an entire TSS */
 
 struct TSS_Struct {
@@ -179,9 +210,13 @@ struct TSS_Struct {
   uint8_t tssIoBitmap[8088];
 };
 
-// 48 bytes
+// 56 bytes
 
 typedef struct {
+  uint16_t gs;
+  uint16_t fs;
+  uint16_t es;
+  uint16_t ds;
   uint32_t edi;
   uint32_t esi;
   uint32_t ebp;
@@ -379,9 +414,9 @@ static inline uint16_t getSs(void) {
 
 static inline void setCs(uint16_t cs) {
   __asm__("push %0\n"
-          "push $1f\n"
-          "retf\n"
-          "1:\n" :: "r"(cs) : "memory");
+      "push $1f\n"
+      "retf\n"
+      "1:\n" :: "r"(cs) : "memory");
 }
 
 static inline void setDs(uint16_t ds) {
@@ -412,78 +447,23 @@ static inline bool intIsEnabled(void) {
   return IS_FLAG_SET(getEflags(), EFLAGS_IF);
 }
 
+static inline void wrmsr(uint32_t msr, uint64_t data) {
+  uint32_t eax = (uint32_t)data;
+  uint32_t edx = (uint32_t)(data >> 32);
+
+  __asm__ __volatile__("wrmsr" :: "c"(msr), "a"(eax), "d"(edx));
+}
+
+static inline uint64_t rdmsr(uint32_t msr) {
+  uint32_t eax;
+  uint32_t edx;
+
+  __asm__ __volatile__("rdmsr" : "=a"(eax), "=d"(edx) : "c"(msr));
+
+  return ((uint64_t)edx << 32) | (uint64_t)eax;
+}
+
 extern void loadGDT(void);
-
-extern void cpuEx0Handler(void);
-extern void cpuEx1Handler(void);
-extern void cpuEx2Handler(void);
-extern void cpuEx3Handler(void);
-extern void cpuEx4Handler(void);
-extern void cpuEx5Handler(void);
-extern void cpuEx6Handler(void);
-extern void cpuEx7Handler(void);
-extern void cpuEx8Handler(void);
-extern void cpuEx9Handler(void);
-extern void cpuEx10Handler(void);
-extern void cpuEx11Handler(void);
-extern void cpuEx12Handler(void);
-extern void cpuEx13Handler(void);
-extern void cpuEx14Handler(void);
-extern void cpuEx15Handler(void);
-extern void cpuEx16Handler(void);
-extern void cpuEx17Handler(void);
-extern void cpuEx18Handler(void);
-extern void cpuEx19Handler(void);
-extern void cpuEx20Handler(void);
-extern void cpuEx21Handler(void);
-extern void cpuEx22Handler(void);
-extern void cpuEx23Handler(void);
-extern void cpuEx24Handler(void);
-extern void cpuEx25Handler(void);
-extern void cpuEx26Handler(void);
-extern void cpuEx27Handler(void);
-extern void cpuEx28Handler(void);
-extern void cpuEx29Handler(void);
-extern void cpuEx30Handler(void);
-extern void cpuEx31Handler(void);
-
-extern void irq0Handler(void);
-extern void irq1Handler(void);
-extern void irq2Handler(void);
-extern void irq3Handler(void);
-extern void irq4Handler(void);
-extern void irq5Handler(void);
-extern void irq6Handler(void);
-extern void irq7Handler(void);
-extern void irq8Handler(void);
-extern void irq9Handler(void);
-extern void irq10Handler(void);
-extern void irq11Handler(void);
-extern void irq12Handler(void);
-extern void irq13Handler(void);
-extern void irq14Handler(void);
-extern void irq15Handler(void);
-extern void irq16Handler(void);
-extern void irq17Handler(void);
-extern void irq18Handler(void);
-extern void irq19Handler(void);
-extern void irq20Handler(void);
-extern void irq21Handler(void);
-extern void irq22Handler(void);
-extern void irq23Handler(void);
-extern void irq24Handler(void);
-extern void irq25Handler(void);
-extern void irq26Handler(void);
-extern void irq27Handler(void);
-extern void irq28Handler(void);
-extern void irq29Handler(void);
-extern void irq30Handler(void);
-extern void irq31Handler(void);
-
-extern void irqHandler(void);
-
-extern void syscallHandler(void);
-extern void invalidIntHandler(void);
 
 #define EXT_PTR(var)    (const void * const)( &var )
 
@@ -534,5 +514,98 @@ extern const unsigned int VPhysMemStart;
 
 extern struct TSS_Struct tss;
 
+#define SAVE_STATE \
+__asm__ ( \
+          "push %eax\n" \
+          "push %ecx\n" \
+          "push %edx\n" \
+          "push %ebx\n" \
+          "push %ebp\n" \
+          "push %esi\n" \
+          "push %edi\n" \
+          "mov %ds, %ax\n" \
+          "shl $16, %eax\n" \
+          "mov %es, %ax\n" \
+          "push %eax\n" \
+          "mov %fs, %ax\n" \
+          "shl $16, %eax\n" \
+          "mov %gs, %ax\n" \
+          "push %eax\n" \
+          "lea tss, %eax\n" \
+          "lea 4(%eax), %eax\n" \
+          "pushl (%eax)\n" \
+          "cmpl $0, (%eax)\n" /* Is tss.esp0 NULL? (because exception occurred during init()) */ \
+          "je 1f\n" \
+          "mov %esp, (%eax)\n" \
+          "mov %ss, %cx\n" \
+          "cmpw 54(%esp), %cx\n" /* Privilege Change? */ \
+          "je 2f\n" \
+          "lea kernelStackTop, %ecx\n" \
+          "mov %ecx, (%eax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \
+          "jmp 1f\n" \
+          "2:\n" /* No privilege change (kernel->kernel switch) */\
+          "mov %esp, (%eax)\n" \
+          "1:\n" \
+)
+
+#define SAVE_ERR_STATE \
+__asm__ ( \
+          "push %ecx\n" \
+          "mov 4(%esp), %ecx\n" /* Save error code to ecx */ \
+          "mov %eax, 4(%esp)\n" /* Put eax where the error code used to be. */ \
+          "push %edx\n" \
+          "push %ebx\n" \
+          "push %ebp\n" \
+          "push %esi\n" \
+          "push %edi\n" \
+          "mov %ds, %ax\n" \
+          "shl $16, %eax\n" \
+          "mov %es, %ax\n" \
+          "push %eax\n" \
+          "mov %fs, %ax\n" \
+          "shl $16, %eax\n" \
+          "mov %gs, %ax\n" \
+          "push %eax\n" \
+          "lea tss, %eax\n" \
+          "lea 4(%eax), %eax\n" \
+          "pushl (%eax)\n" \
+          "cmpl $0, (%eax)\n" /* Is tssEsp0 NULL? (because exception occurred during init()) */ \
+          "je 1f\n" /* If so, don't bother saving/loading tssEsp0 */ \
+          "mov %esp, (%eax)\n" \
+          "mov %ss, %cx\n" \
+          "cmpw 54(%esp), %cx\n" /* Privilege Change? */ \
+          "je 2f\n" \
+          "lea kernelStackTop, %edx\n" \
+          "mov %edx, (%eax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \
+          "jmp 1f\n" \
+          "2:\n" /* No privilege change (kernel->kernel switch) */\
+          "mov %esp, (%eax)\n" \
+          "1:\n" \
+          "push %ecx\n" \
+)
+
+#define RESTORE_STATE \
+__asm__( \
+         "lea tss, %eax\n" \
+         "mov 4(%eax), %esp\n" \
+         "pop %ecx\n" \
+         "mov %ecx, 4(%eax)\n" \
+         "pop %eax\n" \
+         "mov %ax, %gs\n" \
+         "shr $16, %eax\n" \
+         "mov %ax, %fs\n" \
+         "pop %eax\n" \
+         "mov %ax, %es\n" \
+         "shr $16, %eax\n" \
+         "mov %ax, %ds\n" \
+         "pop %edi\n" \
+         "pop %esi\n" \
+         "pop %ebp\n" \
+         "pop %ebx\n" \
+         "pop %edx\n" \
+         "pop %ecx\n" \
+         "pop %eax\n" \
+         "iret\n" \
+)
 
 #endif /* KERNEL_LOWLEVEL_H */

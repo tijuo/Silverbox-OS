@@ -8,7 +8,10 @@
 #include <string.h>
 #include <kernel/bits.h>
 
+NON_NULL_PARAMS
 static int accessPhys(paddr_t phys, void *buffer, size_t len, bool readPhys);
+
+NON_NULL_PARAMS
 static int accessMem(addr_t address, size_t len, void *buffer, paddr_t pdir,
 bool read);
 
@@ -126,6 +129,7 @@ int writePmapEntry(paddr_t pbase, unsigned int entry, pmap_entry_t buffer) {
  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
  */
 
+NON_NULL_PARAMS
 int poke(paddr_t phys, void *buffer, size_t bytes) {
 	return accessPhys(phys, buffer, bytes, false);
 }
@@ -139,6 +143,7 @@ int poke(paddr_t phys, void *buffer, size_t bytes) {
  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
  */
 
+NON_NULL_PARAMS
 int peek(paddr_t phys, void *buffer, size_t bytes) {
 	return accessPhys(phys, buffer, bytes, true);
 }
@@ -156,9 +161,9 @@ int peek(paddr_t phys, void *buffer, size_t bytes) {
  E_BOUNDS if memory access is out of range.
  */
 
+NON_NULL_PARAMS
 static int accessPhys(paddr_t phys, void *buffer, size_t len, bool readPhys) {
 	assert(phys < MAX_PHYS_MEMORY);
-	assert(buffer != NULL);
 
 	addr_t mappedPhys = KPHYS_TO_VIRT((uintptr_t )phys);
 
@@ -192,11 +197,11 @@ static int accessPhys(paddr_t phys, void *buffer, size_t len, bool readPhys) {
  @return E_OK on success. E_FAIL on failure.
  */
 
+NON_NULL_PARAMS
 static int accessMem(addr_t address, size_t len, void *buffer, paddr_t pdir,
 bool read) {
 	size_t buffer_offset = 0;
 
-	assert(buffer != NULL);
 	assert(address);
 
 	while(len) {
@@ -252,6 +257,7 @@ bool read) {
  @return E_OK on success. E_FAIL on failure.
  */
 
+NON_NULL_PARAMS
 int pokeVirt(addr_t address, size_t len, void *buffer, paddr_t pdir) {
 	if(pdir == getRootPageMap() || pdir == CURRENT_ROOT_PMAP) {
 		memcpy((void*)address, buffer, len);
@@ -274,6 +280,7 @@ int pokeVirt(addr_t address, size_t len, void *buffer, paddr_t pdir) {
  @return E_OK on success. E_FAIL on failure.
  */
 
+NON_NULL_PARAMS
 int peekVirt(addr_t address, size_t len, void *buffer, paddr_t pdir) {
 	if(pdir == getRootPageMap() || pdir == CURRENT_ROOT_PMAP) {
 		memcpy(buffer, (void*)address, len);

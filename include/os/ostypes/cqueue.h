@@ -18,8 +18,10 @@ enum CQueueState { CQUEUE_PARTIAL, CQUEUE_EMPTY, CQUEUE_FULL };
 struct CQueue
 {
   void *queue;
-  size_t elem_size, n_elems;
-  unsigned head, tail;
+  size_t elem_size;
+  size_t n_elems;
+  unsigned int head;
+  unsigned int tail;
   enum CQueueState state;
 };
 

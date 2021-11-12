@@ -12,29 +12,22 @@
  *         should be added at the head.
  */
 
-void listInsertAtEnd(list_t *list, tcb_t *thread, int atTail)
-{
-  assert(list);
-  assert(thread);
-
+NON_NULL_PARAMS void listInsertAtEnd(list_t *list, tcb_t *thread, int atTail) {
   tid_t threadTid = getTid(thread);
 
-  if(list->headTid == NULL_TID)
-  {
+  if(isListEmpty(list)) {
     list->headTid = threadTid;
     list->tailTid = threadTid;
     thread->nextTid = NULL_TID;
     thread->prevTid = NULL_TID;
   }
-  else if(atTail)
-  {
+  else if(atTail) {
     thread->nextTid = NULL_TID;
     getTcb(list->tailTid)->nextTid = threadTid;
     thread->prevTid = list->tailTid;
     list->tailTid = threadTid;
   }
-  else
-  {
+  else {
     thread->prevTid = NULL_TID;
     getTcb(list->headTid)->prevTid = threadTid;
     thread->nextTid = list->headTid;
@@ -51,23 +44,19 @@ void listInsertAtEnd(list_t *list, tcb_t *thread, int atTail)
  *  @return The removed thread's TCB on success. NULL, if the list is empty.
  */
 
-tcb_t *listRemoveFromEnd(list_t *list, int atTail)
-{
-  assert(list);
+NON_NULL_PARAMS tcb_t* listRemoveFromEnd(list_t *list, int atTail) {
   tcb_t *removedTcb = getTcb(atTail ? list->tailTid : list->headTid);
 
-  #ifdef DEBUG
+#ifdef DEBUG
   if(!list->headTid || !list->tailTid)
     assert(list->headTid == NULL_TID && list->tailTid == NULL_TID);
 
   if(list->headTid || list->tailTid)
     assert(list->headTid != NULL_TID && list->tailTid != NULL_TID);
-  #endif /* DEBUG */
+#endif /* DEBUG */
 
-  if(removedTcb)
-  {
-    if(atTail)
-    {
+  if(removedTcb) {
+    if(atTail) {
       list->tailTid = removedTcb->prevTid;
 
       if(list->tailTid == NULL_TID)
@@ -75,8 +64,7 @@ tcb_t *listRemoveFromEnd(list_t *list, int atTail)
       else
         getTcb(list->tailTid)->nextTid = NULL_TID;
     }
-    else
-    {
+    else {
       list->headTid = removedTcb->nextTid;
 
       if(list->headTid == NULL_TID)
@@ -102,8 +90,7 @@ tcb_t *listRemoveFromEnd(list_t *list, int atTail)
  *  @param thread The TCB of the thread to be removed. (Must not be null)
  */
 
-void listRemove(list_t *list, tcb_t *thread)
-{
+void listRemove(list_t *list, tcb_t *thread) {
   assert(list);
   assert(thread);
 

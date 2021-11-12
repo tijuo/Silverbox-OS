@@ -3,10 +3,11 @@
 
 #include <kernel/list_struct.h>
 #include <kernel/thread.h>
+#include <util.h>
 
-void listInsertAtEnd(list_t *list, tcb_t *thread, int atTail);
-tcb_t *listRemoveFromEnd(list_t *list, int atTail);
-void listRemove(list_t *list, tcb_t *thread);
+NON_NULL_PARAMS void listInsertAtEnd(list_t *list, tcb_t *thread, int atTail);
+NON_NULL_PARAMS tcb_t *listRemoveFromEnd(list_t *list, int atTail);
+NON_NULL_PARAMS void listRemove(list_t *list, tcb_t *thread);
 
 //int listEnqueue(list_t *list, tcb_t *thread);
 //tcb_t *listDequeue(list_t *list);
@@ -24,5 +25,8 @@ void listRemove(list_t *list, tcb_t *thread);
 // Pops a thread from the head of the list
 #define listPop(list)               listRemoveFromEnd(list, 0)
 
-#define isListEmpty(list)       ((list)->headTid == NULL_TID)
+NON_NULL_PARAMS static inline bool isListEmpty(list_t *list) {
+  return list->headTid == NULL_TID;
+}
+
 #endif /* KERNEL_LIST_H */

@@ -8,7 +8,8 @@ extern "C" {
 #endif /* __cplusplus */
 extern const void * const __end;
 extern size_t heapSize;
-extern void *heapStart, *heapEnd;
+extern void *heapStart;
+extern void *heapEnd;
 void *sbrk( int increment );
 
 #ifdef __cplusplus

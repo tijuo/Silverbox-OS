@@ -13,6 +13,9 @@
 
 #define TID_START           1u
 
+ALIGNED(PAGE_SIZE) uint8_t kernelStack[PAGE_SIZE]; // The single kernel stack used by all threads (assumes a uniprocessor system)
+uint8_t *kernelStackTop = kernelStack + PAGE_SIZE;
+
 extern tcb_t tcbTable[MAX_THREADS];
 tcb_t *initServerThread;
 
@@ -20,12 +23,27 @@ list_t pausedList;
 list_t zombieList;
 
 static tid_t getNewTid(void);
-int removeThreadFromList(tcb_t *thread);
 
-int removeThreadFromList(tcb_t *thread)
-{
-  switch(thread->threadState)
-  {
+NON_NULL_PARAMS int wakeupThread(tcb_t *thread) {
+  switch(thread->threadState) {
+    case RUNNING:
+    case READY:
+      RET_MSG(E_DONE, "Thread is already awake.");
+    case ZOMBIE:
+    case INACTIVE:
+      RET_MSG(E_FAIL, "Unable to wake up inactive thread.");
+    default:
+      removeThreadFromList(thread);
+      thread->threadState = READY;
+      listEnqueue(&runQueues[thread->priority], thread);
+      break;
+  }
+
+  return E_OK;
+}
+
+NON_NULL_PARAMS int removeThreadFromList(tcb_t *thread) {
+  switch(thread->threadState) {
     case WAIT_FOR_RECV:
       detachSendWaitQueue(thread);
       thread->waitTid = NULL_TID;
@@ -44,10 +62,10 @@ int removeThreadFromList(tcb_t *thread)
       listRemove(&zombieList, thread);
       break;
     case RUNNING:
-      for(unsigned int processorId=0; processorId < MAX_PROCESSORS; processorId++)
+      for(unsigned int processorId = 0; processorId < MAX_PROCESSORS;
+          processorId++)
       {
-        if(runningThreads[processorId] == thread)
-        {
+        if(runningThreads[processorId] == thread) {
           runningThreads[processorId] = NULL;
           break;
         }
@@ -62,13 +80,11 @@ int removeThreadFromList(tcb_t *thread)
 
 /** Starts a non-running thread by placing it on a run queue.
 
-    @param thread The thread to be started.
-    @return E_OK on success. E_FAIL on failure. E_DONE if the thread is already started.
-*/
-int startThread( tcb_t *thread )
-{
-  switch(thread->threadState)
-  {
+ @param thread The thread to be started.
+ @return E_OK on success. E_FAIL on failure. E_DONE if the thread is already started.
+ */
+NON_NULL_PARAMS int startThread(tcb_t *thread) {
+  switch(thread->threadState) {
     case WAIT_FOR_RECV:
     case WAIT_FOR_SEND:
     case PAUSED:
@@ -93,10 +109,8 @@ int startThread( tcb_t *thread )
  * @return E_OK on success. E_FAIL on failure. E_DONE if thread is already paused.
  */
 
-int pauseThread( tcb_t *thread )
-{
-  switch( thread->threadState )
-  {
+NON_NULL_PARAMS int pauseThread(tcb_t *thread) {
+  switch(thread->threadState) {
     case WAIT_FOR_RECV:
     case WAIT_FOR_SEND:
     case READY:
@@ -116,22 +130,20 @@ int pauseThread( tcb_t *thread )
 }
 
 /**
-    Creates and initializes a new thread.
+ Creates and initializes a new thread.
 
-    @param entryAddr The start address of the thread.
-    @param addrSpace The physical address of the thread's page directory.
-    @param stackTop The address of the top of the thread's stack.
-    @return The TCB of the newly created thread. NULL on failure.
-*/
+ @param entryAddr The start address of the thread.
+ @param addrSpace The physical address of the thread's page directory.
+ @param stackTop The address of the top of the thread's stack.
+ @return The TCB of the newly created thread. NULL on failure.
+ */
 
-tcb_t *createThread(void *entryAddr, addr_t addrSpace, void *stackTop)
-{
-  tcb_t * thread = NULL;
-  uint32_t rootPmap = addrSpace == CURRENT_ROOT_PMAP ? getRootPageMap() : addrSpace;
+NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, addr_t addrSpace, void *stackTop) {
+  tcb_t *thread = NULL;
+  uint32_t rootPmap =
+      addrSpace == CURRENT_ROOT_PMAP ? getRootPageMap() : addrSpace;
 
-  if(!entryAddr)
-    RET_MSG(NULL, "NULL entry addr");
-  else if(IS_ERROR(initializeRootPmap(rootPmap)))
+  if(IS_ERROR(initializeRootPmap(rootPmap)))
     RET_MSG(NULL, "Unable to initialize page map.");
 
   tid_t tid = getNewTid();
@@ -141,14 +153,14 @@ tcb_t *createThread(void *entryAddr, addr_t addrSpace, void *stackTop)
 
   thread = getTcb(tid);
 
-  if( thread->threadState != INACTIVE )
+  if(thread->threadState != INACTIVE)
     RET_MSG(NULL, "Thread is already active.");
 
   clearMemory(thread, sizeof(tcb_t));
   thread->rootPageMap = (dword)rootPmap;
 
   thread->userExecState.eflags = EFLAGS_IOPL3 | EFLAGS_IF | EFLAGS_RESD;
-  thread->userExecState.eip = ( dword ) entryAddr;
+  thread->userExecState.eip = (dword)entryAddr;
 
   thread->userExecState.userEsp = (dword)stackTop;
   thread->userExecState.cs = UCODE_SEL;
@@ -156,34 +168,49 @@ tcb_t *createThread(void *entryAddr, addr_t addrSpace, void *stackTop)
 
   thread->priority = NORMAL_PRIORITY;
 
-  kprintf("Created new thread at %#p (tid: %u, pmap: %#p)\n", thread, tid, (void *)(uintptr_t)thread->rootPageMap);
+  thread->childrenHead = NULL_TID;
+
+  kprintf("Created new thread at %#p (tid: %u, pmap: %#p)\n", thread, tid,
+          (void*)(uintptr_t)thread->rootPageMap);
 
   thread->threadState = PAUSED;
   listEnqueue(&pausedList, thread);
 
+  tcb_t *currentThread = getCurrentThread();
+
+  if(currentThread) {
+    thread->parent = getTid(currentThread);
+    thread->nextSibling = currentThread->childrenHead;
+    currentThread->childrenHead = tid;
+  }
+  else {
+    thread->parent = NULL_TID;
+    thread->nextSibling = NULL_TID;
+  }
   return thread;
 }
 
 /**
-    Destroys a thread and detaches it from all queues.
+ Destroys a thread and detaches it from all queues.
 
-    @param thread The TCB of the thread to release.
-    @return E_OK on success. E_FAIL on failure.
-*/
+ @param thread The TCB of the thread to release.
+ @return E_OK on success. E_FAIL on failure.
+ */
 
-int releaseThread( tcb_t *thread )
-{
-  list_t *queues[2] = { &thread->senderWaitQueue, &thread->receiverWaitQueue };
+NON_NULL_PARAMS int releaseThread(tcb_t *thread) {
+  list_t *queues[2] = {
+    &thread->senderWaitQueue,
+    &thread->receiverWaitQueue
+  };
   list_t *queue;
   size_t i;
 
   /* If the thread is a sender waiting for a recipient, remove the
-     sender from the recipient's wait queue. If the thread is a
-     receiver, clear its wait queue after
-     waking all of the waiting threads. */
+   sender from the recipient's wait queue. If the thread is a
+   receiver, clear its wait queue after waking all of the waiting
+   threads. */
 
-  switch( thread->threadState )
-  {
+  switch(thread->threadState) {
     case INACTIVE:
       RET_MSG(E_DONE, "Thread is already inactive.");
     default:
@@ -191,16 +218,13 @@ int releaseThread( tcb_t *thread )
   }
 
   /* Notify any threads waiting for a send/receive that the operation
-     failed. */
+   failed. */
 
-  for(i=0, queue=queues[0]; i < ARRAY_SIZE(queues); i++, queue++)
-  {
-    while(queue->headTid != NULL_TID)
-    {
+  for(i = 0, queue = queues[0]; i < ARRAY_SIZE(queues); i++, queue++) {
+    while(queue->headTid != NULL_TID) {
       tcb_t *t = listDequeue(queue);
 
-      if(t)
-      {
+      if(t) {
         t->waitTid = NULL_TID;
         t->userExecState.eax = E_UNREACH;
         kprintf("Releasing thread. Starting %u\n", getTid(t));
@@ -211,10 +235,22 @@ int releaseThread( tcb_t *thread )
 
   // Unregister the thread as an exception handler
 
-  for(i=0; i < NUM_IRQS; i++)
-  {
+  for(i = 0; i < NUM_IRQS; i++) {
     if(irqHandlers[i] == thread)
       irqHandlers[i] = NULL_TID;
+  }
+
+  // Release any zombie child threads
+
+  for(tid_t tid = thread->childrenHead; tid != NULL_TID;) {
+    tcb_t *tcb = getTcb(tid);
+
+    if(tcb->threadState == ZOMBIE)
+      releaseThread(tcb);
+    else
+      tcb->parent = NULL_TID;
+
+    tid = tcb->nextSibling;
   }
 
   thread->threadState = INACTIVE;
@@ -227,13 +263,11 @@ int releaseThread( tcb_t *thread )
  * @return A TID that is available for use. NULL_TID if no TIDs are available to be allocated.
  */
 
-tid_t getNewTid(void)
-{
+tid_t getNewTid(void) {
   static int lastTid = TID_START;
   int prevTid = lastTid++;
 
-  do
-  {
+  do {
     if(lastTid == MAX_THREADS)
       lastTid = TID_START;
   } while(lastTid != prevTid && getTcb(lastTid)->threadState != INACTIVE);
@@ -244,10 +278,7 @@ tid_t getNewTid(void)
   return (tid_t)lastTid;
 }
 
-void switchContext(tcb_t *thread, int doXSave)
-{
-  assert(thread);
-
+NON_NULL_PARAMS void switchContext(tcb_t *thread, int doXSave) {
   assert(thread->threadState == RUNNING);
 
   if((thread->rootPageMap & CR3_BASE_MASK) != (getCR3() & CR3_BASE_MASK))
@@ -255,8 +286,7 @@ void switchContext(tcb_t *thread, int doXSave)
 
   tcb_t *currentThread = getCurrentThread();
 
-  if(currentThread)
-  {
+  if(currentThread) {
     if(doXSave)
       __asm__("fxsave  %0\n" :: "m"(currentThread->xsaveState));
   }
@@ -265,21 +295,15 @@ void switchContext(tcb_t *thread, int doXSave)
 
 //  activateContinuation(thread); // doesn't return if successful
 
-  // Restore user state
+// Restore user state
 
-  ExecutionState *state = (ExecutionState *)tss.esp0 - 1;
+  tss.esp0 = (uint32_t)((ExecutionState *)kernelStackTop - 1) - sizeof(uint32_t);
+  uint32_t *s = (uint32_t *)tss.esp0;
+  ExecutionState *state = (ExecutionState *)(s + 1);
+
+  *s = (uint32_t)kernelStackTop;
   *state = thread->userExecState;
 
-  asm volatile("mov %1, %%esp\n"
-               "mov %0, %%eax\n"
-               "mov %%eax, %%ds\n"
-               "mov %%eax, %%es\n"
-               "pop %%edi\n"
-               "pop %%esi\n"
-               "pop %%ebp\n"
-               "pop %%ebx\n"
-               "pop %%edx\n"
-               "pop %%ecx\n"
-               "pop %%eax\n"
-               "iret" :: "i"(UDATA_SEL), "r"(state) : "eax");
+  setCR3(initServerThread->rootPageMap);
+  RESTORE_STATE;
 }

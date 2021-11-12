@@ -21,6 +21,11 @@
 #define CR4_PGE 0x80
 #define CR4_PSE 0x10
 
+#define MULTIBOOT_MAGIC 0x2BADB002
+#define MULTIBOOT_MAGIC2 0x1BADB002
+
+#define VIDEO_RAM_START	0xB8000
+
 .section .header, "a", @progbits
 .align 4
 
@@ -143,9 +148,6 @@ idle:
 
 .section .ddata, "a", @progbits
 .align 4
-
-#define MULTIBOOT_MAGIC 0x2BADB002
-#define MULTIBOOT_MAGIC2 0x1BADB002
 
 bstrapErrMsg: .asciz "Error: Only Multiboot-compliant loaders are supported."
 sizeErrMsg: .asciz "Error: Kernel size is too long!"

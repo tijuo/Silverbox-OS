@@ -2,7 +2,7 @@
 #define OS_IO_H
 
 #include <stdint.h>
-#include <ia32intrin.h>
+#include <x86gprintrin.h>
 
 #define IO_WAIT_CYCLES		20000ull
 
@@ -15,11 +15,14 @@ static inline void outPort16(uint16_t port, uint16_t data);
 static inline void outPort32(uint16_t port, uint32_t data);
 
 static inline void ioWait(void) {
-	unsigned long long time1 = _rdtscp();
+  // CPUID is a serializing innstruction
+  __asm__ __volatile__("cpuid" :: "a"(0) : "eax","ebx","ecx","edx");
+  unsigned long long time1 = _rdtsc();
 
 	while(1) {
-		_pause();
-		unsigned long long time2 = _rdtscp();
+		__pause();
+	  __asm__ __volatile__("cpuid" :: "a"(0) : "eax","ebx","ecx","edx");
+		unsigned long long time2 = _rdtsc();
 
 		if(time2 < time1) {
 			time1 = time2;
