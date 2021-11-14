@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <os/dev_interface.h>
 
 int setvbuf(FILE *stream, char *buf, int mode, size_t size) {
   if(stream == NULL) {

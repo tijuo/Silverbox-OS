@@ -1,18 +1,21 @@
-include ../../../prefix.inc
+include ../../../Makefile.inc
 
-SRC	=clearerr.c do_printf.c feof.c ferror.c fflush.c fgetc.c fprintf.c \
-        fputc.c fputs.c fseek.c ftell.c getchar.c perror.c \
-        printf.c putchar.c puts.c rewind.c setvbuf.c sprintf.c \
-        stdio_init.c vfprintf.c vprintf.c vsprintf.c fopen.c fread.c \
-	fclose.c
+ROOT_DIR	:=../../..
 
-OBJ     =$(SRC:.c=.o)
-OPT_FLG =-O2
+.PHONY:	all tests clean
+
+SRC	=clearerr.c do_printf.c fclose.c feof.c ferror.c fflush.c \
+	fgetc.c fopen.c fprintf.c fputc.c fputs.c fread.c fseek.c \
+	ftell.c getchar.c os_stub.c perror.c printf.c putchar.c \
+	puts.c rewind.c setbuf.c setvbuf.c sprintf.c stdio_init.c \
+	vfprintf.c vprintf.c vsprintf.c
+OBJ	=$(SRC:.c=.o)
 
 all: $(OBJ)
 
-include ../../../Makefile.inc
-include ../../../vars.mk
+tests:
 
 clean:
 	rm -f *.o
+
+include ../../../Makefile_post.inc

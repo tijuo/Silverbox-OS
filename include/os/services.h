@@ -54,15 +54,14 @@ struct GenericReq
 {
   int request;
   int arg[8];
-} PACKED;
+};
 
 struct ExecReq
 {
   size_t nameLen;
   size_t argsLen;
   char data[];
-} PACKED;
-
+};
 
 addr_t mapMem(addr_t addr, int device, size_t length, uint64_t offset, int flags);
 int unmapMem(addr_t addr, size_t length);

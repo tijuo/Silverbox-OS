@@ -3,7 +3,6 @@
 
 #include <types.h>
 #include <stddef.h>
-#include <os/variables.h>
 
 #define CLOCKS_PER_SEC		TICKS_PER_SEC
 

@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 #include <stdarg.h>
+#include <stdint.h>
+#include <oslib.h>
 
 #define EOF			((int)-1)
 #define BUFSIZ			1024
@@ -124,6 +126,7 @@ int setvbuf(FILE *stream, char *buf, int mode, size_t size);
 int vprintf(const char *format, va_list ap);
 int vsprintf(char *str, const char *format, va_list ap);
 int vfprintf(FILE *stream, const char *format, va_list ap);
+void setbuf(FILE *stream, char *buf);
 
 #ifdef __cplusplus
 }

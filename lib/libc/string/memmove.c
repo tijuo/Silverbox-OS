@@ -3,8 +3,8 @@
 
 void* memmove(void *dest, const void *src, size_t num) {
   unsigned char *destin = (unsigned char*)dest;
-  const unsigned char *source = (unsigned char*)src;
-  unsigned char *buffer = malloc(num); // Use malloc instead?
+  const unsigned char *source = (const unsigned char*)src;
+  unsigned char *buffer = malloc(num);
 
   if(!buffer)
     return NULL;

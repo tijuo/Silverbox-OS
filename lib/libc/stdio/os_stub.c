@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <os/dev_interface.h>
 
 int _flushToFile(FILE *stream);
@@ -69,7 +70,7 @@ int _flushToFile(FILE *stream)
           if(stream->buf_head < stream->buf_tail)
           {
             bytes = stream->buffer_len - stream->buf_tail;
-            memcpy(&stream->write_req_buffer->payload[stream->write_req_pos], stream->buffer[stream->buf_tail], bytes);
+            memcpy(&stream->write_req_buffer->payload[stream->write_req_pos], &stream->buffer[stream->buf_tail], bytes);
             stream->buf_tail = 0;
             stream->write_req_pos += bytes;
           }
@@ -78,7 +79,7 @@ int _flushToFile(FILE *stream)
 
           if(bytes)
           {
-            memcpy(&stream->write_req_buffer->payload[stream->write_req_pos], stream->buffer[stream->buf_tail], bytes);
+            memcpy(&stream->write_req_buffer->payload[stream->write_req_pos], &stream->buffer[stream->buf_tail], bytes);
             stream->buf_tail += bytes;
             stream->write_req_pos += bytes;
           }

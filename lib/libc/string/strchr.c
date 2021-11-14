@@ -1,5 +1,7 @@
 #include <string.h>
 
+#pragma GCC diagnostic ignored "-Wcast-qual"
+
 char *strchr(const char *s, int c)
 {
   if(s != NULL)

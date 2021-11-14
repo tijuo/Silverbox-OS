@@ -1,5 +1,6 @@
+include ../../Makefile.inc
+
 ROOT_DIR	:=../..
-include $(ROOT_DIR)/Makefile.inc
 
 ARFLAGS =rs
 
@@ -37,4 +38,4 @@ clean:
 	for i in $(DIRS); do make -C $$i clean; done
 	rm -rf *.o
 
-include $(ROOT_DIR)/Makefile_post.inc
+include ../../Makefile_post.inc

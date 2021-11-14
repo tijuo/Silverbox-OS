@@ -10,6 +10,8 @@
 
 #include <string.h>
 
+#pragma GCC diagnostic ignored "-Wcast-qual"
+
 char* strpbrk(const char *s1, const char *s2) {
   const char *p1 = s1;
   const char *p2;

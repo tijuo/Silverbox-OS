@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <limits.h>
 
 #define ITOSTR_BUF_LEN      65
 
@@ -569,4 +570,5 @@ int do_printf(void **s, int (*writeFunc)(int, void **), const char *formatStr, v
       }
     }
   }
+  return 0;
 }

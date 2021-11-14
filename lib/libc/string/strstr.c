@@ -1,4 +1,5 @@
 #include <string.h>
+#pragma GCC diagnostic ignored "-Wcast-qual"
 
 char* strstr(const char *haystack, const char *needle) {
   const char *needleStart = (const char*)needle;

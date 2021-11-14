@@ -1,5 +1,6 @@
+include ../../../Makefile.inc
+
 ROOT_DIR	:=../../..
-include $(ROOT_DIR)/Makefile.inc
 
 .PHONY:	all tests clean
 
@@ -12,3 +13,5 @@ tests:
 
 clean:
 	rm -f *.o
+
+include ../../../Makefile_post.inc

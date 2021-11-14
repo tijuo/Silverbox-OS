@@ -5,6 +5,8 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#include <util.h>
+
 CONST int isalnum(int c);
 CONST int isalpha(int c);
 CONST int isblank(int c);

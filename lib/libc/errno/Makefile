@@ -1,13 +1,17 @@
-include ../../../prefix.inc
+include ../../../Makefile.inc
 
-SRC     =errno.c
-OBJ     =$(SRC:.c=.o)
-OPT_FLG =-O2
+ROOT_DIR	:=../../..
+
+.PHONY:	all tests clean
+
+SRC	=errno.c
+OBJ	=$(SRC:.c=.o)
 
 all: $(OBJ)
 
-include ../../../Makefile.inc
-include ../../../vars.mk
+tests:
 
 clean:
 	rm -f *.o
+
+include ../../../Makefile_post.inc

@@ -1,16 +1,17 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
+#include <stdint.h>
 
 static char *_digits = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 #define INT_MIN_STR     "-2147483648"
 
-#if __LONG_LEN__ == 8
+#if __LONG_WIDTH__ == 8
 #define LONG_MIN_STR    "-9223372036854775808"
 #else
 #define LONG_MIN_STR    INT_MIN_STR
-#endif /* __LONG_LEN__ == 8 */
+#endif /* __LONG_WIDTH__ == 8 */
 
 #define LLONG_MIN_STR   "-9223372036854775808"
 

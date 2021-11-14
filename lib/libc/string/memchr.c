@@ -1,11 +1,11 @@
 #include <string.h>
+#pragma GCC diagnostic ignored "-Wdiscarded-qualifiers"
 
 void* memchr(const void *buffer, int c, size_t num) {
-  size_t i;
-  unsigned char *buff = (unsigned char*)buffer;
+  const unsigned char *buff = (const unsigned char*)buffer;
 
-  for(i = 0; i < num && *buff != c; i++, buff++)
+  for(; num && *buff != (unsigned char)c; num--, buff++)
     ;
 
-  return (i == num ? NULL : buff);
+  return (num ? buff : NULL);
 }

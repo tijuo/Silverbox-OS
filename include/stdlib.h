@@ -25,12 +25,18 @@ lldiv_t lldiv(long long num, long long denom);
 
 int atoi(char *nptr);
 long atol(char *nptr);
+long long atoll(char *nptr);
+
 long strtol(const char *nptr, char **endptr, int base);
 unsigned long strtoul(const char *nptr, char **endptr, int base);
+
+long long strtoll(const char *nptr, char **endptr, int base);
+unsigned long long strtoull(const char *nptr, char **endptr, int base);
 
 void abort(void);
 void exit(int status);
 int atexit(void (*func)(void));
+char* itoa(int value, char *str, int base);
 
 void *malloc(size_t bytes);
 void free(void *address);

@@ -16,5 +16,5 @@ int strcmp(const char *s1, const char *s2)
   else if(!s1)
     return -(*s2);
   else
-    return NULL;
+    return 0;
 }

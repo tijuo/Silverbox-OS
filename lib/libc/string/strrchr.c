@@ -1,16 +1,17 @@
 #include <string.h>
+#pragma GCC diagnostic ignored "-Wcast-qual"
 
 char* strrchr(const char *s, int c) {
-  char *addr = NULL;
+  const char *addr = NULL;
 
   if(s) {
     while(*s) {
       if(*s == c)
-        addr = (char*)s;
+        addr = (const char*)s;
       s++;
     }
   }
 
-  return addr;
+  return (char *)addr;
 }
 

@@ -7,7 +7,7 @@ void perror(const char *prefix) {
       fprintf(stderr, "%s\n", _errno_reasons[errno]);
   }
   else if(errno == 0)
-    frintf(stderr, "%s", prefix);
+    fprintf(stderr, "%s", prefix);
   else
     fprintf(stderr, "%s: %s\n", prefix, _errno_reasons[errno]);
 }
