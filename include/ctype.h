@@ -1,30 +1,24 @@
 #ifndef CTYPE_H
 #define CTYPE_H
 
-#ifdef __GNUC__
-#define _PURE(x)	(x) __attribute__((pure))
-#else
-#define _PURE(x)	(x)
-#endif /* __GNUC__ */
-
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
-int _PURE(isalnum(int c));
-int _PURE(isalpha(int c));
-int _PURE(isblank(int c));
-int _PURE(iscntrl(int c));
-int _PURE(isdigit(int c));
-int _PURE(isgraph(int c));
-int _PURE(islower(int c));
-int _PURE(isprint(int c));
-int _PURE(ispunct(int c));
-int _PURE(isspace(int c));
-int _PURE(isupper(int c));
-int _PURE(isxdigit(int c));
-int _PURE(tolower(int c));
-int _PURE(toupper(int c));
+CONST int isalnum(int c);
+CONST int isalpha(int c);
+CONST int isblank(int c);
+CONST int iscntrl(int c);
+CONST int isdigit(int c);
+CONST int isgraph(int c);
+CONST int islower(int c);
+CONST int isprint(int c);
+CONST int ispunct(int c);
+CONST int isspace(int c);
+CONST int isupper(int c);
+CONST int isxdigit(int c);
+CONST int tolower(int c);
+CONST int toupper(int c);
 
 #ifdef __cplusplus
 }

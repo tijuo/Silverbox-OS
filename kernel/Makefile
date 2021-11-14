@@ -1,8 +1,8 @@
-include ../Makefile.inc
+ROOT_PATH	:=..
+include $(ROOT_PATH)/Makefile.inc
 
 .PHONY:	all check clean tests install
 
-ROOT_PATH	:=..
 SRC	:=list.c message.c pic.c syscall.c debug.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
 	init.c
@@ -13,16 +13,10 @@ BIN_GZ	:=kernel.gz
 
 CHECK_INC=/opt/cross/i686-elf/lib/gcc/i686-elf/12.0.0
 
-all: $(BIN_GZ) $(BIN).dmp $(BIN).sym
+all: $(BIN_GZ) $(BIN).dmp $(BIN).sym $(BIN).bsym
 
 $(BIN): $(OBJ)
 	$(LD) $(LDFLAGS) -T kernelLink.ld $(OBJ) -o $@
-
-$(BIN).dmp: $(BIN)
-	objdump -Dx $< > $@
-
-$(BIN).sym: $(BIN)
-	readelf --syms $(BIN) > $@
 
 $(BIN_GZ): $(BIN)
 	gzip -k $<
@@ -33,8 +27,8 @@ check:
 	-I$(ROOT_DIR)/include -I$(CHECK_INC)/include \
 	-I$(CHECK_INC)/include-fixed *.c
 
-install:
-	$(ROOT_DIR)/tools/copy_files.sh -d /boot kernel.gz
+install: $(BIN_GZ)
+	mcopy -D o -i $(FLOPPY_IMG) $< ::boot
 
 tests:
 

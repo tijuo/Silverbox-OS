@@ -119,8 +119,8 @@ static void printChar(int c);
 NON_NULL_PARAMS static void _kprintf(void (*writeFunc)(int), const char *str,
                                      va_list args);
 NON_NULL_PARAM(1) void kprintf(const char *str, ...) __attribute__((format(printf, 1, 2)));
-NON_NULL_PARAM(3) void kprintfAt(unsigned int x, unsigned int y, const char *str,
-                               ...) __attribute__((format(printf, 3, 4)));
+NON_NULL_PARAM(3) void kprintfAt(unsigned int x, unsigned int y,
+                                 const char *str, ...) __attribute__((format(printf, 3, 4)));
 static int scroll(int up);
 static void setScroll(word addr);
 void resetScroll(void);
@@ -530,8 +530,8 @@ int scrollDown(void) {
   return scroll(DOWN_DIR);
 }
 
-NON_NULL_PARAM(3) void kprintfAt(unsigned int x, unsigned int y, const char *str,
-                               ...)
+NON_NULL_PARAM(3) void kprintfAt(unsigned int x, unsigned int y,
+                                 const char *str, ...)
 {
   unsigned int _cursorX = cursorX;
   unsigned int _cursorY = cursorY;
@@ -651,7 +651,7 @@ void putChar(char c, int x, int y) {
 }
 
 void resetPrintfState(struct PrintfState *state) {
-  clearMemory(state, sizeof *state);
+  memset(state, 0, sizeof *state);
   state->precision = -1;
 }
 

@@ -13,13 +13,14 @@ export ASFLAGS		=-I$(ROOT_DIR)/include \
 			-Wa,-I$(ROOT_DIR)/include,--32
 export DEPEND		:=makedepend
 export DD		:=dd
-export EN_DEBUG		:=$(if $(RELEASE),"","-DDEBUG -g")
+export EN_DEBUG		:=$(if $(RELEASE),,-DDEBUG -g)
 export OPT_LEVEL	:=$(if $(RELEASE),2,0)
 export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
 	     	-fno-leading-underscore -ffreestanding \
 		-fno-stack-protector -fno-stack-check \
 		-fno-asynchronous-unwind-tables -march=pentium4 \
-		$(EN_DEBUG) -O$(OPT_LEVEL) -Wall -Wextra -Wshadow \
+		$(if $(RELEASE),,-DDEBUG -ggdb) \
+		-O$(OPT_LEVEL) -Wall -Wextra -Wshadow \
 		-Wpointer-arith -Wsign-compare -Wsystem-headers \
 		-Wstrict-prototypes -Wunused-function -Wmissing-prototypes \
 		-Wmissing-declarations -Wnonnull \
@@ -29,11 +30,12 @@ export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
 		-Wcast-qual -Wcast-align -Wdangling-else \
 		-Wlogical-op -Wpacked
-
-export LDFLAGS	:=-static -nostdlib -z nodefaultlib
+export LDFLAGS	:=$(if $(RELEASE),,-g) -static -nostdlib -z nodefaultlib
+export FLOPPY_IMG=$(ROOT_DIR)/os_floppy.img
 TOP		=$(shell if [ -f "Makefile.top" ]; then echo 1; else echo ""; fi)
 DEPDIR		:=.deps
 DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
+TESTDIR		:=test
 
 %.o: %.c $(DEPDIR)/%.d | $(DEPDIR)
 	$(CC) -c $(DEPFLAGS) $(CFLAGS) $< -o $@
@@ -41,10 +43,13 @@ DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 %.o: %.S $(DEPDIR)/%.d | $(DEPDIR)
 	$(CC) -c $(DEPFLAGS) $(ASFLAGS) $< -o $@
 
-%.dmp: %.elf
-	objdump -Dx -M intel $< -o $@
+%.dmp: %
+	objdump -Dx $< > $@
 
-%.sym: %elf
-	
+%.sym: %
+	readelf --syms $< > $@
+
+%.bsym: %
+	nm $< | awk -- '{ print $$1, $$3 }' > $@
 
 DEPFILES	:= $(SRC:%.c=$(DEPDIR)/%.d) $(ASM_SRC:%.S=$(DEPDIR)/%.d)

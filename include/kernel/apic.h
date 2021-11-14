@@ -42,7 +42,6 @@
 #define IOAPIC_REDTBL22      0x3C
 #define IOAPIC_REDTBL23      0x3E
 
-
 #define LAPIC_OFFSET	    0
 #define LAPIC_BASE	        0xFEE00000
 

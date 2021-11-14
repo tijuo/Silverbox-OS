@@ -3,12 +3,10 @@
 #include <os/services.h>
 #include <errno.h>
 
-time_t time(time_t *timer)
-{
+time_t time(time_t *timer) {
   unsigned int t;
 
-  if(!timer || getCurrentTime(&t) != 0)
-  {
+  if(!timer || getCurrentTime(&t) != 0) {
     errno = EFAULT;
     return (time_t)-1;
   }

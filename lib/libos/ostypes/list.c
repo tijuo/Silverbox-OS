@@ -1,16 +1,20 @@
 #include <os/list.h>
 #include <stdlib.h>
 
-enum ListOpWhich { FIRST, LAST, ALL, HEAD, TAIL };
+enum ListOpWhich {
+  FIRST, LAST, ALL, HEAD, TAIL
+};
 
-static list_node_t *_createListNode(int key, void *elem);
-static int _listInsert(list_t *list, int key, void *element, enum ListOpWhich which);
-static int _listFind(list_t *list, int key, void **elemPtr, enum ListOpWhich which);
-static int _listRemove(list_t *list, int key, void **elemPtr, enum ListOpWhich which);
+static list_node_t* _createListNode(int key, void *elem);
+static int _listInsert(list_t *list, int key, void *element,
+                       enum ListOpWhich which);
+static int _listFind(list_t *list, int key, void **elemPtr,
+                     enum ListOpWhich which);
+static int _listRemove(list_t *list, int key, void **elemPtr,
+                       enum ListOpWhich which);
 static int _listRemoveEnd(list_t *list, void **elemPtr, enum ListOpWhich which);
 
-static list_node_t *_createListNode(int key, void *elem)
-{
+static list_node_t* _createListNode(int key, void *elem) {
   list_node_t *node = kmalloc(sizeof(list_node_t));
 
   if(!node)
@@ -29,8 +33,7 @@ static list_node_t *_createListNode(int key, void *elem)
  * @return 0 on success.
  */
 
-int listInit(list_t *list)
-{
+int listInit(list_t *list) {
   list->head = list->tail = NULL;
   return 0;
 }
@@ -41,12 +44,10 @@ int listInit(list_t *list)
  * @return 0 on success.
  */
 
-int listDestroy(list_t *list)
-{
+int listDestroy(list_t *list) {
   list_node_t *next;
 
-  for(list_node_t *ptr=list->head; ptr != NULL; ptr=next)
-  {
+  for(list_node_t *ptr = list->head; ptr != NULL; ptr = next) {
     next = ptr->next;
     kfree(ptr, sizeof *ptr);
   }
@@ -55,17 +56,16 @@ int listDestroy(list_t *list)
   return 0;
 }
 
-static int _listInsert(list_t *list, int key, void *element, enum ListOpWhich which)
+static int _listInsert(list_t *list, int key, void *element,
+                       enum ListOpWhich which)
 {
   list_node_t *node = _createListNode(key, element);
 
   if(!node)
     return -1;
 
-  if(which == HEAD)
-  {
-    if(list->head)
-    {
+  if(which == HEAD) {
+    if(list->head) {
       list->head->prev = node;
       node->next = list->head;
     }
@@ -75,10 +75,8 @@ static int _listInsert(list_t *list, int key, void *element, enum ListOpWhich wh
     if(!list->tail)
       list->tail = node;
   }
-  else
-  {
-    if(list->tail)
-    {
+  else {
+    if(list->tail) {
       list->tail->next = node;
       node->prev = list->tail;
     }
@@ -92,24 +90,21 @@ static int _listInsert(list_t *list, int key, void *element, enum ListOpWhich wh
   return 0;
 }
 
-int listInsertHead(list_t *list, int key, void *element)
-{
+int listInsertHead(list_t *list, int key, void *element) {
   return _listInsert(list, key, element, HEAD);
 }
 
-int listInsertTail(list_t *list, int key, void *element)
-{
+int listInsertTail(list_t *list, int key, void *element) {
   return _listInsert(list, key, element, TAIL);
 }
 
-static int _listFind(list_t *list, int key, void **elemPtr, enum ListOpWhich which)
+static int _listFind(list_t *list, int key, void **elemPtr,
+                     enum ListOpWhich which)
 {
   list_node_t *node = (which == FIRST) ? list->head : list->tail;
 
-  while(node)
-  {
-    if(node->key == key)
-    {
+  while(node) {
+    if(node->key == key) {
       if(elemPtr != NULL)
         *elemPtr = node->elem;
 
@@ -122,13 +117,11 @@ static int _listFind(list_t *list, int key, void **elemPtr, enum ListOpWhich whi
   return -1;
 }
 
-int listFindFirst(list_t *list, int key, void **elemPtr)
-{
+int listFindFirst(list_t *list, int key, void **elemPtr) {
   return _listFind(list, key, elemPtr, FIRST);
 }
 
-int listFindLast(list_t *list, int key, void **elemPtr)
-{
+int listFindLast(list_t *list, int key, void **elemPtr) {
   return _listFind(list, key, elemPtr, LAST);
 }
 
@@ -136,10 +129,8 @@ static int _listRemoveEnd(list_t *list, void **elemPtr, enum ListOpWhich which)
 {
   list_node_t *prevNode = (which == HEAD) ? list->head : list->tail;
 
-  if(prevNode)
-  {
-    if(which == HEAD)
-    {
+  if(prevNode) {
+    if(which == HEAD) {
       list->head = prevNode->next;
 
       if(list->head)
@@ -147,8 +138,7 @@ static int _listRemoveEnd(list_t *list, void **elemPtr, enum ListOpWhich which)
       else
         list->tail = NULL;
     }
-    else
-    {
+    else {
       list->tail = prevNode->prev;
 
       if(list->tail)
@@ -167,24 +157,21 @@ static int _listRemoveEnd(list_t *list, void **elemPtr, enum ListOpWhich which)
     return -1;
 }
 
-int listRemoveHead(list_t *list, void **elemPtr)
-{
+int listRemoveHead(list_t *list, void **elemPtr) {
   return _listRemoveEnd(list, elemPtr, HEAD);
 }
 
-int listRemoveTail(list_t *list, void **elemPtr)
-{
+int listRemoveTail(list_t *list, void **elemPtr) {
   return _listRemoveEnd(list, elemPtr, TAIL);
 }
 
-static int _listRemove(list_t *list, int key, void **elemPtr, enum ListOpWhich which)
+static int _listRemove(list_t *list, int key, void **elemPtr,
+                       enum ListOpWhich which)
 {
   list_node_t *node = (which == LAST) ? list->tail : list->head;
 
-  while(node)
-  {
-    if(node->key == key)
-    {
+  while(node) {
+    if(node->key == key) {
       if(node->next)
         node->next->prev = node->prev;
 
@@ -212,17 +199,14 @@ static int _listRemove(list_t *list, int key, void **elemPtr, enum ListOpWhich w
   return (which == ALL) ? 0 : -1;
 }
 
-int listRemoveFirst(list_t *list, int key, void **elemPtr)
-{
+int listRemoveFirst(list_t *list, int key, void **elemPtr) {
   return _listRemove(list, key, elemPtr, FIRST);
 }
 
-int listRemoveLast(list_t *list, int key, void **elemPtr)
-{
+int listRemoveLast(list_t *list, int key, void **elemPtr) {
   return _listRemove(list, key, elemPtr, LAST);
 }
 
-int listRemoveAll(list_t *list, int key)
-{
+int listRemoveAll(list_t *list, int key) {
   return _listRemove(list, key, NULL, ALL);
 }

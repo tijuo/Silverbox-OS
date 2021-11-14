@@ -16,7 +16,7 @@
 ALIGNED(PAGE_SIZE) uint8_t kernelStack[PAGE_SIZE]; // The single kernel stack used by all threads (assumes a uniprocessor system)
 uint8_t *kernelStackTop = kernelStack + PAGE_SIZE;
 
-extern tcb_t tcbTable[MAX_THREADS];
+SECTION(".tcb") tcb_t tcbTable[MAX_THREADS];
 tcb_t *initServerThread;
 
 list_t pausedList;
@@ -138,7 +138,9 @@ NON_NULL_PARAMS int pauseThread(tcb_t *thread) {
  @return The TCB of the newly created thread. NULL on failure.
  */
 
-NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, addr_t addrSpace, void *stackTop) {
+NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, addr_t addrSpace,
+                                    void *stackTop)
+{
   tcb_t *thread = NULL;
   uint32_t rootPmap =
       addrSpace == CURRENT_ROOT_PMAP ? getRootPageMap() : addrSpace;
@@ -156,7 +158,7 @@ NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, addr_t addrSpace, void *sta
   if(thread->threadState != INACTIVE)
     RET_MSG(NULL, "Thread is already active.");
 
-  clearMemory(thread, sizeof(tcb_t));
+  memset(thread, 0, sizeof(tcb_t));
   thread->rootPageMap = (dword)rootPmap;
 
   thread->userExecState.eflags = EFLAGS_IOPL3 | EFLAGS_IF | EFLAGS_RESD;
@@ -297,9 +299,9 @@ NON_NULL_PARAMS void switchContext(tcb_t *thread, int doXSave) {
 
 // Restore user state
 
-  tss.esp0 = (uint32_t)((ExecutionState *)kernelStackTop - 1) - sizeof(uint32_t);
-  uint32_t *s = (uint32_t *)tss.esp0;
-  ExecutionState *state = (ExecutionState *)(s + 1);
+  tss.esp0 = (uint32_t)((ExecutionState*)kernelStackTop - 1) - sizeof(uint32_t);
+  uint32_t *s = (uint32_t*)tss.esp0;
+  ExecutionState *state = (ExecutionState*)(s + 1);
 
   *s = (uint32_t)kernelStackTop;
   *state = thread->userExecState;

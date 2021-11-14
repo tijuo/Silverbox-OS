@@ -6,7 +6,6 @@
 #define TIMER2		    0x42u
 #define TIMER_CTRL	    0x43u
 
-
 // Bit 0
 #define BIN_COUNTER		0x00u
 #define BCD_COUNTER		0x01u
@@ -19,7 +18,6 @@
 #define C_MODE3		    0x06u  // mode 3
 #define C_MODE4		    0x08u  // mode 4
 #define C_MODE5		    0x0Au  // mode 5
-
 
 // Bits 54
 #define RWL_FORMAT0		0x00u  // latch present counter value

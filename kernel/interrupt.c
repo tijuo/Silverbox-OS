@@ -140,12 +140,13 @@ void handleIRQ(void) {
       __asm__("fxsave %0\n" :: "m"(currentThread->xsaveState));
       __asm__("movd %0, %%mm0\n" :: "r"(intNum));
 
-      if(IS_ERROR(sendMessage(currentThread, getTid(handler), IRQ_MSG, MSG_STD)))
-      {
+      if(IS_ERROR(
+          sendMessage(currentThread, getTid(handler), IRQ_MSG, MSG_STD))) {
         kprintf("Unable to send irq %u message to handler.\n", intNum);
         __asm__("emms\n");
       }
-    } else if(currentThread->threadState != RUNNING) {
+    }
+    else if(currentThread->threadState != RUNNING) {
       wakeupThread(currentThread);
     }
   }
@@ -235,49 +236,12 @@ void handleIRQ(void) {
  @param state The saved execution state of the processor before the exception occurred.
  */
 
-void handleCpuException(uint32_t exNum, uint32_t errorCode)
-{
+void handleCpuException(uint32_t exNum, uint32_t errorCode) {
   tcb_t *tcb = getCurrentThread();
-
-  /*
-   // Handle page faults due to non-present pages in kernel heap
-
-   if(exNum == PAGE_FAULT_INT && !IS_ERROR(handleHeapPageFault(errorCode)))
-   return;
-   */
-#ifdef DEBUG
-
-  if(tcb) {
-    if(tcb == initServerThread) {
-      if(exNum == PAGE_FAULT_INT) {
-        addr_t faultAddress = (addr_t)getCR2();
-
-        if(faultAddress >= INIT_SERVER_STACK_TOP - INIT_SERVER_STACK_SIZE && faultAddress
-            < INIT_SERVER_STACK_TOP
-           && (errorCode & PAGING_PRES) == 0
-           && kMapPage(faultAddress, allocPageFrame(), PAGING_RW | PAGING_USER) == 0)
-        {
-          goto leave;
-        }
-      }
-
-      kprintf("Exception for initial server. System Halted.\n");
-
-      dump_regs(tcb, &tcb->userExecState, exNum, errorCode);
-
-      while(1) {
-        disableInt();
-        halt();
-      }
-    }
-//    else
-//      dump_regs( tcb, state, exNum, errorCode );
-  }
-#endif
 
   if(!tcb) {
     kprintf("NULL tcb. Unable to handle exception. System halted.\n");
-    dump_state((ExecutionState *)(&errorCode + 1), exNum, errorCode);
+    dump_state((ExecutionState*)(&errorCode + 1), exNum, errorCode);
 
     while(1) {
       disableInt();
@@ -294,12 +258,13 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode)
 
   __asm__("fxsave %0\n" :: "m"(tcb->xsaveState));
   __asm__("movq %0, %%mm0\n"
-          "movq %1, %%mm1\n" :: "m"(messageData), "m"(messageData.faultAddress));
-
-  //kprintf("Sending exception %u message (err code: %#x, fault addr: %#x)\n", exNum, errorCode, exNum == 14 ? getCR2() : 0);
+      "movq %1, %%mm1\n" :: "m"(messageData), "m"(messageData.faultAddress));
 
   if(IS_ERROR(sendMessage(tcb, tcb->exHandler, EXCEPTION_MSG, MSG_STD))) {
     kprintf("Unable to send exception message to exception handler.\n");
+    kprintf(
+        "Tried to send exception %u message (err code: %#x, fault addr: %#x) to tid %hhu.\n",
+        exNum, errorCode, exNum == 14 ? getCR2() : 0, getTid(tcb));
 
     dump_regs(tcb, &tcb->userExecState, exNum, errorCode);
     __asm__("emms\n");
@@ -307,7 +272,6 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode)
     releaseThread(tcb);
   }
 
-leave:
   __asm__("leave\n"
       "ret\n");
   RESTORE_STATE;

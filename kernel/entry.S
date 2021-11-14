@@ -57,10 +57,12 @@ EXPORT start
 //  ebx has multiboot data address
 
   lea	kBootStack, %esp
+  add   $kVirtToPhys, %esp
   add   PAGE_SIZE, %esp
   mov	%esp, %ebp
   cld
 
+  push %ebp
 // Save for main()
 
   push %ebx
@@ -76,15 +78,28 @@ EXPORT start
 
 .okMboot:
 
-
-/*
+  mov $kVirtToPhys, %eax
   lea kernelGDT, %ecx
-  add $kVirtToPhys, %ecx
+  add %eax, %ecx
+
+  // Set the base values for the bootstrap descriptors
+
+  mov $0x06, %ebx
+  mov %ebx, %edx
+  inc %edx
+
+  mov %ax, 2(%ecx,%ebx,8)
+  mov %ax, 2(%ecx,%edx,8)
+  shr $16, %eax
+  mov %al, 3(%ecx,%ebx,8)
+  mov %al, 3(%ecx,%edx,8)
+  mov %ah, 7(%ecx,%ebx,8)
+  mov %ah, 7(%ecx,%edx,8)
 
 // Load GDT
 
   push %ecx
-  push $(8*8)
+  push $0x400000	// Push 0x40 limit
   lgdt 2(%esp)
   add  $8, %esp
 
@@ -93,16 +108,16 @@ EXPORT start
   mov  $BOOT_DATA_SEL, %cx
   mov  %cx, %ds
   mov  %cx, %es
-  mov  $BOOT_DATA_SEL, %cx
   mov  %cx, %ss
-  mov  %cx, %fs
+
   xor  %cx, %cx
+  mov  %cx, %fs
   mov  %cx, %gs
 
   ljmp $BOOT_CODE_SEL, $.reloadSel
 
 .reloadSel:
-*/
+
 
 /* Stack and base pointers point to 1:1 mapped addresses
    Convert them to their kernel memory equivalents since the

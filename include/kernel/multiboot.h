@@ -28,8 +28,7 @@
 /* Types.  */
 
 /* The Multiboot header.  */
-typedef struct multiboot_header
-{
+typedef struct multiboot_header {
   unsigned int magic;
   unsigned int flags;
   unsigned int checksum;
@@ -41,8 +40,7 @@ typedef struct multiboot_header
 } multiboot_header_t;
 
 /* The symbol table for a.out.  */
-typedef struct aout_symbol_table
-{
+typedef struct aout_symbol_table {
   unsigned int tabsize;
   unsigned int strsize;
   unsigned int addr;
@@ -50,8 +48,7 @@ typedef struct aout_symbol_table
 } aout_symbol_table_t;
 
 /* The section header table for ELF.  */
-typedef struct elf_section_header_table
-{
+typedef struct elf_section_header_table {
   unsigned int num;
   unsigned int size;
   unsigned int addr;
@@ -72,8 +69,7 @@ typedef struct elf_section_header_table
 #define MBI_FLAGS_GFX_TAB        (1u << 11) /* Grahphics table is available */
 
 /* The Multiboot information.  */
-typedef struct multiboot_info
-{
+typedef struct multiboot_info {
   unsigned int flags;
   unsigned int mem_lower;
   unsigned int mem_upper;
@@ -81,8 +77,7 @@ typedef struct multiboot_info
   unsigned int cmdline;
   unsigned int mods_count;
   unsigned int mods_addr;
-  union Tables
-  {
+  union Tables {
     aout_symbol_table_t symtab;
     elf_section_header_table_t shdr;
   } syms;
@@ -102,8 +97,7 @@ typedef struct multiboot_info
 } multiboot_info_t;
 
 /* The module structure.  */
-typedef struct module
-{
+typedef struct module {
   unsigned int mod_start;
   unsigned int mod_end;
   unsigned int string;
@@ -115,8 +109,7 @@ typedef struct module
 #define MBI_TYPE_RESD   4   // Reserved RAM that must be preserved upon hibernation
 #define MBI_TYPE_BAD    5   // Defective RAM
 
-typedef struct memory_map
-{
+typedef struct memory_map {
   unsigned int size; // doesn't include itself
   unsigned int base_addr_low;
   unsigned int base_addr_high;
@@ -125,8 +118,7 @@ typedef struct memory_map
   unsigned int type;
 } memory_map_t;
 
-typedef struct apm_table
-{
+typedef struct apm_table {
   unsigned short int version;
   unsigned short int cseg;
   unsigned int offset;
@@ -138,8 +130,7 @@ typedef struct apm_table
   unsigned short int dseg_len;
 } apm_table_t;
 
-typedef struct drive_info
-{
+typedef struct drive_info {
   unsigned int size;
   unsigned char drive_number;
   unsigned char drive_mode;

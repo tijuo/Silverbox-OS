@@ -88,7 +88,7 @@ gdt_entry_t kernelGDT[8] = {
     }
   },
 
-  // Bootstrap Code Descriptor (0x30)
+  // Bootstrap Code Descriptor (0x30) [Base values will be set by boot code]
   {
     {
       .limit1 = 0xFFFFu,
@@ -102,7 +102,7 @@ gdt_entry_t kernelGDT[8] = {
     }
   },
 
-  // Bootstrap Data Descriptor (0x38)
+  // Bootstrap Data Descriptor (0x38) [Base values will be set by boot code]
   {
     {
       .limit1 = 0xFFFFu,
@@ -121,27 +121,31 @@ struct IdtEntry kernelIDT[NUM_EXCEPTIONS + NUM_IRQS];
 
 alignas(PAGE_SIZE) struct TSS_Struct tss SECTION(".tss");
 
-NON_NULL_PARAMS void clearMemory(void *ptr, size_t len) {
-#ifdef DEBUG
-  if((size_t)ptr % 4 != 0 || len % 4 != 0) {
-    kprintf(
-        "clearMemory(): Start address (0x%p) must have 4-byte alignment and length (%d) must be divisible by 4. Using memset() instead...\n",
-        ptr, len);
-    memset(ptr, 0, len);
-    return;
-  }
-#endif
-  __asm__ __volatile__("rep stosl\n" :: "a"(0), "c"(len / 4), "D"(ptr) : "memory");
-}
-
 NON_NULL_PARAMS RETURNS_NON_NULL
-void* memset(void *ptr, int value, size_t num) {
-  char *p = (char*)ptr;
+void* memset(void *ptr, int value, size_t len)
+{
+  if((unsigned char)value)
+    __asm__ __volatile__("rep stosb\n" :: "a"((unsigned char)value), "c"(len), "D"(ptr) : "memory");
+  else {
+    char *p = (char*)ptr;
 
-  while(num) {
-    *p = (char)value;
-    p++;
-    num--;
+    while(len && ((uintptr_t)p % 4)) {
+      *p++ = 0;
+      len--;
+    }
+
+    if(len) {
+      if(!(unsigned char)value)
+        __asm__ __volatile__("rep stosl\n" :: "a"(0), "c"(len / 4), "D"(p) : "memory");
+
+      p += (len & ~0x03u);
+      len -= (len & ~0x03u);
+    }
+
+    while(len) {
+      *p++ = 0;
+      len--;
+    }
   }
 
   return ptr;
@@ -150,7 +154,8 @@ void* memset(void *ptr, int value, size_t num) {
 // XXX: Assumes that the memory regions don't overlap
 
 NON_NULL_PARAMS RETURNS_NON_NULL
-void* memcpy(void *dest, const void *src, size_t num) {
+void* memcpy(void *restrict dest, const void *restrict src, size_t num)
+{
   char *d = (char*)dest;
   const char *s = (const char*)src;
 
@@ -162,50 +167,4 @@ void* memcpy(void *dest, const void *src, size_t num) {
   }
 
   return dest;
-}
-
-/** Allocate an available 4 KB physical page frame.
-
- @return The physical address of a newly allocated page frame. INVALID_PFRAME, on failure.
- **/
-
-addr_t allocPageFrame(void) {
-#ifdef DEBUG
-  if(!freePageStackTop)
-    RET_MSG(INVALID_PFRAME,
-            "allocPageFrame(): Free page stack hasn't been initialized yet.");
-#endif /* DEBUG */
-
-#ifdef DEBUG
-  else
-    assert(
-        *(freePageStackTop-1) == ALIGN_DOWN(*(freePageStackTop-1), PAGE_SIZE))
-#endif /* DEBUG */
-
-  if(freePageStackTop == freePageStack)
-    RET_MSG(INVALID_PFRAME,
-            "Kernel has no more available physical page frames.");
-  else
-    return *--freePageStackTop;
-}
-
-/** Release a 4 KB page frame.
-
- @param frame The physical address of the page frame to be released
- **/
-
-void freePageFrame(addr_t frame) {
-  assert(frame == ALIGN_DOWN(frame, PAGE_SIZE));
-  assert(freePageStackTop);
-  assert(frame != INVALID_PFRAME);
-
-#ifdef DEBUG
-  if(freePageStackTop)
-#endif /* DEBUG */
-    *freePageStackTop++ = ALIGN_DOWN(frame, PAGE_SIZE);
-
-#ifdef DEBUG
-  else
-    PRINT_DEBUG("Free page stack hasn't been initialized yet\n");
-#endif /* DEBUG */
 }

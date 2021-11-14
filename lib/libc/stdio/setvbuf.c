@@ -2,22 +2,17 @@
 #include <stdlib.h>
 #include <errno.h>
 
-int setvbuf(FILE *stream, char *buf, int mode, size_t size)
-{
-  if(stream == NULL)
-  {
+int setvbuf(FILE *stream, char *buf, int mode, size_t size) {
+  if(stream == NULL) {
     errno = -EBADF;
     return -1;
   }
-  else if(!stream->is_open)
-  {
+  else if(!stream->is_open) {
     errno = -ESTALE;
     return -1;
   }
-  else
-  {
-    switch(mode)
-    {
+  else {
+    switch(mode) {
       case _IOFBF:
       case _IONBF:
         stream->buffer = buf;
@@ -35,18 +30,15 @@ int setvbuf(FILE *stream, char *buf, int mode, size_t size)
         return -1;
     }
 
-    if(stream->write_req_buffer)
-    {
+    if(stream->write_req_buffer) {
       free(stream->write_req_buffer);
       stream->write_req_buffer = NULL;
     }
 
-    if(stream->buffer)
-    {
+    if(stream->buffer) {
       stream->write_req_buffer = malloc(size + sizeof(struct DeviceOpRequest));
 
-      if(!stream->write_req_buffer)
-      {
+      if(!stream->write_req_buffer) {
         stream->error = 1;
         errno = -ENOMEM;
         return -1;

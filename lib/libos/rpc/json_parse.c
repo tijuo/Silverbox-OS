@@ -5,7 +5,7 @@
 #include <limits.h>
 #include "serialization.h"
 
-struct RPC_Node *parseJSON(uchar *s);
+struct RPC_Node* parseJSON(uchar *s);
 void showNodes(struct RPC_Node *node);
 
 static void _showNodes(struct RPC_Node *node, int depth);
@@ -20,16 +20,14 @@ static int _parseObject(uchar **s, struct RPC_Node *node);
 static int _parsePair(uchar **s, struct RPC_Node *node);
 static int _parseValue(uchar **s, struct RPC_Node *node);
 
-struct RPC_Node *parseJSON(uchar *s)
-{
+struct RPC_Node* parseJSON(uchar *s) {
   struct RPC_Node *node = rpc_new_node();
   uchar *start = s;
 
-  if( !node )
+  if(!node)
     return NULL;
 
-  if( _parseValue(&s, node) == 0 )
-  {
+  if(_parseValue(&s, node) == 0) {
     printf("Parse error at char %d\n", s - start);
     return NULL;
   }
@@ -37,18 +35,15 @@ struct RPC_Node *parseJSON(uchar *s)
     return node;
 }
 
-void showNodes(struct RPC_Node *node)
-{
+void showNodes(struct RPC_Node *node) {
   _showNodes(node, 0);
 }
 
-static void _showNodes(struct RPC_Node *node, int depth)
-{
-  for( int i=depth*2; i; i-- )
+static void _showNodes(struct RPC_Node *node, int depth) {
+  for(int i = depth * 2; i; i--)
     putchar(' ');
 
-  switch( node->type )
-  {
+  switch(node->type) {
     case RPC_NULL:
       printf("RPCNull");
       break;
@@ -60,7 +55,7 @@ static void _showNodes(struct RPC_Node *node, int depth)
       break;
     case RPC_STRING:
       printf("RPCString (length: %llu) : \"%*s\"", node->data.string.len,
-        (unsigned int)node->data.string.len, node->data.string.seq);
+             (unsigned int)node->data.string.len, node->data.string.seq);
       break;
     case RPC_PAIR:
       printf("RPCPair");
@@ -93,7 +88,7 @@ static void _showNodes(struct RPC_Node *node, int depth)
       printf("RPCFloat : %g", node->data.f);
       break;
     case RPC_UUID:
-      printf("RPCUuid : %llx", *(long long unsigned int *)&node->data.uuid);
+      printf("RPCUuid : %llx", *(long long unsigned int*)&node->data.uuid);
       break;
     default:
       printf("UnknownNode (type: %d)", node->type);
@@ -102,22 +97,19 @@ static void _showNodes(struct RPC_Node *node, int depth)
 
   printf("\n");
 
-  for(unsigned long long i=0; i < node->numChildren; i++)
-    _showNodes(&node->children[i], depth+1);
+  for(unsigned long long i = 0; i < node->numChildren; i++)
+    _showNodes(&node->children[i], depth + 1);
 }
 
-static void _skipWhitespace(uchar **s)
-{
+static void _skipWhitespace(uchar **s) {
   while(**s == ' ')
     (*s)++;
 }
 
-static int _parseTrue(uchar **s, struct RPC_Node *node)
-{
+static int _parseTrue(uchar **s, struct RPC_Node *node) {
   _skipWhitespace(s);
 
-  if( strncmp("true", (char *)*s, 4) == 0 )
-  {
+  if(strncmp("true", (char*)*s, 4) == 0) {
     *s += 4;
     return rpc_bool(true, node);
   }
@@ -125,12 +117,10 @@ static int _parseTrue(uchar **s, struct RPC_Node *node)
     return 0;
 }
 
-static int _parseFalse(uchar **s, struct RPC_Node *node)
-{
+static int _parseFalse(uchar **s, struct RPC_Node *node) {
   _skipWhitespace(s);
 
-  if( strncmp("false", (char *)*s, 5) == 0 )
-  {
+  if(strncmp("false", (char*)*s, 5) == 0) {
     *s += 5;
     return rpc_bool(false, node);
   }
@@ -138,12 +128,10 @@ static int _parseFalse(uchar **s, struct RPC_Node *node)
     return 0;
 }
 
-static int _parseNull(uchar **s, struct RPC_Node *node)
-{
+static int _parseNull(uchar **s, struct RPC_Node *node) {
   _skipWhitespace(s);
 
-  if( strncmp("null", (char *)*s, 4) == 0 )
-  {
+  if(strncmp("null", (char*)*s, 4) == 0) {
     *s += 4;
     return rpc_null(node);
   }
@@ -153,24 +141,20 @@ static int _parseNull(uchar **s, struct RPC_Node *node)
 
 /* Assumes that the string is utf-8 */
 
-static int _parseString(uchar **s, struct RPC_Node *node)
-{
+static int _parseString(uchar **s, struct RPC_Node *node) {
   uchar *start;
-  int bytes_left=0;
+  int bytes_left = 0;
 
   _skipWhitespace(s);
 
-  if( **s == '\"' )
+  if(**s == '\"')
     start = ++(*s);
   else
     return 0;
 
-  while( **s != '\"' && **s )
-  {
-    if( !bytes_left && **s == '\\' )
-    {
-      switch( *(++(*s)) )
-      {
+  while(**s != '\"' && **s) {
+    if(!bytes_left && **s == '\\') {
+      switch(*(++(*s))) {
         case '\0':
           return 0;
         case '\"':
@@ -186,9 +170,8 @@ static int _parseString(uchar **s, struct RPC_Node *node)
         case 'u':
           ++(*s);
 
-          for(int i=0; i < 4; i++, ++(*s))
-          {
-            if( !isxdigit(**s) )
+          for(int i = 0; i < 4; i++, ++(*s)) {
+            if(!isxdigit(**s))
               return 0;
           }
 
@@ -198,23 +181,23 @@ static int _parseString(uchar **s, struct RPC_Node *node)
       }
     }
 
-    if( **s < 0x20 )
+    if(**s < 0x20)
       return 0;
-    else if( **s == 0xC0 || **s == 0xC1 || **s >= 0xF5 )
+    else if(**s == 0xC0 || **s == 0xC1 || **s >= 0xF5)
       return 0;
-    else if( !bytes_left && **s >= 0x80 && **s <= 0xBF )
+    else if(!bytes_left && **s >= 0x80 && **s <= 0xBF)
       return 0;
-    else if( bytes_left && (**s <= 0x7F || **s >= 0xC2) )
+    else if(bytes_left && (**s <= 0x7F || **s >= 0xC2))
       return 0;
 
-    if( **s >= 0x80 && **s <= 0xBF )
+    if(**s >= 0x80 && **s <= 0xBF)
       bytes_left--;
 
-    if( **s >= 0xF0 )
+    if(**s >= 0xF0)
       bytes_left = 3;
-    else if( **s >= 0xE0 )
+    else if(**s >= 0xE0)
       bytes_left = 2;
-    else if( **s >= 0xC2 )
+    else if(**s >= 0xC2)
       bytes_left = 1;
 
     (*s)++;
@@ -222,36 +205,31 @@ static int _parseString(uchar **s, struct RPC_Node *node)
 
   (*s)++;
 
-  if( bytes_left || rpc_string(start, (size_t)(*s - start - 1), node) == 0 )
+  if(bytes_left || rpc_string(start, (size_t)(*s - start - 1), node) == 0)
     return 0;
   else
     return 1;
 }
 
-static int _parseNumber(uchar **s, struct RPC_Node *node)
-{
+static int _parseNumber(uchar **s, struct RPC_Node *node) {
   bool neg = false, negExp = false, decimal = false;
   double number = 0;
-  double multiplier=0.1;
+  double multiplier = 0.1;
   int exponent = 0;
 
   _skipWhitespace(s);
 
-  if( **s == '-' )
-  {
+  if(**s == '-') {
     neg = true;
     (*s)++;
   }
 
-  if( isdigit(**s) )
-  {
-    if( **s != '0' )
-    {
+  if(isdigit(**s)) {
+    if(**s != '0') {
       number = **s - '0';
       (*s)++;
 
-      while( isdigit(**s) )
-      {
+      while(isdigit(**s)) {
         number = number * 10 + (**s - '0');
         (*s)++;
       }
@@ -260,15 +238,12 @@ static int _parseNumber(uchar **s, struct RPC_Node *node)
   else
     return 0;
 
-  if( **s == '.' )
-  {
+  if(**s == '.') {
     (*s)++;
     decimal = true;
 
-    if( isdigit(**s) )
-    {
-      while( isdigit(**s) )
-      {
+    if(isdigit(**s)) {
+      while(isdigit(**s)) {
         number += (**s - '0') * multiplier;
         multiplier /= 10;
         (*s)++;
@@ -278,21 +253,18 @@ static int _parseNumber(uchar **s, struct RPC_Node *node)
       return 0;
   }
 
-  if( **s == 'e' || **s == 'E' )
-  {
+  if(**s == 'e' || **s == 'E') {
     (*s)++;
     decimal = true;
 
-    if( **s == '+' )
+    if(**s == '+')
       (*s)++;
-    else if( **s == '-' )
-    {
+    else if(**s == '-') {
       (*s)++;
       negExp = true;
     }
 
-    if( isdigit(**s) )
-    {
+    if(isdigit(**s)) {
       exponent = (**s - '0') + exponent * 10;
       (*s)++;
     }
@@ -300,72 +272,59 @@ static int _parseNumber(uchar **s, struct RPC_Node *node)
       return 0;
   }
 
-  if( negExp )
+  if(negExp)
     exponent = -exponent;
 
-  if( exponent != 0 )
+  if(exponent != 0)
     number = pow(number, exponent);
 
-  if( neg )
+  if(neg)
     number = -number;
 
-  if( decimal )
-  {
+  if(decimal) {
     node->type = RPC_FLOAT;
     node->data.f = number;
   }
-  else if( number < 0 )
-  {
-    if( number < LLONG_MIN )
-    {
+  else if(number < 0) {
+    if(number < LLONG_MIN) {
       node->type = RPC_FLOAT;
       node->data.f = number;
     }
-    else if( number < INT_MIN )
-    {
+    else if(number < INT_MIN) {
       node->type = RPC_INT64;
       node->data.i64 = (int64_t)number;
     }
-    else if( number < SHRT_MIN )
-    {
+    else if(number < SHRT_MIN) {
       node->type = RPC_INT32;
       node->data.i32 = (int32_t)number;
     }
-    else if( number < SCHAR_MIN )
-    {
+    else if(number < SCHAR_MIN) {
       node->type = RPC_INT16;
       node->data.i16 = (int16_t)number;
     }
-    else
-    {
+    else {
       node->type = RPC_CHAR;
       node->data.b = (int8_t)number;
     }
   }
-  else
-  {
-    if( number > LLONG_MAX )
-    {
+  else {
+    if(number > LLONG_MAX) {
       node->type = RPC_FLOAT;
       node->data.f = number;
     }
-    else if( number > INT_MAX )
-    {
+    else if(number > INT_MAX) {
       node->type = RPC_INT64;
       node->data.i64 = (int64_t)number;
     }
-    else if( number > SHRT_MAX )
-    {
+    else if(number > SHRT_MAX) {
       node->type = RPC_INT32;
       node->data.i32 = (int32_t)number;
     }
-    else if( number > SCHAR_MAX )
-    {
+    else if(number > SCHAR_MAX) {
       node->type = RPC_INT16;
       node->data.i16 = (int16_t)number;
     }
-    else
-    {
+    else {
       node->type = RPC_CHAR;
       node->data.b = (int8_t)number;
     }
@@ -374,41 +333,37 @@ static int _parseNumber(uchar **s, struct RPC_Node *node)
   return 1;
 }
 
-static int _parseArray(uchar **s, struct RPC_Node *node)
-{
+static int _parseArray(uchar **s, struct RPC_Node *node) {
   struct RPC_Node *newNode = NULL;
   _skipWhitespace(s);
 
   rpc_array(node);
 
-  if( **s == '[' )
-  {
+  if(**s == '[') {
     (*s)++;
     _skipWhitespace(s);
   }
   else
     return 0;
 
-  while( **s && **s != ']' )
-  {
+  while(**s && **s != ']') {
     newNode = rpc_new_node();
 
-    if( _parseValue(s, newNode) == 0 || rpc_append_child(newNode, node) == 0 )
+    if(_parseValue(s, newNode) == 0 || rpc_append_child(newNode, node) == 0)
       goto _parseArrayError;
 
     newNode = NULL;
     _skipWhitespace(s);
 
-    if( **s != ',' && **s != ']' )
+    if(**s != ',' && **s != ']')
       goto _parseArrayError;
-    else if( **s == ',' )
-    {
+    else if(**s == ',') {
       (*s)++;
       _skipWhitespace(s);
     }
   }
 
-  if( **s != ']' )
+  if(**s != ']')
     goto _parseArrayError;
 
   (*s)++;
@@ -420,41 +375,37 @@ _parseArrayError:
   return 0;
 }
 
-static int _parseObject(uchar **s, struct RPC_Node *node)
-{
+static int _parseObject(uchar **s, struct RPC_Node *node) {
   struct RPC_Node *newNode = NULL;
   _skipWhitespace(s);
 
   rpc_hash(node);
 
-  if( **s == '{' )
-  {
+  if(**s == '{') {
     (*s)++;
     _skipWhitespace(s);
   }
   else
     return 0;
 
-  while( **s && **s != '}' )
-  {
+  while(**s && **s != '}') {
     newNode = rpc_new_node();
 
-    if( _parsePair(s, newNode) == 0 || rpc_append_child(newNode, node) == 0 )
+    if(_parsePair(s, newNode) == 0 || rpc_append_child(newNode, node) == 0)
       goto _parseObjectError;
 
     newNode = NULL;
     _skipWhitespace(s);
 
-    if( **s != ',' && **s != '}' )
+    if(**s != ',' && **s != '}')
       goto _parseObjectError;
-    else if( **s == ',' )
-    {
+    else if(**s == ',') {
       (*s)++;
       _skipWhitespace(s);
     }
   }
 
-  if( **s != '}' )
+  if(**s != '}')
     goto _parseObjectError;
 
   (*s)++;
@@ -467,14 +418,17 @@ _parseObjectError:
   return 0;
 }
 
-static int _parsePair(uchar **s, struct RPC_Node *node)
-{
-  struct RPC_Node *newNodes[4] = { rpc_new_node(), rpc_new_node(),
-    rpc_new_node(), rpc_new_node() };
+static int _parsePair(uchar **s, struct RPC_Node *node) {
+  struct RPC_Node *newNodes[4] = {
+    rpc_new_node(),
+    rpc_new_node(),
+    rpc_new_node(),
+    rpc_new_node()
+  };
 
   node->type = RPC_PAIR;
 
-  if( !newNodes[0] || !newNodes[1] || !newNodes[2] || !newNodes[3] )
+  if(!newNodes[0] || !newNodes[1] || !newNodes[2] || !newNodes[3])
     goto _parsePairError;
 
   _skipWhitespace(s);
@@ -482,9 +436,9 @@ static int _parsePair(uchar **s, struct RPC_Node *node)
   newNodes[2]->type = RPC_KEY;
   newNodes[3]->type = RPC_VALUE;
 
-  if( _parseString(s, newNodes[0]) == 0 ||
-      rpc_append_child(newNodes[0], newNodes[2]) == 0 )
-  {
+  if(_parseString(s, newNodes[0]) == 0 || rpc_append_child(newNodes[0],
+                                                           newNodes[2])
+                                          == 0) {
     goto _parsePairError;
   }
 
@@ -492,29 +446,28 @@ static int _parsePair(uchar **s, struct RPC_Node *node)
 
   _skipWhitespace(s);
 
-  if( **s != ':' )
+  if(**s != ':')
     goto _parsePairError;
 
   (*s)++;
 
   _skipWhitespace(s);
 
-  if( _parseValue(s, newNodes[1]) == 0 ||
-      rpc_append_child(newNodes[1], newNodes[3]) == 0 )
-  {
+  if(_parseValue(s, newNodes[1]) == 0 || rpc_append_child(newNodes[1],
+                                                          newNodes[3])
+                                         == 0) {
     goto _parsePairError;
   }
 
   newNodes[1] = NULL;
 
-  if( rpc_append_child(newNodes[2], node) == 0 )
-  {
+  if(rpc_append_child(newNodes[2], node) == 0) {
     goto _parsePairError;
   }
 
   newNodes[2] = NULL;
 
-  if( rpc_append_child(newNodes[3], node) == 0 )
+  if(rpc_append_child(newNodes[3], node) == 0)
     goto _parsePairError;
 
   return 1;
@@ -528,18 +481,17 @@ _parsePairError:
   return 0;
 }
 
-static int _parseValue(uchar **s, struct RPC_Node *node)
-{
+static int _parseValue(uchar **s, struct RPC_Node *node) {
   uchar *ptr = *s;
-  int (*parseFuncs[7])(uchar **, struct RPC_Node *) = { _parseNumber,
+  int (*parseFuncs[7])(uchar**, struct RPC_Node*) = {_parseNumber,
     _parseString, _parseTrue, _parseFalse, _parseNull, _parseArray,
-    _parseObject };
+    _parseObject
+  };
 
-  for(int i=0; i < 7; i++)
-  {
+  for(int i = 0; i < 7; i++) {
     *s = ptr;
 
-    if( parseFuncs[i](s,node) == 1 )
+    if(parseFuncs[i](s, node) == 1)
       return 1;
   }
 

@@ -3,14 +3,11 @@
 
 using namespace sb;
 
-String::String() : charSize(cSize), nChars(0), stringData(NULL)
-{
+String::String() : charSize(cSize), nChars(0), stringData(NULL) {
 }
 
-String::String(const char *str)
-{
-  if( !str )
-  {
+String::String(const char *str) {
+  if(!str) {
     charSize = 1;
     stringData = NULL;
     nChars = 0;
@@ -21,8 +18,7 @@ String::String(const char *str)
   charSize = 1;
   stringData = new char[nChars * charSize];
 
-  if( !stringData )
-  {
+  if(!stringData) {
     nChars = 0;
     return;
   }
@@ -30,16 +26,13 @@ String::String(const char *str)
   memcpy(stringData, str, nChars * charSize);
 }
 
-String::String(const String &str)
-{
-  if( str.stringData == NULL )
-  {
+String::String(const String &str) {
+  if(str.stringData == NULL) {
     str.stringData = NULL;
     nChars = 0;
     charSize = str.charSize;
   }
-  else
-  {
+  else {
     stringData = new char[str.nChars * str.charSize];
     nChars = str.nChars;
     charSize = str.charSize;
@@ -48,23 +41,19 @@ String::String(const String &str)
   }
 }
 
-String::~String()
-{
-  delete [] stringData;
+String::~String() {
+  delete[] stringData;
 }
 
-int String::operator[](int index) const
-{
+int String::operator[](int index) const {
   int val;
 
-  if( index >= 0 && index < nChars )
-  {
-    memcpy(&val, (void *)((unsigned)stringData + index * charSize), charSize);
+  if(index >= 0 && index < nChars) {
+    memcpy(&val, (void*)((unsigned)stringData + index * charSize), charSize);
     return val;
   }
-  else if( index < 0 && index >= -nChars )
-  {
-    memcpy(&val, (void *)((unsigned)stringData + (nChars+index) * charSize), 
+  else if(index < 0 && index >= -nChars) {
+    memcpy(&val, (void*)((unsigned)stringData + (nChars + index) * charSize),
            charSize);
     return val;
   }
@@ -74,10 +63,9 @@ int String::operator[](int index) const
 
 int String::operator==(const String &str) const;
 {
-  
+
 }
 
-size_t String::length() const
-{
+size_t String::length() const {
   return nChars;
 }

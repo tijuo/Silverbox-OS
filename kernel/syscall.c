@@ -95,7 +95,9 @@ static int sysGetPageMappings(syscall_args_t args) {
 
   if(ADDR_SPACE == CURRENT_ROOT_PMAP) {
     if(LEVEL == 2) {
-      cr3_t cr3 = {.value = getCR3()};
+      cr3_t cr3 = {
+        .value = getCR3()
+      };
 
       mappings->physAddr = (paddr_t)(cr3.value & CR3_BASE_MASK);
       mappings->flags = 0;
@@ -115,7 +117,8 @@ static int sysGetPageMappings(syscall_args_t args) {
   switch(LEVEL ) {
     case 0:
       for(i = 0; i < COUNT && VIRT < KERNEL_VSTART;
-          i++, VIRT_VAR += PAGE_SIZE, mappings++) {
+          i++, VIRT_VAR += PAGE_SIZE, mappings++)
+      {
         pde_t pde = readPDE(PDE_INDEX(VIRT), ADDR_SPACE);
 
         if(!pde.isPresent)
@@ -155,7 +158,8 @@ static int sysGetPageMappings(syscall_args_t args) {
       break;
     case 1:
       for(i = 0; i < COUNT && VIRT < KERNEL_VSTART; i++, VIRT_VAR +=
-      PAGE_TABLE_SIZE, mappings++) {
+      PAGE_TABLE_SIZE, mappings++)
+      {
         pde_t pde = readPDE(PDE_INDEX(VIRT), ADDR_SPACE);
 
         if(!pde.isPresent) {
@@ -173,7 +177,9 @@ static int sysGetPageMappings(syscall_args_t args) {
             mappings->flags |= PM_KERNEL;
 
           if(pde.isLargePage) {
-            pmap_entry_t pmapEntry = {.pde = pde};
+            pmap_entry_t pmapEntry = {
+              .pde = pde
+            };
 
             mappings->flags |= PM_PAGE_SIZED;
             mappings->flags |= pmapEntry.largePde.available << PM_AVAIL_OFFSET;
@@ -183,7 +189,7 @@ static int sysGetPageMappings(syscall_args_t args) {
           }
           else
             mappings->flags |= ((pde.available2 << 4) | pde.available)
-              << PM_AVAIL_OFFSET;
+                << PM_AVAIL_OFFSET;
 
           if(pde.pcd)
             mappings->flags |= PM_UNCACHED;
@@ -243,8 +249,11 @@ static int sysSetPageMappings(syscall_args_t args) {
   switch(LEVEL ) {
     case 0:
       for(i = 0; i < COUNT && VIRT < KERNEL_VSTART;
-          i++, VIRT_VAR += PAGE_SIZE, mappings++) {
-        pte_t pte = {.value = 0};
+          i++, VIRT_VAR += PAGE_SIZE, mappings++)
+      {
+        pte_t pte = {
+          .value = 0
+        };
         pde_t pde = readPDE(PDE_INDEX(VIRT), ADDR_SPACE);
 
         if(!pde.isPresent)
@@ -261,7 +270,7 @@ static int sysSetPageMappings(syscall_args_t args) {
         }
         else {
           uint32_t availBits = ((mappings->flags & PM_AVAIL_MASK)
-            >> PM_AVAIL_OFFSET);
+              >> PM_AVAIL_OFFSET);
           pte.isPresent = 1;
 
           if(mappings->physAddr >= 1048576u)
@@ -275,7 +284,8 @@ static int sysSetPageMappings(syscall_args_t args) {
           pte.dirty = IS_FLAG_SET(mappings->flags, PM_DIRTY);
           pte.accessed = IS_FLAG_SET(mappings->flags, PM_ACCESSED);
           pte.pat = IS_FLAG_SET(mappings->flags,
-              PM_WRITECOMB) && !IS_FLAG_SET(mappings->flags, PM_UNCACHED);
+              PM_WRITECOMB)
+                    && !IS_FLAG_SET(mappings->flags, PM_UNCACHED);
           pte.pcd = IS_FLAG_SET(mappings->flags, PM_UNCACHED);
           pte.pwt = IS_FLAG_SET(mappings->flags, PM_WRITETHRU);
           pte.global = IS_FLAG_SET(mappings->flags, PM_STICKY);
@@ -290,8 +300,11 @@ static int sysSetPageMappings(syscall_args_t args) {
       break;
     case 1:
       for(i = 0; i < COUNT && VIRT < KERNEL_VSTART; i++, VIRT_VAR +=
-      PAGE_TABLE_SIZE, mappings++) {
-        pmap_entry_t pmapEntry = {.value = 0};
+      PAGE_TABLE_SIZE, mappings++)
+      {
+        pmap_entry_t pmapEntry = {
+          .value = 0
+        };
 
         if(IS_FLAG_SET(mappings->flags, PM_KERNEL))
           RET_MSG((int )i, "Cannot set page with kernel access privilege.");
@@ -306,7 +319,7 @@ static int sysSetPageMappings(syscall_args_t args) {
           pmapEntry.pde.isPresent = 1;
 
           pmapEntry.pde.isReadWrite = !IS_FLAG_SET(mappings->flags,
-              PM_READ_ONLY);
+                                                   PM_READ_ONLY);
           pmapEntry.pde.isUser = 1;
           pmapEntry.pde.accessed = IS_FLAG_SET(mappings->flags, PM_ACCESSED);
           pmapEntry.pde.pcd = IS_FLAG_SET(mappings->flags, PM_UNCACHED);
@@ -314,7 +327,7 @@ static int sysSetPageMappings(syscall_args_t args) {
 
           if(IS_FLAG_SET(mappings->flags, PM_PAGE_SIZED)) {
             uint32_t availBits = ((mappings->flags & PM_AVAIL_MASK)
-              >> PM_AVAIL_OFFSET);
+                >> PM_AVAIL_OFFSET);
 
             if(mappings->physAddr >= 262144u)
               RET_MSG((int )i, "Tried to write invalid frame to PDE.");
@@ -325,7 +338,9 @@ static int sysSetPageMappings(syscall_args_t args) {
             pmapEntry.largePde.dirty = IS_FLAG_SET(mappings->flags, PM_DIRTY);
             pmapEntry.largePde.global = IS_FLAG_SET(mappings->flags, PM_STICKY);
             pmapEntry.largePde.pat = IS_FLAG_SET(mappings->flags,
-                PM_WRITECOMB) && !IS_FLAG_SET(mappings->flags, PM_UNCACHED);
+                PM_WRITECOMB)
+                                     && !IS_FLAG_SET(mappings->flags,
+                                                     PM_UNCACHED);
             pmapEntry.largePde.available = availBits;
             pmapEntry.largePde.baseLower = mappings->physAddr & 0x3FFu;
             pmapEntry.largePde.baseUpper = mappings->physAddr >> 10u;
@@ -333,7 +348,7 @@ static int sysSetPageMappings(syscall_args_t args) {
           }
           else {
             uint32_t availBits = ((mappings->flags & PM_AVAIL_MASK)
-              >> PM_AVAIL_OFFSET);
+                >> PM_AVAIL_OFFSET);
 
             if(mappings->physAddr >= 1048576u)
               RET_MSG((int )i, "Tried to write invalid frame to PDE.");
@@ -379,7 +394,8 @@ static int sysCreateThread(syscall_args_t args) {
     return newTcb ? (int)getTid(newTcb) : ESYS_FAIL;
   }
   else
-    RET_MSG(ESYS_PERM,
+    RET_MSG(
+        ESYS_PERM,
         "Calling thread doesn't have permission to execute this system call.");
 
 #undef ENTRY
@@ -397,7 +413,8 @@ static int sysDestroyThread(syscall_args_t args) {
     return tcb && !IS_ERROR(releaseThread(tcb)) ? ESYS_OK : ESYS_FAIL;
   }
   else
-    RET_MSG(ESYS_PERM,
+    RET_MSG(
+        ESYS_PERM,
         "Calling thread doesn't have permission to execute this system call.");
 
 #undef TID
@@ -440,7 +457,8 @@ static int sysReadThread(syscall_args_t args) {
     return ESYS_OK;
   }
   else
-    RET_MSG(ESYS_PERM,
+    RET_MSG(
+        ESYS_PERM,
         "Calling thread doesn't have permission to execute this system call.");
 
   return ESYS_FAIL;
@@ -460,7 +478,8 @@ static int sysUpdateThread(syscall_args_t args) {
 #define INFO (thread_info_t *)args.arg3
 
   if(0)
-    RET_MSG(ESYS_PERM,
+    RET_MSG(
+        ESYS_PERM,
         "Calling thread doesn't have permission to execute this system call.");
 
   thread_info_t *info = INFO;
@@ -585,7 +604,8 @@ static int sysSendAndReceive(syscall_args_t args) {
   currentThread->userExecState.eip = args.returnAddress;
 
   switch(sendAndReceiveMessage(currentThread, (tid_t)(TARGETS & 0xFFFFu),
-      (tid_t)(TARGETS >> 16), SUBJECT, SEND_FLAGS, RECV_FLAGS)) {
+                               (tid_t)(TARGETS >> 16), SUBJECT, SEND_FLAGS,
+                               RECV_FLAGS)) {
     case E_OK:
       return ESYS_OK;
     case E_INVALID_ARG:

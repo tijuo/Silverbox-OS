@@ -26,26 +26,29 @@ int getDebugChar(void);
 void putDebugChar(int ch);
 
 DECL_CALL_COUNTER(incSchedCount)
-void incSchedCount( void );
-void incTimerCount( void );
-void clearScreen( void );
-NON_NULL_PARAM(1) void kprintf( const char *str, ... );
-NON_NULL_PARAMS void printAssertMsg(const char *exp, const char *file, const char *func, int line);
-void setBadAssertHlt( bool value );
-void setVideoLowMem( bool value );
-NON_NULL_PARAMS void dump_regs( const tcb_t *thread, const ExecutionState *state, unsigned int intNum, unsigned int errorCode );
-NON_NULL_PARAMS void dump_state( const ExecutionState *state, unsigned int intNum, unsigned int errorCode );
+void incSchedCount(void);
+void incTimerCount(void);
+void clearScreen(void);
+NON_NULL_PARAM(1) void kprintf(const char *str, ...);
+NON_NULL_PARAMS void printAssertMsg(const char *exp, const char *file,
+                                    const char *func, int line);
+void setBadAssertHlt( bool value);
+void setVideoLowMem( bool value);
+NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const ExecutionState *state,
+                               unsigned int intNum, unsigned int errorCode);
+NON_NULL_PARAMS void dump_state(const ExecutionState *state,
+                                unsigned int intNum, unsigned int errorCode);
 
 /*
-char *_toHexString(unsigned int num);
-char *__toHexString(unsigned int, int);
-char *_toIntString(int num);
-char *__toIntString(int, int);
-void putChar( char, int, int );
-void _putChar( char, int, int, unsigned char );
-*/
-NON_NULL_PARAMS void printString(const char *, ...);
-void initVideo( void );
+ char *_toHexString(unsigned int num);
+ char *__toHexString(unsigned int, int);
+ char *_toIntString(int num);
+ char *__toIntString(int, int);
+ void putChar( char, int, int );
+ void _putChar( char, int, int, unsigned char );
+ */
+NON_NULL_PARAMS void printString(const char*, ...);
+void initVideo(void);
 
 /* Note: RDTSCP should be used instead due to possible out of order execution.
  * Alternatively, CPUID or MFENCE,LFENCE can be used before RDTSC

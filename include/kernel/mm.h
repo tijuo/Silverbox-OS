@@ -10,7 +10,7 @@
 #define INVALID_PFRAME             (addr_t)0xFFFFFFFFu
 
 /* FIXME: Changing any of these values may require changing
-   the asm code */
+ the asm code */
 
 #define KERNEL_TCB_START	        ((addr_t)&kTcbStart)
 #define KERNEL_TCB_END		        ((addr_t)&kTcbEnd)
@@ -30,7 +30,7 @@
 #define MAX_PHYS_MEMORY							0x80000000u
 
 /* FIXME: Changing any of these values may require changing the
-   asm code. */
+ asm code. */
 
 #define KMAP_AREA			        (0xFF000u)
 #define TEMP_PAGEADDR		    	KMAP_AREA
@@ -69,17 +69,17 @@
 
 int initializeRootPmap(dword pmap);
 
-NON_NULL_PARAMS int peek( paddr_t, void *, size_t );
+NON_NULL_PARAMS int peek(paddr_t, void*, size_t);
 
-NON_NULL_PARAMS int poke( paddr_t, void *, size_t );
-
-NON_NULL_PARAMS HOT
-int peekVirt( addr_t address, size_t len, void *buffer, paddr_t addrSpace );
+NON_NULL_PARAMS int poke(paddr_t, void*, size_t);
 
 NON_NULL_PARAMS HOT
-int pokeVirt( addr_t address, size_t len, void *buffer, paddr_t addrSpace );
+int peekVirt(addr_t address, size_t len, void *buffer, paddr_t addrSpace);
 
-int clearPhysPage( paddr_t phys );
+NON_NULL_PARAMS HOT
+int pokeVirt(addr_t address, size_t len, void *buffer, paddr_t addrSpace);
+
+int clearPhysPage(paddr_t phys);
 
 /**
  Can the kernel perform some memory access at some virtual address in a particular address space?
@@ -101,7 +101,7 @@ bool isAccessible(addr_t addr, paddr_t pdir, bool isReadOnly);
  **/
 
 static inline bool isReadable(addr_t addr, paddr_t pdir) {
-	return isAccessible(addr, pdir, true);
+  return isAccessible(addr, pdir, true);
 }
 
 /**
@@ -113,17 +113,9 @@ static inline bool isReadable(addr_t addr, paddr_t pdir) {
  **/
 
 static inline bool isWritable(addr_t addr, paddr_t pdir) {
-	return isAccessible(addr, pdir, false);
+  return isAccessible(addr, pdir, false);
 }
 
-extern addr_t *freePageStack;
-extern addr_t *freePageStackTop;
-
 //extern void addGDTEntry( word, addr_t, uint32, uint32 );
-
-addr_t allocPageFrame(void);
-void freePageFrame(addr_t frame);
-
-extern size_t pageTableSize;
 
 #endif

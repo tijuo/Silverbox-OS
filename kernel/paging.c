@@ -24,23 +24,23 @@ bool read);
  */
 
 int initializeRootPmap(paddr_t pmap) {
-	// Map kernel memory into the new address space
+  // Map kernel memory into the new address space
 
 #ifdef DEBUG
 
-	// map the first page table
+  // map the first page table
 
-	if(IS_ERROR(writePDE(0, readPDE(0, CURRENT_ROOT_PMAP), pmap)))
-		RET_MSG(E_FAIL, "Unable to copy kernel PDEs (write failed).");
+  if(IS_ERROR(writePDE(0, readPDE(0, CURRENT_ROOT_PMAP), pmap)))
+    RET_MSG(E_FAIL, "Unable to copy kernel PDEs (write failed).");
 
 #endif /* DEBUG */
 
-	for(unsigned int entry = PDE_INDEX(KERNEL_VSTART); entry < 1024; entry++) {
-		if(IS_ERROR(writePDE(entry, readPDE(entry, CURRENT_ROOT_PMAP), pmap)))
-			RET_MSG(E_FAIL, "Unable to copy kernel PDEs (write failed).");
-	}
+  for(unsigned int entry = PDE_INDEX(KERNEL_VSTART); entry < 1024; entry++) {
+    if(IS_ERROR(writePDE(entry, readPDE(entry, CURRENT_ROOT_PMAP), pmap)))
+      RET_MSG(E_FAIL, "Unable to copy kernel PDEs (write failed).");
+  }
 
-	return E_OK;
+  return E_OK;
 }
 
 /**
@@ -51,21 +51,21 @@ int initializeRootPmap(paddr_t pmap) {
  */
 
 int clearPhysPage(paddr_t phys) {
-	assert(phys < MAX_PHYS_MEMORY);
+  assert(phys < MAX_PHYS_MEMORY);
 
-	clearMemory((void*)KPHYS_TO_VIRT((uintptr_t )phys), PAGE_SIZE);
-	return E_OK;
+  memset((void*)KPHYS_TO_VIRT((uintptr_t )phys), 0, PAGE_SIZE);
+  return E_OK;
 }
 
 bool isAccessible(addr_t addr, paddr_t pdir, bool isReadOnly) {
-	pde_t pde = readPDE(PDE_INDEX(addr), pdir);
+  pde_t pde = readPDE(PDE_INDEX(addr), pdir);
 
-	if(pde.isLargePage)
-		return !!(pde.isPresent && (isReadOnly || pde.isReadWrite));
-	else {
-		pte_t pte = readPTE(PTE_INDEX(addr), PDE_BASE(pde));
-		return !!(pte.isPresent && (isReadOnly || pte.isReadWrite));
-	}
+  if(pde.isLargePage)
+    return !!(pde.isPresent && (isReadOnly || pde.isReadWrite));
+  else {
+    pte_t pte = readPTE(PTE_INDEX(addr), PDE_BASE(pde));
+    return !!(pte.isPresent && (isReadOnly || pte.isReadWrite));
+  }
 }
 
 /**
@@ -83,15 +83,15 @@ bool isAccessible(addr_t addr, paddr_t pdir, bool isReadOnly) {
  */
 
 pmap_entry_t readPmapEntry(paddr_t pbase, unsigned int entry) {
-	if(pbase == CURRENT_ROOT_PMAP)
-		pbase = getRootPageMap();
+  if(pbase == CURRENT_ROOT_PMAP)
+    pbase = getRootPageMap();
 
-	assert(entry < 1024);
-	assert(pbase < MAX_PHYS_MEMORY);
+  assert(entry < 1024);
+  assert(pbase < MAX_PHYS_MEMORY);
 
-	pmap_entry_t *pmap_entry = (pmap_entry_t*)KPHYS_TO_VIRT((uintptr_t )pbase);
+  pmap_entry_t *pmap_entry = (pmap_entry_t*)KPHYS_TO_VIRT((uintptr_t )pbase);
 
-	return pmap_entry[entry];
+  return pmap_entry[entry];
 }
 
 /**
@@ -108,16 +108,16 @@ pmap_entry_t readPmapEntry(paddr_t pbase, unsigned int entry) {
  */
 
 int writePmapEntry(paddr_t pbase, unsigned int entry, pmap_entry_t buffer) {
-	if(pbase == CURRENT_ROOT_PMAP)
-		pbase = getRootPageMap();
+  if(pbase == CURRENT_ROOT_PMAP)
+    pbase = getRootPageMap();
 
-	assert(pbase < MAX_PHYS_MEMORY);
-	assert(entry < 1024);
+  assert(pbase < MAX_PHYS_MEMORY);
+  assert(entry < 1024);
 
-	pmap_entry_t *pmap_entry = (pmap_entry_t*)KPHYS_TO_VIRT((uintptr_t )pbase);
+  pmap_entry_t *pmap_entry = (pmap_entry_t*)KPHYS_TO_VIRT((uintptr_t )pbase);
 
-	pmap_entry[entry] = buffer;
-	return E_OK;
+  pmap_entry[entry] = buffer;
+  return E_OK;
 }
 
 /**
@@ -129,9 +129,8 @@ int writePmapEntry(paddr_t pbase, unsigned int entry, pmap_entry_t buffer) {
  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
  */
 
-NON_NULL_PARAMS
-int poke(paddr_t phys, void *buffer, size_t bytes) {
-	return accessPhys(phys, buffer, bytes, false);
+NON_NULL_PARAMS int poke(paddr_t phys, void *buffer, size_t bytes) {
+  return accessPhys(phys, buffer, bytes, false);
 }
 
 /**
@@ -143,9 +142,8 @@ int poke(paddr_t phys, void *buffer, size_t bytes) {
  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
  */
 
-NON_NULL_PARAMS
-int peek(paddr_t phys, void *buffer, size_t bytes) {
-	return accessPhys(phys, buffer, bytes, true);
+NON_NULL_PARAMS int peek(paddr_t phys, void *buffer, size_t bytes) {
+  return accessPhys(phys, buffer, bytes, true);
 }
 
 /**
@@ -161,23 +159,24 @@ int peek(paddr_t phys, void *buffer, size_t bytes) {
  E_BOUNDS if memory access is out of range.
  */
 
-NON_NULL_PARAMS
-static int accessPhys(paddr_t phys, void *buffer, size_t len, bool readPhys) {
-	assert(phys < MAX_PHYS_MEMORY);
+NON_NULL_PARAMS static int accessPhys(paddr_t phys, void *buffer, size_t len,
+                                      bool readPhys)
+{
+  assert(phys < MAX_PHYS_MEMORY);
 
-	addr_t mappedPhys = KPHYS_TO_VIRT((uintptr_t )phys);
+  addr_t mappedPhys = KPHYS_TO_VIRT((uintptr_t )phys);
 
-	if(phys == NULL_PADDR)
-		RET_MSG(E_INVALID_ARG, "Invalid physical address.");
-	else if(len > MAX_PHYS_MEMORY || phys > MAX_PHYS_MEMORY - len)
-		RET_MSG(E_BOUNDS, "Attempted to access physical memory past 2 GiB limit.");
+  if(phys == NULL_PADDR)
+    RET_MSG(E_INVALID_ARG, "Invalid physical address.");
+  else if(len > MAX_PHYS_MEMORY || phys > MAX_PHYS_MEMORY - len)
+    RET_MSG(E_BOUNDS, "Attempted to access physical memory past 2 GiB limit.");
 
-	if(readPhys)
-		memcpy(buffer, (void*)mappedPhys, len);
-	else
-		memcpy((void*)mappedPhys, buffer, len);
+  if(readPhys)
+    memcpy(buffer, (void*)mappedPhys, len);
+  else
+    memcpy((void*)mappedPhys, buffer, len);
 
-	return E_OK;
+  return E_OK;
 }
 
 /**
@@ -197,52 +196,53 @@ static int accessPhys(paddr_t phys, void *buffer, size_t len, bool readPhys) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS
-static int accessMem(addr_t address, size_t len, void *buffer, paddr_t pdir,
-bool read) {
-	size_t buffer_offset = 0;
+NON_NULL_PARAMS static int accessMem(addr_t address, size_t len, void *buffer,
+                                     paddr_t pdir,
+                                     bool read)
+{
+  size_t buffer_offset = 0;
 
-	assert(address);
+  assert(address);
 
-	while(len) {
-		paddr_t baseAddress;
-		pde_t pde = readPDE(address, pdir);
-		size_t addr_offset = address & (PAGE_SIZE - 1);
-		size_t bytes =
-				(len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
+  while(len) {
+    paddr_t baseAddress;
+    pde_t pde = readPDE(address, pdir);
+    size_t addr_offset = address & (PAGE_SIZE - 1);
+    size_t bytes =
+        (len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
 
-		if(pde.isPresent)
-		{
-			pmap_entry_t pmapEntry = { .pde = pde };
+    if(pde.isPresent) {
+      pmap_entry_t pmapEntry = {
+        .pde = pde
+      };
 
-			if(pde.isLargePage)
-				baseAddress = LARGE_PDE_BASE(pmapEntry.largePde);
-			else
-			{
-				pte_t pte = readPTE(address, pdir);
+      if(pde.isLargePage)
+        baseAddress = LARGE_PDE_BASE(pmapEntry.largePde);
+      else {
+        pte_t pte = readPTE(address, pdir);
 
-				if(pte.isPresent)
-					baseAddress = PTE_BASE(pte);
-				else
-					RET_MSG(E_NOT_MAPPED, "Address is not mapped");
-			}
-		}
-		else
-			RET_MSG(E_NOT_MAPPED, "Address region is not mapped");
+        if(pte.isPresent)
+          baseAddress = PTE_BASE(pte);
+        else
+          RET_MSG(E_NOT_MAPPED, "Address is not mapped");
+      }
+    }
+    else
+      RET_MSG(E_NOT_MAPPED, "Address region is not mapped");
 
-		if(read)
-			peek(baseAddress + addr_offset,
-					(void*)((addr_t)buffer + buffer_offset), bytes);
-		else
-			poke(baseAddress + addr_offset,
-					(void*)((addr_t)buffer + buffer_offset), bytes);
+    if(read)
+      peek(baseAddress + addr_offset, (void*)((addr_t)buffer + buffer_offset),
+           bytes);
+    else
+      poke(baseAddress + addr_offset, (void*)((addr_t)buffer + buffer_offset),
+           bytes);
 
-		address += bytes;
-		buffer_offset += bytes;
-		len -= bytes;
-	}
+    address += bytes;
+    buffer_offset += bytes;
+    len -= bytes;
+  }
 
-	return E_OK;
+  return E_OK;
 }
 
 /**
@@ -257,13 +257,15 @@ bool read) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS
-int pokeVirt(addr_t address, size_t len, void *buffer, paddr_t pdir) {
-	if(pdir == getRootPageMap() || pdir == CURRENT_ROOT_PMAP) {
-		memcpy((void*)address, buffer, len);
-		return E_OK;
-	} else
-		return accessMem(address, len, buffer, pdir, false);
+NON_NULL_PARAMS int pokeVirt(addr_t address, size_t len, void *buffer,
+                             paddr_t pdir)
+{
+  if(pdir == getRootPageMap() || pdir == CURRENT_ROOT_PMAP) {
+    memcpy((void*)address, buffer, len);
+    return E_OK;
+  }
+  else
+    return accessMem(address, len, buffer, pdir, false);
 }
 
 /* data in 'address' goes to 'buffer' */
@@ -280,13 +282,15 @@ int pokeVirt(addr_t address, size_t len, void *buffer, paddr_t pdir) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS
-int peekVirt(addr_t address, size_t len, void *buffer, paddr_t pdir) {
-	if(pdir == getRootPageMap() || pdir == CURRENT_ROOT_PMAP) {
-		memcpy(buffer, (void*)address, len);
-		return E_OK;
-	} else
-		return accessMem(address, len, buffer, pdir, true);
+NON_NULL_PARAMS int peekVirt(addr_t address, size_t len, void *buffer,
+                             paddr_t pdir)
+{
+  if(pdir == getRootPageMap() || pdir == CURRENT_ROOT_PMAP) {
+    memcpy(buffer, (void*)address, len);
+    return E_OK;
+  }
+  else
+    return accessMem(address, len, buffer, pdir, true);
 }
 
 /**
@@ -302,51 +306,55 @@ int peekVirt(addr_t address, size_t len, void *buffer, paddr_t pdir) {
  */
 
 int kMapPage(addr_t virt, paddr_t phys, u32 flags) {
-	assert(virt);
-	assert(phys != NULL_PADDR);
-	assert(phys < MAX_PHYS_MEMORY);
+  assert(virt);
+  assert(phys != NULL_PADDR);
+  assert(phys < MAX_PHYS_MEMORY);
 
-	pde_t pde = readPDE(PDE_INDEX(virt), CURRENT_ROOT_PMAP);
+  pde_t pde = readPDE(PDE_INDEX(virt), CURRENT_ROOT_PMAP);
 
-	if(IS_FLAG_SET(flags, PAGING_4MB_PAGE)) {
-		if(pde.isPresent) {
-			kprintf("kMapPage(): %#x -> %#llx\n", virt, phys);
-			RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.");
-		}
+  if(IS_FLAG_SET(flags, PAGING_4MB_PAGE)) {
+    if(pde.isPresent) {
+      kprintf("kMapPage(): %#x -> %#llx\n", virt, phys);
+      RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.");
+    }
 
-		pmap_entry_t pmapEntry = { .pde = pde };
+    pmap_entry_t pmapEntry = {
+      .pde = pde
+    };
 
-		setLargePdeBase(&pmapEntry.largePde, phys);
-		pmapEntry.value |= (flags & LARGE_PDE_FLAG_MASK) | PAGING_PRES;
+    setLargePdeBase(&pmapEntry.largePde, phys);
+    pmapEntry.largePde.isLargePage = 1;
+    pmapEntry.value |= (flags & LARGE_PDE_FLAG_MASK) | PAGING_PRES;
 
-		if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
-			RET_MSG(E_FAIL, "Unable to write PDE.");
+    if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
+      RET_MSG(E_FAIL, "Unable to write PDE.");
 
-		invalidatePage(ALIGN_DOWN(virt, LARGE_PAGE_SIZE));
-	} else {
-		pte_t pte;
+    invalidatePage(ALIGN_DOWN(virt, LARGE_PAGE_SIZE));
+  }
+  else {
+    pte_t pte;
 
-		if(!pde.isPresent) {
-			kprintf("kMapPage(): %#x -> %#llx\n", virt, phys);
-			RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
-		}
+    if(!pde.isPresent) {
+      kprintf("kMapPage(): %#x -> %#llx\n", virt, phys);
+      RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
+    }
 
-		pte = readPTE(PTE_INDEX(virt), PDE_BASE(pde));
+    pte = readPTE(PTE_INDEX(virt), PDE_BASE(pde));
 
-		if(pte.isPresent) {
-			kprintf("kMapPage(): %#x -> %#llx\n", virt, phys);
-			RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.");
-		}
+    if(pte.isPresent) {
+      kprintf("kMapPage(): %#x -> %#llx\n", virt, phys);
+      RET_MSG(E_OVERWRITE, "Mapping already exists for virtual address.");
+    }
 
-		pte.value = ((uint32_t)phys & PAGE_BASE_MASK) | (flags & PTE_FLAG_MASK)
-			| PAGING_PRES;
+    pte.value = ((uint32_t)phys & PAGE_BASE_MASK) | (flags & PTE_FLAG_MASK)
+                | PAGING_PRES;
 
-		if(IS_ERROR(writePTE(PTE_INDEX(virt), pte, PDE_BASE(pde))))
-			RET_MSG(E_FAIL, "Unable to write PTE.");
-		invalidatePage(virt);
-	}
+    if(IS_ERROR(writePTE(PTE_INDEX(virt), pte, PDE_BASE(pde))))
+      RET_MSG(E_FAIL, "Unable to write PTE.");
+    invalidatePage(virt);
+  }
 
-	return E_OK;
+  return E_OK;
 }
 
 /**
@@ -358,41 +366,47 @@ int kMapPage(addr_t virt, paddr_t phys, u32 flags) {
  */
 
 int kUnmapPage(addr_t virt, paddr_t *phys) {
-	pte_t pte;
+  pte_t pte;
 
-	pmap_entry_t pmapEntry = { .pde = readPDE(PDE_INDEX(virt), CURRENT_ROOT_PMAP) };
+  pmap_entry_t pmapEntry = {
+    .pde = readPDE(PDE_INDEX(virt), CURRENT_ROOT_PMAP)
+  };
 
-	if(pmapEntry.pde.isPresent) {
-		if(!pmapEntry.pde.isLargePage) {
-			pte = readPTE(PTE_INDEX(virt), PDE_BASE(pmapEntry.pde));
+  if(pmapEntry.pde.isPresent) {
+    if(!pmapEntry.pde.isLargePage) {
+      pte = readPTE(PTE_INDEX(virt), PDE_BASE(pmapEntry.pde));
 
-			if(pte.isPresent) {
-				if(phys)
-					*phys = PTE_BASE(pte) | (pte.value & PTE_FLAG_MASK);
+      if(pte.isPresent) {
+        if(phys)
+          *phys = PTE_BASE(pte) | (pte.value & PTE_FLAG_MASK);
 
-				pte.isPresent = 0;
+        pte.isPresent = 0;
 
-				if(IS_ERROR(writePTE(PTE_INDEX(virt), pte, PDE_BASE(pmapEntry.pde))))
-					RET_MSG(E_FAIL, "Unable to write PDE.");
-			} else
-				RET_MSG(E_NOT_MAPPED, "Virtual address is not mapped.");
-		} else {
-			if(phys)
-				*phys = LARGE_PDE_BASE(pmapEntry.largePde)
-					| (pmapEntry.value & LARGE_PDE_FLAG_MASK);
+        if(IS_ERROR(writePTE(PTE_INDEX(virt), pte, PDE_BASE(pmapEntry.pde))))
+          RET_MSG(E_FAIL, "Unable to write PDE.");
+      }
+      else
+        RET_MSG(E_NOT_MAPPED, "Virtual address is not mapped.");
+    }
+    else {
+      if(phys)
+        *phys = LARGE_PDE_BASE(pmapEntry.largePde)
+            | (pmapEntry.value & LARGE_PDE_FLAG_MASK);
 
-			pmapEntry.largePde.isPresent = 0;
+      pmapEntry.largePde.isPresent = 0;
 
-			if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
-				RET_MSG(E_FAIL, "Unable to write PDE.");
-		}
-	} else
-		RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
+      if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
+        RET_MSG(E_FAIL, "Unable to write PDE.");
+    }
+  }
+  else
+    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
 
-	invalidatePage(
-			ALIGN_DOWN(virt, pmapEntry.pde.isLargePage ? LARGE_PAGE_SIZE : PAGE_SIZE));
+  invalidatePage(
+      ALIGN_DOWN(virt,
+                 pmapEntry.pde.isLargePage ? LARGE_PAGE_SIZE : PAGE_SIZE));
 
-	return E_OK;
+  return E_OK;
 }
 
 /**
@@ -406,28 +420,32 @@ int kUnmapPage(addr_t virt, paddr_t *phys) {
  */
 
 int kMapPageTable(addr_t virt, paddr_t phys, u32 flags) {
-	if(phys == NULL_PADDR) {
-		kprintf("kMapPageTable(): %#x -> %#llx: ", virt, phys);
-		RET_MSG(E_INVALID_ARG, "Invalid physical address");
-	}
+  if(phys == NULL_PADDR) {
+    kprintf("kMapPageTable(): %#x -> %#llx: ", virt, phys);
+    RET_MSG(E_INVALID_ARG, "Invalid physical address");
+  }
 
-	pmap_entry_t pmapEntry = { .pde = readPDE(PDE_INDEX(virt), CURRENT_ROOT_PMAP) };
+  pmap_entry_t pmapEntry = {
+    .pde = readPDE(PDE_INDEX(virt), CURRENT_ROOT_PMAP)
+  };
 
-	if(pmapEntry.pde.isPresent) {
-		kprintf("kMapPageTable(): %#x -> %#llx:\n", virt, phys);
-		RET_MSG(E_OVERWRITE, "Address is already mapped!");
-	}
+  if(pmapEntry.pde.isPresent) {
+    kprintf("kMapPageTable(): %#x -> %#llx:\n", virt, phys);
+    RET_MSG(E_OVERWRITE, "Address is already mapped!");
+  }
 
-	if(IS_FLAG_SET(flags, PAGING_4MB_PAGE)) {
-		setLargePdeBase(&pmapEntry.largePde, phys);
-		pmapEntry.value |= (flags & LARGE_PDE_FLAG_MASK) | PAGING_PRES;
-	} else
-		pmapEntry.value = (uint32_t)phys | (flags & PDE_FLAG_MASK) | PAGING_PRES;
+  if(IS_FLAG_SET(flags, PAGING_4MB_PAGE)) {
+    setLargePdeBase(&pmapEntry.largePde, phys);
+    pmapEntry.largePde.isLargePage = 1;
+    pmapEntry.value |= (flags & LARGE_PDE_FLAG_MASK) | PAGING_PRES;
+  }
+  else
+    pmapEntry.value = (uint32_t)phys | (flags & PDE_FLAG_MASK) | PAGING_PRES;
 
-	if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
-		RET_MSG(E_FAIL, "Unable to write PDE.");
+  if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
+    RET_MSG(E_FAIL, "Unable to write PDE.");
 
-	return E_OK;
+  return E_OK;
 }
 
 /**
@@ -440,32 +458,35 @@ int kMapPageTable(addr_t virt, paddr_t phys, u32 flags) {
  */
 
 int kUnmapPageTable(addr_t virt, paddr_t *phys) {
-	pmap_entry_t pmapEntry = { .pde = readPDE(PDE_INDEX(virt), CURRENT_ROOT_PMAP) };
+  pmap_entry_t pmapEntry = {
+    .pde = readPDE(PDE_INDEX(virt), CURRENT_ROOT_PMAP)
+  };
 
-	if(!pmapEntry.pde.isPresent)
-		RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
+  if(!pmapEntry.pde.isPresent)
+    RET_MSG(E_NOT_MAPPED, "PDE is not present for virtual address.");
 
-	pmapEntry.pde.isPresent = 0;
+  pmapEntry.pde.isPresent = 0;
 
-	if(pmapEntry.pde.isLargePage) {
-		if(phys)
-			*phys = LARGE_PDE_BASE(pmapEntry.largePde)
-				| (pmapEntry.value & LARGE_PDE_FLAG_MASK);
+  if(pmapEntry.pde.isLargePage) {
+    if(phys)
+      *phys = LARGE_PDE_BASE(pmapEntry.largePde)
+          | (pmapEntry.value & LARGE_PDE_FLAG_MASK);
 
-		invalidatePage(ALIGN_DOWN(virt, LARGE_PAGE_SIZE));
-	} else {
-		if(phys)
-			*phys = PDE_BASE(pmapEntry.pde) | (pmapEntry.value & PDE_FLAG_MASK);
+    invalidatePage(ALIGN_DOWN(virt, LARGE_PAGE_SIZE));
+  }
+  else {
+    if(phys)
+      *phys = PDE_BASE(pmapEntry.pde) | (pmapEntry.value & PDE_FLAG_MASK);
 
-		addr_t tableBaseAddr = ALIGN_DOWN(virt, PAGE_TABLE_SIZE);
+    addr_t tableBaseAddr = ALIGN_DOWN(virt, PAGE_TABLE_SIZE);
 
-		for(addr_t addr = tableBaseAddr; addr < tableBaseAddr + PAGE_TABLE_SIZE;
-				addr += PAGE_SIZE)
-			invalidatePage(addr);
-	}
+    for(addr_t addr = tableBaseAddr; addr < tableBaseAddr + PAGE_TABLE_SIZE;
+        addr += PAGE_SIZE)
+      invalidatePage(addr);
+  }
 
-	if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
-		RET_MSG(E_FAIL, "Unable to write PDE.");
+  if(IS_ERROR(writePDE(PDE_INDEX(virt), pmapEntry.pde, CURRENT_ROOT_PMAP)))
+    RET_MSG(E_FAIL, "Unable to write PDE.");
 
-	return E_OK;
+  return E_OK;
 }

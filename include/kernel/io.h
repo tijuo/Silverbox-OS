@@ -3,7 +3,7 @@
 
 #include <types.h>
 
-extern void ioWait( void );
+extern void ioWait(void);
 extern byte inByte(word port);
 extern word inWord(word port);
 extern dword inDword(word port);

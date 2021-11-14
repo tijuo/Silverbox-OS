@@ -2,7 +2,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-enum _strtotype_type { __LONG_TYPE,  __ULONG_TYPE };
+enum _strtotype_type {
+  __LONG_TYPE, __ULONG_TYPE
+};
 
 long _strtotype(const char *nptr, char **endptr, int base, .../*int type*/);
 
@@ -12,30 +14,25 @@ long _strtotype(const char *nptr, char **endptr, int base, .../*int type*/);
 #define HEX_BASE        16
 #define MAX_BASE        36
 
-long atol(char *nptr)
-{
-  return strtol(nptr, (char **)NULL, DEC_BASE);
+long atol(char *nptr) {
+  return strtol(nptr, (char**)NULL, DEC_BASE);
 }
 
-int atoi(char *nptr)
-{
-  return (int)strtol(nptr, (char **)NULL, DEC_BASE);
+int atoi(char *nptr) {
+  return (int)strtol(nptr, (char**)NULL, DEC_BASE);
 }
 
-long strtol(const char *nptr, char **endptr, int base)
-{
+long strtol(const char *nptr, char **endptr, int base) {
   return _strtotype(nptr, endptr, base, __LONG_TYPE);
 }
 
-unsigned long strtoul(const char *nptr, char **endptr, int base)
-{
+unsigned long strtoul(const char *nptr, char **endptr, int base) {
   return (unsigned long)_strtotype(nptr, endptr, base, __ULONG_TYPE);
 }
 
-long _strtotype(const char *nptr, char **endptr, int base, .../*int type*/)
-{
+long _strtotype(const char *nptr, char **endptr, int base, .../*int type*/) {
   int neg = 0;
-  long num=0;
+  long num = 0;
 
   while(isspace(*nptr))
     nptr++;
@@ -43,12 +40,9 @@ long _strtotype(const char *nptr, char **endptr, int base, .../*int type*/)
   if(*nptr == '-' || *nptr == '+')
     neg = (*(nptr++) == '-');
 
-  if(base == 0)
-  {
-    if(*nptr == '0')
-    {
-      if(tolower(*(++nptr)) == 'x')
-      {
+  if(base == 0) {
+    if(*nptr == '0') {
+      if(tolower(*(++nptr)) == 'x') {
         base = HEX_BASE;
         nptr++;
       }
@@ -59,21 +53,23 @@ long _strtotype(const char *nptr, char **endptr, int base, .../*int type*/)
       base = DEC_BASE;
   }
 
-  while(*nptr)
-  {
+  while(*nptr) {
     if(!isalnum(*nptr))
       goto error;
-    else if( base >= MIN_BASE && base <= DEC_BASE && *nptr - '0' >= base )
+    else if(base >= MIN_BASE && base <= DEC_BASE && *nptr - '0' >= base)
       goto error;
-    else if( base > DEC_BASE && base < MAX_BASE && tolower(*nptr) - 'a' >= base - DEC_BASE )
+    else if(base > DEC_BASE && base < MAX_BASE
+            && tolower(*nptr) - 'a' >= base - DEC_BASE)
       goto error;
 
-    num = num * base + (neg ? -1 : 1) * (isdigit(*nptr) ? (*nptr - '0') : (DEC_BASE + tolower(*nptr) - 'a'));
+    num = num * base
+        + (neg ? -1 : 1) * (
+            isdigit(*nptr) ? (*nptr - '0') : (DEC_BASE + tolower(*nptr) - 'a'));
     nptr++;
   }
 
 error:
   if(endptr)
-    *endptr = (char *)nptr;
+    *endptr = (char*)nptr;
   return num;
 }

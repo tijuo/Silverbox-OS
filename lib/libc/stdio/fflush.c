@@ -3,16 +3,12 @@
 
 int _flushToFile(FILE *stream);
 
-int fflush(FILE *stream)
-{
+int fflush(FILE *stream) {
   // If stream is null, then flush all open files
 
-  if( stream == NULL )
-  {
-    for(size_t i=0; i < FOPEN_MAX; i++)
-    {
-      if(_stdio_open_files[i].is_open)
-      {
+  if(stream == NULL) {
+    for(size_t i = 0; i < FOPEN_MAX; i++) {
+      if(_stdio_open_files[i].is_open) {
         if(fflush(&_stdio_open_files[i]) == EOF)
           return EOF;
       }
@@ -20,18 +16,15 @@ int fflush(FILE *stream)
 
     return 0;
   }
-  else if(!stream->is_open)
-  {
+  else if(!stream->is_open) {
     errno = -ESTALE;
     return EOF;
   }
 
   // otherwise, flush a particular file
 
-  if(stream->buffer)
-  {
-    if(_flushToFile(stream) != 0)
-    {
+  if(stream->buffer) {
+    if(_flushToFile(stream) != 0) {
       stream->error = 1;
       errno = -EIO;
       return EOF;

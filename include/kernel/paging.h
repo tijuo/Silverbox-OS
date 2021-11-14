@@ -287,8 +287,8 @@ CONST static inline uint32_t getPdeFrameNumber(pde_t pde) {
     .pde = pde
   };
 
-  return
-      (entry.pde.isLargePage ?
+  return (
+      entry.pde.isLargePage ?
           entry.largePde.baseLower | (entry.largePde.baseUpper << 10) :
           entry.pde.base);
 }
@@ -299,7 +299,8 @@ CONST static inline paddr_t getPdeBase(pde_t pde) {
 }
 
 NON_NULL_PARAMS
-static inline void setLargePdeBase(large_pde_t *largePde, paddr_t paddr) {
+static inline void setLargePdeBase(large_pde_t *largePde, paddr_t paddr)
+{
   largePde->baseLower = (uint32_t)((paddr >> LARGE_PFRAME_BITS) & 0x3FFu);
   largePde->baseUpper = 0; /*(uint32_t)((_paddr >> 32) & 0xFF)*/
 }

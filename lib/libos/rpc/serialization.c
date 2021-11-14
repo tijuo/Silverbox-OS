@@ -4,8 +4,7 @@
 
 void _free_rpc_node(struct RPC_Node *node);
 
-struct RPC_Node *rpc_new_node(void)
-{
+struct RPC_Node* rpc_new_node(void) {
   struct RPC_Node *node = malloc(sizeof *node);
 
   rpc_null(node);
@@ -13,24 +12,24 @@ struct RPC_Node *rpc_new_node(void)
 }
 
 int rpc_insert_child(struct RPC_Node *node, unsigned long long pos,
-  struct RPC_Node *parent)
+                     struct RPC_Node *parent)
 {
   struct RPC_Node *newChildren;
 
-  if( !parent || !node )
+  if(!parent || !node)
     return 0;
 
-  if( pos > parent->numChildren )
+  if(pos > parent->numChildren)
     pos = parent->numChildren;
 
   newChildren = realloc(parent->children,
                         (parent->numChildren + 1) * sizeof *node);
 
-  if( !newChildren )
+  if(!newChildren)
     return 0;
 
-  for(unsigned long long i=parent->numChildren; i < pos; i--)
-    newChildren[i] = newChildren[i-1];
+  for(unsigned long long i = parent->numChildren; i < pos; i--)
+    newChildren[i] = newChildren[i - 1];
 
   newChildren[pos] = *node;
   parent->numChildren++;
@@ -41,26 +40,23 @@ int rpc_insert_child(struct RPC_Node *node, unsigned long long pos,
   return 1;
 }
 
-int rpc_append_child(struct RPC_Node *node, struct RPC_Node *parent)
-{
-  if( !parent )
+int rpc_append_child(struct RPC_Node *node, struct RPC_Node *parent) {
+  if(!parent)
     return 0;
 
   return rpc_insert_child(node, parent->numChildren, parent);
 }
 
-void rpc_delete_node(struct RPC_Node *node)
-{
-  if( !node )
+void rpc_delete_node(struct RPC_Node *node) {
+  if(!node)
     return;
 
   _free_rpc_node(node);
   free(node);
 }
 
-void rpc_remove_children(struct RPC_Node *node)
-{
-  if( !node )
+void rpc_remove_children(struct RPC_Node *node) {
+  if(!node)
     return;
 
   while(node->numChildren)
@@ -69,9 +65,8 @@ void rpc_remove_children(struct RPC_Node *node)
   free(node->children);
 }
 
-int rpc_null(struct RPC_Node *node)
-{
-  if( !node )
+int rpc_null(struct RPC_Node *node) {
+  if(!node)
     return 0;
 
   node->numChildren = 0;
@@ -81,9 +76,8 @@ int rpc_null(struct RPC_Node *node)
   return 1;
 }
 
-int rpc_float(double f, struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_float(double f, struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_FLOAT;
@@ -92,10 +86,8 @@ int rpc_float(double f, struct RPC_Node *node)
   return 1;
 }
 
-int rpc_bool(bool b, struct RPC_Node *node)
-{
-  if( rpc_null(node) )
-  {
+int rpc_bool(bool b, struct RPC_Node *node) {
+  if(rpc_null(node)) {
     node->type = b ? RPC_TRUE : RPC_FALSE;
     return 1;
   }
@@ -103,9 +95,8 @@ int rpc_bool(bool b, struct RPC_Node *node)
   return 0;
 }
 
-int rpc_array(struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_array(struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_ARRAY;
@@ -113,9 +104,8 @@ int rpc_array(struct RPC_Node *node)
   return 1;
 }
 
-int rpc_hash(struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_hash(struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_HASH;
@@ -123,9 +113,8 @@ int rpc_hash(struct RPC_Node *node)
   return 1;
 }
 
-int rpc_byte(int8_t b, struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_byte(int8_t b, struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_BYTE;
@@ -134,9 +123,8 @@ int rpc_byte(int8_t b, struct RPC_Node *node)
   return 1;
 }
 
-int rpc_int16(int16_t i, struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_int16(int16_t i, struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_INT16;
@@ -145,9 +133,8 @@ int rpc_int16(int16_t i, struct RPC_Node *node)
   return 1;
 }
 
-int rpc_int32(int32_t i, struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_int32(int32_t i, struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_INT32;
@@ -156,9 +143,8 @@ int rpc_int32(int32_t i, struct RPC_Node *node)
   return 1;
 }
 
-int rpc_int64(int64_t i, struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_int64(int64_t i, struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_INT64;
@@ -167,9 +153,8 @@ int rpc_int64(int64_t i, struct RPC_Node *node)
   return 1;
 }
 
-int rpc_uuid(uuid_t u, struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_uuid(uuid_t u, struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_UUID;
@@ -178,14 +163,13 @@ int rpc_uuid(uuid_t u, struct RPC_Node *node)
   return 1;
 }
 
-int rpc_string(void *seq, size_t len, struct RPC_Node *node)
-{
-  if( !rpc_null(node) )
+int rpc_string(void *seq, size_t len, struct RPC_Node *node) {
+  if(!rpc_null(node))
     return 0;
 
   node->type = RPC_STRING;
 
-  if( (node->data.string.seq = malloc(len)) == NULL )
+  if((node->data.string.seq = malloc(len)) == NULL)
     return 0;
 
   memcpy(node->data.string.seq, seq, len);
@@ -194,13 +178,11 @@ int rpc_string(void *seq, size_t len, struct RPC_Node *node)
   return 1;
 }
 
-void _free_rpc_node(struct RPC_Node *node)
-{
-  if( !node )
+void _free_rpc_node(struct RPC_Node *node) {
+  if(!node)
     return;
 
-  switch(node->type)
-  {
+  switch(node->type) {
     case RPC_STRING:
       free(node->data.string.seq);
       break;

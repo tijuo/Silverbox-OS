@@ -9,7 +9,7 @@
 #define MAX_PRIORITY            4
 #define NORMAL_PRIORITY         2
 
-tcb_t *schedule(unsigned int processorId);
+tcb_t* schedule(unsigned int processorId);
 HOT void switchStacks(ExecutionState *state);
 
 extern tcb_t *runningThreads[MAX_PROCESSORS];

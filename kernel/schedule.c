@@ -13,22 +13,19 @@ tcb_t *runningThreads[MAX_PROCESSORS];
 // Assumes processor id is valid
 
 RETURNS_NON_NULL
-tcb_t *schedule(unsigned int processorId)
+tcb_t* schedule(unsigned int processorId)
 {
   tcb_t *currentThread = runningThreads[processorId];
   int minPriority = currentThread ? currentThread->priority : MIN_PRIORITY;
 
-  for(int priority=MAX_PRIORITY; minPriority; priority--)
-  {
-    if(!isListEmpty(&runQueues[priority]))
-    {
+  for(int priority = MAX_PRIORITY; minPriority; priority--) {
+    if(!isListEmpty(&runQueues[priority])) {
       tcb_t *newThread = listDequeue(&runQueues[priority]);
 
       // If the currently running thread has been preempted, then
       // simply place it back onto its run queue
 
-      if(currentThread)
-      {
+      if(currentThread) {
         currentThread->threadState = READY;
         listEnqueue(&runQueues[currentThread->priority], currentThread);
       }
@@ -42,23 +39,22 @@ tcb_t *schedule(unsigned int processorId)
 
   if(currentThread)
     return currentThread;
-  else // todo: Have a minimum priority kernel idle thread that does nothing
+  else
+    // todo: Have a minimum priority kernel idle thread that does nothing
     panic("No more threads to run.");
 }
 
 /**
-  Switch to a new stack (and thus perform a context switch to a new thread),
-  if necessary.
+ Switch to a new stack (and thus perform a context switch to a new thread),
+ if necessary.
 
-  @param The saved execution state of the processor.
+ @param The saved execution state of the processor.
  */
 
-NON_NULL_PARAMS void switchStacks(ExecutionState *state)
-{
+NON_NULL_PARAMS void switchStacks(ExecutionState *state) {
   tcb_t *oldTcb = getCurrentThread();
 
-  if(!oldTcb || oldTcb->threadState != RUNNING)
-  {
+  if(!oldTcb || oldTcb->threadState != RUNNING) {
     tcb_t *newTcb = schedule(getCurrentProcessor());
 
     if(newTcb != oldTcb && newTcb) // if switching to a new thread
@@ -70,8 +66,7 @@ NON_NULL_PARAMS void switchStacks(ExecutionState *state)
       if((getCR3() & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
         asm volatile("mov %0, %%cr3" :: "r"(newTcb->rootPageMap));
 
-      if(oldTcb)
-      {
+      if(oldTcb) {
         oldTcb->userExecState = *state;
         __asm__("fxsave %0" :: "m"(oldTcb->xsaveState));
       }

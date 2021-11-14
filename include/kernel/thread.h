@@ -69,7 +69,8 @@ struct ThreadControlBlock {
   uint32_t rootPageMap;
 };
 
-NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, uint32_t addrSpace, void *stackTop);
+NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, uint32_t addrSpace,
+                                    void *stackTop);
 
 NON_NULL_PARAMS int startThread(tcb_t *thread);
 NON_NULL_PARAMS int pauseThread(tcb_t *thread);
