@@ -284,7 +284,7 @@ NON_NULL_PARAMS void switchContext(tcb_t *thread, int doXSave) {
   assert(thread->threadState == RUNNING);
 
   if((thread->rootPageMap & CR3_BASE_MASK) != (getCR3() & CR3_BASE_MASK))
-    asm volatile("mov %0, %%cr3\n" :: "r"(thread->rootPageMap));
+    setCR3(thread->rootPageMap);
 
   tcb_t *currentThread = getCurrentThread();
 

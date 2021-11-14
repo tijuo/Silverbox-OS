@@ -546,7 +546,7 @@ __asm__ ( \
           "2:\n" /* No privilege change (kernel->kernel switch) */\
           "mov %%esp, (%%eax)\n" \
           "1:\n" \
-          ::: "eax", "ecx", "memory" \
+          ::: "eax", "ecx", "memory", "cc" \
 )
 
 #define SAVE_ERR_STATE \
@@ -583,7 +583,7 @@ __asm__ ( \
           "mov %%esp, (%%eax)\n" \
           "1:\n" \
           "push %%ecx\n" \
-          ::: "eax", "ecx", "edx", "memory" \
+          ::: "eax", "ecx", "edx", "memory", "cc" \
 )
 
 #define RESTORE_STATE \
@@ -608,7 +608,7 @@ __asm__( \
          "pop %%ecx\n" \
          "pop %%eax\n" \
          "iret\n" \
-         ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory" \
+         ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory", "cc" \
 )
 
 #endif /* KERNEL_LOWLEVEL_H */

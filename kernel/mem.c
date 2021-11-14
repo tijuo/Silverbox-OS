@@ -124,8 +124,13 @@ alignas(PAGE_SIZE) struct TSS_Struct tss SECTION(".tss");
 NON_NULL_PARAMS RETURNS_NON_NULL
 void* memset(void *ptr, int value, size_t len)
 {
+  int dummy;
+
   if((unsigned char)value)
-    __asm__ __volatile__("rep stosb\n" :: "a"((unsigned char)value), "c"(len), "D"(ptr) : "memory");
+    __asm__ __volatile__("rep stosb\n"
+                      : "=c"(dummy)
+                      : "a"((unsigned char)value), "c"(len), "D"(ptr)
+                      : "memory", "cc");
   else {
     char *p = (char*)ptr;
 
@@ -136,7 +141,10 @@ void* memset(void *ptr, int value, size_t len)
 
     if(len) {
       if(!(unsigned char)value)
-        __asm__ __volatile__("rep stosl\n" :: "a"(0), "c"(len / 4), "D"(p) : "memory");
+        __asm__ __volatile__("rep stosl\n"
+                          : "=c"(dummy)
+                          : "a"(0), "c"(len / 4), "D"(p)
+                          : "memory", "cc");
 
       p += (len & ~0x03u);
       len -= (len & ~0x03u);

@@ -64,7 +64,7 @@ NON_NULL_PARAMS void switchStacks(ExecutionState *state) {
       // Switch to the new address space
 
       if((getCR3() & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
-        asm volatile("mov %0, %%cr3" :: "r"(newTcb->rootPageMap));
+        setCR3(newTcb->rootPageMap);
 
       if(oldTcb) {
         oldTcb->userExecState = *state;
