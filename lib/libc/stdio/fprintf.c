@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-int fprintf(FILE *stream, const char *format, ...)
-{
+int fprintf(FILE *stream, const char *format, ...) {
   va_list args;
   int retval;
 

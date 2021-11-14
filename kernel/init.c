@@ -1254,7 +1254,7 @@ void init(multiboot_info_t *info) {
 
   // Initialize FPU to a known state
   __asm__("fninit\n"
-      "fxsave %0\n" :: "m"(initServerThread->xsaveState));
+          "fxsave %0\n" :: "m"(initServerThread->xsaveState));
 
   // Set MSRs to enable sysenter/sysexit functionality
 

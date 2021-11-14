@@ -202,8 +202,7 @@ addr_t unmapPage(addr_t virt, uint32_t addrSpace);
  */
 
 static inline void invalidateTlb(void) {
-  __asm__ __volatile__("movl %%cr3, %%eax\n"
-      "movl %%eax, %%cr3\n" ::: "eax", "memory");
+  setCR3(getCR3());
 }
 
 /**

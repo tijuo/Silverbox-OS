@@ -1,6 +1,6 @@
 include Makefile.inc
 
-.PHONY: all kernel libs apps servers drivers tests clean
+.PHONY: all kernel lib apps servers drivers tests clean
 
 QEMU		:=qemu-system-x86_64
 QEMU_FLAGS	:=-boot order=acn -fda os_floppy.img -smp cores=2,threads=2 -m 768 -cpu kvm64,kvm
@@ -12,8 +12,8 @@ all: kernel #libs apps servers drivers tests
 kernel:
 	$(MAKE) -C kernel all
 
-libs:
-	$(MAKE) -C libs all
+lib:
+	$(MAKE) -C lib all
 
 apps:
 
@@ -29,8 +29,8 @@ gdb-debug: kernel/kernel.elf
 
 tests:
 	$(MAKE) -C kernel tests
-	$(MAKE) -C libs tests
+	$(MAKE) -C lib tests
 
 clean:
 	$(MAKE) -C kernel clean
-	$(MAKE) -C libs all
+	$(MAKE) -C lib clean

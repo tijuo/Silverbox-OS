@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <limits.h>
 
 static void shiftArray(void **ptr, int nElems, int shift);
 static int adjustArrayCapacity(sbarray_t *array);

@@ -128,8 +128,8 @@
 #define SYSENTER_ESP_MSR    0x175u
 #define SYSENTER_EIP_MSR    0x176u
 
-#define enableInt()     __asm__ __volatile__("sti")
-#define disableInt()    __asm__ __volatile__("cli")
+#define enableInt()     __asm__ __volatile__("sti" ::: "cc")
+#define disableInt()    __asm__ __volatile__("cli" ::: "cc")
 #define halt()          __asm__ __volatile__("hlt")
 
 //#define IOMAP_LAZY_OFFSET	0xFFFF
@@ -323,7 +323,7 @@ static inline void setCR0(uint32_t newCR0) {
 }
 
 static inline void setCR3(uint32_t newCR3) {
-  __asm__("mov %0, %%cr3" :: "r"(newCR3));
+  __asm__("mov %0, %%cr3" :: "r"(newCR3) : "memory");
 }
 
 static inline void setCR4(uint32_t newCR4) {
@@ -332,7 +332,7 @@ static inline void setCR4(uint32_t newCR4) {
 
 static inline void setEflags(uint32_t newEflags) {
   __asm__("pushl %0\n"
-      "popf\n" :: "r"(newEflags) : "flags");
+          "popf\n" :: "r"(newEflags) : "cc");
 }
 
 static inline uint32_t getCR0(void) {
@@ -367,7 +367,7 @@ static inline uint32_t getEflags(void) {
   uint32_t eflags;
 
   __asm__("pushf\n"
-      "popl %0\n" : "=r"(eflags));
+          "popl %0\n" : "=r"(eflags));
 
   return eflags;
 }
@@ -414,17 +414,17 @@ static inline uint16_t getSs(void) {
 
 static inline void setCs(uint16_t cs) {
   __asm__("push %0\n"
-      "push $1f\n"
-      "retf\n"
-      "1:\n" :: "r"(cs) : "memory");
+          "push $1f\n"
+          "retf\n"
+          "1:\n" :: "r"(cs) : "memory");
 }
 
 static inline void setDs(uint16_t ds) {
-  __asm__("mov %0, %%ds" :: "r"(ds));
+  __asm__("mov %0, %%ds" :: "r"(ds) : "memory");
 }
 
 static inline void setEs(uint16_t es) {
-  __asm__("mov %0, %%es" :: "r"(es));
+  __asm__("mov %0, %%es" :: "r"(es) : "memory");
 }
 
 static inline void setFs(uint16_t fs) {
@@ -436,7 +436,7 @@ static inline void setGs(uint16_t gs) {
 }
 
 static inline void setSs(uint16_t ss) {
-  __asm__("mov %0, %%ss" :: "r"(ss));
+  __asm__("mov %0, %%ss" :: "r"(ss) : "memory");
 }
 
 static inline bool isXSaveSupported(void) {
@@ -516,96 +516,99 @@ extern struct TSS_Struct tss;
 
 #define SAVE_STATE \
 __asm__ ( \
-          "push %eax\n" \
-          "push %ecx\n" \
-          "push %edx\n" \
-          "push %ebx\n" \
-          "push %ebp\n" \
-          "push %esi\n" \
-          "push %edi\n" \
-          "mov %ds, %ax\n" \
-          "shl $16, %eax\n" \
-          "mov %es, %ax\n" \
-          "push %eax\n" \
-          "mov %fs, %ax\n" \
-          "shl $16, %eax\n" \
-          "mov %gs, %ax\n" \
-          "push %eax\n" \
-          "lea tss, %eax\n" \
-          "lea 4(%eax), %eax\n" \
-          "pushl (%eax)\n" \
-          "cmpl $0, (%eax)\n" /* Is tss.esp0 NULL? (because exception occurred during init()) */ \
+          "push %%eax\n" \
+          "push %%ecx\n" \
+          "push %%edx\n" \
+          "push %%ebx\n" \
+          "push %%ebp\n" \
+          "push %%esi\n" \
+          "push %%edi\n" \
+          "mov %%ds, %%ax\n" \
+          "shl $16, %%eax\n" \
+          "mov %%es, %%ax\n" \
+          "push %%eax\n" \
+          "mov %%fs, %%ax\n" \
+          "shl $16, %%eax\n" \
+          "mov %%gs, %%ax\n" \
+          "push %%eax\n" \
+          "lea tss, %%eax\n" \
+          "lea 4(%%eax), %%eax\n" \
+          "pushl (%%eax)\n" \
+          "cmpl $0, (%%eax)\n" /* Is tss.esp0 NULL? (because exception occurred during init()) */ \
           "je 1f\n" \
-          "mov %esp, (%eax)\n" \
-          "mov %ss, %cx\n" \
-          "cmpw 54(%esp), %cx\n" /* Privilege Change? */ \
+          "mov %%esp, (%%eax)\n" \
+          "mov %%ss, %%cx\n" \
+          "cmpw 54(%%esp), %%cx\n" /* Privilege Change? */ \
           "je 2f\n" \
-          "lea kernelStackTop, %ecx\n" \
-          "mov %ecx, (%eax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \
+          "lea kernelStackTop, %%ecx\n" \
+          "mov %%ecx, (%%eax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \
           "jmp 1f\n" \
           "2:\n" /* No privilege change (kernel->kernel switch) */\
-          "mov %esp, (%eax)\n" \
+          "mov %%esp, (%%eax)\n" \
           "1:\n" \
+          ::: "eax", "ecx", "memory" \
 )
 
 #define SAVE_ERR_STATE \
 __asm__ ( \
-          "push %ecx\n" \
-          "mov 4(%esp), %ecx\n" /* Save error code to ecx */ \
-          "mov %eax, 4(%esp)\n" /* Put eax where the error code used to be. */ \
-          "push %edx\n" \
-          "push %ebx\n" \
-          "push %ebp\n" \
-          "push %esi\n" \
-          "push %edi\n" \
-          "mov %ds, %ax\n" \
-          "shl $16, %eax\n" \
-          "mov %es, %ax\n" \
-          "push %eax\n" \
-          "mov %fs, %ax\n" \
-          "shl $16, %eax\n" \
-          "mov %gs, %ax\n" \
-          "push %eax\n" \
-          "lea tss, %eax\n" \
-          "lea 4(%eax), %eax\n" \
-          "pushl (%eax)\n" \
-          "cmpl $0, (%eax)\n" /* Is tssEsp0 NULL? (because exception occurred during init()) */ \
+          "push %%ecx\n" \
+          "mov 4(%%esp), %%ecx\n" /* Save error code to ecx */ \
+          "mov %%eax, 4(%%esp)\n" /* Put eax where the error code used to be. */ \
+          "push %%edx\n" \
+          "push %%ebx\n" \
+          "push %%ebp\n" \
+          "push %%esi\n" \
+          "push %%edi\n" \
+          "mov %%ds, %%ax\n" \
+          "shl $16, %%eax\n" \
+          "mov %%es, %%ax\n" \
+          "push %%eax\n" \
+          "mov %%fs, %%ax\n" \
+          "shl $16, %%eax\n" \
+          "mov %%gs, %%ax\n" \
+          "push %%eax\n" \
+          "lea tss, %%eax\n" \
+          "lea 4(%%eax), %%eax\n" \
+          "pushl (%%eax)\n" \
+          "cmpl $0, (%%eax)\n" /* Is tssEsp0 NULL? (because exception occurred during init()) */ \
           "je 1f\n" /* If so, don't bother saving/loading tssEsp0 */ \
-          "mov %esp, (%eax)\n" \
-          "mov %ss, %cx\n" \
-          "cmpw 54(%esp), %cx\n" /* Privilege Change? */ \
+          "mov %%esp, (%%eax)\n" \
+          "mov %%ss, %%cx\n" \
+          "cmpw 54(%%esp), %%cx\n" /* Privilege Change? */ \
           "je 2f\n" \
-          "lea kernelStackTop, %edx\n" \
-          "mov %edx, (%eax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \
+          "lea kernelStackTop, %%edx\n" \
+          "mov %%edx, (%%eax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \
           "jmp 1f\n" \
           "2:\n" /* No privilege change (kernel->kernel switch) */\
-          "mov %esp, (%eax)\n" \
+          "mov %%esp, (%%eax)\n" \
           "1:\n" \
-          "push %ecx\n" \
+          "push %%ecx\n" \
+          ::: "eax", "ecx", "edx", "memory" \
 )
 
 #define RESTORE_STATE \
 __asm__( \
-         "lea tss, %eax\n" \
-         "mov 4(%eax), %esp\n" \
-         "pop %ecx\n" \
-         "mov %ecx, 4(%eax)\n" \
-         "pop %eax\n" \
-         "mov %ax, %gs\n" \
-         "shr $16, %eax\n" \
-         "mov %ax, %fs\n" \
-         "pop %eax\n" \
-         "mov %ax, %es\n" \
-         "shr $16, %eax\n" \
-         "mov %ax, %ds\n" \
-         "pop %edi\n" \
-         "pop %esi\n" \
-         "pop %ebp\n" \
-         "pop %ebx\n" \
-         "pop %edx\n" \
-         "pop %ecx\n" \
-         "pop %eax\n" \
+         "lea tss, %%eax\n" \
+         "mov 4(%%eax), %%esp\n" \
+         "pop %%ecx\n" \
+         "mov %%ecx, 4(%%eax)\n" \
+         "pop %%eax\n" \
+         "mov %%ax, %%gs\n" \
+         "shr $16, %%eax\n" \
+         "mov %%ax, %%fs\n" \
+         "pop %%eax\n" \
+         "mov %%ax, %%es\n" \
+         "shr $16, %%eax\n" \
+         "mov %%ax, %%ds\n" \
+         "pop %%edi\n" \
+         "pop %%esi\n" \
+         "pop %%ebp\n" \
+         "pop %%ebx\n" \
+         "pop %%edx\n" \
+         "pop %%ecx\n" \
+         "pop %%eax\n" \
          "iret\n" \
+         ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory" \
 )
 
 #endif /* KERNEL_LOWLEVEL_H */

@@ -3545,7 +3545,7 @@ static void do_check_malloc_state(mstate m) {
           }
           s = s->next;
         }
-      } POSTACTION(m); /* drop lock */
+      }POSTACTION(m); /* drop lock */
       fprintf(stderr, "max system bytes = %10lu\n", (unsigned long)(maxfp));
       fprintf(stderr, "system bytes     = %10lu\n", (unsigned long)(fp));
       fprintf(stderr, "in use bytes     = %10lu\n", (unsigned long)(used));
@@ -4309,7 +4309,8 @@ static void reset_on_error(mstate m) {
               /* Prefer mremap, fall back to munmap */
               if((CALL_MREMAP(sp->base, sp->size, newsize, 0) != MFAIL) || (CALL_MUNMAP(
                   sp->base + newsize, extra)
-                  == 0)) {
+                                                                            == 0))
+              {
                 released = extra;
               }
             }
@@ -4327,7 +4328,7 @@ static void reset_on_error(mstate m) {
                 if(rel_br != CMFAIL && new_br < old_br)
                   released = old_br - new_br;
               }
-            } RELEASE_MALLOC_GLOBAL_LOCK();
+            }RELEASE_MALLOC_GLOBAL_LOCK();
           }
         }
 
@@ -4953,7 +4954,7 @@ postaction:
         mem = chunk2mem(p);
         assert(chunksize(p) >= nb);
         assert(((size_t )mem & (alignment - 1)) == 0);
-        check_inuse_chunk(m, p); POSTACTION(m);
+        check_inuse_chunk(m, p);POSTACTION(m);
       }
     }
     return mem;

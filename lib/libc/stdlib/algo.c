@@ -54,8 +54,7 @@ void gen_mt_numbers(void) {
   unsigned int x;
 
   for(i = 0; i <= 623; i++) {
-    x = (0x80000000UL & mt_array[i]) + (0x7FFFFFFFUL
-        & mt_array[(i + 1) % 623]);
+    x = (0x80000000UL & mt_array[i]) + (0x7FFFFFFFUL & mt_array[(i + 1) % 623]);
     mt_array[i] = (mt_array[(i + 397) % 624]) ^ (x >> 1);
 
     if(x % 2 == 1)

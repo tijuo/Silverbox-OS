@@ -257,8 +257,8 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode) {
   };
 
   __asm__("fxsave %0\n" :: "m"(tcb->xsaveState));
-  __asm__("movq %0, %%mm0\n"
-      "movq %1, %%mm1\n" :: "m"(messageData), "m"(messageData.faultAddress));
+  __asm__("movq (%0), %%mm0\n"
+          "movq 8(%0), %%mm1\n" :: "r"(&messageData));
 
   if(IS_ERROR(sendMessage(tcb, tcb->exHandler, EXCEPTION_MSG, MSG_STD))) {
     kprintf("Unable to send exception message to exception handler.\n");

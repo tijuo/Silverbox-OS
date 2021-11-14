@@ -4,16 +4,12 @@
 
 extern char kbGetChar(void);
 
-int fgetc(FILE *stream)
-{
-  if(stream)
-  {
+int fgetc(FILE *stream) {
+  if(stream) {
     if(stream->eof)
       return EOF;
-    else
-    {
-      if(stream->performed_write)
-      {
+    else {
+      if(stream->performed_write) {
         stream->performed_write = 0;
         // todo: reposition file pos (if applicable)
 
@@ -26,8 +22,7 @@ int fgetc(FILE *stream)
       return (stream == stdin) ? kbGetChar() : EOF;
     }
   }
-  else
-  {
+  else {
     if(!stream->is_open)
       return -ESTALE;
 

@@ -8,16 +8,13 @@ int thrd_equal(thrd_t lhs, thrd_t rhs);
 
 thrd_t thrd_current(void);
 
-int thrd_sleep(const struct timespec* duration,
-                struct timespec* remaining)
-{
+int thrd_sleep(const struct timespec *duration, struct timespec *remaining) {
   if(!duration)
     return -1;
 
-  sys_sleep(duration.tv_sec*1000);
+  sys_sleep(duration.tv_sec * 1000);
 
-  if(remaining)
-  {
+  if(remaining) {
     remaining->tv_sec = 0;
     remaining->tv_nsec = 0;
   }
@@ -25,13 +22,11 @@ int thrd_sleep(const struct timespec* duration,
   return 0;
 }
 
-void thrd_yield(void)
-{
+void thrd_yield(void) {
   sys_sleep(0);
 }
 
-_Noreturn void thrd_exit(int res)
-{
+_Noreturn void thrd_exit(int res) {
   sys_exit(res);
 }
 

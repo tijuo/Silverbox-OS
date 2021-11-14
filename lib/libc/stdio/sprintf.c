@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-int sprintf(char *str, const char *format, ...)
-{
+int sprintf(char *str, const char *format, ...) {
   va_list args;
   int retval;
 

@@ -5,5 +5,5 @@ void abort() {
 }
 
 void exit(int status) {
-  __asm__  __volatile__("hlt\n" :: "a"(status));
+  __asm__ __volatile__("hlt\n" :: "a"(status));
 }

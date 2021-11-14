@@ -10,7 +10,7 @@
 #define ANY_SENDER          NULL_TID
 
 #define MSG_NOBLOCK         0x01u
-#define MSG_BLANK           0x00u   // Only subject is sent
+#define MSG_EMPTY           0x00u   // Only subject is sent
 #define MSG_STD             0x02u   // MMX registers contain data (64 bytes)
 #define MSG_LONG            0x04u   // SSE registers contain data (128 bytes)
 #define MSG_HUGE            0x06u   // Both MMX and SSE registers contain data (192 bytes)
@@ -38,11 +38,30 @@ typedef struct
   } payload;
 } msg_t;
 
-#define EMPTY_MSG { .subject = 0,\
-                    .flags = 0,\
-                    .sender = NULL_TID,\
-                    .payload = { \
-                      .uint32 = { 0, 0, 0, 0, 0, 0 }}}
+#define EMPTY_MSG { \
+  .subject = 0,\
+  .flags = 0,\
+  .target = { \
+    .sender = NULL_TID \
+  }, \
+  .payload = { \
+    .uint64 = { \
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
+      0, 0, 0, 0 \
+    } \
+  } \
+}
+
+/// Store the message payload in the SIMD registers
+
+void setMessagePayload(const msg_t *msg);
+
+/// Retrieve the message payload from the SIMD registers
+void getMessagePayload(msg_t *msg);
+
+/// Indicate that we're done using the SIMD registers (in particular, MMX)
+void finishMessagePayload(void);
 
 /*
 #define EMPTY_REQUEST_MSG(subj, recv) { .subject = subj, .sender = NULL_TID, .recipient = recv, .buffer = NULL, .bufferLen = 0, .flags = 0, .bytesTransferred = 0 }

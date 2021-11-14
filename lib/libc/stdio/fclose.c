@@ -2,15 +2,12 @@
 #include <stdlib.h>
 #include <errno.h>
 
-int fclose(FILE *stream)
-{
-  if( !stream )
-  {
+int fclose(FILE *stream) {
+  if(!stream) {
     errno = -EINVAL;
     return EOF;
   }
-  else if(!stream->is_open)
-  {
+  else if(!stream->is_open) {
     errno = -ESTALE;
     return EOF;
   }

@@ -12,6 +12,6 @@ char* strrchr(const char *s, int c) {
     }
   }
 
-  return (char *)addr;
+  return (char*)addr;
 }
 

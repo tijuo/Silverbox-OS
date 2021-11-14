@@ -17,10 +17,11 @@ typedef union {
   unsigned long long ullValue;
 } strtol_t;
 
-static strtol_t strtotype(const char *nptr, char **endptr, int base, enum strtotypeType t);
+static strtol_t strtotype(const char *nptr, char **endptr, int base,
+                          enum strtotypeType t);
 
 long long atoll(char *nptr) {
-  return strtotype(nptr, (char **)NULL, 10, TYPE_LLONG).llValue;
+  return strtotype(nptr, (char**)NULL, 10, TYPE_LLONG).llValue;
 }
 
 long atol(char *nptr) {
@@ -47,7 +48,9 @@ unsigned long long strtoull(const char *nptr, char **endptr, int base) {
   return strtotype(nptr, endptr, base, TYPE_ULLONG).ullValue;
 }
 
-strtol_t strtotype(const char *nptr, char **endptr, int base, enum strtotypeType t) {
+strtol_t strtotype(const char *nptr, char **endptr, int base,
+                   enum strtotypeType t)
+{
   int isNeg = 0;
   strtol_t num;
 
@@ -167,7 +170,6 @@ error:
       num.iValue = isNeg ? -num.iValue : num.iValue;
       break;
   }
-
 
   return num;
 }
