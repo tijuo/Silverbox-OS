@@ -4,6 +4,7 @@
 *.dmp
 *.tmp
 *.sym
+*.bsym
 *.exe
 *.gz
 *.save*

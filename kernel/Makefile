@@ -38,5 +38,7 @@ clean:
 	rm -f $(BIN).dmp
 	rm -f $(BIN).gz
 	rm -f $(BIN_GZ)
+	rm -f $(BIN).sym
+	rm -f $(BIN).bsym
 
 include ../Makefile_post.inc
