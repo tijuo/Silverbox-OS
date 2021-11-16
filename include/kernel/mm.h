@@ -40,7 +40,7 @@
 #define INVALID_VADDR       	    ((addr_t)0xFFFFFFFF)
 #define INVALID_ADDR        	    ((addr_t)0xFFFFFFFF)
 
-#define INIT_SERVER_STACK_TOP	    ((addr_t)KERNEL_VSTART)
+#define INIT_SERVER_STACK_TOP	    (ALIGN_DOWN((addr_t)KERNEL_VSTART, PAGE_TABLE_SIZE))
 #define INIT_SERVER_STACK_SIZE      0x400000u
 /** Aligns an address to the previous boundary (if not already aligned) */
 #define ALIGN_DOWN(addr, boundary)       ((addr_t)((addr) & ~((boundary) - 1) ))

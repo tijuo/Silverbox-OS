@@ -3,7 +3,7 @@ use crate::lowlevel::{phys};
 use core::{mem, cmp};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
-use alloc::prelude::v1::String;
+use alloc::string::String;
 
 #[repr(C)]
 #[derive(Default, Clone, Copy)]

@@ -5,7 +5,7 @@ use crate::syscall::status;
 use crate::syscall::c_types::{CTid, NULL_TID};
 use crate::syscall;
 use crate::error;
-use alloc::prelude::v1::Vec;
+use alloc::vec::Vec;
 use core::ffi::c_void;
 use core::{mem, result};
 use alloc::boxed::Box;

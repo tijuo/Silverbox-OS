@@ -17,7 +17,7 @@ tcb_t* schedule(proc_id_t processorId)
   tcb_t *currentThread = processors[processorId].runningThread;
   int minPriority = currentThread ? currentThread->priority : MIN_PRIORITY;
 
-  for(int priority = MAX_PRIORITY; minPriority; priority--) {
+  for(int priority = MAX_PRIORITY; priority >= minPriority; priority--) {
     if(!isListEmpty(&runQueues[priority])) {
       tcb_t *newThread = listDequeue(&runQueues[priority]);
 

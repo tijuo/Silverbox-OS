@@ -1,7 +1,7 @@
 use core::panic::PanicInfo;
 use core::alloc::{Layout, GlobalAlloc};
 use core::ffi::c_void;
-use alloc::prelude::v1::ToString;
+use alloc::string::ToString;
 
 static BASE_CHARS: &'static [u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 

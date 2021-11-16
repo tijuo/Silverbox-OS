@@ -169,6 +169,8 @@ NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, addr_t addrSpace,
 
   thread->userExecState.userEsp = (dword)stackTop;
   thread->userExecState.cs = UCODE_SEL;
+  thread->userExecState.ds = UDATA_SEL;
+  thread->userExecState.es = UDATA_SEL;
   thread->userExecState.userSS = UDATA_SEL;
 
   thread->priority = NORMAL_PRIORITY;

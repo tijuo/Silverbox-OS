@@ -57,7 +57,6 @@ use crate::message::init::{RegisterNameRequest, LookupNameRequest, UnregisterNam
                            RegisterServerResponse};
 use crate::message::kernel::{ExceptionMessage, ExitMessage};
 use syscall::c_types::{CTid, NULL_TID};
-use core::prelude::v1::*;
 use alloc::string::String;
 use crate::multiboot::{RawMultibootInfo, MultibootInfo};
 use alloc::boxed::Box;
@@ -72,7 +71,7 @@ use crate::message::Message;
 use core::convert::TryFrom;
 use crate::message::init::{SimpleResponse, NameString};
 use core::cmp::Ordering;
-use alloc::prelude::v1::Vec;
+use alloc::vec::Vec;
 use crate::phys_alloc::PhysPageAllocator;
 
 const DATA_BUF_SIZE: usize = 64;

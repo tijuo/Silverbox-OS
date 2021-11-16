@@ -98,6 +98,10 @@ pub mod c_types {
                 eip: 0,
                 eflags: 0,
                 cs: 0,
+                ds: 0,
+                es: 0,
+                fs: 0,
+                gs: 0,
                 ss: 0
             }
         }

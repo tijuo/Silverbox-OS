@@ -3,7 +3,7 @@ use crate::message::init::{RawRegisterNameRequest, RegisterNameRequest, RawRegis
 use alloc::boxed::Box;
 use crate::Tid;
 use crate::error;
-use alloc::prelude::v1::String;
+use alloc::string::String;
 use crate::syscall;
 
 const DATA_BUF_SIZE: usize = 32;

@@ -665,6 +665,7 @@ void setupGDT(void) {
   tss.ss0 = KDATA_SEL;
 
   __asm__ __volatile__("lgdt %0" :: "m"(gdtPointer) : "memory");
+  __asm__ __volatile__("ltr %%ax" :: "a"(TSS_SEL));
 }
 
 void stopInit(const char *msg) {
@@ -1364,9 +1365,7 @@ void init(multiboot_info_t *info) {
   wrmsr(SYSENTER_EIP_MSR, (uint64_t)(uintptr_t)sysenterEntry);
 
   kprintf("Context switching...\n");
-  while(1)
-    ;
 
-  switchContext(initServerThread, 0);
+  switchContext(schedule(0), 0);
   stopInit("Error: Context switch failed.");
 }
