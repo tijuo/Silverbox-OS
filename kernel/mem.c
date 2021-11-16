@@ -11,8 +11,6 @@ addr_t *freePageStack = (addr_t*)PAGE_STACK;
 addr_t *freePageStackTop;
 bool tempMapped = false;
 
-ALIGNED(PAGE_SIZE) pte_t kMapAreaPTab[PTE_ENTRY_COUNT];
-
 gdt_entry_t kernelGDT[8] = {
   // Null Descriptor (0x00)
   {

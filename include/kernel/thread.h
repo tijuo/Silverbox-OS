@@ -53,7 +53,10 @@ struct ThreadControlBlock {
   tid_t childrenHead;
   tid_t nextSibling;
 
-  uint8_t available[38];
+  uint8_t available[30];
+
+  void *capTable;
+  size_t capTableSize;
 
   // 64 bytes
 
@@ -69,6 +72,23 @@ struct ThreadControlBlock {
   uint32_t rootPageMap;
 };
 
+struct Processor {
+  bool isOnline;
+  uint8_t acpiUid;
+  uint8_t lapicId;
+  tcb_t *runningThread;
+};
+
+typedef uint8_t proc_id_t;
+extern size_t numProcessors;
+
+_Static_assert(sizeof(tcb_t) == 32 || sizeof(tcb_t) == 64 || sizeof(tcb_t) == 128
+               || sizeof(tcb_t) == 256 || sizeof(tcb_t) == 512 || sizeof(tcb_t) == 1024
+               || sizeof(tcb_t) == 2048 || sizeof(tcb_t) == 4096,
+               "TCB size is not properly aligned");
+
+extern struct Processor processors[MAX_PROCESSORS];
+
 NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, uint32_t addrSpace,
                                     void *stackTop);
 
@@ -82,7 +102,6 @@ NON_NULL_PARAMS int wakeupThread(tcb_t *thread);
 extern tcb_t *initServerThread;
 extern tcb_t *initPagerThread;
 extern tcb_t tcbTable[MAX_THREADS];
-extern tcb_t *runningThreads[MAX_PROCESSORS];
 extern ALIGNED(PAGE_SIZE) uint8_t kernelStack[PAGE_SIZE];
 extern uint8_t *kernelStackTop;
 
@@ -115,7 +134,7 @@ static inline CONST unsigned int getCurrentProcessor(void) {
 /// @return The current thread that's running on this processor.
 
 static inline tcb_t* getCurrentThread(void) {
-  return runningThreads[getCurrentProcessor()];
+  return processors[getCurrentProcessor()].runningThread;
 }
 
 /**
@@ -124,7 +143,7 @@ static inline tcb_t* getCurrentThread(void) {
  */
 
 static inline void setCurrentThread(tcb_t *tcb) {
-  runningThreads[getCurrentProcessor()] = tcb;
+  processors[getCurrentProcessor()].runningThread = tcb;
 }
 
 #endif /* KERNEL_THREAD_H */

@@ -22,6 +22,9 @@ tcb_t *initServerThread;
 list_t pausedList;
 list_t zombieList;
 
+struct Processor processors[MAX_PROCESSORS];
+size_t numProcessors;
+
 static tid_t getNewTid(void);
 
 NON_NULL_PARAMS int wakeupThread(tcb_t *thread) {
@@ -62,11 +65,11 @@ NON_NULL_PARAMS int removeThreadFromList(tcb_t *thread) {
       listRemove(&zombieList, thread);
       break;
     case RUNNING:
-      for(unsigned int processorId = 0; processorId < MAX_PROCESSORS;
+      for(unsigned int processorId = 0; processorId < numProcessors;
           processorId++)
       {
-        if(runningThreads[processorId] == thread) {
-          runningThreads[processorId] = NULL;
+        if(processors[processorId].runningThread == thread) {
+          processors[processorId].runningThread = NULL;
           break;
         }
       }

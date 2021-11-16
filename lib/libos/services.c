@@ -45,13 +45,18 @@ int videoSetScroll(unsigned int offset) {
   if(_lookupVideoTid() != 0)
     return -1;
 
-  struct VideoSetScrollRequest request = {
-    .row = offset
+  msg_t requestMsg = {
+    .subject = VSET_SCROLL,
+    .flags = MSG_STD,
+    .target = { .recipient = videoTid },
   };
 
-  msg_t requestMsg = REQUEST_MSG(VSET_SCROLL, videoTid, request);
-  msg_t responseMsg = EMPTY_MSG
-  ;
+  struct VideoSetScrollRequest *request = (struct VideoSetScrollRequest *)&requestMsg.payload;
+  request->row = offset;
+
+  msg_t responseMsg = EMPTY_MSG;
+
+  setMessagePayload(&requestMsg);
 
   return
       (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject

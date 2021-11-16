@@ -5,7 +5,7 @@ include $(ROOT_PATH)/Makefile.inc
 
 SRC	:=list.c message.c pic.c syscall.c debug.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
-	init.c
+	apic.c init.c
 ASM_SRC	=entry.S
 OBJ	:=$(SRC:%.c=%.o) $(ASM_SRC:%.S=%.o)
 BIN	:=kernel.elf

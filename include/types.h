@@ -23,8 +23,7 @@ typedef int32_t s32;
 typedef uint64_t u64;
 typedef int64_t s64;
 
-typedef uintptr_t addr_t;
-typedef uint32_t paddr_t;
+typedef unsigned long int addr_t;
 
 typedef u8  byte;
 typedef u16 word;
@@ -51,11 +50,12 @@ typedef s64 quad;
 typedef unsigned short int tid_t;
 typedef unsigned short int pid_t;
 
-#define NULL_TID  					((tid_t)0)
-#define NULL_PID  					((pid_t)0)
-#define NULL_PADDR					((paddr_t)0xFFFFFFFFu)
-#define CURRENT_ROOT_PMAP   NULL_PADDR
+typedef unsigned long int pframe_t;
 
+#define NULL_TID  		((tid_t)0)
+#define NULL_PID  		((pid_t)0)
+#define CURRENT_ROOT_PMAP   	~0ul
+#define INVALID_PFRAME		~0ul
 #ifndef __cplusplus
 /* typedef char _Bool; */
 

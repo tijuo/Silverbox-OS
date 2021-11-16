@@ -4,7 +4,7 @@
 #include <types.h>
 #include <kernel/bits.h>
 
-#define MODE_BIT_WIDTH  32u
+#define MODE_BIT_WIDTH      32u
 
 #define RING0_DPL           0u
 #define RING1_DPL           1u
@@ -291,6 +291,8 @@ union GdtEntry {
 
 typedef union GdtEntry gdt_entry_t;
 
+_Static_assert(sizeof(gdt_entry_t) == 8, "GDTEntry should be 8 bytes");
+
 struct GdtPointer {
   uint16_t limit;
   uint32_t base;
@@ -308,6 +310,8 @@ struct IdtEntry {
 };
 
 typedef struct IdtEntry idt_entry_t;
+
+_Static_assert(sizeof(idt_entry_t) == 8, "IDTEntry should be 8 bytes");
 
 struct IdtPointer {
   uint16_t limit;
@@ -610,5 +614,64 @@ __asm__( \
          "iret\n" \
          ::: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory", "cc" \
 )
+
+
+extern void cpuEx0Handler(void);
+extern void cpuEx1Handler(void);
+extern void cpuEx2Handler(void);
+extern void cpuEx3Handler(void);
+extern void cpuEx4Handler(void);
+extern void cpuEx5Handler(void);
+extern void cpuEx6Handler(void);
+extern void cpuEx7Handler(void);
+extern void cpuEx8Handler(void);
+extern void cpuEx9Handler(void);
+extern void cpuEx10Handler(void);
+extern void cpuEx11Handler(void);
+extern void cpuEx12Handler(void);
+extern void cpuEx13Handler(void);
+extern void cpuEx14Handler(void);
+extern void cpuEx15Handler(void);
+extern void cpuEx16Handler(void);
+extern void cpuEx17Handler(void);
+extern void cpuEx18Handler(void);
+extern void cpuEx19Handler(void);
+extern void cpuEx20Handler(void);
+extern void cpuEx21Handler(void);
+extern void cpuEx22Handler(void);
+extern void cpuEx23Handler(void);
+extern void cpuEx24Handler(void);
+extern void cpuEx25Handler(void);
+extern void cpuEx26Handler(void);
+extern void cpuEx27Handler(void);
+extern void cpuEx28Handler(void);
+extern void cpuEx29Handler(void);
+extern void cpuEx30Handler(void);
+extern void cpuEx31Handler(void);
+
+extern void irq0Handler(void);
+extern void irq1Handler(void);
+extern void irq2Handler(void);
+extern void irq3Handler(void);
+extern void irq4Handler(void);
+extern void irq5Handler(void);
+extern void irq6Handler(void);
+extern void irq7Handler(void);
+extern void irq8Handler(void);
+extern void irq9Handler(void);
+extern void irq10Handler(void);
+extern void irq11Handler(void);
+extern void irq12Handler(void);
+extern void irq13Handler(void);
+extern void irq14Handler(void);
+extern void irq15Handler(void);
+extern void irq16Handler(void);
+extern void irq17Handler(void);
+extern void irq18Handler(void);
+extern void irq19Handler(void);
+extern void irq20Handler(void);
+extern void irq21Handler(void);
+extern void irq22Handler(void);
+extern void irq23Handler(void);
 
 #endif /* KERNEL_LOWLEVEL_H */

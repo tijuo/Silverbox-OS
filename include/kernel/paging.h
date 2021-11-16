@@ -5,6 +5,8 @@
 #include <kernel/error.h>
 #include <stdint.h>
 
+#define MAX_PHYS_MEMORY           0x10000000000ull
+
 #define PAGE_SIZE		            	0x1000u
 #define LARGE_PAGE_SIZE   	    	0x400000u
 #define PAE_LARGE_PAGE_SIZE	    	0x200000u
@@ -20,7 +22,8 @@
 
 #define PDE_INDEX(a)		    			(((a) >> 22) & 0x3FFu)
 #define PTE_INDEX(a)		    			(((a) >> 12) & 0x3FFu)
-#define PAGE_OFFSET(a)		    		((a) & 0xFFFu)
+#define PAGE_OFFSET(a)		    		((a) & (PAGE_SIZE-1))
+#define LARGE_PAGE_OFFSET(a)      ((a) & (LARGE_PAGE_SIZE-1))
 
 #define NDX_TO_VADDR(pde, pte, offset)  ((((pde) & 0x3FFu) << 22) | (((pte) & 0x3FFu) << 12) | ((offset) & 0xFFFu))
 
@@ -59,21 +62,21 @@
 #define PDE_FLAG_MASK               	((1u << PMAP_FLAG_BITS)-1)
 #define LARGE_PDE_FLAG_MASK         	((1u << PMAP_FLAG_BITS)-1)
 
-#define PFRAME_TO_ADDR(frame)   			(addr_t)((frame) << PFRAME_BITS)
-#define ADDR_TO_PFRAME(addr)    			(unsigned int)(((uintptr_t)(addr)) >> PFRAME_BITS)
+#define PFRAME_TO_PADDR(frame)        ((uint64_t)(frame) << PFRAME_BITS)
+
+#define ADDR_TO_PFRAME(addr)         (pframe_t)((addr) >> PFRAME_BITS)
+#define ADDR_TO_LARGE_PFRAME(addr)    (pframe_t)(ALIGN_DOWN(addr, LARGE_PAGE_SIZE) >> PFRAME_BITS)
+
+#define PADDR_TO_PFRAME(addr)    			(pframe_t)((addr) >> PFRAME_BITS)
+#define PADDR_TO_LARGE_PFRAME(addr)    (pframe_t)(ALIGN_DOWN(addr, (uint64_t)LARGE_PAGE_SIZE) >> PFRAME_BITS)
 
 #define PAGE_BASE_MASK		   					0xFFFFF000u
 
-#define PTE_BASE(pte) 								(paddr_t)((pte).base << PTE_FLAG_BITS)
-#define PDE_BASE(pde) 								(paddr_t)((pde).base << PDE_FLAG_BITS)
+#define PTE_BASE(pte) 								((pte).base << PTE_FLAG_BITS)
+#define PDE_BASE(pde) 								((pde).base << PDE_FLAG_BITS)
 
 #define PADDR_TO_PDE_BASE(addr)				(uint32_t)((addr) >> PDE_FLAG_BITS)
 #define PADDR_TO_PTE_BASE(addr)				(uint32_t)((addr) >> PDE_FLAG_BITS)
-
-#define LARGE_PDE_BASE(pde) ({\
-	large_pde_t _pde=(pde); \
-	((paddr_t)(_pde.baseLower) << 22) /*| ((paddr_t)(_pde->baseUpper) << 32)*/;\
-})
 
 #define CR3_PWT                 	(1u << 3)
 #define CR3_PCD                 	(1u << 4)
@@ -95,6 +98,9 @@ struct CR3_Struct {
 };
 
 typedef struct CR3_Struct cr3_t;
+
+_Static_assert(sizeof(cr3_t) == 4, "CR3_Struct should be 4 bytes");
+
 
 /// Represents a 4 kB PTE in a page table.
 /// Physical addresses for 4 kB pages are limited to 32 bits.
@@ -121,6 +127,8 @@ struct PageTableEntry {
 
 typedef struct PageTableEntry pte_t;
 
+_Static_assert(sizeof(pte_t) == 4, "PageTableEntry should be 4 bytes");
+
 /// Represents an x86 PDE in a page directory.
 
 struct PageDirEntry {
@@ -143,6 +151,8 @@ struct PageDirEntry {
 };
 
 typedef struct PageDirEntry pde_t;
+
+_Static_assert(sizeof(pde_t) == 4, "PageDirEntry should be 4 bytes");
 
 /// Represents an x86 4MB PDE in a page directory.
 /// Physical addresses for 4 MB pages are limited to 40 bits.
@@ -172,6 +182,8 @@ struct LargePageDirEntry {
 
 typedef struct LargePageDirEntry large_pde_t;
 
+_Static_assert(sizeof(large_pde_t) == 4, "LargePageDirEntry should be 4 bytes");
+
 struct PageMapEntry {
   union {
     pde_t pde;
@@ -183,16 +195,13 @@ struct PageMapEntry {
 
 typedef struct PageMapEntry pmap_entry_t;
 
-HOT pmap_entry_t readPmapEntry(uint32_t pbase, unsigned int entry);
-HOT int writePmapEntry(uint32_t pbase, unsigned int entry,
-                       pmap_entry_t pmapEntry);
+_Static_assert(sizeof(pmap_entry_t) == 4, "PageMapEntry should be 4 bytes");
 
-int kMapPage(addr_t virt, paddr_t phys, u32 flags);
-int mapPage(addr_t virt, paddr_t phys, u32 flags, uint32_t addrSpace);
-int kUnmapPage(addr_t virt, paddr_t *phys);
-int kMapPageTable(addr_t virt, paddr_t phys, u32 flags);
-int kUnmapPageTable(addr_t virt, paddr_t *phys);
-addr_t unmapPage(addr_t virt, uint32_t addrSpace);
+pmap_entry_t readPmapEntry(uint32_t pbase, unsigned int entry);
+int writePmapEntry(uint32_t pbase, unsigned int entry,
+                       pmap_entry_t pmapEntry);
+int mapLargeFrame(uint64_t phys, pmap_entry_t *pmapEntry);
+int unmapLargeFrame(pmap_entry_t pmapEntry);
 
 /**
  Flushes the entire TLB by reloading the CR3 register.
@@ -216,8 +225,8 @@ static inline void invalidatePage(addr_t virt) {
   __asm__ __volatile__( "invlpg (%0)\n" :: "r"( virt ) : "memory" );
 }
 
-static inline paddr_t getRootPageMap(void) {
-  return (paddr_t)(getCR3() & CR3_BASE_MASK);
+static inline uint32_t getRootPageMap(void) {
+  return (uint32_t)(getCR3() & CR3_BASE_MASK);
 }
 
 /**
@@ -230,7 +239,7 @@ static inline paddr_t getRootPageMap(void) {
  @return The PDE that was read.
  */
 
-static inline pde_t readPDE(unsigned int entryNum, paddr_t pageDir) {
+static inline pde_t readPDE(unsigned int entryNum, uint32_t pageDir) {
   return readPmapEntry(pageDir, entryNum).pde;
 }
 
@@ -245,7 +254,7 @@ static inline pde_t readPDE(unsigned int entryNum, paddr_t pageDir) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-static inline int writePDE(unsigned int entryNum, pde_t pde, paddr_t pageDir) {
+static inline int writePDE(unsigned int entryNum, pde_t pde, uint32_t pageDir) {
   pmap_entry_t pmapEntry = {
     .pde = pde
   };
@@ -260,7 +269,7 @@ static inline int writePDE(unsigned int entryNum, pde_t pde, paddr_t pageDir) {
  @return The PTE that was read.
  */
 
-static inline pte_t readPTE(unsigned int entryNum, paddr_t pageTable) {
+static inline pte_t readPTE(unsigned int entryNum, uint32_t pageTable) {
   return readPmapEntry(pageTable, entryNum).pte;
 }
 
@@ -273,7 +282,7 @@ static inline pte_t readPTE(unsigned int entryNum, paddr_t pageTable) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-static inline int writePTE(unsigned int entryNum, pte_t pte, paddr_t pageTable)
+static inline int writePTE(unsigned int entryNum, pte_t pte, uint32_t pageTable)
 {
   pmap_entry_t pmapEntry = {
     .pte = pte
@@ -281,27 +290,22 @@ static inline int writePTE(unsigned int entryNum, pte_t pte, paddr_t pageTable)
   return writePmapEntry(pageTable, entryNum, pmapEntry);
 }
 
-CONST static inline uint32_t getPdeFrameNumber(pde_t pde) {
+CONST static inline pframe_t getPdeFrameNumber(pde_t pde) {
   pmap_entry_t entry = {
     .pde = pde
   };
 
   return (
       entry.pde.isLargePage ?
-          entry.largePde.baseLower | (entry.largePde.baseUpper << 10) :
+          (entry.largePde.baseLower << 10) | (entry.largePde.baseUpper << 20) :
           entry.pde.base);
 }
 
-CONST static inline paddr_t getPdeBase(pde_t pde) {
-  return getPdeFrameNumber(pde)
-      << (pde.isLargePage ? LARGE_PFRAME_BITS : PFRAME_BITS);
-}
-
 NON_NULL_PARAMS
-static inline void setLargePdeBase(large_pde_t *largePde, paddr_t paddr)
+static inline void setLargePdeBase(large_pde_t *largePde, pframe_t pframe)
 {
-  largePde->baseLower = (uint32_t)((paddr >> LARGE_PFRAME_BITS) & 0x3FFu);
-  largePde->baseUpper = 0; /*(uint32_t)((_paddr >> 32) & 0xFF)*/
+  largePde->baseLower = (uint32_t)((pframe >> 10) & 0x3FFu);
+  largePde->baseUpper = (uint32_t)((pframe >> 20) & 0xFFu);
 }
 
 #endif /* PAGING_H */

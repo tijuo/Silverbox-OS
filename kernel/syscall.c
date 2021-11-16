@@ -43,7 +43,7 @@ typedef struct SyscallArgs {
   uint32_t eflags;
 } syscall_args_t;
 
-noreturn void sysenter(void) NAKED;
+noreturn void sysenterEntry(void) NAKED;
 
 static int sysReceive(syscall_args_t args);
 static int sysSend(syscall_args_t args);
@@ -99,7 +99,7 @@ static int sysGetPageMappings(syscall_args_t args) {
         .value = getCR3()
       };
 
-      mappings->physAddr = (paddr_t)(cr3.value & CR3_BASE_MASK);
+      mappings->physFrame = (pframe_t)cr3.base;
       mappings->flags = 0;
 
       if(cr3.pcd)
@@ -131,7 +131,7 @@ static int sysGetPageMappings(syscall_args_t args) {
           mappings->flags |= PM_UNMAPPED;
         }
         else {
-          mappings->physAddr = PTE_BASE(pte);
+          mappings->physFrame = pte.base;
           mappings->flags = PM_PAGE_SIZED;
 
           if(!pte.isReadWrite)
@@ -167,7 +167,7 @@ static int sysGetPageMappings(syscall_args_t args) {
           mappings->flags |= PM_UNMAPPED;
         }
         else {
-          mappings->physAddr = getPdeBase(pde);
+          mappings->physFrame = getPdeFrameNumber(pde);
           mappings->flags = 0;
 
           if(!pde.isReadWrite)
@@ -203,7 +203,7 @@ static int sysGetPageMappings(syscall_args_t args) {
       }
       break;
     case 2: {
-      mappings->physAddr = (paddr_t)ADDR_SPACE;
+      mappings->physFrame = PADDR_TO_PFRAME(ADDR_SPACE);
       mappings->flags = 0;
 
       return 1;
@@ -233,7 +233,7 @@ static int sysSetPageMappings(syscall_args_t args) {
 #define VIRT        (addr_t)VIRT_VAR
 #define COUNT       (size_t)args.arg2
 #define ADDR_SPACE_VAR args.arg3
-#define ADDR_SPACE  (paddr_t)ADDR_SPACE_VAR
+#define ADDR_SPACE  (uint32_t)ADDR_SPACE_VAR
 #define MAPPINGS    (struct PageMapping *)args.arg3
 #define LEVEL				(unsigned int)args.subArg.word
 
@@ -244,7 +244,7 @@ static int sysSetPageMappings(syscall_args_t args) {
     return ESYS_FAIL;
 
   if(ADDR_SPACE == CURRENT_ROOT_PMAP)
-    ADDR_SPACE_VAR = (paddr_t)getRootPageMap();
+    ADDR_SPACE_VAR = (uint32_t)getRootPageMap();
 
   switch(LEVEL ) {
     case 0:
@@ -263,7 +263,7 @@ static int sysSetPageMappings(syscall_args_t args) {
           RET_MSG((int )i, "Cannot set page with kernel access privilege.");
 
         if(IS_FLAG_SET(mappings->flags, PM_UNMAPPED)) {
-          if(IS_FLAG_SET(mappings->physAddr, 0x80000000u))
+          if(IS_FLAG_SET(mappings->blockNum, 0x80000000u))
             RET_MSG((int )i, "Tried to set invalid block number for PTE.");
           else
             pte.value = mappings->blockNum << 1;
@@ -273,12 +273,12 @@ static int sysSetPageMappings(syscall_args_t args) {
               >> PM_AVAIL_OFFSET);
           pte.isPresent = 1;
 
-          if(mappings->physAddr >= 1048576u)
+          if(mappings->physFrame >= 1048576u)
             RET_MSG((int )i, "Tried to write invalid frame to PTE.");
           else if(availBits & ~0x07u)
             RET_MSG((int )i, "Cannot set available bits (overflow).");
 
-          pte.base = mappings->physAddr;
+          pte.base = mappings->physFrame;
           pte.isReadWrite = !IS_FLAG_SET(mappings->flags, PM_READ_ONLY);
           pte.isUser = 1;
           pte.dirty = IS_FLAG_SET(mappings->flags, PM_DIRTY);
@@ -310,7 +310,7 @@ static int sysSetPageMappings(syscall_args_t args) {
           RET_MSG((int )i, "Cannot set page with kernel access privilege.");
 
         if(IS_FLAG_SET(mappings->flags, PM_UNMAPPED)) {
-          if(IS_FLAG_SET(mappings->physAddr, 0x80000000u))
+          if(IS_FLAG_SET(mappings->blockNum, 0x80000000u))
             RET_MSG((int )i, "Tried to set invalid block number for PDE.");
           else
             pmapEntry.value = mappings->blockNum << 1;
@@ -329,7 +329,7 @@ static int sysSetPageMappings(syscall_args_t args) {
             uint32_t availBits = ((mappings->flags & PM_AVAIL_MASK)
                 >> PM_AVAIL_OFFSET);
 
-            if(mappings->physAddr >= 262144u)
+            if(mappings->physFrame >= 262144u)
               RET_MSG((int )i, "Tried to write invalid frame to PDE.");
             else if(availBits & ~0x07u)
               RET_MSG((int )i, "Cannot set available bits (overflow).");
@@ -342,20 +342,20 @@ static int sysSetPageMappings(syscall_args_t args) {
                                      && !IS_FLAG_SET(mappings->flags,
                                                      PM_UNCACHED);
             pmapEntry.largePde.available = availBits;
-            pmapEntry.largePde.baseLower = mappings->physAddr & 0x3FFu;
-            pmapEntry.largePde.baseUpper = mappings->physAddr >> 10u;
+            pmapEntry.largePde.baseLower = mappings->physFrame & 0x3FFu;
+            pmapEntry.largePde.baseUpper = mappings->physFrame >> 10u;
             pmapEntry.largePde._resd = 0;
           }
           else {
             uint32_t availBits = ((mappings->flags & PM_AVAIL_MASK)
                 >> PM_AVAIL_OFFSET);
 
-            if(mappings->physAddr >= 1048576u)
+            if(mappings->physFrame >= 1048576u)
               RET_MSG((int )i, "Tried to write invalid frame to PDE.");
             else if(availBits & ~0x1fu)
               RET_MSG((int )i, "Cannot set available bits (overflow).");
 
-            pmapEntry.pde.base = mappings->physAddr;
+            pmapEntry.pde.base = mappings->physFrame;
             pmapEntry.pde.available = availBits & 0x0Fu;
             pmapEntry.pde.available2 = availBits >> 4;
             pmapEntry.pde.isLargePage = 0;
@@ -622,7 +622,7 @@ static int sysSendAndReceive(syscall_args_t args) {
 #undef RECV_FLAGS
 }
 
-void sysenter(void) {
+void sysenterEntry(void) {
   __asm__ __volatile__
   (
       "pushf\n"

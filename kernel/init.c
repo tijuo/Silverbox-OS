@@ -19,11 +19,26 @@
 #include <kernel/lowlevel.h>
 #include <cpuid.h>
 #include <x86gprintrin.h>
+#include <limits.h>
+#include <kernel/apic.h>
 
 #define KERNEL_IDT_LEN	(64 * sizeof(struct IdtEntry))
 
 #define RSDP_SIGNATURE  "RSD PTR "
 #define PARAGRAPH_LEN   16
+
+#define DISC_CODE SECTION(".dtext")
+#define DISC_DATA SECTION(".ddata")
+
+#define EBDA                0x80000u
+#define VGA_RAM             0xA0000u
+#define VGA_COLOR_TEXT      0xB8000u
+#define ISA_EXT_ROM         0xC0000u
+#define BIOS_EXT_ROM        0xE0000u
+#define BIOS_ROM            0xF0000u
+#define EXTENDED_MEMORY     0x100000u
+
+#define INIT_SERVER_FLAG  "initsrv="
 
 struct RSDPointer {
   char signature[8]; // should be "RSD PTR "
@@ -35,7 +50,9 @@ struct RSDPointer {
   uint64_t xsdtAddress; // physical address
   uint8_t extChecksum;
   char _resd[3];
-} PACKED;
+};
+
+_Static_assert(sizeof(struct RSDPointer) == 36, "RSDPointer struct should be 36 bytes.");
 
 struct ACPI_DT_Header {
   char signature[4];
@@ -49,70 +66,45 @@ struct ACPI_DT_Header {
   uint32_t creatorRevision;
 };
 
-#define MP_SIGNATURE    "_MP_"
+_Static_assert(sizeof(struct ACPI_DT_Header) == 36, "ACPI_DT_Header should be 36 bytes.");
 
-struct MP_FloatingHeader {
-  char signature[4]; // should be "_MP_"
-  uint32_t tableAddress; // physical address
-  uint8_t length; // 16 bytes
-  uint8_t specRev;
-  uint8_t checksum;
-  uint8_t mpConfigType;
-  uint8_t _resd :7;
-  uint8_t icmrPresent :1;
-  uint8_t _resd2[3];
+struct MADT_Header {
+  struct ACPI_DT_Header dtHeader;
+  uint32_t lapicAddress;
+  uint32_t flags;
 };
 
-#define MP_CT_SIGNATURE "PCMP"
+_Static_assert(sizeof(struct MADT_Header) == 44, "MADT_Header should be 44 bytes.");
 
-struct MP_CT_Header {
-  char signature[4]; // should be PCMP
-  uint16_t length;
-  uint8_t revision;
-  uint8_t checksum;
-  char oemId[8];
-  char productId[12];
-  uint32_t oemTableAddress; // physical address
-  uint16_t oemTableSize;
-  uint16_t numEntries;
-  uint32_t lapicAddress; // physical address
-  uint16_t extTableLength;
-  uint8_t extChecksum;
-  uint8_t _resd;
+struct IC_Header {
+  uint8_t type;
+  uint8_t length;
 };
 
-#define MP_ENTRY_PROCESSOR  0
-#define MP_ENTRY_BUS        1
-#define MP_ENTRY_IO_APIC    2
-#define MP_ENTRY_IO_INT     3
-#define MP_ENTRY_LOCAL_INT  4
+#define TYPE_PROC_LAPIC     0
+#define TYPE_IOAPIC         1
 
-struct MP_Processor {
-  uint8_t entryType; // 0
+struct ProcessorLAPIC_Header {
+  struct IC_Header header;
+  uint8_t uid;
   uint8_t lapicId;
-  uint8_t lapicVersion;
-  uint8_t isEnabled :1;
-  uint8_t isBootstrap :1;
-  uint8_t _resd :6;
-  uint32_t cpuSignature;
-  uint32_t featureFlags;
-  uint32_t _resd2;
-  uint32_t _resd3;
-} PACKED;
+  uint32_t flags;
+};
 
-#define EBDA                0x80000u
-#define VGA_RAM             0xA0000u
-#define VGA_COLOR_TEXT      0xB8000u
-#define ISA_EXT_ROM         0xC0000u
-#define BIOS_EXT_ROM        0xE0000u
-#define BIOS_ROM            0xF0000u
-#define EXTENDED_MEMORY     0x100000u
+#define PROC_LAPIC_ENABLED    1
+#define PROC_LAPIC_ONLINE     2
 
-#define DISC_CODE SECTION(".dtext")
+struct IOAPIC_Header {
+  struct IC_Header header;
+  uint8_t ioapicId;
+  uint8_t _resd;
+  uint32_t ioapicAddress;
+  uint32_t globalSysIntBase;
+};
 
-#define DISC_DATA SECTION(".ddata")
-
-#define INIT_SERVER_FLAG	"initsrv="
+DISC_CODE static bool isValidAcpiHeader(uint64_t physAddress);
+DISC_CODE void readAcpiTables(void);
+NON_NULL_PARAMS DISC_CODE addr_t findRSDP(struct RSDPointer *header);
 
 extern pte_t kMapAreaPTab[PTE_ENTRY_COUNT];
 
@@ -127,7 +119,6 @@ extern idt_entry_t kernelIDT[NUM_EXCEPTIONS + NUM_IRQS];
 extern tcb_t *initServerThread;
 extern uint8_t *kernelStackTop;
 
-//DISC_CODE static bool isValidAcpiHeader(paddr_t physAddress));
 DISC_CODE void initPaging(void);
 DISC_CODE static tcb_t* loadElfExe(addr_t, uint32_t, void*);
 DISC_CODE static bool isValidElfExe(elf_header_t *image);
@@ -139,7 +130,7 @@ DISC_CODE static void stopInit(const char*);
 DISC_CODE static void bootstrapInitServer(multiboot_info_t *info);
 DISC_CODE void init(multiboot_info_t*);
 //DISC_CODE static void initPIC( void ));
-//DISC_CODE static int memcmp(const char *s1, const char *s2, register size_t n));
+DISC_CODE static int memcmp(const void *m1, const void *m2, size_t n);
 DISC_CODE static int strncmp(const char*, const char*, size_t num);
 //DISC_CODE static size_t strlen(const char *s));
 DISC_CODE static char* strstr(char*, const char*);
@@ -149,18 +140,235 @@ DISC_CODE void addIDTEntry(void (*f)(void), unsigned int entryNum,
 DISC_CODE void loadIDT(void);
 DISC_CODE addr_t allocPageFrame(void);
 
+// Assumes 0xE0000 - 0x100000 has been 1:1 mapped
+addr_t findRSDP(struct RSDPointer *rsdPointer) {
+  addr_t retPtr = (addr_t)NULL;
+
+  for(uint8_t *ptr = (uint8_t*)KPHYS_TO_VIRT(BIOS_EXT_ROM);
+      ptr < (uint8_t*)KPHYS_TO_VIRT(EXTENDED_MEMORY); ptr += PARAGRAPH_LEN)
+  {
+    if(memcmp(ptr, RSDP_SIGNATURE, sizeof rsdPointer->signature) == 0) {
+      uint8_t checksum = 0;
+
+      for(size_t i = 0; i < offsetof(struct RSDPointer, length); i++)
+        checksum += ptr[i];
+
+      if(checksum == 0) {
+        memcpy(rsdPointer, ptr, sizeof *rsdPointer);
+        retPtr = (addr_t)ptr;
+        break;
+      }
+    }
+  }
+
+  return retPtr;
+}
+
+bool isValidAcpiHeader(uint64_t physAddress) {
+  struct ACPI_DT_Header header;
+  uint8_t checksum = 0;
+  uint8_t buffer[128];
+  size_t bytesRead = 0;
+  size_t headerLen;
+
+  if(physAddress >= MAX_PHYS_MEMORY)
+    RET_MSG(false, "Physical memory is out of range.");
+
+  if(IS_ERROR(peek(physAddress, &header, sizeof header)))
+    RET_MSG(false, "Unable to read ACPI descriptor table header.");
+
+  headerLen = header.length;
+
+  memcpy(buffer, &header, sizeof header);
+
+  for(size_t i = 0; i < sizeof header; i++, bytesRead++)
+    checksum += buffer[i];
+
+  while(bytesRead < headerLen) {
+    size_t bytesToRead = MIN(sizeof buffer, headerLen - bytesRead);
+
+    if(IS_ERROR(peek(physAddress + bytesRead, buffer, bytesToRead)))
+      RET_MSG(false, "Unable to read ACPI descriptor table header.");
+
+    for(size_t i = 0; i < bytesToRead; i++, bytesRead++)
+      checksum += buffer[i];
+  }
+
+  return checksum == 0 ? true : false;
+}
+
+void readAcpiTables(void) {
+  struct RSDPointer rsdp;
+  addr_t rsdpAddr;
+
+  // Look for the RSDP
+
+  for(uint8_t *ptr = (uint8_t*)KPHYS_TO_VIRT(BIOS_EXT_ROM);
+      ptr < (uint8_t*)KPHYS_TO_VIRT(EXTENDED_MEMORY); ptr += PARAGRAPH_LEN)
+  {
+    if(memcmp(ptr, RSDP_SIGNATURE, sizeof rsdp.signature) == 0) {
+      uint8_t checksum = 0;
+
+      for(size_t i = 0; i < offsetof(struct RSDPointer, length); i++)
+        checksum += ptr[i];
+
+      if(checksum == 0) {
+        rsdp = *(struct RSDPointer*)ptr;
+        rsdpAddr = (addr_t)ptr;
+        break;
+      }
+    }
+  }
+
+  if(rsdpAddr) {
+    // Now go through the RSDT, looking for the MADT
+
+    kprintf("%.8s found at %#x. RSDT at %#x\n", rsdp.signature, rsdpAddr,
+            rsdp.rsdtAddress);
+
+    if(rsdp.rsdtAddress && isValidAcpiHeader((uint64_t)rsdp.rsdtAddress)) {
+      struct ACPI_DT_Header rsdt;
+
+      if(IS_ERROR(peek((uint64_t )rsdp.rsdtAddress, &rsdt, sizeof rsdt))) {
+        kprintf("Unable to read RSDT\n");
+        return;
+      }
+
+      size_t totalEntries = (rsdt.length - sizeof(struct ACPI_DT_Header))
+          / sizeof(uint32_t);
+
+      kprintf("%.4s found at %#x\n", rsdt.signature, rsdp.rsdtAddress);
+
+      for(size_t rsdtIndex = 0; rsdtIndex < totalEntries; rsdtIndex++) {
+        uint32_t rsdtEntryPtr;
+
+        if(IS_ERROR(
+            peek(
+                (uint64_t )rsdp.rsdtAddress + sizeof rsdt
+                + rsdtIndex * sizeof(uint32_t),
+                &rsdtEntryPtr, sizeof(uint32_t)))) {
+          kprintf("Unable to read descriptor table.\n");
+          return;
+        }
+
+        if(isValidAcpiHeader((uint64_t)rsdtEntryPtr)) {
+          struct ACPI_DT_Header header;
+
+          if(IS_ERROR(peek((uint64_t )rsdtEntryPtr, &header, sizeof header))) {
+            kprintf("Unable to read descriptor table header.\n");
+            return;
+          }
+
+          kprintf("%.4s found at %#x\n", header.signature, rsdtEntryPtr);
+
+          // If the MADT is in the RSDT, then retrieve apic data
+
+          if(memcmp(&header.signature, "APIC", 4) == 0) {
+            struct MADT_Header madtHeader;
+
+            if(IS_ERROR(
+                peek((uint64_t )rsdtEntryPtr, &madtHeader, sizeof madtHeader)))
+            {
+              kprintf("Unable to read MADT header.\n");
+              return;
+            }
+
+            kprintf("Local APIC address: %#x\n", madtHeader.lapicAddress);
+            lapicPtr = madtHeader.lapicAddress;
+
+            for(size_t madtOffset = sizeof madtHeader;
+                madtOffset < madtHeader.dtHeader.length;)
+            {
+              struct IC_Header icHeader;
+
+              if(IS_ERROR(
+                  peek((uint64_t )rsdtEntryPtr + madtOffset, &icHeader,
+                       sizeof icHeader))) {
+                kprintf("Unable to read interrupt controller header.\n");
+                return;
+              }
+
+              switch(icHeader.type) {
+                case TYPE_PROC_LAPIC: {
+                  /* Each processor has a local APIC. Use this to find each processor's
+                   local APIC id. */
+                  struct ProcessorLAPIC_Header procLapicHeader;
+
+                  if(IS_ERROR(
+                      peek((uint64_t )rsdtEntryPtr + madtOffset,
+                           &procLapicHeader, sizeof procLapicHeader))) {
+                    kprintf("Unable to read processor local APIC header.\n");
+                    return;
+                  }
+
+                  if(IS_FLAG_SET(procLapicHeader.flags, PROC_LAPIC_ENABLED) || IS_FLAG_SET(
+                      procLapicHeader.flags, PROC_LAPIC_ONLINE)) {
+                    kprintf(
+                        "Processor %d has local APIC id: %d%s\n",
+                        procLapicHeader.uid,
+                        procLapicHeader.lapicId,
+                        IS_FLAG_SET(procLapicHeader.flags, PROC_LAPIC_ENABLED) ?
+                            "" :
+                        IS_FLAG_SET(procLapicHeader.flags, PROC_LAPIC_ONLINE) ?
+                            " (offline)" : " (disabled)");
+                    processors[numProcessors].lapicId = procLapicHeader.lapicId;
+                    processors[numProcessors].acpiUid = procLapicHeader.uid;
+                    processors[numProcessors].isOnline = !!IS_FLAG_SET(
+                        procLapicHeader.flags, PROC_LAPIC_ENABLED);
+
+                    numProcessors++;
+                  }
+                  break;
+                }
+                case TYPE_IOAPIC: {
+                  struct IOAPIC_Header ioapicHeader;
+
+                  if(IS_ERROR(
+                      peek((uint64_t )rsdtEntryPtr + madtOffset, &ioapicHeader,
+                           sizeof ioapicHeader))) {
+                    kprintf("Unable to read processor local APIC header.\n");
+                    return;
+                  }
+
+                  kprintf(
+                      "IOAPIC id %d is at %#x. Global System Interrupt Base: %#x\n",
+                      ioapicHeader.ioapicId, ioapicHeader.ioapicAddress,
+                      ioapicHeader.globalSysIntBase);
+                  ioapicPtr = ioapicHeader.ioapicId;
+                  break;
+                }
+                default:
+                  kprintf("APIC Entry type %d found.\n", icHeader.type);
+                  break;
+              }
+
+              madtOffset += icHeader.length;
+            }
+
+            kprintf("%d processors found.\n", numProcessors);
+          }
+        }
+        else
+          kprintf("Unable to read RSDT entries at %#x\n", rsdtEntryPtr);
+      }
+    }
+    else
+      kprintf("Unable to read RSDT\n");
+  }
+  else
+    kprintf("RSDP not found\n");
+}
+
 /*
  static unsigned DISC_CODE bcd2bin(unsigned num));
  static unsigned long long DISC_CODE mktime(unsigned int year, unsigned int month, unsigned int day, unsigned int hour,
  unsigned int minute, unsigned int second));
  */
 DISC_DATA static addr_t initServerImg;
-DISC_CODE static bool isReservedPage(paddr_t addr, multiboot_info_t *info,
+DISC_CODE static bool isReservedPage(uint64_t addr, multiboot_info_t *info,
                                      int isLargePage);
 
-//paddr_t DISC_CODE findRSDP(struct RSDPointer *header));
-//paddr_t DISC_CODE findMP_Header(struct MP_FloatingHeader *header));
-//static void DISC_CODE  readPhysMem(addr_t address, addr_t buffer, size_t len) );
+DISC_CODE int clearPhysPage(uint64_t phys);
 
 DISC_DATA static addr_t firstFreePage;
 
@@ -205,111 +413,27 @@ DISC_DATA static void (*irqIntHandlers[NUM_IRQS])(
  }
  */
 
-// Assumes 0xE0000 - 0x100000 has been 1:1 mapped
-/*
- paddr_t findRSDP(struct RSDPointer *rsdPointer)
- {
- paddr_t retPtr = (paddr_t)NULL;
+/**
+ Zero out a page frame.
 
- for(addr_t addr=BIOS_EXT_ROM; addr < EXTENDED_MEMORY; addr += PAGE_SIZE)
- kMapPage(addr, (paddr_t)addr, PAGING_RO);
-
- for(uint8_t *ptr=(uint8_t *)BIOS_EXT_ROM; ptr < (uint8_t *)EXTENDED_MEMORY; ptr += PARAGRAPH_LEN)
- {
- if(memcmp((void *)ptr, RSDP_SIGNATURE, sizeof rsdPointer->signature) == 0)
- {
- uint8_t checksum = 0;
-
- for(size_t i=0; i < offsetof(struct RSDPointer, length); i++)
- checksum += ptr[i];
-
- if(checksum == 0)
- {
- memcpy(rsdPointer, ptr, sizeof *rsdPointer);
- retPtr = (paddr_t)(uintptr_t)ptr;
- break;
- }
- }
- }
-
- for(addr_t addr=BIOS_EXT_ROM; addr < EXTENDED_MEMORY; addr += PAGE_SIZE)
- kUnmapPage(addr, NULL);
-
- return retPtr;
- }
-
- paddr_t findMP_Header(struct MP_FloatingHeader *mpHeader)
- {
- addr_t memoryRegions[4][2] = { {BIOS_ROM, EXTENDED_MEMORY}, {EBDA, EBDA+1024},
- {VGA_RAM-1024, VGA_RAM}, {0x7fc00, 0x80000} };
-
- paddr_t retPtr = (paddr_t)NULL;
-
- for(size_t region=0; region < 4; region++)
- {
- for(addr_t addr=memoryRegions[region][0]; addr < memoryRegions[region][1]; addr += PAGE_SIZE)
- {
- if(addr >= VGA_RAM)
- kMapPage(addr, (paddr_t)addr, PAGING_RO);
- }
-
- for(uint8_t *ptr=(uint8_t *)memoryRegions[region][0]; ptr < (uint8_t *)memoryRegions[region][1]; ptr += PARAGRAPH_LEN)
- {
- if(memcmp((char *)ptr, MP_SIGNATURE, 4) == 0)
- {
- uint8_t checksum = 0;
-
- for(size_t i=0; i < ((struct MP_FloatingHeader *)ptr)->length; i++)
- checksum += ptr[i];
-
- if(checksum == 0)
- {
- memcpy(mpHeader, ptr, sizeof *mpHeader);
- retPtr = (paddr_t)(uintptr_t)ptr;
- break;
- }
- }
- }
-
- for(addr_t addr=memoryRegions[region][0]; addr < memoryRegions[region][1]; addr += PAGE_SIZE)
- {
- if(addr >= VGA_RAM)
- kUnmapPage(addr, NULL);
- }
-
- if(retPtr)
- break;
- }
-
- return retPtr;
- }
-
- bool isValidAcpiHeader(paddr_t physAddress)
- {
- struct ACPI_DT_Header header;
- uint8_t checksum = 0;
- uint8_t buffer[256];
- size_t bytesRead=0;
-
- if(peek(physAddress, &header, sizeof header) != E_OK)
- return false;
-
- while(bytesRead < header.length)
- {
- size_t bytesToRead = MIN(header.length - bytesRead, 256u);
-
- if(peek(physAddress + bytesRead, buffer, bytesToRead) != E_OK)
- return false;
-
- for(size_t i=0; i < bytesRead; i++)
- checksum += buffer[i];
-
- bytesRead += bytesToRead;
- }
-
- return checksum == 0 ? true : false;
- }
+ @param phys Physical address frame to clear.
+ @return E_OK on success. E_FAIL on failure.
  */
+
+int clearPhysPage(uint64_t phys) {
+  pmap_entry_t oldPmapEntry;
+  size_t offset = LARGE_PAGE_OFFSET(ALIGN_DOWN(phys, (uint64_t)PAGE_SIZE));
+
+  if(IS_ERROR(mapLargeFrame(phys, &oldPmapEntry)))
+    RET_MSG(E_FAIL, "Unable to map physical frame.");
+
+  memset((void*)(KMAP_AREA + offset), 0, PAGE_SIZE);
+
+  if(IS_ERROR(unmapLargeFrame(oldPmapEntry)))
+    RET_MSG(E_FAIL, "Unable to unmap physical frame.");
+
+  return E_OK;
+}
 
 addr_t allocPageFrame(void) {
   addr_t frame = firstFreePage;
@@ -319,17 +443,17 @@ addr_t allocPageFrame(void) {
   }
 
   if(frame < EXTENDED_MEMORY)
-    return INVALID_PFRAME ;
+    return INVALID_PFRAME;
 
   firstFreePage = frame + PAGE_SIZE;
 
   return frame;
 }
 
-bool isReservedPage(paddr_t addr, multiboot_info_t *info, int isLargePage) {
+bool isReservedPage(uint64_t addr, multiboot_info_t *info, int isLargePage) {
   unsigned int kernelStart = (unsigned int)&kPhysStart;
   unsigned int kernelLength = (unsigned int)&kSize;
-  paddr_t addrEnd;
+  uint64_t addrEnd;
 
   if(isLargePage) {
     addr = addr & ~(PAGE_TABLE_SIZE - 1);
@@ -340,7 +464,7 @@ bool isReservedPage(paddr_t addr, multiboot_info_t *info, int isLargePage) {
     addrEnd = addr + PAGE_SIZE;
   }
 
-  if(addr < (paddr_t)EXTENDED_MEMORY)
+  if(addr < (uint64_t)EXTENDED_MEMORY)
     return true;
   else if((addr >= kernelStart && addr < kernelStart + kernelLength)
       || (addrEnd >= kernelStart && addrEnd < kernelStart + kernelLength))
@@ -398,15 +522,22 @@ bool isReservedPage(paddr_t addr, multiboot_info_t *info, int isLargePage) {
   }
 }
 
-int strncmp(const char *str1, const char *str2, size_t num) {
-  register size_t i;
+NON_NULL_PARAMS int memcmp(const void *m1, const void *m2, size_t num) {
+  size_t i;
+  const char *mem1 = (const char*)m1;
+  const char *mem2 = (const char*)m2;
 
-  if(!str1 && !str2)
+  for(i = 0; i < num && mem1[i] == mem2[i]; i++)
+    ;
+
+  if(i == num)
     return 0;
-  else if(!str1)
-    return -1;
-  else if(!str2)
-    return 1;
+  else
+    return (mem1[i] > mem2[i] ? 1 : -1);
+}
+
+NON_NULL_PARAMS int strncmp(const char *str1, const char *str2, size_t num) {
+  size_t i;
 
   for(i = 0; i < num && str1[i] == str2[i] && str1[i]; i++)
     ;
@@ -720,6 +851,7 @@ struct InitStackArgs {
   uint32_t returnAddress;
   multiboot_info_t *multibootInfo;
   addr_t firstFreePage;
+  size_t stackSize;
   unsigned char code[4];
 };
 
@@ -748,6 +880,7 @@ void bootstrapInitServer(multiboot_info_t *info) {
     .returnAddress = initServerStack - sizeof((struct InitStackArgs*)0)->code,
     .multibootInfo = info,
     .firstFreePage = firstFreePage,
+    .stackSize = 0,
     .code = {
       0x90,
       0x90,
@@ -795,24 +928,41 @@ void bootstrapInitServer(multiboot_info_t *info) {
   pde.isUser = 1;
   pde.isPresent = 1;
 
-  addr_t stackPage = allocPageFrame();
-
-  if(stackPage == INVALID_PFRAME) {
-    kprintf("Unable to initialize stack page.\n");
+  if(IS_ERROR(
+      writePDE(PDE_INDEX(initServerStack-PAGE_TABLE_SIZE), pde, initServerPDir)))
+  {
     goto failedBootstrap;
   }
 
-  pte.base = (uint32_t)ADDR_TO_PFRAME(stackPage);
-  pte.isReadWrite = 1;
-  pte.isUser = 1;
-  pte.isPresent = 1;
+  for(size_t p = 0; p < (512 * 1024) / PAGE_SIZE; p++) {
+    addr_t stackPage = allocPageFrame();
 
-  if(IS_ERROR(
-      writePDE(PDE_INDEX(initServerStack-PAGE_SIZE), pde, initServerPDir))
-     || IS_ERROR(writePTE(PTE_INDEX(initServerStack-PAGE_SIZE), pte, stackPTab)))
-  {
-    kprintf("Unable to write page map entries for init server stack.\n");
-    goto failedBootstrap;
+    if(stackPage == INVALID_PFRAME) {
+      kprintf("Unable to initialize stack page.\n");
+      goto failedBootstrap;
+    }
+
+    pte.base = (uint32_t)ADDR_TO_PFRAME(stackPage);
+    pte.isReadWrite = 1;
+    pte.isUser = 1;
+    pte.isPresent = 1;
+
+    if(IS_ERROR(
+        writePTE(PTE_INDEX(initServerStack-(p+1)*PAGE_SIZE), pte, stackPTab))) {
+      if(p == 0) {
+        kprintf("Unable to write page map entries for init server stack.\n");
+        goto failedBootstrap;
+      }
+      else
+        break;
+    }
+
+    if(p == 0) {
+      poke(stackPage + PAGE_SIZE - sizeof(stackData), &stackData,
+           sizeof(stackData));
+    }
+
+    stackData.stackSize += PAGE_SIZE;
   }
 
   if((initServerThread = loadElfExe(
@@ -823,8 +973,6 @@ void bootstrapInitServer(multiboot_info_t *info) {
     goto failedBootstrap;
   }
 
-  poke(stackPage + PAGE_SIZE - sizeof(stackData), &stackData,
-       sizeof(stackData));
   kprintf("Starting initial server... %#p\n", initServerThread);
 
   if(IS_ERROR(startThread(initServerThread)))
@@ -884,12 +1032,13 @@ void showMBInfoFlags(multiboot_info_t *info) {
     "GFX_TAB"
   };
 
-  kprintf("Mulitboot Information Flags:\n");
+  kprintf("Mulitboot Information Flags:\n\n");
 
   for(size_t i = 0; i < 12; i++) {
     if(IS_FLAG_SET(info->flags, (1u << i)))
       kprintf("%s\n", names[i]);
   }
+  kprintf("\n");
 }
 
 void showCPU_Features(void) {
@@ -1043,26 +1192,31 @@ void initPaging(void) {
   pde->isPresent = 1;
   pde->isReadWrite = 1;
 
-  /* Map lower 2 GiB of physical memory to kernel space.
+  /* Map lower 256 MiB of physical memory to kernel space.
    * The kernel has to be careful not to write to read-only or non-existent areas.
    */
 
-  paddr_t physAddr = 0;
-
-  for(size_t pdeIndex = PDE_INDEX(KERNEL_VSTART);
-      pdeIndex < LARGE_PDE_ENTRY_COUNT; pdeIndex++, physAddr += LARGE_PAGE_SIZE)
+  for(addr_t addr = ALIGN_DOWN(KERNEL_VSTART, LARGE_PAGE_SIZE);
+      addr < KERNEL_VEND && addr >= ALIGN_DOWN(KERNEL_VSTART, LARGE_PAGE_SIZE); addr +=
+      LARGE_PAGE_SIZE)
   {
+    size_t pdeIndex = PDE_INDEX(addr);
     large_pde_t *largePde = &kPageDir[pdeIndex].largePde;
 
-    setLargePdeBase(largePde, physAddr);
-
-    if(pdeIndex < PDE_INDEX(KERNEL_VEND))
-      largePde->global = 1;
-
+    largePde->global = 1;
+    setLargePdeBase(largePde, ADDR_TO_PFRAME(KVIRT_TO_PHYS(addr)));
     largePde->isLargePage = 1;
+
     largePde->isReadWrite = 1;
     largePde->isPresent = 1;
   }
+
+  pde_t *kMapPde = &kPageDir[PDE_INDEX(KMAP_AREA2)].pde;
+
+  kMapPde->base = ADDR_TO_PFRAME(KVIRT_TO_PHYS(kMapAreaPTab));
+
+  kMapPde->isReadWrite = 1;
+  kMapPde->isPresent = 1;
 
   // Set the page directory
   setCR3((uint32_t)KVIRT_TO_PHYS((addr_t )kPageDir));
@@ -1168,64 +1322,11 @@ void init(multiboot_info_t *info) {
   kprintf("Initializing interrupt handling.\n");
   initInterrupts();
 
-  /*
-   struct RSDPointer rsdp;
-   struct MP_FloatingHeader mpHeader;
-   paddr_t rsdpAddr;
-   paddr_t mpHeaderAddr;
+  readAcpiTables();
 
-   if((rsdpAddr=findRSDP(&rsdp)))
-   {
-   kprintf("%.8s found at %#llx. RSDT at %#x\n", rsdp.signature, rsdpAddr, rsdp.rsdtAddress);
+  if(numProcessors == 0)
+    numProcessors = 1;
 
-   struct ACPI_DT_Header rsdt;
-
-   if(rsdp.rsdtAddress && peek((paddr_t)rsdp.rsdtAddress, &rsdt, sizeof rsdt) == E_OK
-   && isValidAcpiHeader((paddr_t)rsdp.rsdtAddress))
-   {
-   uint32_t rsdtEntries[64];
-   size_t entriesLeft = (rsdt.length - sizeof(struct ACPI_DT_Header)) / sizeof(uint32_t);
-   size_t entriesRead = 0;
-
-   kprintf("%.4s found at %#x\n", rsdt.signature, rsdp.rsdtAddress);
-
-   while(entriesLeft)
-   {
-   size_t entriesPeeked =  MIN(entriesLeft, sizeof rsdtEntries / sizeof(uint32_t));
-
-   if(peek((paddr_t)(rsdp.rsdtAddress + sizeof (struct ACPI_DT_Header) + entriesRead * sizeof(uint32_t)),
-   rsdtEntries,  entriesPeeked * sizeof(uint32_t)) == E_OK)
-   {
-   for(size_t i=0; i < entriesPeeked; i++)
-   {
-   struct ACPI_DT_Header header;
-
-   if(peek((paddr_t)rsdtEntries[i], &header, sizeof header) == E_OK
-   && isValidAcpiHeader((paddr_t)rsdtEntries[i]))
-   {
-   kprintf("%.4s found at %#x\n", header.signature, rsdtEntries[i]);
-   }
-   }
-   }
-   else
-   kprintf("Unable to read RSDT entries at %#x\n",
-   (rsdp.rsdtAddress + sizeof (struct ACPI_DT_Header) + entriesRead * sizeof(uint32_t)));
-
-   entriesLeft -= entriesPeeked;
-   entriesRead += entriesPeeked;
-   }
-   }
-   else
-   kprintf("Unable to read RSDT\n");
-   }
-   else
-   kprintf("RSDP not found\n");
-
-   if((mpHeaderAddr=findMP_Header(&mpHeader)))
-   kprintf("MP Floating header found at %#llx. Table at %#x.\n", mpHeaderAddr, mpHeader.tableAddress);
-   else
-   kprintf("MP Floating header not found.\n");
-   */
   //  enable_apic();
   //  init_apic_timer();
   /*
@@ -1254,13 +1355,13 @@ void init(multiboot_info_t *info) {
 
   // Initialize FPU to a known state
   __asm__("fninit\n"
-          "fxsave %0\n" :: "m"(initServerThread->xsaveState));
+      "fxsave %0\n" :: "m"(initServerThread->xsaveState));
 
   // Set MSRs to enable sysenter/sysexit functionality
 
   wrmsr(SYSENTER_CS_MSR, KCODE_SEL);
   wrmsr(SYSENTER_ESP_MSR, (uint64_t)(uintptr_t)kernelStackTop);
-  wrmsr(SYSENTER_EIP_MSR, (uint64_t)(uintptr_t)sysenter);
+  wrmsr(SYSENTER_EIP_MSR, (uint64_t)(uintptr_t)sysenterEntry);
 
   kprintf("Context switching...\n");
   while(1)

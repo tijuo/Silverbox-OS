@@ -2,7 +2,9 @@
 #define KERNEL_SYSCALL_H
 
 #include <os/syscalls.h>
+#include <util.h>
+#include <stdnoreturn.h>
 
-extern noreturn void sysenter(void) __attribute__((naked));
+extern noreturn NAKED void sysenterEntry(void);
 
 #endif /* KERNEL_SYSCALL_H */

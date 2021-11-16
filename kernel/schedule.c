@@ -8,14 +8,13 @@
 #include <kernel/list.h>
 
 list_t runQueues[NUM_PRIORITIES];
-tcb_t *runningThreads[MAX_PROCESSORS];
 
 // Assumes processor id is valid
 
 RETURNS_NON_NULL
-tcb_t* schedule(unsigned int processorId)
+tcb_t* schedule(proc_id_t processorId)
 {
-  tcb_t *currentThread = runningThreads[processorId];
+  tcb_t *currentThread = processors[processorId].runningThread;
   int minPriority = currentThread ? currentThread->priority : MIN_PRIORITY;
 
   for(int priority = MAX_PRIORITY; minPriority; priority--) {
@@ -31,7 +30,7 @@ tcb_t* schedule(unsigned int processorId)
       }
 
       newThread->threadState = RUNNING;
-      runningThreads[processorId] = newThread;
+      processors[processorId].runningThread = newThread;
 
       return newThread;
     }

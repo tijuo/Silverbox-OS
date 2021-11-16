@@ -4,8 +4,8 @@ SECTIONS
 {
   kPhysCode  = 0x00100000;
   kPhysStart = 0x00100000;
-  kVirtCode  = 0x80100000;
-  kVirtStart = 0x80100000;
+  kVirtCode  = 0xF8100000;
+  kVirtStart = 0xF8100000;
 
   kVirtToPhys = kPhysStart + ~kVirtStart + 1;
   kPhysToVirt = kVirtStart - kPhysStart;

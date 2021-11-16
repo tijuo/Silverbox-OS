@@ -1,6 +1,8 @@
 #ifndef APIC_H
 #define APIC_H
 
+#include <stdint.h>
+
 // Memory mapped IOAPIC registers
 
 // I/O register select register
@@ -93,4 +95,9 @@
 #define LAPIC_PERIODIC	    (1 << 17)
 #define LAPIC_MASKED	    (1 << 18)
 #define LAPIC_UNMASKED	    0
+
+#define IA32_APIC_BASE_MSR 0x1Bu
+
+extern uint32_t lapicPtr;
+extern uint32_t ioapicPtr;
 #endif /* APIC_H */
