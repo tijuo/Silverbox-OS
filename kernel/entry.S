@@ -58,7 +58,7 @@ EXPORT start
 
   lea	kBootStack, %esp
   add   $kVirtToPhys, %esp
-  add   PAGE_SIZE, %esp
+  add   $PAGE_SIZE, %esp
   mov	%esp, %ebp
   cld
 

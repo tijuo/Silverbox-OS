@@ -1,24 +1,22 @@
 #![allow(dead_code)]
 
-use crate::{error, Tid};
-use crate::syscall;
-use crate::device;
-use crate::message::kernel::ExceptionMessage;
+use rust::types::Tid;
+use rust::{device, syscalls};
+use crate::lowlevel;
 use crate::mapping;
-use crate::error::{ILLEGAL_MEM_ACCESS, OPERATION_FAILED};
+use crate::error::{self, ILLEGAL_MEM_ACCESS, NOT_IMPLEMENTED, OPERATION_FAILED};
 use alloc::string::String;
 use core::ffi::c_void;
-use crate::syscall::flags::map::{READ_WRITE, READ_ONLY};
 use crate::eprintln;
-use crate::syscall::c_types::ThreadInfo;
 use core::convert::TryInto;
+use rust::message::kernel::ExceptionMessagePayload;
 use crate::mapping::AddrSpace;
 
 mod new_allocator {
     use crate::address::{PAddr, PSize};
-    use crate::page::PhysicalPage;
+    use crate::page::PhysicalFrame;
     use core::cmp::Ordering;
-    use crate::address::Align;
+    use rust::align::Align;
 
     #[derive(Hash, Eq, Debug)]
     pub enum Page {
@@ -31,8 +29,8 @@ mod new_allocator {
     impl PartialEq for Page {
         fn eq(&self, other: &Self) -> bool {
             self.is_same_value(other)
-                && (self.address().align_trunc(self.size()))
-                == other.address().align_trunc(self.size())
+                && (self.address().align_trunc(self.size() as PSize))
+                == other.address().align_trunc(self.size() as PSize)
         }
     }
 
@@ -50,25 +48,25 @@ mod new_allocator {
         /// Creates a new small physical page frame (4 KB) at an aligned physical address.
 
         pub fn new_small(addr: PAddr) -> Page {
-            Page::Small(addr.align_trunc(PhysicalPage::SMALL_PAGE_SIZE))
+            Page::Small(addr.align_trunc(PhysicalFrame::SMALL_PAGE_SIZE as PSize))
         }
 
         /// Creates a new large physical page frame (2 MB) at an aligned physical address.
 
         pub fn new_large_2mb(addr: PAddr) -> Page {
-            Page::Large2M(addr.align_trunc(PhysicalPage::PAE_LARGE_PAGE_SIZE))
+            Page::Large2M(addr.align_trunc(PhysicalFrame::PAE_LARGE_PAGE_SIZE as PSize))
         }
 
         /// Creates a new large physical page frame (4 MB) at an aligned physical address.
 
         pub fn new_large_4mb(addr: PAddr) -> Page {
-            Page::Large4M(addr.align_trunc(PhysicalPage::PSE_LARGE_PAGE_SIZE))
+            Page::Large4M(addr.align_trunc(PhysicalFrame::PSE_LARGE_PAGE_SIZE as PSize))
         }
 
         /// Creates a new huge physical page frame (1 GB) at an aligned physical address.
 
         pub fn new_huge(addr: PAddr) -> Page {
-            Page::Huge(addr.align_trunc(PhysicalPage::HUGE_PAGE_SIZE))
+            Page::Huge(addr.align_trunc(PhysicalFrame::HUGE_PAGE_SIZE as PSize))
         }
 
         /// Returns the physical address of a page.
@@ -84,12 +82,12 @@ mod new_allocator {
 
         /// Returns the size, in bytes, of a page.
 
-        pub fn size(&self) -> PSize {
+        pub fn size(&self) -> usize {
             match self {
-                Page::Small(_) => PhysicalPage::SMALL_PAGE_SIZE,
-                Page::Large2M(_) => PhysicalPage::PAE_LARGE_PAGE_SIZE,
-                Page::Large4M(_) => PhysicalPage::PSE_LARGE_PAGE_SIZE,
-                Page::Huge(_) => PhysicalPage::HUGE_PAGE_SIZE,
+                Page::Small(_) => PhysicalFrame::SMALL_PAGE_SIZE,
+                Page::Large2M(_) => PhysicalFrame::PAE_LARGE_PAGE_SIZE,
+                Page::Large4M(_) => PhysicalFrame::PSE_LARGE_PAGE_SIZE,
+                Page::Huge(_) => PhysicalFrame::HUGE_PAGE_SIZE,
             }
         }
 
@@ -245,28 +243,25 @@ mod new_allocator {
 
 pub type DeviceId = u32;
 
+use crate::address;
+
 /// The main page fault handler. Receives page fault messages from the kernel and attempts to
 /// resolve the page fault by allocating memory, mapping pages, etc.
 
-pub(crate) fn handle_page_fault(request: &ExceptionMessage) -> Result<(), (error::Error, Option<String>)> {
-    let is_read_access = request.error_code & ExceptionMessage::WRITE == 0;
-    let is_kernel_access = request.error_code & ExceptionMessage::USER == 0;
-    let is_not_present = request.error_code & ExceptionMessage::PRESENT == 0;
+pub(crate) fn handle_page_fault(request: &ExceptionMessagePayload) -> Result<(), (error::Error, Option<String>)> {
+    let is_read_access = rust::is_flag_cleared!(request.error_code, ExceptionMessagePayload::WRITE);
+    let is_kernel_access = rust::is_flag_cleared!(request.error_code, ExceptionMessagePayload::USER);
+    let is_not_present = rust::is_flag_cleared!(request.error_code, ExceptionMessagePayload::PRESENT);
 
-    let mut thread_info = ThreadInfo::default();
-    thread_info.status = ThreadInfo::READY;
+    let addr_space = mapping::manager::lookup_tid_mut(&Tid::try_from(request.who)
+        .expect("Faulting thread should not have a NULL tid"))
+        .ok_or((error::NOT_REGISTERED, Some(String::from("Thread's address space isn't registered"))))?;
 
-    let thread_struct = syscall::read_thread(&Tid::new(request.who.into()), ThreadInfo::REG_STATE)
-        .map_err(|err| (err, None))?;
-
-    let reg_state = thread_struct.state().unwrap();
-
-    let addr_space = mapping::manager::lookup_tid_mut(&request.who.into()).unwrap();
     let root_pmap = addr_space.root_pmap();
 
     /* Is the fault address mapped in the thread's address space, but not yet committed? */
 
-    if let Some(mapping) = addr_space.get_mapping(request.fault_address) {
+    if let Some(mapping) = addr_space.get_mapping(address::u32_into_vaddr(request.cr2)) {
         /* Either swap the page into memory, load the page from disk into memory, or allocate a new physical page
             depending on swap status and device. */
 
@@ -274,44 +269,35 @@ pub(crate) fn handle_page_fault(request: &ExceptionMessage) -> Result<(), (error
 
         if is_not_present {
             let mapped_frame = {
-                let mapping_offset = (request.fault_address as usize - mapping.region.start()) as u64;
+                let mapping_offset = (request.cr2 as usize - mapping.region.start()) as u64;
 
-                match device::read_page(&mapping.base_page.add_offset(mapping_offset)) {
-                    Ok(p) => p.as_address(),
-                    Err(code) => return Err((OPERATION_FAILED, Some(format!("Reading block from device resulted in error {}", code))))
-                }
+                match mapping.base_page.device.major {
+                    device::mem::MAJOR => Ok(mapping.base_page.add_offset(mapping_offset).offset),
+                    device::pseudo::MAJOR if mapping.base_page.device.minor == device::pseudo::ZERO_MINOR => Ok(0),
+                    _ => Err((NOT_IMPLEMENTED, Some(String::from("Reading block from device resulted in error")))),
+                }?
             };
 
             let mut flags = 0;
 
             flags |= if mapping.flags & AddrSpace::READ_ONLY == AddrSpace::READ_ONLY {
-                READ_ONLY
+                syscalls::flags::mapping::READ_ONLY
             } else {
-                READ_WRITE
+                0
             };
 
             /*eprintln!("Fault mapping {:p} -> {:#x} pmap: {:#x}",
                       request.fault_address, mapped_frame, root_pmap); */
 
             return unsafe {
-                syscall::map_frames(Some(root_pmap),
-                                    request.fault_address as *mut c_void,
-                                    &[mapped_frame],
-                                    1,
-                                    flags)
+                lowlevel::map(Some(root_pmap),
+                              request.cr2 as usize as *mut c_void,
+                              mapped_frame,
+                              flags)
             }
-                .and_then(|result| {
-                    if result == 1 {
-                        //eprintln!("Mapping ok");
-                        Ok(())
-                    } else {
-                        //eprintln!("Unable to map page");
-                        Err(OPERATION_FAILED)
-                    }
-                })
-                .map_err(|code| (OPERATION_FAILED,
-                                 Some(format!("Unable to map page. System call returned 0x{:X}", code))));
-        } else if is_kernel_access && reg_state.cs != 0x10 { // Don't allow access to kernel memory
+                .map(|_| ())
+                .map_err(|_| (OPERATION_FAILED, None));
+        } else if is_kernel_access && request.cs != 0x10 { // Don't allow access to kernel memory
             eprintln!("Attempted to access kernel memory.");
         } else if is_read_access {     // This isn't supposed to happen
             eprintln!("Address has been committed to memory, but a read access resulted in a page fault.");
@@ -330,7 +316,7 @@ pub(crate) fn handle_page_fault(request: &ExceptionMessage) -> Result<(), (error
         eprintln!("Fault address is not mapped in address space");
     }
 
-    error::dump_state(&request.who);
+    error::dump_state(&request);
 
     let access = if is_read_access {
         "read from"
@@ -345,6 +331,6 @@ pub(crate) fn handle_page_fault(request: &ExceptionMessage) -> Result<(), (error
     };
 
     Err((ILLEGAL_MEM_ACCESS,
-         Some(format!("Tid {} attempted to {}{} memory at address {:p}",
-                      request.who.try_into().unwrap_or(0u16), access, privilege, request.fault_address))))
+         Some(format!("Tid {} attempted to {}{} memory at address {:#x}",
+                      request.who.try_into().unwrap_or(0u16), access, privilege, request.cr2))))
 }

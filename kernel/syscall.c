@@ -4,7 +4,7 @@
 #include <kernel/schedule.h>
 #include <kernel/error.h>
 #include <kernel/message.h>
-#include <os/message.h>
+#include <os/msg/message.h>
 #include <kernel/thread.h>
 #include <kernel/interrupt.h>
 #include <kernel/lowlevel.h>
@@ -78,8 +78,8 @@ int (*syscallTable[])(syscall_args_t) =
 // arg4 - mappings
 // subArg.word - level
 
-static int sysGetPageMappings(syscall_args_t args) {
-#define VIRT_VAR		args.arg1
+int sysGetPageMappings(syscall_args_t args) {
+#define VIRT_VAR	args.arg1
 #define VIRT        (addr_t)VIRT_VAR
 #define COUNT       (size_t)args.arg2
 #define ADDR_SPACE_VAR args.arg3
@@ -203,10 +203,14 @@ static int sysGetPageMappings(syscall_args_t args) {
       }
       break;
     case 2: {
-      mappings->physFrame = PADDR_TO_PFRAME(ADDR_SPACE);
-      mappings->flags = 0;
+      if(COUNT) {
+        mappings->physFrame = PADDR_TO_PFRAME(ADDR_SPACE);
+        mappings->flags = 0;
 
-      return 1;
+        return 1;
+      }
+      else
+        return 0;
     }
     default:
       RET_MSG(ESYS_FAIL, "Invalid page map level.");
@@ -228,7 +232,7 @@ static int sysGetPageMappings(syscall_args_t args) {
 // arg4 - mappings
 // subArg.word - level
 
-static int sysSetPageMappings(syscall_args_t args) {
+int sysSetPageMappings(syscall_args_t args) {
 #define VIRT_VAR		args.arg1
 #define VIRT        (addr_t)VIRT_VAR
 #define COUNT       (size_t)args.arg2
@@ -239,6 +243,8 @@ static int sysSetPageMappings(syscall_args_t args) {
 
   size_t i;
   struct PageMapping *mappings = MAPPINGS;
+  pframe_t pframe;
+  bool isArray = false;
 
   if(!mappings)
     return ESYS_FAIL;
@@ -248,12 +254,12 @@ static int sysSetPageMappings(syscall_args_t args) {
 
   switch(LEVEL ) {
     case 0:
-      for(i = 0; i < COUNT && VIRT < KERNEL_VSTART;
-          i++, VIRT_VAR += PAGE_SIZE, mappings++)
+      for(i = 0; i < COUNT && VIRT < KERNEL_VSTART; i++, VIRT_VAR += PAGE_SIZE)
       {
         pte_t pte = {
           .value = 0
         };
+
         pde_t pde = readPDE(PDE_INDEX(VIRT), ADDR_SPACE);
 
         if(!pde.isPresent)
@@ -263,22 +269,22 @@ static int sysSetPageMappings(syscall_args_t args) {
           RET_MSG((int )i, "Cannot set page with kernel access privilege.");
 
         if(IS_FLAG_SET(mappings->flags, PM_UNMAPPED)) {
-          if(IS_FLAG_SET(mappings->blockNum, 0x80000000u))
+          if(IS_FLAG_SET(isArray ? pframe : mappings->blockNum, 0x80000000u))
             RET_MSG((int )i, "Tried to set invalid block number for PTE.");
           else
-            pte.value = mappings->blockNum << 1;
+            pte.value = (isArray ? pframe : mappings->blockNum) << 1;
         }
         else {
           uint32_t availBits = ((mappings->flags & PM_AVAIL_MASK)
               >> PM_AVAIL_OFFSET);
           pte.isPresent = 1;
 
-          if(mappings->physFrame >= 1048576u)
+          if(isArray ? pframe : mappings->physFrame >= (1 << 20))
             RET_MSG((int )i, "Tried to write invalid frame to PTE.");
           else if(availBits & ~0x07u)
             RET_MSG((int )i, "Cannot set available bits (overflow).");
 
-          pte.base = mappings->physFrame;
+          pte.base = isArray ? pframe : mappings->physFrame;
           pte.isReadWrite = !IS_FLAG_SET(mappings->flags, PM_READ_ONLY);
           pte.isUser = 1;
           pte.dirty = IS_FLAG_SET(mappings->flags, PM_DIRTY);
@@ -292,10 +298,26 @@ static int sysSetPageMappings(syscall_args_t args) {
           pte.available = availBits;
         }
 
+        pte_t oldPte = readPTE(PTE_INDEX(VIRT), ADDR_SPACE);
+
+        if(oldPte.isPresent && !IS_FLAG_SET(mappings->flags, PM_OVERWRITE))
+          RET_MSG((int )i, "Attempted to overwrite page mapping.");
+
         if(IS_ERROR(writePTE(PTE_INDEX(VIRT), pte, ADDR_SPACE)))
           RET_MSG((int )i, "Unable to write to PTE.");
 
         invalidatePage(VIRT);
+
+        if(IS_FLAG_SET(mappings->flags, PM_ARRAY)) {
+          if(!isArray) {
+            isArray = true;
+            pframe = mappings->physFrame;
+          }
+
+          pframe++;
+        }
+        else
+          mappings++;
       }
       break;
     case 1:
@@ -310,10 +332,10 @@ static int sysSetPageMappings(syscall_args_t args) {
           RET_MSG((int )i, "Cannot set page with kernel access privilege.");
 
         if(IS_FLAG_SET(mappings->flags, PM_UNMAPPED)) {
-          if(IS_FLAG_SET(mappings->blockNum, 0x80000000u))
+          if(IS_FLAG_SET(isArray ? pframe : mappings->blockNum, 0x80000000u))
             RET_MSG((int )i, "Tried to set invalid block number for PDE.");
           else
-            pmapEntry.value = mappings->blockNum << 1;
+            pmapEntry.value = (isArray ? pframe : mappings->blockNum) << 1;
         }
         else {
           pmapEntry.pde.isPresent = 1;
@@ -329,7 +351,7 @@ static int sysSetPageMappings(syscall_args_t args) {
             uint32_t availBits = ((mappings->flags & PM_AVAIL_MASK)
                 >> PM_AVAIL_OFFSET);
 
-            if(mappings->physFrame >= 262144u)
+            if((isArray ? pframe : mappings->physFrame) >= (1 << 28))
               RET_MSG((int )i, "Tried to write invalid frame to PDE.");
             else if(availBits & ~0x07u)
               RET_MSG((int )i, "Cannot set available bits (overflow).");
@@ -342,30 +364,58 @@ static int sysSetPageMappings(syscall_args_t args) {
                                      && !IS_FLAG_SET(mappings->flags,
                                                      PM_UNCACHED);
             pmapEntry.largePde.available = availBits;
-            pmapEntry.largePde.baseLower = mappings->physFrame & 0x3FFu;
-            pmapEntry.largePde.baseUpper = mappings->physFrame >> 10u;
+            pmapEntry.largePde.baseLower = ((
+                isArray ? pframe : mappings->physFrame)
+                                            >> 10)
+                                           & 0x3FFu;
+            pmapEntry.largePde.baseUpper = (
+                isArray ? pframe : mappings->physFrame)
+                                           >> 20u;
             pmapEntry.largePde._resd = 0;
           }
           else {
             uint32_t availBits = ((mappings->flags & PM_AVAIL_MASK)
                 >> PM_AVAIL_OFFSET);
 
-            if(mappings->physFrame >= 1048576u)
+            if((isArray ? pframe : mappings->physFrame) >= (1 << 20))
               RET_MSG((int )i, "Tried to write invalid frame to PDE.");
             else if(availBits & ~0x1fu)
               RET_MSG((int )i, "Cannot set available bits (overflow).");
 
-            pmapEntry.pde.base = mappings->physFrame;
+            pmapEntry.pde.base = isArray ? pframe : mappings->physFrame;
             pmapEntry.pde.available = availBits & 0x0Fu;
             pmapEntry.pde.available2 = availBits >> 4;
             pmapEntry.pde.isLargePage = 0;
           }
         }
 
+        pde_t oldPde = readPDE(PDE_INDEX(VIRT), ADDR_SPACE);
+
+        if(oldPde.isPresent && !IS_FLAG_SET(mappings->flags, PM_OVERWRITE))
+          RET_MSG((int )i, "Attempted to overwrite page mapping.");
+
         if(IS_ERROR(writePDE(PDE_INDEX(VIRT), pmapEntry.pde, ADDR_SPACE)))
           RET_MSG((int )i, "Unable to write to PDE.");
+
+        if(IS_FLAG_SET(mappings->flags, PM_ARRAY))
+          pframe += LARGE_PAGE_SIZE / PAGE_SIZE;
+        else
+          mappings++;
       }
       break;
+    case 2: {
+      if(COUNT) {
+        uint32_t newAddrSpace = PFRAME_TO_ADDR(mappings->physFrame);
+
+        initializeRootPmap(newAddrSpace);
+        getCurrentThread()->rootPageMap = newAddrSpace;
+
+        setCR3(newAddrSpace);
+        return 1;
+      }
+      else
+        return 0;
+    }
     default:
       return ESYS_FAIL;
   }
@@ -384,7 +434,7 @@ static int sysSetPageMappings(syscall_args_t args) {
 // arg2 - addrSpace
 // arg3 - stackTop
 
-static int sysCreateThread(syscall_args_t args) {
+int sysCreateThread(syscall_args_t args) {
 #define ENTRY	(void *)args.arg1
 #define ADDR_SPACE (addr_t)args.arg2
 #define STACK_TOP (void *)args.arg3
@@ -405,7 +455,7 @@ static int sysCreateThread(syscall_args_t args) {
 
 // arg1 - tid
 
-static int sysDestroyThread(syscall_args_t args) {
+int sysDestroyThread(syscall_args_t args) {
 #define TID (tid_t)args.arg1
 
   if(1) {
@@ -421,13 +471,11 @@ static int sysDestroyThread(syscall_args_t args) {
 }
 
 // arg1 - tid
-// arg2 - flags
-// arg3 - info
+// arg2 - info
 
-static int sysReadThread(syscall_args_t args) {
+int sysReadThread(syscall_args_t args) {
 #define TID (tid_t)args.arg1
-#define FLAGS (unsigned int)args.arg2
-#define INFO (thread_info_t *)args.arg3
+#define INFO (thread_info_t *)args.arg2
 
   if(1) {
     thread_info_t *info = INFO;
@@ -436,43 +484,69 @@ static int sysReadThread(syscall_args_t args) {
     if(!tcb)
       return ESYS_ARG;
 
-    if(IS_FLAG_SET(FLAGS, TF_STATUS)) {
-      info->status = tcb->threadState;
+    info->status = tcb->threadState;
 
-      if(tcb->threadState == WAIT_FOR_SEND || tcb->threadState == WAIT_FOR_RECV)
-        info->waitTid = tcb->waitTid;
+    if(tcb->threadState == WAIT_FOR_SEND || tcb->threadState == WAIT_FOR_RECV)
+      info->waitTid = tcb->waitTid;
+
+    info->state.eax = tcb->userExecState.eax;
+    info->state.ebx = tcb->userExecState.ebx;
+    info->state.ecx = tcb->userExecState.ecx;
+    info->state.edx = tcb->userExecState.edx;
+    info->state.esi = tcb->userExecState.esi;
+    info->state.edi = tcb->userExecState.edi;
+    info->state.ebp = tcb->userExecState.ebp;
+    info->state.esp = tcb->userExecState.userEsp;
+    info->state.eip = tcb->userExecState.eip;
+    info->state.eflags = tcb->userExecState.eflags;
+    info->state.cs = tcb->userExecState.cs;
+    info->state.ds = tcb->userExecState.ds;
+    info->state.es = tcb->userExecState.es;
+    info->state.fs = tcb->userExecState.fs;
+    info->state.gs = tcb->userExecState.gs;
+    info->state.ss = tcb->userExecState.userSS;
+
+    info->priority = tcb->priority;
+    info->rootPageMap = tcb->rootPageMap;
+
+    if(tcb->threadState == RUNNING) {
+      for(size_t i = 0; i < MAX_PROCESSORS; i++) {
+        if(processors[i].runningThread == tcb) {
+          info->currentProcessorId = (uint8_t)i;
+          break;
+        }
+      }
+
+      info->tid = getTid(tcb);
+
+      info->pendingEvents = tcb->pendingEvents;
+      info->eventMask = tcb->eventMask;
+
+      info->capabilityTable = tcb->capTable;
+      info->capabilityTableLen = tcb->capTableSize;
+      info->parent = tcb->parent;
+
+      info->exceptionHandler = tcb->exHandler;
+
+      info->xsaveState = tcb->xsaveState;
+      return ESYS_OK;
     }
+    else
+      RET_MSG(
+          ESYS_PERM,
+          "Calling thread doesn't have permission to execute this system call.");
 
-    // todo: Need to handle TF_REG_STATE flag
-
-    if(IS_FLAG_SET(FLAGS, TF_PRIORITY))
-      info->priority = tcb->priority;
-
-    if(IS_FLAG_SET(FLAGS, TF_PMAP))
-      info->rootPageMap = tcb->rootPageMap;
-
-    if(IS_FLAG_SET(FLAGS, TF_XSAVE_STATE))
-      memcpy(&info->xsaveState, &tcb->xsaveState, sizeof tcb->xsaveState);
-
-    return ESYS_OK;
-  }
-  else
-    RET_MSG(
-        ESYS_PERM,
-        "Calling thread doesn't have permission to execute this system call.");
-
-  return ESYS_FAIL;
+    return ESYS_FAIL;
 
 #undef TID
-#undef FLAGS
 #undef INFO
+  }
 }
-
 // arg1 - tid
 // arg2 - flags
 // arg3 - info
 
-static int sysUpdateThread(syscall_args_t args) {
+int sysUpdateThread(syscall_args_t args) {
 #define TID (tid_t)args.arg1
 #define FLAGS (unsigned int)args.arg2
 #define INFO (thread_info_t *)args.arg3
@@ -488,13 +562,31 @@ static int sysUpdateThread(syscall_args_t args) {
   if(!tcb || tcb->threadState == INACTIVE)
     RET_MSG(ESYS_ARG, "The specified thread doesn't exist");
 
-  if(IS_FLAG_SET(FLAGS, TF_PMAP)) {
+  if(IS_FLAG_SET(FLAGS, TF_STATUS)) {
+
+    switch(info->status) {
+      case READY:
+      case PAUSED:
+        break;
+      default:
+        RET_MSG(ESYS_ARG, "Unable to change thread status");
+    }
+
+    removeThreadFromList(tcb);
+
+    if(info->status == READY)
+      startThread(tcb);
+
+    tcb->threadState = info->status;
+  }
+
+  if(IS_FLAG_SET(FLAGS, TF_ROOT_PMAP)) {
     tcb->rootPageMap = info->rootPageMap;
 
     initializeRootPmap(tcb->rootPageMap);
   }
 
-  if(IS_FLAG_SET(FLAGS, TF_XSAVE_STATE))
+  if(IS_FLAG_SET(FLAGS, TF_EXT_REG_STATE))
     memcpy(&tcb->xsaveState, &info->xsaveState, sizeof tcb->xsaveState);
 
   if(IS_FLAG_SET(FLAGS, TF_REG_STATE)) {
@@ -530,7 +622,7 @@ static int sysUpdateThread(syscall_args_t args) {
 // arg2 - subject
 // arg3 - flags
 
-static int sysSend(syscall_args_t args) {
+int sysSend(syscall_args_t args) {
 #define RECIPIENT (tid_t)args.arg1
 #define SUBJECT (uint32_t)args.arg2
 #define FLAGS (unsigned int)args.arg3
@@ -550,6 +642,8 @@ static int sysSend(syscall_args_t args) {
       return ESYS_ARG;
     case E_BLOCK:
       return ESYS_NOTREADY;
+    case E_INTERRUPT:
+      return ESYS_INT;
     case E_FAIL:
     default:
       return ESYS_FAIL;
@@ -577,6 +671,8 @@ int sysReceive(syscall_args_t args) {
       return ESYS_ARG;
     case E_BLOCK:
       return ESYS_NOTREADY;
+    case E_INTERRUPT:
+      return ESYS_INT;
     case E_FAIL:
     default:
       return ESYS_FAIL;
@@ -590,7 +686,7 @@ int sysReceive(syscall_args_t args) {
 // arg3 - sendFlags
 // arg4 - recvFlags
 
-static int sysSendAndReceive(syscall_args_t args) {
+int sysSendAndReceive(syscall_args_t args) {
 #define TARGETS (uint32_t)args.arg1
 #define SUBJECT (uint32_t)args.arg2
 #define SEND_FLAGS (unsigned int)args.arg3
@@ -612,6 +708,8 @@ static int sysSendAndReceive(syscall_args_t args) {
       return ESYS_ARG;
     case E_BLOCK:
       return ESYS_NOTREADY;
+    case E_INTERRUPT:
+      return ESYS_INT;
     case E_FAIL:
     default:
       return ESYS_FAIL;

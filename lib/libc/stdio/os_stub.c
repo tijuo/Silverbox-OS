@@ -16,9 +16,10 @@ int _writeCharToFile(FILE *stream, int c) {
       stream->write_req_buffer->offset = 0;
       stream->write_req_buffer->flags =
           stream->access == ACCESS_AP ? DEVF_APPEND : 0;
-
+/*
       if(deviceWrite(stream->dev_server, stream->write_req_buffer, NULL) == -1)
         return -1;
+        */
     }
 
     return 0;
@@ -87,9 +88,10 @@ int _flushToFile(FILE *stream) {
       stream->write_req_buffer->offset = stream->file_pos;
       stream->write_req_buffer->flags =
           stream->access == ACCESS_AP ? DEVF_APPEND : 0;
-
+/*
       if(deviceWrite(stream->dev_server, stream->write_req_buffer, NULL) == -1)
         return -1;
+        */
     }
 
     return 0;

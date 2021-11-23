@@ -11,7 +11,7 @@ OBJ	=$(SRC:%.c=%.o) $(ASM_SRC:%.S=%.o)
 
 .PHONY:	$(DIRS) all tests clean install
 
-all: libos.a
+all: libos.a libos_init.a
 
 ostypes:
 	make -C ostypes all

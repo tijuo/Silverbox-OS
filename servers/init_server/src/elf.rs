@@ -80,9 +80,9 @@ pub fn is_valid_elf_exe(image: PAddr) -> Result<Box<RawElfHeader>, ()> {
 
 pub mod loader {
     use crate::elf::{RawElfHeader, RawProgramHeader32};
-    use crate::Tid;
-    use crate::syscall;
-    use crate::syscall::c_types::{NULL_TID, ThreadInfo};
+    use rust::types::Tid;
+    use rust::syscalls;
+    use rust::syscalls::c_types::{NULL_TID, ThreadState};
     use core::mem;
     use core::ffi::c_void;
     use crate::page::VirtualPage;
@@ -90,7 +90,7 @@ pub mod loader {
     use crate::mapping::{self, AddrSpace};
     use crate::lowlevel::phys;
     use crate::address;
-    use crate::device::{self, DeviceId};
+    use rust::device::{self, DeviceId};
     use crate::syscall::{ThreadStruct, INIT_TID};
     use crate::multiboot::BootModule;
     use crate::phys_alloc::{self, BlockSize, AllocError};
@@ -98,7 +98,7 @@ pub mod loader {
     pub fn load_init_mappings(module: &BootModule) -> bool {
         let stack_top = 0xC0000000usize;
         let stack_size = 64*1024usize - 4096usize;
-        let tid = Tid::new(INIT_TID);
+        let tid = Tid::new(INIT_TID).expect("Init tid shouldn't be null.");
         let addr_space= mapping::manager::lookup_tid_mut(&tid)
             .expect("Initial address space wasn't found.");
 
@@ -164,9 +164,9 @@ pub mod loader {
                 .map(|header|
                     unsafe {
                         let entry = header.entry;
-                        (header, syscall::sys_create_thread(NULL_TID,
+                        (header, syscall::sys_create_thread(
                                                    entry as *const c_void,
-                                                   &pmap as *const PAddr,
+                                                   pmap as u32,
                                                    stack_top as *const c_void))
                     })
                 .and_then(|(header, tid)| {

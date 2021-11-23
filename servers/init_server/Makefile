@@ -1,22 +1,27 @@
-include ../../prefix.inc
+include ../../Makefile.inc
+
+ROOT_DIR	:=../..
 
 INSTALL_DIR=sbos/servers/
 OUTPUT=target/i686-unknown-elf/debug/init_server.exe
 EXE_NAME=init.exe
+DMP_NAME=init.dmp
 
-all: $(SB_PREFIX)/lib/libc/libc.a $(SB_PREFIX)/lib/libos/libos.a
-	cargo build
-	@objdump -g -Dx -M intel $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
-	strip $(OUTPUT)
+all: $(EXE_NAME) $(DMP_NAME)
 
-$(OUTPUT): $(SB_PREFIX)/lib/libc/libc.a $(SB_PREFIX)/lib/libos/libos.a
-	cargo build
-	@objdump -g -Dx -M intel $(OUTPUT) > `basename $(OUTPUT) .exe`.dmp
-	strip $(OUTPUT)
+$(DMP_NAME): $(EXE_NAME)
+	objdump -g -Dx -M intel $< > $@
 
-install: $(OUTPUT)
+$(EXE_NAME): $(OUTPUT)
 	cp $(OUTPUT) $(EXE_NAME)
-	$(SB_PREFIX)/tools/copy_files.sh $(EXE_NAME) -d $(INSTALL_DIR)
+
+$(OUTPUT): $(ROOT_DIR)/lib/libc/libc.a $(ROOT_DIR)/lib/libos/libos_init.a \
+  $(ROOT_DIR)/lib/librust/librust.rlib src/*.rs
+	cargo build
+#	strip $(OUTPUT)
+
+install: $(EXE_NAME)
+	$(ROOT_DIR)/tools/copy_files.sh -d $(INSTALL_DIR) $(EXE_NAME)
 
 clean:
 	cargo clean
@@ -26,5 +31,4 @@ clean:
 test:
 	cargo test
 
-include ../../vars.mk
-include ../../Makefile.inc
+include ../../Makefile_post.inc

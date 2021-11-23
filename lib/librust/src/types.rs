@@ -1,8 +1,83 @@
-#![allow(dead_code)]
+use core::cmp::Ordering;
+use crate::syscalls::c_types;
+
+pub type CTid = c_types::CTid;
+pub const NULL_TID: u16 = c_types::NULL_TID;
 
 pub mod bit_array {
-    use crate::address::Align;
+    use crate::align::Align;
     use alloc::vec::Vec;
+
+    #[macro_export]
+    macro_rules! is_flag_cleared {
+        ($flags:expr, $flag:expr) => {
+            {
+                ($flags) & ($flag) == 0
+            }
+        }
+    }
+
+    #[macro_export]
+    macro_rules! is_flag_set {
+        ($flags:expr, $flag:expr) => {
+            !$crate::is_flag_cleared!($flags, $flag)
+        }
+    }
+
+    #[macro_export]
+    macro_rules! set_flag {
+        ($flags:expr, $flag:expr) => {
+            {
+                $flags |= ($flag)
+            }
+        }
+    }
+
+    #[macro_export]
+    macro_rules! clear_flag {
+        ($flags:expr, $flag:expr) => {
+            {
+                $flags &= !($flag)
+            }
+        }
+    }
+
+    #[macro_export]
+    macro_rules! is_bit_cleared {
+        ($flags:expr, $bit:expr) => {
+            $crate::is_flag_cleared!($flags, bit_flag!($bit))
+        }
+    }
+
+    #[macro_export]
+    macro_rules! is_bit_set {
+        ($flags:expr, $bit:expr) => {
+            !$crate::is_flag_set!($flags, bit_flag!($bit))
+        }
+    }
+
+    #[macro_export]
+    macro_rules! set_bit {
+        ($flags:expr, $bit:expr) => {
+            $crate::set_flag!($flags, bit_flag!($bit))
+        }
+    }
+
+    #[macro_export]
+    macro_rules! clear_bit {
+        ($flags:expr, $bit:expr) => {
+            $crate::clear_flag!($flags, bit_flag!($bit))
+        }
+    }
+
+    #[macro_export]
+    macro_rules! bit_flag {
+        ($bit:expr) => {
+            {
+                1 << ($bit)
+            }
+        }
+    }
 
     type Word = u32;
 
@@ -263,9 +338,65 @@ pub mod bit_array {
         }
     }
 }
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash)]
+/// Represents a valid (non-null) thread id a.k.a. tid
+pub struct Tid(CTid);
+
+impl Tid {
+    /// Create a new `Tid` from a `CTid`. Returns `None` if the `CTid` is `NULL_TID`
+    pub fn new(id: CTid) -> Option<Tid> {
+        match id {
+            NULL_TID => None,
+            x => Some(Tid(x)),
+        }
+    }
+}
+
+impl PartialOrd for Tid {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        CTid::from(self).partial_cmp(&CTid::from(other))
+    }
+}
+
+impl Ord for Tid {
+    fn cmp(&self, other: &Self) -> Ordering {
+        CTid::from(self).cmp(&CTid::from(other))
+    }
+}
+
+impl TryFrom<CTid> for Tid {
+    type Error = ();
+
+    fn try_from(value: CTid) -> Result<Self, Self::Error> {
+        Tid::new(value)
+            .ok_or( ())
+    }
+}
+
+impl TryFrom<&CTid> for Tid {
+    type Error = ();
+
+    fn try_from(value: &CTid) -> Result<Self, Self::Error> {
+        Tid::try_from(*value)
+    }
+}
+
+impl From<Tid> for CTid {
+    fn from(id: Tid) -> Self {
+        id.0
+    }
+}
+
+impl From<&Tid> for CTid {
+    fn from(id: &Tid) -> Self {
+        id.0
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::bit_array::{BitArray, Bitmap};
+    use super::bit_array::BitArray;
 
     #[test]
     fn test_bitmap_set() {

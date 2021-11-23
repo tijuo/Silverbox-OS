@@ -1,0 +1,12 @@
+[unstable]
+build-std = ["core", "alloc", "compiler_builtins"]
+
+[build]
+target = "i686-unknown-elf.json"
+
+[profile.dev]
+panic = "abort"
+debug = 0
+
+[profile.release]
+panic = "abort"

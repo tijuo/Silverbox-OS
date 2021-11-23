@@ -6,7 +6,7 @@
 #include <stdnoreturn.h>
 #include <util.h>
 
-#define PAGE_FAULT_INT      14u
+#define PAGE_FAULT_INT    14u
 
 #define NUM_EXCEPTIONS    32u
 #define NUM_IRQS        	24u

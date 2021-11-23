@@ -1,3 +1,4 @@
+*.idea
 *.o
 *.a
 *.dbg
@@ -13,8 +14,10 @@
 *.cproject
 *.vs
 *.settings
+*.lock
 .deps/
 bx_enh_dbg.ini
+bochsrc.bxrc
 kernel/kernel
 bin/
 /build/

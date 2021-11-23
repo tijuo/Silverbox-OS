@@ -2,6 +2,10 @@ use core::panic::PanicInfo;
 use core::alloc::{Layout, GlobalAlloc};
 use core::ffi::c_void;
 use alloc::string::ToString;
+use rust::syscalls::{self, flags, PageMapping, CPageMap, SyscallError};
+use crate::address::PAddr;
+use crate::page::{FrameSize, PhysicalFrame};
+use rust::io;
 
 static BASE_CHARS: &'static [u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
@@ -14,15 +18,9 @@ extern "C" {
     fn abort() -> !;
 }
 
-unsafe fn io_write_byte(port: u16, data: u8) {
-    asm!("out dx, al", in("al") data, in("dx") port);
-}
-
 fn put_debug_char(c: u8) {
-    let debug_port = 0xE9;
-
     unsafe {
-        io_write_byte(debug_port, c);
+        io::write_u8(0xE9, c);
     }
 }
 
@@ -41,10 +39,9 @@ pub fn print_debugln(msg: &str) {
     print_debug("\n");
 }
 
-
 #[macro_export]
 macro_rules! eprintln {
-    () => (eprint!("\n"));
+    () => ($crate::eprint!("\n"));
 
     ($($arg:tt)*) => ({
         $crate::lowlevel::print_debugln(format!($($arg)*).as_str());
@@ -60,7 +57,7 @@ macro_rules! eprint {
 
 #[macro_export]
 macro_rules! println {
-    () => (eprintln!());
+    () => ($crate::eprintln!());
 
     ($($arg:tt)*) => ({
         eprintln!($($arg)*);
@@ -70,7 +67,7 @@ macro_rules! println {
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ({
-        eprint!($($arg)*);
+        $crate::eprint!($($arg)*);
     });
 }
 
@@ -131,20 +128,19 @@ pub fn print_debug_i32(num: i32, base: u32) {
 }
 
 pub mod phys {
-    use crate::syscall;
-    use crate::page::{PhysicalPage, VirtualPage};
+    use crate::page::{FrameSize, PhysicalFrame, VirtualPage};
     use crate::error::{self, Error};
     use crate::address::{PAddr, PSize};
-    use crate::address::Align;
+    use rust::align::Align;
     use core::ffi::c_void;
-    use crate::syscall::flags::map::READ_WRITE;
     use core::{cmp, mem};
     use core::ops::{Deref, DerefMut, Index};
-    use crate::lowlevel::{GLOBAL_ALLOCATOR};
+    use super::{GLOBAL_ALLOCATOR};
     use crate::phys_alloc::{self, BlockSize};
     use core::alloc::{GlobalAlloc, Layout};
     use alloc::boxed::Box;
     use alloc::vec::Vec;
+    use rust::syscalls::SyscallError;
 
     #[link(name="c", kind="static")]
     extern "C" {
@@ -257,29 +253,32 @@ pub mod phys {
             if size > 0 && size <= PAGE_MAP_AREA.len() {
                 Self::acquire_buffer(size)
                     .and_then(|base_ref| {
-                        match syscall::map_frames(None,
+                        match super::map_frames(None,
                                                   base_ref.as_ptr() as *mut c_void,
-                                                  &frames, frames.len() as i32, READ_WRITE) {
-                            Ok(pages_mapped) if pages_mapped == frames.len() as i32 => {
+                                                  &frames, 0) {
+                            Ok(_) => {
                                 Some(Self {
                                     slice: base_ref,
                                     has_frames_mapped: false,
                                 })
                             },
-                            Ok(pages_mapped) => {
+                            Err(SyscallError::PartiallyMapped(pages_mapped)) => {
                                 super::print_debug("new_from_frames failed. only mapped ");
-                                super::print_debug_i32(pages_mapped, 10);
+                                super::print_debug_i32(pages_mapped as i32, 10);
                                 super::print_debug(" pages instead of ");
                                 super::print_debug_u32(frames.len() as u32, 10);
                                 super::print_debugln(".");
 
-                                match syscall::unmap(None,
-                                                     base_ref.as_ptr() as *mut c_void,
-                                                     pages_mapped,
-                                                     None) {
-                                    Ok(pages_unmapped) if pages_unmapped == pages_mapped => None,
-                                    _ => panic!("Unable to unmap memory."),
+                                let mut v = base_ref.as_ptr();
+
+                                for _ in 0..pages_mapped {
+                                    let frame = super::unmap(None, v as *mut c_void)
+                                        .ok()?;
+
+                                    v = v.wrapping_add(frame.frame_size().bytes());
                                 }
+
+                                None
                             },
                             Err(_) => None
                         }
@@ -321,29 +320,25 @@ pub mod phys {
         fn drop(&mut self) {
             Self::release_buffer(self.slice.as_mut());
 
-            unsafe {
-                let len = self.slice.len() / VirtualPage::SMALL_PAGE_SIZE;
+            let mut v = self.slice.as_ptr();
 
-                let mut unmapped_frame_arr = Vec::with_capacity(len);
-                let mut unmapped_frame_entries = Vec::with_capacity(len);
+            (0..self.slice.len() / VirtualPage::SMALL_PAGE_SIZE).for_each(|_| {
+                let frame = unsafe {
+                    super::unmap(None, v as *mut c_void)
+                        .expect("Unable to map memory")
+                };
 
-                match syscall::unmap(None,
-                                     self.slice.as_ptr() as *mut c_void,
-                                     len as i32,
-                                     Some((&mut unmapped_frame_arr, &mut unmapped_frame_entries))) {
-                    Ok(pages_unmapped) => {
-                        if self.has_frames_mapped {
-                            (0..pages_unmapped as usize)
-                                .for_each(|frame| {
-                                    let is_large_page = unmapped_frame_entries[frame] & syscall::flags::unmap::WAS_LARGE_PAGE != 0;
+                let block_size = match frame.frame_size() {
+                    FrameSize::PseLarge => BlockSize::Block4M,
+                    _ => BlockSize::Block4k,
+                };
 
-                                    phys_alloc::release_phys(unmapped_frame_arr[frame], if is_large_page { BlockSize::Block4M } else { BlockSize::Block4k });
-                                })
-                        }
-                    },
-                    _ => panic!("Unable to unmap memory.")
+                if self.has_frames_mapped {
+                    phys_alloc::release_phys(frame.address(), block_size);
                 }
-            }
+
+                v = v.wrapping_add(frame.frame_size().bytes());
+            });
         }
     }
 
@@ -426,7 +421,7 @@ pub mod phys {
             let mut bytes_read = 0;
 
             while length > 0 {
-                let phys_offset = (paddr - paddr.align_trunc(PhysicalPage::SMALL_PAGE_SIZE)) as usize;
+                let phys_offset = (paddr - paddr.align_trunc(PhysicalFrame::SMALL_PAGE_SIZE as PSize)) as usize;
                 let bytes = cmp::min(VirtualPage::SMALL_PAGE_SIZE - phys_offset, length);
 
                 PageMapArea::new_from_addr(paddr)
@@ -453,7 +448,7 @@ pub mod phys {
             let mut bytes_written = 0;
 
             while length > 0 {
-                let phys_offset = (paddr - paddr.align_trunc(PhysicalPage::SMALL_PAGE_SIZE)) as usize;
+                let phys_offset = (paddr - paddr.align_trunc(PhysicalFrame::SMALL_PAGE_SIZE as PSize)) as usize;
                 let bytes = cmp::min(VirtualPage::SMALL_PAGE_SIZE - phys_offset, length);
 
                 PageMapArea::new_from_frames(&[paddr])
@@ -471,6 +466,62 @@ pub mod phys {
 
             Ok(())
         }
+    }
+}
+
+pub unsafe fn map(root_map: Option<CPageMap>, vaddr: *mut c_void, paddr: PAddr, flags: u32)
+                  -> syscalls::Result<usize> {
+    map_frames(root_map, vaddr, &[paddr], flags)
+}
+
+pub unsafe fn map_frames(root_map: Option<CPageMap>, vaddr: *mut c_void, page_frames: &[PAddr],
+                         flags: u32)
+                         -> syscalls::Result<usize> {
+    let level = if is_flag_set!(flags, flags::mapping::PAGE_SIZED) {
+        1
+    } else {
+        0
+    };
+
+    let mut page_mappings = [PageMapping::default(); 32];
+    let mut count = 0;
+
+    for c in page_frames.chunks(page_mappings.len()) {
+        for i in 0..c.len() {
+            page_mappings[i] = PageMapping {
+                number: PhysicalFrame::new(c[i], FrameSize::Small).frame() as u32,
+                flags: flags | flags::mapping::ARRAY
+            };
+
+            count += syscalls::sys_set_page_mappings(level, vaddr as *const c_void, root_map,
+                                            &page_mappings[..c.len()])
+                .map_err(|e| if let SyscallError::PartiallyMapped(map_count)=e {
+                    SyscallError::PartiallyMapped(map_count + count)
+                } else {
+                    e
+                })?;
+        }
+    }
+
+    Ok(count)
+}
+
+pub unsafe fn unmap(root_map: Option<CPageMap>, vaddr: *const c_void) -> syscalls::Result<PhysicalFrame> {
+    let mut mapping = [PageMapping::default()];
+
+    syscalls::sys_get_page_mappings(1, vaddr, root_map, &mut mapping)?;
+
+    if is_flag_set!(mapping[0].flags, flags::mapping::PAGE_SIZED) {
+        set_flag!(mapping[0].flags, flags::mapping::UNMAPPED);
+
+        syscalls::sys_set_page_mappings(1, vaddr, root_map, &mapping)
+            .map(|_| PhysicalFrame::new(vaddr as usize as PAddr, FrameSize::PseLarge))
+    } else {
+        syscalls::sys_get_page_mappings(0, vaddr, root_map, &mut mapping)?;
+
+        set_flag!(mapping[0].flags, flags::mapping::UNMAPPED);
+        syscalls::sys_set_page_mappings(0, vaddr, root_map, &mapping)
+            .map(|_| PhysicalFrame::new(vaddr as usize as PAddr, FrameSize::Small))
     }
 }
 

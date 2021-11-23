@@ -15,12 +15,13 @@
 #include <os/syscalls.h>
 #include <kernel/bits.h>
 #include <kernel/syscall.h>
-#include <kernel/io.h>
 #include <kernel/lowlevel.h>
 #include <cpuid.h>
-#include <x86gprintrin.h>
+#include <x86intrin.h>
 #include <limits.h>
 #include <kernel/apic.h>
+#include <kernel/pic.h>
+#include <os/io.h>
 
 #define KERNEL_IDT_LEN	(64 * sizeof(struct IdtEntry))
 
@@ -38,7 +39,7 @@
 #define BIOS_ROM            0xF0000u
 #define EXTENDED_MEMORY     0x100000u
 
-#define INIT_SERVER_FLAG  "initsrv="
+#define INIT_SERVER_FLAG  "--init"
 
 struct RSDPointer {
   char signature[8]; // should be "RSD PTR "
@@ -102,6 +103,8 @@ struct IOAPIC_Header {
   uint32_t globalSysIntBase;
 };
 
+DISC_CODE static void disableIRQ(unsigned int irq);
+
 DISC_CODE static bool isValidAcpiHeader(uint64_t physAddress);
 DISC_CODE void readAcpiTables(void);
 NON_NULL_PARAMS DISC_CODE addr_t findRSDP(struct RSDPointer *header);
@@ -132,9 +135,9 @@ DISC_CODE void init(multiboot_info_t*);
 //DISC_CODE static void initPIC( void ));
 DISC_CODE static int memcmp(const void *m1, const void *m2, size_t n);
 DISC_CODE static int strncmp(const char*, const char*, size_t num);
-//DISC_CODE static size_t strlen(const char *s));
-DISC_CODE static char* strstr(char*, const char*);
-DISC_CODE static char* strchr(char*, int);
+DISC_CODE static size_t strlen(const char *s);
+DISC_CODE static char* strstr(const char*, const char*);
+DISC_CODE static char* strchr(const char*, int);
 DISC_CODE void addIDTEntry(void (*f)(void), unsigned int entryNum,
                            unsigned int dpl);
 DISC_CODE void loadIDT(void);
@@ -548,7 +551,7 @@ NON_NULL_PARAMS int strncmp(const char *str1, const char *str2, size_t num) {
     return (str1[i] > str2[i] ? 1 : -1);
 }
 
-char* strstr(char *str, const char *substr) {
+char* strstr(const char *str, const char *substr) {
   register size_t i;
 
   if(str && substr) {
@@ -563,25 +566,25 @@ char* strstr(char *str, const char *substr) {
 
   return NULL;
 }
-/*
- size_t strlen(const char *s)
- {
+
+size_t strlen(const char *s)
+{
  if( !s )
- return 0;
+   return 0;
 
  return (size_t)(strchr(s, '\0') - s);
- }
- */
-char* strchr(char *s, int c) {
+}
+
+char* strchr(const char *s, int c) {
   if(s) {
     while(*s) {
       if(*s == c)
-        return (char*)s;
+        return s;
       else
         s++;
     }
 
-    return c ? NULL : s;
+    return s;
   }
 
   return NULL;
@@ -649,6 +652,20 @@ void loadIDT(void) {
   __asm__("lidt %0" :: "m"(idtPointer) : "memory");
 }
 
+void disableIRQ(unsigned int irq) {
+  assert(irq < 16);
+
+  // Send OCW1 (set IRQ mask)
+
+  if(irq < PIC2_IRQ_START)
+    outPort8( PIC1_PORT | 0x01,
+             inPort8(PIC1_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq));
+  else
+    outPort8(
+        PIC2_PORT | 0x01,
+        inPort8(PIC2_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq-PIC2_IRQ_START));
+}
+
 void setupGDT(void) {
   gdt_entry_t *tssDescriptor = &kernelGDT[TSS_SEL / sizeof(gdt_entry_t)];
   struct GdtPointer gdtPointer = {
@@ -656,13 +673,15 @@ void setupGDT(void) {
     .limit = 6 * sizeof(gdt_entry_t)
   };
 
+  size_t tssLimit = sizeof tss - 1;
   tssDescriptor->base1 = (uint32_t)&tss & 0xFFFFu;
   tssDescriptor->base2 = (uint8_t)(((uint32_t)&tss >> 16) & 0xFFu);
   tssDescriptor->base3 = (uint8_t)(((uint32_t)&tss >> 24) & 0xFFu);
-  tssDescriptor->limit1 = sizeof tss; // Size of TSS structure and IO Bitmap (in pages)
-  tssDescriptor->limit2 = 0;
+  tssDescriptor->limit1 = (uint16_t)(tssLimit & 0xFFFF); // Size of TSS structure and IO Bitmap (in pages)
+  tssDescriptor->limit2 = (uint8_t)(tssLimit >> 16);
 
   tss.ss0 = KDATA_SEL;
+  tss.esp0 = (uint32_t)kernelStackTop;
 
   __asm__ __volatile__("lgdt %0" :: "m"(gdtPointer) : "memory");
   __asm__ __volatile__("ltr %%ax" :: "a"(TSS_SEL));
@@ -743,6 +762,9 @@ void initInterrupts(void) {
 
   for(unsigned int i = 0; i < NUM_IRQS; i++)
     addIDTEntry(irqIntHandlers[i], IRQ(i), 0);
+
+  for(int i=0; i < 16; i++)
+    disableIRQ(i);
 
   //initPIC();
   loadIDT();
@@ -1259,8 +1281,6 @@ void init(multiboot_info_t *info) {
   //  memory_map_t *mmap;
   module_t *module;
   bool initServerFound = false;
-  char *initServerStrPtr = NULL;
-  char *initServerStrEnd = NULL;
 
 #ifdef DEBUG
 
@@ -1274,23 +1294,6 @@ void init(multiboot_info_t *info) {
   showCPU_Features();
 #endif
 
-  initServerStrPtr = strstr((char*)KPHYS_TO_VIRT(info->cmdline),
-  INIT_SERVER_FLAG);
-
-  /* Locate the initial server string (if it exists) */
-
-  if(initServerStrPtr) {
-    initServerStrPtr += (sizeof( INIT_SERVER_FLAG) - 1);
-    initServerStrEnd = strchr(initServerStrPtr, ' ');
-
-    if(!initServerStrEnd)
-      initServerStrEnd = strchr(initServerStrPtr, '\0');
-  }
-  else {
-    kprintf("Initial server not specified.\n");
-    stopInit("No boot modules found.\nNo initial server to start.");
-  }
-
   if(IS_FLAG_SET(info->flags, MBI_FLAGS_MEM))
     kprintf("Lower Memory: %d bytes Upper Memory: %d bytes\n",
             info->mem_lower << 10, info->mem_upper << 10);
@@ -1303,17 +1306,33 @@ void init(multiboot_info_t *info) {
   /* Locate the initial server module. */
 
   for(size_t i = info->mods_count; i; i--, module++) {
-    if(strncmp((char*)KPHYS_TO_VIRT(module->string), initServerStrPtr,
-               initServerStrEnd - initServerStrPtr)
-       == 0) {
+    if(i == info->mods_count)
       initServerImg = (addr_t)module->mod_start;
-      initServerFound = true;
-      break;
+
+    if(module->string) {
+      const char *strPtr = (const char *)KPHYS_TO_VIRT(module->string);
+
+      do {
+        strPtr = (const char *)strstr(strPtr, INIT_SERVER_FLAG);
+        const char *separator = strPtr + strlen(INIT_SERVER_FLAG);
+
+        if(*separator == '\0' || (*separator >= '\t' && *separator <= '\r')) {
+          initServerFound = true;
+          initServerImg = (addr_t)module->mod_start;
+          break;
+        }
+        else
+          strPtr = separator;
+      } while(strPtr);
     }
   }
 
-  if(!initServerFound)
-    stopInit("Can't find initial server.");
+  if(!initServerFound) {
+    if(info->mods_count)
+      kprintf("Initial server was not specified with --init. Using first module.\n");
+    else
+      stopInit("Can't find initial server.");
+  }
 
   /* Initialize memory */
 

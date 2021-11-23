@@ -1,5 +1,3 @@
-include Makefile.inc
-
 .PHONY: all kernel lib apps servers drivers tests clean
 
 QEMU		:=qemu-system-x86_64
@@ -7,7 +5,9 @@ QEMU_FLAGS	:=-boot order=acn -fda os_floppy.img -smp cores=2,threads=2 -m 768 -c
 QEMU_DRIVE	:=newimg.img
 GDB		:=i686-elf-gdb
 
-all: kernel #libs apps servers drivers tests
+include Makefile.inc
+
+all: kernel libs servers #apps servers drivers tests
 
 kernel:
 	$(MAKE) -C kernel all
@@ -18,6 +18,7 @@ lib:
 apps:
 
 servers:
+	$(MAKE) -C servers all
 
 drivers:
 
@@ -30,7 +31,9 @@ gdb-debug: kernel/kernel.elf
 tests:
 	$(MAKE) -C kernel tests
 	$(MAKE) -C lib tests
+	$(MAKE) -C servers tests
 
 clean:
 	$(MAKE) -C kernel clean
 	$(MAKE) -C lib clean
+	$(MAKE) -C servers clean

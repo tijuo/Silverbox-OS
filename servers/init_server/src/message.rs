@@ -13,417 +13,6 @@ use core::convert::{TryInto, TryFrom};
 use core::ptr;
 
 type Result<T> = core::result::Result<T, error::Error>;
-pub type BlankMessage = Message<()>;
-
-#[derive(Clone)]
-#[repr(C)]
-pub struct RawMessage {
-    subject: i32,
-    sender: CTid,
-    recipient: CTid,
-    buffer: *mut c_void,
-    buffer_len: usize,
-    bytes_transferred: usize,
-    flags: i32,
-}
-
-impl RawMessage {
-    pub const ANY_SENDER: CTid = 0;
-    pub const KERNEL_TID: CTid = 0;
-    pub const RESPONSE_OK: i32 = 0;
-    pub const RESPONSE_FAIL: i32 = 1;
-
-    pub const MSG_NOBLOCK: i32 = 1;
-    pub const MSG_SYSTEM: i32 = 2;
-    pub const MSG_CALL: i32 = 4;
-    pub const MSG_KERNEL: i32 = -0x80000000i32;
-
-    /*
-    pub fn new(subject: i32, sender: Option<CTid>, recipient: Option<CTid>,
-               data: Option<&[u8]>, flags: i32) -> RawMessage {
-        let buffer = data.unwrap_or(&[])
-        RawMessage {
-            subject,
-            sender: sender.unwrap_or(0),
-            recipient: recipient.unwrap_or(0),
-            buffer: .as_ptr_mut(),
-            buffer_len: ,
-        }
-    }
-*/
-    pub fn new_blank() -> Self {
-        RawMessage {
-            subject: 0,
-            sender: NULL_TID,
-            recipient: NULL_TID,
-            buffer: ptr::null_mut(),
-            buffer_len: 0,
-            bytes_transferred: 0,
-            flags: 0,
-        }
-    }
-
-    pub fn is_flags_set(&self, flags: i32) -> bool {
-        self.flags & flags == flags
-    }
-
-    pub fn flags(&self) -> i32 {
-        self.flags
-    }
-
-    pub fn subject(&self) -> i32 {
-        self.subject
-    }
-
-    pub fn recipient(&self) -> CTid {
-        self.recipient
-    }
-
-    pub fn sender(&self) -> CTid {
-        self.sender
-    }
-
-    pub fn bytes_transferred(&self) -> usize {
-        self.bytes_transferred
-    }
-}
-
-#[derive(Clone)]
-pub struct Message<T: Sized> {
-    pub subject: i32,
-    pub sender: Tid,
-    pub recipient: Tid,
-    data: Option<Box<T>>,
-    bytes_transferred: Option<usize>,
-    pub flags: i32,
-}
-
-impl<T: Sized> Message<T> {
-    pub fn new(subject: i32, data: Option<Box<T>>, flags: i32) -> Self {
-        Self {
-            subject,
-            sender: Tid::null(),
-            recipient: Tid::null(),
-            data,
-            bytes_transferred: None,
-            flags,
-        }
-    }
-
-    pub fn new_blank() -> Self {
-        Self::new(0, None, 0)
-    }
-
-    pub fn data(&self) -> Option<&T> {
-        self.data.as_ref().map(|r| &**r)
-    }
-
-    pub fn data_mut(&mut self) -> Option<&mut T> {
-        self.data.as_mut().map(|r| &mut **r)
-    }
-
-    pub fn bytes_transferred(&self) -> Option<usize> {
-        self.bytes_transferred.clone()
-    }
-
-    pub fn take(&mut self) -> Option<Box<T>> {
-        self.data.take()
-    }
-
-    pub fn raw_message(&self) -> RawMessage {
-        let len = match self.data() {
-            Some(r) => mem::size_of_val(r),
-            None => 0
-        };
-
-        RawMessage {
-            subject: self.subject,
-            sender: self.sender.into(),
-            recipient: self.recipient.into(),
-            buffer: match self.data() {
-                Some(r) => r as *const T as *mut c_void,
-                None => ptr::null_mut(),
-            },
-            buffer_len: len,
-            bytes_transferred: 0,
-            flags: self.flags
-        }
-    }
-
-    pub fn send(&mut self, recipient: &Tid) -> Result<usize> {
-        self.recipient = recipient.clone();
-
-        let mut raw_msg = self.raw_message();
-
-        match unsafe { syscall::sys_send(&mut raw_msg as *mut RawMessage) } {
-            status::OK => {
-                self.sender = Tid::new(raw_msg.sender);
-                Ok(raw_msg.bytes_transferred)
-            },
-            r => Err(r),
-        }
-    }
-
-    pub fn call<U>(&mut self, recipient: &Tid) -> Result<(Message<U>, usize)> {
-        self.recipient = recipient.clone();
-
-        let u_size = mem::size_of::<U>();
-        let mut v: Vec<u8> = vec![0; u_size];
-        let v_ptr = if u_size == 0 { ptr::null_mut() } else { &mut v as *mut Vec<u8> as *mut c_void };
-
-        let mut send_msg = self.raw_message();
-        let mut recv_msg = RawMessage {
-            subject: 0,
-            sender: Tid::null_ctid(),
-            recipient: Tid::null_ctid(),
-            buffer: v_ptr,
-            buffer_len: u_size,
-            bytes_transferred: 0,
-            flags: 0,
-        };
-
-        match unsafe { syscall::sys_call(&mut send_msg as *mut RawMessage,
-                                         &mut recv_msg as *mut RawMessage) } {
-            status::OK => {
-                let bytes_transferred = recv_msg.bytes_transferred;
-                recv_msg
-                    .try_into()
-                    .map_err(|_| error::PARSE_ERROR)
-                    .map(|m| (m, bytes_transferred))
-            },
-            r => Err(r),
-        }
-    }
-}
-use crate::eprintln;
-
-impl<T> TryFrom<RawMessage> for Message<T> {
-    type Error = i32;
-
-    fn try_from(value: RawMessage) -> result::Result<Self, Self::Error> {
-        if value.buffer_len != mem::size_of::<T>() || (value.buffer.is_null() && value.buffer_len != 0) {
-            eprintln!("Buffer len: {} T size: {}", value.buffer_len, mem::size_of::<T>());
-            eprintln!("value.buffer addr: {:p} ", value.buffer);
-            result::Result::Err(error::PARSE_ERROR)
-        } else {
-            result::Result::Ok(Message {
-                subject: value.subject,
-                sender: Tid::new(value.sender),
-                recipient: Tid::new(value.recipient),
-                data: if value.buffer.is_null() {
-                    None
-                } else {
-                    Some(Box::new(unsafe { ptr::read(value.buffer as *const T) }))
-                },
-                bytes_transferred: Some(value.bytes_transferred),
-                flags: value.flags,
-            })
-        }
-    }
-}
-
-pub fn send<T: Sized>(recipient: &Tid, message: &mut Message<T>) -> Result<usize> {
-    message.send(recipient)
-}
-
-pub fn call<S, R>(recipient: &Tid, send_msg: &mut Message<S>) -> Result<(Message<R>, usize)>
-    where S: Sized, R: Sized {
-    send_msg.call(recipient)
-}
-
-pub fn receive<T: Sized>(sender: &Tid, flags: i32) -> Result<(Message<T>, usize)> {
-    let t_size = mem::size_of::<T>();
-    let mut v: Vec<u8> = vec![0; t_size];
-    let mut raw_msg = RawMessage {
-        subject: 0,
-        sender: sender.into(),
-        recipient: Tid::null_ctid(),
-        buffer: v.as_mut_ptr() as *mut c_void,
-        buffer_len: t_size,
-        bytes_transferred: 0,
-        flags
-    };
-
-    match unsafe { syscall::sys_receive(&mut raw_msg as *mut RawMessage) } {
-        status::OK => {
-            let bytes_transferred = raw_msg.bytes_transferred;
-
-            Message::<T>::try_from(raw_msg)
-                .map(|msg| (msg, bytes_transferred))
-        },
-        r => Err(r),
-    }
-}
-
-pub mod kernel {
-    pub const EXCEPTION: i32 = -1;
-    pub const IRQ: i32 = -2;
-    pub const EXIT: i32 = -3;
-    pub const EOI: i32 = -4;
-    pub const MEMORY: i32 = -5;
-    pub const BIND_IRQ: i32 = -6;
-    pub const UNBIND_IRQ: i32 = -7;
-
-    use super::RawMessage;
-    use crate::Tid;
-    use crate::address::VAddr;
-    use crate::syscall::c_types::CTid;
-    use core::ffi::c_void;
-    use core::convert::TryFrom;
-    use core::{mem, result};
-    use crate::error;
-
-    #[derive(Clone)]
-    #[repr(C)]
-    pub struct RawExceptionMessage {
-        pub who: CTid,
-        pub error_code: i32,
-        pub fault_address: *const c_void,
-        pub int_num: i32,
-    }
-
-    impl RawExceptionMessage {
-        pub const PRESENT: u32 = 0x01;
-        pub const WRITE: u32 = 0x02;
-        pub const USER: u32 = 0x04;
-        pub const RESD_WRITE: u32 = 0x08;
-        pub const FETCH: u32 = 0x10;
-    }
-
-    pub struct ExceptionMessage {
-        pub int_num: u32,
-        pub who: Tid,
-        pub error_code: u32,
-        pub fault_address: VAddr,
-    }
-
-    impl ExceptionMessage {
-        pub const PRESENT: u32 = RawExceptionMessage::PRESENT;
-        pub const WRITE: u32 = RawExceptionMessage::WRITE;
-        pub const USER: u32 = RawExceptionMessage::USER;
-        pub const RESD_WRITE: u32 = RawExceptionMessage::RESD_WRITE;
-        pub const FETCH: u32 = RawExceptionMessage::FETCH;
-
-        pub fn new(raw_msg: RawExceptionMessage) -> Self {
-            ExceptionMessage {
-                int_num: raw_msg.int_num as u32,
-                who: Tid::new(raw_msg.who),
-                error_code: raw_msg.error_code as u32,
-                fault_address: raw_msg.fault_address as VAddr,
-            }
-        }
-    }
-
-    impl From<RawExceptionMessage> for ExceptionMessage {
-        fn from(value: RawExceptionMessage) -> Self {
-            Self::new(value)
-        }
-    }
-
-    impl TryFrom<RawMessage> for ExceptionMessage {
-        type Error = i32;
-        fn try_from(value: RawMessage) -> result::Result<Self, Self::Error> {
-            RawExceptionMessage::try_from(value)
-                .map(|raw_msg| Self::from(raw_msg))
-        }
-    }
-
-    impl TryFrom<RawMessage> for RawExceptionMessage {
-        type Error = i32;
-
-        fn try_from(msg: RawMessage) -> Result<Self, Self::Error> {
-            if msg.buffer_len < mem::size_of::<Self>() {
-                Err(error::PARSE_ERROR)
-            } else {
-                let int_num_arr;
-                let who_arr;
-                let code_arr;
-                let fault_addr_arr;
-
-                let int_num_ptr = (msg.buffer.wrapping_add(offset_of!(RawExceptionMessage, int_num))) as *const [u8; mem::size_of::<i32>()];
-                let who_ptr = (msg.buffer.wrapping_add(offset_of!(RawExceptionMessage, who))) as *const [u8; mem::size_of::<CTid>()];
-                let code_ptr = (msg.buffer.wrapping_add(offset_of!(RawExceptionMessage, error_code))) as *const [u8; mem::size_of::<i32>()];
-                let fault_addr_ptr = (msg.buffer.wrapping_add(offset_of!(RawExceptionMessage, fault_address))) as *const [u8; mem::size_of::<usize>()];
-
-                unsafe {
-                    int_num_arr = int_num_ptr.read();
-                    who_arr = who_ptr.read();
-                    code_arr = code_ptr.read();
-                    fault_addr_arr = fault_addr_ptr.read();
-                }
-
-                Ok(Self {
-                    who: CTid::from_le_bytes(who_arr),
-                    error_code: i32::from_le_bytes(code_arr),
-                    fault_address: usize::from_le_bytes(fault_addr_arr) as *const c_void,
-                    int_num: i32::from_le_bytes(int_num_arr),
-                })
-            }
-        }
-    }
-
-    #[derive(Clone)]
-    #[repr(C)]
-    pub struct RawExitMessage {
-        pub who: CTid,
-        pub status_code: i32,
-    }
-
-    pub struct ExitMessage {
-        pub who: Tid,
-        pub status_code: i32,
-    }
-
-    impl ExitMessage {
-        pub fn new(raw_msg: RawExitMessage) -> Self {
-            ExitMessage {
-                who: raw_msg.who.into(),
-                status_code: raw_msg.status_code
-            }
-        }
-    }
-
-    impl From<RawExitMessage> for ExitMessage {
-        fn from(value: RawExitMessage) -> Self {
-            Self::new(value)
-        }
-    }
-
-    impl TryFrom<RawMessage> for ExitMessage {
-        type Error = i32;
-        fn try_from(value: RawMessage) -> result::Result<Self, Self::Error> {
-            RawExitMessage::try_from(value)
-                .map(|raw_msg| Self::from(raw_msg))
-        }
-    }
-
-    impl TryFrom<RawMessage> for RawExitMessage {
-        type Error = i32;
-
-        fn try_from(msg: RawMessage) -> Result<Self, Self::Error> {
-            if msg.buffer_len < mem::size_of::<RawExitMessage>() {
-                Err(error::PARSE_ERROR)
-            } else {
-                let who_arr;
-                let status_arr;
-
-                let who_ptr = (msg.buffer.wrapping_add(offset_of!(RawExitMessage, who))) as *const [u8; mem::size_of::<CTid>()];
-                let status_ptr = (msg.buffer.wrapping_add(offset_of!(RawExitMessage, status_code))) as *const [u8; mem::size_of::<i32>()];
-
-                unsafe {
-                    who_arr = who_ptr.read();
-                    status_arr = status_ptr.read();
-                }
-
-                Ok(RawExitMessage {
-                        who: CTid::from_le_bytes(who_arr),
-                        status_code: i32::from_le_bytes(status_arr),
-                    }
-                )
-            }
-        }
-    }
-}
 
 pub mod init {
     use super::RawMessage;
@@ -434,7 +23,7 @@ pub mod init {
     use crate::error;
     use alloc::string::String;
     use alloc::vec::Vec;
-    use crate::device::DeviceId;
+    use rust::device::DeviceId;
     use core::ffi::c_void;
     use crate::message::{Message, BlankMessage};
     use crate::syscall::c_types::{CTid};
@@ -444,7 +33,7 @@ pub mod init {
     use core::result;
     use alloc::boxed::Box;
     use core::mem;
-    
+
     pub const MAX_NAME_LEN: usize = 32;
 
     pub const MAP: i32 = 1;
@@ -461,7 +50,8 @@ pub mod init {
     pub const LOOKUP_NAME: i32 = 10;
     pub const UNREGISTER_NAME: i32 = 11;
 
-    pub const MAP_IO: i32 = 12;         // Reserve an IO port range
+    pub const MAP_IO: i32 = 12;
+    // Reserve an IO port range
     pub const UNMAP_IO: i32 = 13;       // Release an IO port range
 
     pub trait Valid {
@@ -505,6 +95,8 @@ pub mod init {
                 })
         }
     }
+}
+    /*
 
     pub trait SimpleResponse {
         fn new_message(recipient: Tid, is_success: bool, flags: i32) -> BlankMessage {
@@ -1443,3 +1035,4 @@ pub mod init {
         }
     }
 }
+*/

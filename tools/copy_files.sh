@@ -3,7 +3,7 @@
 # This copies executables into the appropriate directory on the drive
 # Assumes that SB_MNT_PT is an existing mount point for the drive image
 
-SB_MNT_PT="~/os_floppy"
+SB_MNT_PT="~/os_drive"
 target_dir=
 file_list=
 

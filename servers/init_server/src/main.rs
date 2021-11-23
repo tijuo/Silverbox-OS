@@ -2,150 +2,67 @@
 #![no_std]
 #![no_main]
 #![feature(alloc_error_handler, lang_items, asm, panic_info_message)]
-#![feature(const_ptr_offset_from, const_maybe_uninit_as_ptr, const_raw_ptr_deref, const_refs_to_cell)]
+#![feature(const_ptr_offset_from, const_maybe_uninit_as_ptr, const_refs_to_cell)]
+
+extern "C" {
+    fn exit(code: i32) -> !;
+}
 
 #[no_mangle]
-pub extern "C" fn _start(multiboot_info: *mut RawMultibootInfo, last_free_page: PAddr) -> ! {
+pub extern "C" fn _start(multiboot_info: *mut RawMultibootInfo, first_free_page: PAddr, stack_size: usize) -> ! {
     lowlevel::print_debug("Initializing the init server...");
     lowlevel::print_debug("Multiboot info: 0x");
     lowlevel::print_debug_u32(multiboot_info as usize as u32, 16);
-    lowlevel::print_debug(" Last free page: 0x");
-    lowlevel::print_debug_u32(last_free_page as usize as u32, 16);
+    lowlevel::print_debug(" First free page: 0x");
+    lowlevel::print_debug_u32(first_free_page as usize as u32, 16);
     lowlevel::print_debugln(".");
     let multiboot_box = init(multiboot_info as usize as PAddr,
-                             last_free_page);
+                             first_free_page, stack_size);
     main(multiboot_box);
-    syscall::exit(1)
+
+    unsafe {
+        exit(1);
+    }
 }
 
 #[macro_use] extern crate core;
 #[macro_use] extern crate alloc;
 extern crate num_traits;
-#[macro_use] extern crate memoffset;
+#[macro_use] extern crate rust;
 
 mod pager;
 mod address;
-mod name;
-mod syscall;
-mod port;
-mod message;
+//mod name;
+//mod port;
 mod page;
 mod mapping;
 mod error;
-mod device;
-#[macro_use]
-mod lowlevel;
+//mod device;
+#[macro_use] mod lowlevel;
 mod sbrk;
-#[allow(dead_code)]
-mod elf;
-mod ramdisk;
-mod thread;
-mod types;
+//mod elf;
+//mod ramdisk;
+//mod thread;
 mod multiboot;
 mod region;
 mod phys_alloc;
-mod vfs;
-mod fat;
-mod mutex;
+//mod vfs;
+//mod fat;
+//mod mutex;
 
 use address::PAddr;
-use message::RawMessage;
-use message::{init, kernel};
-use crate::message::init::{RegisterNameRequest, LookupNameRequest, UnregisterNameRequest,
-                           MapResponse, UnmapResponse, MapRequest, UnmapRequest, LookupNameResponse,
-                           RegisterNameResponse, UnregisterNameResponse, RegisterServerRequest,
-                           RegisterServerResponse};
-use crate::message::kernel::{ExceptionMessage, ExitMessage};
-use syscall::c_types::{CTid, NULL_TID};
 use alloc::string::String;
 use crate::multiboot::{RawMultibootInfo, MultibootInfo};
 use alloc::boxed::Box;
-use crate::syscall::c_types::ThreadInfo;
-use crate::syscall::{ThreadStruct, INIT_TID};
-use core::ffi::c_void;
-use crate::address::VAddr;
-use crate::device::DeviceId;
-use crate::mapping::AddrSpace;
-use crate::page::VirtualPage;
-use crate::message::Message;
-use core::convert::TryFrom;
-use crate::message::init::{SimpleResponse, NameString};
-use core::cmp::Ordering;
-use alloc::vec::Vec;
 use crate::phys_alloc::PhysPageAllocator;
+use rust::types::CTid;
+use rust::message::kernel::{self, ExceptionMessagePayload, ExitMessagePayload};
+use rust::message::{MessageHeader, Transmit};
+use rust::syscalls;
 
 const DATA_BUF_SIZE: usize = 64;
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug, Hash)]
-pub struct Tid(Option<CTid>);
-
-impl Tid {
-    pub fn new(id: CTid) -> Tid {
-        match id {
-            NULL_TID => Tid(None),
-            x => Tid(Some(x)),
-        }
-    }
-
-    pub fn is_null(&self) -> bool {
-        self.0.is_none()
-    }
-
-    pub fn null_ctid() -> CTid {
-        NULL_TID
-    }
-    pub fn null() -> Tid { Tid(None) }
-}
-
-impl PartialOrd for Tid {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        CTid::from(self).partial_cmp(&CTid::from(other))
-    }
-}
-
-impl Ord for Tid {
-    fn cmp(&self, other: &Self) -> Ordering {
-        CTid::from(self).cmp(&CTid::from(other))
-    }
-}
-
-impl From<CTid> for Tid {
-    fn from(id: CTid) -> Self {
-       Tid::new(id)
-    }
-}
-
-impl From<&CTid> for Tid {
-    fn from(id: &CTid) -> Self {
-        Tid::new(*id)
-    }
-}
-
-impl From<Tid> for CTid {
-    fn from(id: Tid) -> Self {
-        match id.0 {
-            None => NULL_TID,
-            Some(x) => x,
-        }
-    }
-}
-
-impl From<&Tid> for CTid {
-    fn from(id: &Tid) -> Self {
-        match id.0 {
-            None => NULL_TID,
-            Some(x) => x,
-        }
-    }
-}
-
-impl Default for Tid {
-    fn default() -> Self {
-        Tid::null()
-    }
-}
-
-fn init(multiboot_info: PAddr, first_free_page: PAddr) -> Option<Box<MultibootInfo>> {
+fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Option<Box<MultibootInfo>> {
     lowlevel::print_debugln("Initializing bootstrap allocator");
 
     PhysPageAllocator::init_bootstrap(first_free_page);
@@ -183,6 +100,7 @@ fn init(multiboot_info: PAddr, first_free_page: PAddr) -> Option<Box<MultibootIn
     eprintln!("Initializing mapping manager...");
     mapping::manager::init();
 
+    /*
     eprintln!("Initializing name manager...");
     name::manager::init();
 
@@ -193,15 +111,18 @@ fn init(multiboot_info: PAddr, first_free_page: PAddr) -> Option<Box<MultibootIn
     init_threads(vec![idle_main, ramdisk::ramdisk_main]);
 
     eprintln!("Loading modules...");
+
+     */
     let multiboot_box = unsafe {
         MultibootInfo::from_phys(multiboot_info)
     };
-
+/*
     load_modules(&multiboot_box);
-
+*/
     multiboot_box
 }
 
+/*
 fn load_modules(multiboot_info: &Option<Box<MultibootInfo>>) {
     if let Some(ref mb_info) = multiboot_info {
         let initsrv_name = mb_info.command_line.as_ref()
@@ -227,75 +148,56 @@ fn load_modules(multiboot_info: &Option<Box<MultibootInfo>>) {
         eprintln!("Multiboot info is missing.");
     }
 }
+*/
 
-fn handle_message<T>(message: Message<T>) -> Result<(), (error::Error, Option<String>)> {
-    let msg = message.raw_message();
+fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<String>)> {
+    let message_sender = header.sender().expect("Message should have a sender");
 
-    if msg.is_flags_set(RawMessage::MSG_KERNEL) {
-        let result = match msg.subject() {
+    if rust::is_flag_set!(header.flags, MessageHeader::MSG_KERNEL) {
+        let result = match header.subject {
             kernel::EXCEPTION => {
-                ExceptionMessage::try_from(msg)
-                    .map_err(|_| (error::OPERATION_FAILED, Some(String::from("Failed to respond to kernel message."))))
-                    .and_then(|ex_msg| {
-                        let result = if ex_msg.int_num == 14 {
-                            pager::handle_page_fault(&ex_msg)
+                ExceptionMessagePayload::read_payload(&header)
+                    .map_err(|_| (error::PARSE_ERROR, Some(String::from("Unable to read exception message."))))
+                    .and_then(|payload| {
+                        if payload.fault_num == 14 {
+                            pager::handle_page_fault(&payload)
+
+                            /*
+                                                      let mut thread_info = ThreadInfo::default();
+                            thread_info.status = ThreadInfo::READY;
+
+                            syscall::update_thread(&Tid::from(ex_msg.who),
+                                                   &ThreadStruct::new(thread_info, ThreadInfo::STATUS))
+                                .map_err(|e| (e, None))
+                             */
                         } else {
-                            error::dump_state(&message.sender);
+                            error::dump_state(&payload);
                             Err((error::NOT_IMPLEMENTED, None))
-                        };
-
-                        let subject = if result.is_ok() {
-                            RawMessage::RESPONSE_OK
-                        } else {
-                            RawMessage::RESPONSE_FAIL
-                        };
-
-                        let mut response: Message<()> = Message::new(subject, None, RawMessage::MSG_SYSTEM | RawMessage::MSG_NOBLOCK);
-
-                        response.send(&message.sender)
-                            .map_err(|code| (code, None))
-                            .and(result)
+                        }
                     })
             },
             kernel::EXIT => {
-                ExitMessage::try_from(msg)
-                    .map_err(|_| (error::OPERATION_FAILED, Some(String::from("Failed to respond to kernel message."))))
-                    .and_then(|_exit_msg| {
-
+                ExitMessagePayload::read_payload(&header)
+                    .map_err(|_| (error::PARSE_ERROR, Some(String::from("Unable to read exit message."))))
+                    .and_then(|_payload|
                         // TODO: Notify threads that are waiting to join with the stopped thread
 
-                        let result = Ok(());
-
-                        result
-/*
-                        let subject = if result.is_ok() {
-                            RawMessage::RESPONSE_OK
-                        } else {
-                            RawMessage::RESPONSE_FAIL
-                        };
-
-                        let mut response: Message<()> = Message::new(subject, None, RawMessage::MSG_SYSTEM | RawMessage::MSG_NOBLOCK);
-
-                        response.send(&message.sender)
-                            .map_err(|code| (code, None))
-                            .and(result)
- */
-                    })
+                        Ok(()))
             },
             _ => {
-                let result = Err((error::BAD_REQUEST, Some(format!("Kernel message with subject {} from TID {}", message.subject, msg.sender()))));
-                let mut response: Message<()> = Message::new(RawMessage::RESPONSE_FAIL, None, RawMessage::MSG_SYSTEM | RawMessage::MSG_NOBLOCK);
-
-                response.send(&message.sender)
-                    .map_err(|code| (code, None))
-                    .and(result)
+                Err((error::BAD_REQUEST,
+                                  Some(format!("Kernel message with subject {} from TID {}",
+                                               header.subject,
+                                               CTid::from(header.sender()
+                                                   .expect("Message is supposed to have a sender"))))))
             },
         };
 
         result
     }
     else {
-        match msg.subject() {
+        match header.subject {
+            /*
             init::REGISTER_NAME => {
                 RegisterNameRequest::try_from(msg)
                     .and_then(|request| {
@@ -346,7 +248,7 @@ fn handle_message<T>(message: Message<T>) -> Result<(), (error::Error, Option<St
             init::MAP => {
                 MapRequest::try_from(msg)
                     .and_then(|request| {
-                        let addr_option = mapping::manager::lookup_tid_mut(&message.sender)
+                        let addr_option = mapping::manager::lookup_tid_mut(message_sender)
                             .and_then(|addr_space|
                                 addr_space.map(request.address,
                                                &request.device,
@@ -360,6 +262,8 @@ fn handle_message<T>(message: Message<T>) -> Result<(), (error::Error, Option<St
 
                         message::send(&message.sender, &mut response)
                             .map(|_| ())
+
+
                     })
                     .map_err(|code| (error::OPERATION_FAILED, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
             },
@@ -372,15 +276,19 @@ fn handle_message<T>(message: Message<T>) -> Result<(), (error::Error, Option<St
                                     true => Some(()),
                                     false => None,
                                 });
+
                         let mut response = UnmapResponse::new_message(message.sender.clone(),
                                                                       unmap_option.is_some(),
                                                                       RawMessage::MSG_NOBLOCK);
 
                         message::send(&message.sender, &mut response)
                             .map(|_| ())
+
+
                     })
                     .map_err(|code| (error::OPERATION_FAILED, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
             },
+
             init::CREATE_PORT => {
                 Err((error::NOT_IMPLEMENTED, Some(format!("Request {}", msg.subject()))))
             },
@@ -410,11 +318,16 @@ fn handle_message<T>(message: Message<T>) -> Result<(), (error::Error, Option<St
             init::UNREGISTER_SERVER => {
                 Err((error::NOT_IMPLEMENTED, Some(format!("Request {}", msg.subject()))))
             },
-            _ => Err((error::BAD_REQUEST, Some(format!("Request {:#x} sender: {} flags: {}", message.subject, msg.sender(), msg.flags())))),
+             */
+            _ => Err((error::BAD_REQUEST, Some(format!("Request {:#x} sender: {} flags: {}",
+                                                       header.subject,
+                                                       CTid::from(message_sender),
+                                                       header.flags)))),
         }
     }
 }
 
+/*
 fn idle_main() -> ! {
     loop {}
 }
@@ -428,17 +341,12 @@ fn init_threads(thread_entries: Vec<fn() -> !>) {
     let zero_device = DeviceId::new_from_tuple((device::pseudo::MAJOR, device::pseudo::ZERO_MINOR));
 
     for (i, entry) in thread_entries.into_iter().enumerate() {
-        let stack_top = 0xC0000000 - (i + 1) * stack_size;
+        let stack_top = 0xF8000000 - (i + 1) * stack_size;
 
-        let tid = match unsafe {
-            syscall::sys_create_thread(NULL_TID,
-                                       entry as *const fn() -> ! as *const c_void,
-                                       &pmap as *const PAddr,
-                                       stack_top as *const c_void)
-        } {
-            NULL_TID => panic!("Unable to create new thread."),
-            t => Tid::new(t)
-        };
+        let tid =
+            syscall::sys_create_thread(entry as *const fn() -> ! as *const c_void,
+                                       pmap as u32,
+                                       stack_top as *const c_void).expect("Unable to create new thread.");
 
         addr_space.attach_thread(tid.clone());
         addr_space.map(Some((stack_top - stack_size + VirtualPage::SMALL_PAGE_SIZE) as VAddr),
@@ -462,38 +370,20 @@ fn init_threads(thread_entries: Vec<fn() -> !>) {
         }
     }
 }
+*/
 
 fn main(_multiboot_info: Option<Box<MultibootInfo>>) {
-    let any_sender = Tid::new(RawMessage::ANY_SENDER);
-
     loop {
-        match message::receive::<[u8; DATA_BUF_SIZE]>(&any_sender, 0) {
-            Ok((msg, _)) => {
-                match handle_message(msg) {
-                    Ok(_) => {},
-                    Err((code, arg)) => error::log_error(code, arg),
-                }
-            },
-            Err(code) => {
-                error::log_error(code, None);
-            }
+        match syscalls::sys_recv(None, MessageHeader::MSG_STD)
+            .map_err(|e| match e {
+                syscalls::SyscallError::Interrupted => {
+                    (error::NOT_IMPLEMENTED, None)
+                },
+                _ => (error::OPERATION_FAILED, None),
+            })
+            .and_then(|msg_header| handle_message(msg_header)) {
+            Err((e, msg)) => error::log_error(e, msg),
+            _ => (),
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::Tid;
-
-    #[test]
-    fn test_null() {
-        assert_eq!(0, Tid::null_ctid());
-    }
-
-    #[test]
-    fn test_is_null() {
-        assert!(Tid::new(0).is_null());
-        assert!(!Tid::new(7000).is_null());
-        assert!(!Tid::new(28529).is_null());
     }
 }

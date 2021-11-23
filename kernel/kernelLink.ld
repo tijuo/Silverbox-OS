@@ -7,7 +7,7 @@ SECTIONS
   kVirtCode  = 0xF8100000;
   kVirtStart = 0xF8100000;
 
-  kVirtToPhys = kPhysStart + ~kVirtStart + 1;
+  kVirtToPhys = kPhysStart - kVirtStart;
   kPhysToVirt = kVirtStart - kPhysStart;
   VPhysMemStart = 0x00000000;
 

@@ -207,7 +207,7 @@ struct TSS_Struct {
   uint16_t trap :1;
   uint16_t _resd12 :15;
   uint16_t ioMap;
-  uint8_t tssIoBitmap[8088];
+  uint8_t tssIoBitmap[8192];
 };
 
 // 56 bytes
@@ -232,48 +232,6 @@ typedef struct {
   uint16_t userSS;
   uint16_t avail2;
 } ExecutionState;
-
-// 288 bytes
-
-typedef struct {
-  uint16_t fcw;
-  uint16_t fsw;
-  uint8_t ftw;
-  uint8_t _resd1;
-  uint16_t fop;
-  uint32_t fpuIp;
-  uint16_t fpuCs;
-  uint16_t _resd2;
-
-  uint32_t fpuDp;
-  uint16_t fpuDs;
-  uint16_t _resd3;
-  uint32_t mxcsr;
-  uint32_t mxcsrMask;
-
-  union {
-    struct MMX_Register {
-      uint64_t value;
-      uint64_t _resd;
-    } mm[8];
-
-    struct FPU_Register {
-      uint8_t value[10];
-      uint8_t _resd[6];
-    } st[8];
-  };
-
-  struct XMM_Register {
-    uint64_t low;
-    uint64_t high;
-  } xmm[8];
-
-// Even though the area is reserved, the processor won't access the reserved bits in 32-bit mode
-/*
- uint8_t _resd12[176];
- uint8_t available[48];
- */
-} xsave_state_t;
 
 union GdtEntry {
   struct {
@@ -577,8 +535,8 @@ __asm__ ( \
           "cmpl $0, (%%eax)\n" /* Is tssEsp0 NULL? (because exception occurred during init()) */ \
           "je 1f\n" /* If so, don't bother saving/loading tssEsp0 */ \
           "mov %%esp, (%%eax)\n" \
-          "mov %%ss, %%cx\n" \
-          "cmpw 54(%%esp), %%cx\n" /* Privilege Change? */ \
+          "mov %%ss, %%dx\n" \
+          "cmpw 54(%%esp), %%dx\n" /* Privilege Change? */ \
           "je 2f\n" \
           "lea kernelStackTop, %%edx\n" \
           "mov %%edx, (%%eax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \

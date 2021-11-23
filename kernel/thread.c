@@ -11,7 +11,7 @@
 #include <kernel/paging.h>
 #include <kernel/interrupt.h>
 
-#define TID_START           1u
+#define TID_START           0u
 
 ALIGNED(PAGE_SIZE) uint8_t kernelStack[PAGE_SIZE]; // The single kernel stack used by all threads (assumes a uniprocessor system)
 uint8_t *kernelStackTop = kernelStack + PAGE_SIZE;
@@ -164,7 +164,7 @@ NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, addr_t addrSpace,
   memset(thread, 0, sizeof(tcb_t));
   thread->rootPageMap = (dword)rootPmap;
 
-  thread->userExecState.eflags = EFLAGS_IOPL3 | EFLAGS_IF | EFLAGS_RESD;
+  thread->userExecState.eflags = EFLAGS_IOPL3 | EFLAGS_IF;
   thread->userExecState.eip = (dword)entryAddr;
 
   thread->userExecState.userEsp = (dword)stackTop;

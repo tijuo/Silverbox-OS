@@ -3,39 +3,38 @@
 
 #include <types.h>
 
-#define RESPONSE_OK		    0
+#define RESPONSE_OK         0
 #define RESPONSE_FAIL	    1
 #define RESPONSE_ERROR      2
 
 #define ANY_SENDER          NULL_TID
 
 #define MSG_NOBLOCK         0x01u
-#define MSG_EMPTY           0x00u   // Only subject is sent
-#define MSG_STD             0x02u   // MMX registers contain data (64 bytes)
-#define MSG_LONG            0x04u   // SSE registers contain data (128 bytes)
-#define MSG_HUGE            0x06u   // Both MMX and SSE registers contain data (192 bytes)
-#define MSG_KERNEL          0x80u
+#define MSG_STD             0x00u   // XMM registers contain data (128 bytes)
+#define MSG_EMPTY           0x02u   // Only subject is sent
+#define MSG_KERNEL          0x80000000u
 
-typedef struct
-{
+union MessagePayload {
+    uint64_t uint64[16];
+    int64_t  int64[16];
+    uint32_t uint32[32];
+    int32_t  int32[32];
+    uint16_t uint16[64];
+    int16_t  int16[64];
+    uint8_t  uint8[128];
+    int8_t   int8[128];
+  };
+
+typedef struct {
+  _Alignas(sizeof(union MessagePayload)) union MessagePayload payload;
+
   uint32_t subject;
-  uint8_t flags;
+  uint32_t flags;
 
   union Target {
     tid_t recipient;
     tid_t sender;
   } target;
-
-  union Payload {
-    uint64_t uint64[24];
-    int64_t  int64[24];
-    uint32_t uint32[48];
-    int32_t  int32[48];
-    uint16_t uint16[96];
-    int16_t  int16[96];
-    uint8_t  uint8[192];
-    int8_t   int8[192];
-  } payload;
 } msg_t;
 
 #define EMPTY_MSG { \
@@ -46,9 +45,8 @@ typedef struct
   }, \
   .payload = { \
     .uint64 = { \
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
-      0, 0, 0, 0 \
+      0, 0, 0, 0, 0, 0, 0, 0, \
+      0, 0, 0, 0, 0, 0, 0, 0 \
     } \
   } \
 }

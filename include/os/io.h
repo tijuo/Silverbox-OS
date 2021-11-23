@@ -2,7 +2,7 @@
 #define OS_IO_H
 
 #include <stdint.h>
-#include <x86gprintrin.h>
+#include <x86intrin.h>
 
 #define IO_WAIT_CYCLES		20000ull
 

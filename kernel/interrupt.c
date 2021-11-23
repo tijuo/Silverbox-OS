@@ -13,6 +13,8 @@
 #include <os/msg/message.h>
 #include <stdint.h>
 
+#define HALT_OPCODE   0xF4u
+
 //static int handleHeapPageFault(int errorCode);
 
 #define FIRST_VALID_PAGE        0x1000u
@@ -124,7 +126,7 @@ void handleIRQ(void) {
   //int irqNum = getInServiceIRQ();
 
   intNum -= IRQ_BASE;
-  tcb_t *handler = irqHandlers[intNum];
+  //tcb_t *handler = irqHandlers[intNum];
 
   /*
    #ifdef DEBUG
@@ -135,15 +137,26 @@ void handleIRQ(void) {
    disableIRQ((unsigned int)irqNum);
    sendEOI((unsigned int)irqNum);
    */
+
+  // Set an irq event instead
+
+  /*
   if(handler) {
     if(currentThread != handler) {
       __asm__("fxsave %0\n" :: "m"(currentThread->xsaveState));
-      __asm__("movd %0, %%mm0\n" :: "r"(intNum));
+      __asm__("movd %0, %%xmm0\n"
+          "xorpd %%xmm1, %%xmm1\n"
+          "xorpd %%xmm2, %%xmm2\n"
+          "xorpd %%xmm3, %%xmm3\n"
+          "xorpd %%xmm4, %%xmm4\n"
+          "xorpd %%xmm5, %%xmm5\n"
+          "xorpd %%xmm6, %%xmm6\n"
+          "xorpd %%xmm7, %%xmm7\n"
+          :: "r"(intNum) : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
 
       if(IS_ERROR(
           sendMessage(currentThread, getTid(handler), IRQ_MSG, MSG_STD))) {
         kprintf("Unable to send irq %u message to handler.\n", intNum);
-        __asm__("emms\n");
       }
     }
     else if(currentThread->threadState != RUNNING) {
@@ -158,6 +171,7 @@ void handleIRQ(void) {
 
     // todo: fxsave, do context switch, copy tss io bitmap...
   }
+*/
 
   RESTORE_STATE;
 }
@@ -173,10 +187,12 @@ void handleIRQ(void) {
 
 void handleCpuException(uint32_t exNum, uint32_t errorCode) {
   tcb_t *tcb = getCurrentThread();
+  ExecutionState *state = (ExecutionState*)(tss.esp0 + sizeof(uint32_t));
+  uint32_t msgSubject;
 
   if(!tcb) {
     kprintf("NULL tcb. Unable to handle exception. System halted.\n");
-    dump_state((ExecutionState*)(&errorCode + 1), exNum, errorCode);
+    dump_state(state, exNum, errorCode);
 
     while(1) {
       disableInt();
@@ -184,30 +200,91 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode) {
     }
   }
 
-  struct ExceptionMessage messageData = {
-    .who = getTid(tcb),
-    .errorCode = errorCode,
-    .faultAddress = exNum == PAGE_FAULT_INT ? getCR2() : 0,
-    .intNum = exNum
-  };
-
   __asm__("fxsave %0\n" :: "m"(tcb->xsaveState));
-  __asm__("movq (%0), %%mm0\n"
-          "movq 8(%0), %%mm1\n" :: "r"(&messageData));
 
-  if(IS_ERROR(sendMessage(tcb, tcb->exHandler, EXCEPTION_MSG, MSG_STD))) {
-    kprintf("Unable to send exception message to exception handler.\n");
-    kprintf(
-        "Tried to send exception %u message (err code: %#x, fault addr: %#x) to tid %hhu.\n",
-        exNum, errorCode, exNum == 14 ? getCR2() : 0, getTid(tcb));
+  if(exNum == 13 && state->cs == UCODE_SEL && isReadable(state->eip, getRootPageMap())
+     && *(uint8_t *)state->eip == HALT_OPCODE) {
+    msgSubject = EXIT_MSG;
+    struct ExitMessage messageData = {
+      .statusCode = state->eax,
+      .who = getTid(tcb)
+    };
 
+    __asm__(
+        "movd (%0), %%xmm0\n"
+        "movd 4(%0), %%xmm1\n"
+        "xorpd %%xmm2, %%xmm2\n"
+        "xorpd %%xmm3, %%xmm3\n"
+        "xorpd %%xmm4, %%xmm4\n"
+        "xorpd %%xmm5, %%xmm5\n"
+        "xorpd %%xmm6, %%xmm6\n"
+        "xorpd %%xmm7, %%xmm7\n"
+        :: "r"(&messageData)
+        : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
+  }
+  else {
+    msgSubject = EXCEPTION_MSG;
+
+    struct ExceptionMessage messageData = {
+      .eax = state->eax,
+      .ebx = state->ebx,
+      .ecx = state->ecx,
+      .edx = state->edx,
+      .esi = state->esi,
+      .edi = state->edi,
+      .ebp = state->ebp,
+      .esp =
+          state->cs == KCODE_SEL ?
+              tss.esp0 + sizeof(uint32_t) + sizeof *state - 2
+                  * sizeof(uint32_t) :
+              state->userEsp,
+      .cs = state->cs,
+      .ds = state->ds,
+      .es = state->es,
+      .fs = state->fs,
+      .gs = state->gs,
+      .ss = state->cs == KCODE_SEL ? getSs() : state->userSS,
+      .eflags = state->eflags,
+      .cr0 = getCR0(),
+      .cr2 = getCR2(),
+      .cr3 = getCR3(),
+      .cr4 = getCR4(),
+      .eip = tcb->userExecState.eip,
+      .errorCode = errorCode,
+      .faultNum = exNum,
+      .processorId = getCurrentProcessor(),
+      .who = getTid(tcb),
+    };
+
+    __asm__(
+        "movapd (%0), %%xmm0\n"
+        "movapd 16(%0), %%xmm1\n"
+        "movapd 32(%0), %%xmm2\n"
+        "movapd 48(%0), %%xmm3\n"
+        "movapd 64(%0), %%xmm4\n"
+        "xorpd %%xmm5, %%xmm5\n"
+        "xorpd %%xmm6, %%xmm6\n"
+        "xorpd %%xmm7, %%xmm7\n"
+        :: "r"(&messageData)
+        : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
+  }
+  if(IS_ERROR(sendMessage(tcb, tcb->exHandler, msgSubject, MSG_STD))) {
+    kprintf("Unable to send message to exception handler.\n");
+
+    if(msgSubject == EXCEPTION_MSG)
+      kprintf(
+          "Tried to send exception %u message (err code: %#x, fault addr: %#x) to tid %hhu.\n",
+          exNum, errorCode, exNum == 14 ? getCR2() : 0, getTid(tcb));
+    else
+      kprintf("Tried to send exit message (status code: %#x) to tid %hhu.\n",
+              state->eax, getTid(tcb));
     dump_regs(tcb, &tcb->userExecState, exNum, errorCode);
-    __asm__("emms\n");
 
     releaseThread(tcb);
   }
 
   __asm__("leave\n"
-      "ret\n");
+          "ret\n"
+          "add $8, %esp\n");
   RESTORE_STATE;
 }

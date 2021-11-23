@@ -3,7 +3,6 @@ use core::borrow::{Borrow, BorrowMut};
 use core::ops::{Deref, DerefMut};
 use core::cell::{Cell, RefCell, RefMut};
 use crate::syscall;
-use core::marker::Sync;
 
 #[link(name="os_init", kind="static")]
 extern "C" {

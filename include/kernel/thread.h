@@ -19,6 +19,7 @@
 #define RUNNING			    	4  // Thread is already scheduled to a processor
 #define WAIT_FOR_SEND			5
 #define WAIT_FOR_RECV			6
+#define SLEEPING			7
 
 #define MAX_PROCESSORS   		16u
 
@@ -53,7 +54,10 @@ struct ThreadControlBlock {
   tid_t childrenHead;
   tid_t nextSibling;
 
-  uint8_t available[30];
+  uint8_t available[22];
+
+  uint32_t eventMask;
+  uint32_t pendingEvents;
 
   void *capTable;
   size_t capTableSize;

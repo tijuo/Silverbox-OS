@@ -1,22 +1,22 @@
-use crate::page::VirtualPage;
-use crate::address::{VAddr, PAddr, Align};
+use crate::page::{PageMapBase, VirtualPage};
+use crate::address::VAddr;
 use alloc::collections::btree_set::BTreeSet;
-use crate::Tid;
-use crate::device::DeviceId;
-use core::prelude::v1::*;
+use rust::align::Align;
+use rust::device::DeviceId;
 use crate::region::{MemoryRegion, RegionSet};
 use core::cmp::Ordering;
-use crate::eprintln;
+pub use rust::types::Tid;
 
 pub mod manager {
-    use crate::address::PAddr;
+    use rust::types::Tid;
     use super::AddrSpace;
-    use crate::Tid;
-    use crate::syscall::{self, INIT_TID};
     use crate::error;
     use alloc::collections::btree_map::BTreeMap;
+    use rust::thread;
+    use crate::error::OPERATION_FAILED;
+    use crate::page::PageMapBase;
 
-    static mut ADDRESS_SPACES: Option<BTreeMap<PAddr, AddrSpace>> = None;
+    static mut ADDRESS_SPACES: Option<BTreeMap<PageMapBase, AddrSpace>> = None;
 
     pub fn init() {
         unsafe {
@@ -26,30 +26,30 @@ pub mod manager {
             }
         }
 
-        match syscall::get_init_pmap() {
+        match thread::get_root_pmap() {
             Ok(page) => {
-                let mut addr_space = AddrSpace::new(page.as_address());
-                addr_space.attach_thread(Tid::new(INIT_TID));
+                let mut addr_space = AddrSpace::new(page);
+                addr_space.attach_thread(thread::get_tid().expect("Unable to determine tid for current thread."));
 
                 if !register(addr_space) {
                     panic!("Unable to register the initial address space.");
                 }
             },
-            Err(e) => {
-                error::log_error(e, None);
+            Err(_) => {
+                error::log_error(OPERATION_FAILED, None);
                 panic!("Unable to initialize the address mapper.");
             }
         }
     }
 
-    fn addr_space_map<'a>() -> &'static BTreeMap<PAddr, AddrSpace> {
+    fn addr_space_map<'a>() -> &'static BTreeMap<PageMapBase, AddrSpace> {
         unsafe {
             ADDRESS_SPACES.as_ref()
                 .expect("Address space map hasn't been initialized yet.")
         }
     }
 
-    fn addr_space_map_mut<'a>() -> &'static mut BTreeMap<PAddr, AddrSpace> {
+    fn addr_space_map_mut<'a>() -> &'static mut BTreeMap<PageMapBase, AddrSpace> {
         unsafe {
             ADDRESS_SPACES.as_mut()
                 .expect("Address space map hasn't been initialized yet.")
@@ -79,7 +79,7 @@ pub mod manager {
         }
     }
 
-    pub fn unregister(pmap: PAddr) -> Option<AddrSpace> {
+    pub fn unregister(pmap: PageMapBase) -> Option<AddrSpace> {
         addr_space_map_mut().remove(&pmap)
     }
 }
@@ -126,7 +126,7 @@ impl AddressMapping {
 }
 
 pub struct AddrSpace {
-    root_page_map: PAddr,
+    root_page_map: PageMapBase,
     vaddr_map: BTreeSet<AddressMapping>,
     attached_threads: BTreeSet<Tid>,
 }
@@ -138,7 +138,7 @@ impl AddrSpace {
     pub const GUARD: u32 = 0x00000008;
     pub const EXTEND_DOWN: u32 = 0x00000010;
 
-    pub fn new(root_pmap: PAddr) -> Self {
+    pub fn new(root_pmap: PageMapBase) -> Self {
         Self {
             root_page_map: root_pmap,
             vaddr_map: BTreeSet::new(),
@@ -152,7 +152,7 @@ impl AddrSpace {
         None
     }
 
-    pub fn root_pmap(&self) -> PAddr {
+    pub fn root_pmap(&self) -> PageMapBase {
         self.root_page_map
     }
 

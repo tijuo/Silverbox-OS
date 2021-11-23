@@ -1,12 +1,13 @@
 use core::ffi::c_void;
-use crate::syscall;
-use crate::address::{Align, PSize, PAddr};
+use rust::align::Align;
+use crate::address::{PSize, PAddr};
 use core::cmp;
-use crate::page::PhysicalPage;
+use crate::page::PhysicalFrame;
 use crate::page::VirtualPage;
 use crate::phys_alloc::{self, BlockSize};
-use crate::lowlevel;
-use crate::syscall::flags::map::{READ_WRITE, PM_LARGE_PAGE};
+use crate::{error, lowlevel};
+use rust::syscalls::flags::mapping::PAGE_SIZED;
+use rust::syscalls::SyscallError;
 
 static mut HEAP_REGION: Option<HeapRegion> = None;
 const MFAIL: * const c_void = -1isize as * const c_void;
@@ -70,26 +71,39 @@ impl HeapRegion {
         cmp::max(0, self.end - self.start)
     }
 
-    unsafe fn map_frames(&mut self, frames: &FrameArray, frame_count: usize, use_large_pages: bool) -> Result<(), i32> {
-        match syscall::map_frames(None,
+    unsafe fn map_frames(&mut self, frames: &FrameArray, frame_count: usize, use_large_pages: bool) -> Result<(), error::Error> {
+        match lowlevel::map_frames(None,
                                   self.map_end as *mut c_void,
                                   &frames[..frame_count],
-                                  frame_count as i32, READ_WRITE | if use_large_pages { PM_LARGE_PAGE } else { 0 }) {
-            Ok(pages_mapped) if pages_mapped == frame_count as i32 => {
+                                   if use_large_pages { PAGE_SIZED } else { 0 }) {
+            Ok(pages_mapped) => {
                 self.map_end += pages_mapped as usize * if use_large_pages {
-                    PhysicalPage::PSE_LARGE_PAGE_SIZE as usize
+                    PhysicalFrame::PSE_LARGE_PAGE_SIZE as usize
                 } else {
-                    PhysicalPage::SMALL_PAGE_SIZE as usize
+                    PhysicalFrame::SMALL_PAGE_SIZE as usize
                 };
 
                 Ok(())
             },
-            Ok(pages_mapped) => {
-                Err(pages_mapped)
+            Err(SyscallError::PartiallyMapped(pages_mapped)) => {
+                let mut v = self.map_end as *const u8;
+
+                for _ in 0..pages_mapped {
+                    let frame = lowlevel::unmap(None, v as *mut c_void)
+                        .map_err(|_| error::OPERATION_FAILED)?;
+
+                    v = v.wrapping_add(frame.frame_size().bytes());
+                }
+
+                Err(pages_mapped as i32)
             },
-            Err(e) => {
+            Err(SyscallError::InvalidArgument) => {
                 lowlevel::print_debugln("Unable to map memory in order to extend heap.");
-                Err(e)
+                Err(error::BAD_ARGUMENT)
+            }
+            Err(_) => {
+                lowlevel::print_debugln("Unable to map memory in order to extend heap.");
+                Err(error::OPERATION_FAILED)
             }
         }
     }
@@ -121,12 +135,12 @@ impl HeapRegion {
                         // Divide each block into either large pages (4M for PSE) or small pages
                         // (the largest one that also fits in the block)
 
-                        let page_size = if block_len >= PhysicalPage::PSE_LARGE_PAGE_SIZE {
+                        let page_size = if block_len as usize >= PhysicalFrame::PSE_LARGE_PAGE_SIZE {
                             use_large_pages = true;
-                            PhysicalPage::PSE_LARGE_PAGE_SIZE
+                            PhysicalFrame::PSE_LARGE_PAGE_SIZE as PSize
                         } else {
                             use_large_pages = false;
-                            PhysicalPage::SMALL_PAGE_SIZE
+                            PhysicalFrame::SMALL_PAGE_SIZE as PSize
                         };
 
                         while map_bytes as u64 >= block_len {
@@ -142,21 +156,21 @@ impl HeapRegion {
 
                             if alloc_block_size.bytes() != page_size {
                                 unsafe {
-                                    syscall::map(None,
-                                                 self.map_end as *mut c_void,
-                                                 paddr,
-                                                 (alloc_block_size.bytes() / page_size) as i32,
-                                                 READ_WRITE
-                                                     | (if use_large_pages { PM_LARGE_PAGE } else { 0 }))
-                                        .map_err(|pages_mapped| {
-                                            if pages_mapped > 0 {
-                                                for i in 0..pages_mapped as PSize {
-                                                    phys_alloc::release_phys(paddr + i * page_size,
-                                                                             if use_large_pages { BlockSize::Block4M } else { BlockSize::Block4k });
+                                    for i in 0..alloc_block_size.bytes() / page_size {
+                                        lowlevel::map(None,
+                                                      (self.map_end as PSize + i * page_size) as *mut c_void,
+                                                      paddr + i * page_size,
+                                                      if use_large_pages { PAGE_SIZED } else { 0 })
+                                            .map_err(|e| {
+                                                if let SyscallError::PartiallyMapped(pages_mapped) = e {
+                                                    for i in 0..pages_mapped as PSize {
+                                                        phys_alloc::release_phys(paddr + i * page_size,
+                                                                                 if use_large_pages { BlockSize::Block4M } else { BlockSize::Block4k });
+                                                    }
                                                 }
-                                            }
-                                            ()
-                                        })?;
+                                                ()
+                                            })?;
+                                    }
                                 }
                                 self.map_end += alloc_block_size.bytes() as usize;
                             } else {
@@ -169,23 +183,13 @@ impl HeapRegion {
                                 if frame_count as usize > frames.len() - frames_mapped as usize {
                                     unsafe {
                                         self.map_frames(&frames, frames_mapped as usize, use_large_pages)
-                                            .map_err(|pages_mapped| {
+                                            .map_err(|_| {
                                                 // Something went wrong. Release the physical page frames
                                                 // and unmap any mapped memory.
 
                                                 for i in 0..frames_mapped as PSize {
                                                     phys_alloc::release_phys(frames[i as usize],
                                                                              if use_large_pages { BlockSize::Block4M } else { BlockSize::Block4k });
-                                                }
-
-                                                if pages_mapped > 0 {
-                                                    (0..pages_mapped)
-                                                        .for_each(|_| {
-                                                            syscall::unmap(None,
-                                                                           self.map_end as *const c_void,
-                                                                           pages_mapped,
-                                                                           None);
-                                                        });
                                                 }
 
                                                 ()
@@ -207,19 +211,13 @@ impl HeapRegion {
 
                                 unsafe {
                                     self.map_frames(&frames, frames_mapped as usize, use_large_pages)
-                                        .map_err(|pages_mapped| {
+                                        .map_err(|_| {
                                             // Something went wrong. Release the physical page frames
                                             // and unmap any mapped memory.
 
                                             for i in 0..frames_mapped as PSize {
                                                 phys_alloc::release_phys(frames[i as usize],
                                                                          if use_large_pages { BlockSize::Block4M } else { BlockSize::Block4k });
-                                            }
-
-                                            if pages_mapped > 0 {
-                                                (0..pages_mapped).for_each(|_| {
-                                                        syscall::unmap(None, self.map_end as *const c_void, pages_mapped, None);
-                                                    });
                                             }
 
                                             ()
@@ -257,13 +255,13 @@ impl HeapRegion {
             // TODO: Reclaim memory by unmapping unused pages if it exceeds a particular count
 
             if unused_len > MAX_UNUSED_LEN {
-                let unmap_start = aligned_end + MIN_INCREMENT;
+                let _unmap_start = aligned_end + MIN_INCREMENT;
                 //let pages_to_unmap = (aligned_map_end - unmap_start) / VirtualPage::SMALL_PAGE_SIZE;
 
                 // TODO: Use the array of unmapped pages from the kernel to release pages back to the page allocator
 
                 /*
-                match syscall::unmap(None, unmap_start, pages_to_unmap) {
+                match lowlevel::unmap(None, unmap_start, pages_to_unmap) {
                     Ok(unmap_count) => {
                         self.map_end -= unmap_count * PhysicalPage::SMALL_PAGE_SIZE;
                     },

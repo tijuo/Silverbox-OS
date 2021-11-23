@@ -63,6 +63,7 @@
 #define LARGE_PDE_FLAG_MASK         	((1u << PMAP_FLAG_BITS)-1)
 
 #define PFRAME_TO_PADDR(frame)        ((uint64_t)(frame) << PFRAME_BITS)
+#define PFRAME_TO_ADDR(frame)         ((addr_t)(frame) << PFRAME_BITS)
 
 #define ADDR_TO_PFRAME(addr)         (pframe_t)((addr) >> PFRAME_BITS)
 #define ADDR_TO_LARGE_PFRAME(addr)    (pframe_t)(ALIGN_DOWN(addr, LARGE_PAGE_SIZE) >> PFRAME_BITS)

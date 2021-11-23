@@ -10,4 +10,4 @@
 
 export SB_PREFIX="/media/cb_Silverbox-OS"
 export SB_DISK_DIR="sbos"
-export SB_MNT_PT="/home/tijuo/os_floppy"
+export SB_MNT_PT="/home/tijuo/os_disk"

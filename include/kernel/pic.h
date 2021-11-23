@@ -15,11 +15,4 @@
 
 #define PIC2_IRQ_START      8u
 
-void sendAutoEOI(void);
-void sendEOI(unsigned int irq);
-void enableIRQ(unsigned int irq);
-void disableIRQ(unsigned int irq);
-int getInServiceIRQ(void);
-bool isIRQInService(unsigned int irq);
-
 #endif /* KERNEL_PIC_H */

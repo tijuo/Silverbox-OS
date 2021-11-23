@@ -1,50 +1,99 @@
+use rust::align::Align;
 use crate::address::{PAddr, PSize};
-use crate::device::DeviceId;
+use rust::device::DeviceId;
+
+pub type PageMapBase = u32;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct PhysicalPage(PAddr);
+pub enum FrameSize {
+    Small,
+    PaeLarge,
+    PseLarge,
+    Huge,
+}
 
-impl PhysicalPage {
-    pub const SMALL_PAGE_SIZE: PSize = 0x1000;
-    pub const PAE_LARGE_PAGE_SIZE: PSize = 0x200000;
-    pub const PSE_LARGE_PAGE_SIZE: PSize = 0x400000;
-    pub const HUGE_PAGE_SIZE: PSize = 0x40000000;
+impl FrameSize {
+    pub const SMALL_PAGE_SIZE: usize = 0x1000;
+    pub const PAE_LARGE_PAGE_SIZE: usize = 0x200000;
+    pub const PSE_LARGE_PAGE_SIZE: usize = 0x400000;
+    pub const HUGE_PAGE_SIZE: usize = 0x40000000;
 
-    pub fn new(address: PAddr) -> Self {
-        Self(address)
+    pub const fn bytes(&self) -> usize {
+        match self {
+            Self::Small => Self::SMALL_PAGE_SIZE,
+            Self::PseLarge => Self::PSE_LARGE_PAGE_SIZE,
+            Self::PaeLarge => Self::PAE_LARGE_PAGE_SIZE,
+            Self::Huge => Self::HUGE_PAGE_SIZE,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct PhysicalFrame(PAddr, FrameSize);
+
+impl PhysicalFrame {
+    pub const SMALL_PAGE_SIZE: usize = FrameSize::SMALL_PAGE_SIZE;
+    pub const PAE_LARGE_PAGE_SIZE: usize = FrameSize::PAE_LARGE_PAGE_SIZE;
+    pub const PSE_LARGE_PAGE_SIZE: usize = FrameSize::PSE_LARGE_PAGE_SIZE;
+    pub const HUGE_PAGE_SIZE: usize = FrameSize::HUGE_PAGE_SIZE;
+
+    pub fn new(address: PAddr, size: FrameSize) -> Self {
+        Self(address.align_trunc(size.bytes() as PSize), size)
     }
 
-    pub fn components(&self) -> (u64, u64) {
-        (self.0 / Self::SMALL_PAGE_SIZE, self.0 % Self::SMALL_PAGE_SIZE)
+    pub fn new_from_frame(frame_number: PSize, size: FrameSize) -> Self {
+        Self((frame_number * size.bytes() as PSize) as PAddr, size)
     }
 
-    pub fn frame(&self) -> u64 {
+    pub fn to_new_frame_size(&self, size: FrameSize) -> Self {
+        Self::new(self.0, size)
+    }
+
+    pub fn components(&self) -> (PSize, usize) {
+        ((self.0 / self.1.bytes() as PSize), (self.0 % self.1.bytes() as PSize) as usize)
+    }
+
+    pub fn frame(&self) -> PSize {
         self.components().0
     }
 
-    pub fn offset(&self) -> u64 {
+    pub fn offset(&self) -> usize {
         self.components().1
     }
 
-    pub fn as_address(&self) -> PAddr { self.0 }
-}
+    pub fn address(&self) -> PAddr { self.0 }
 
-impl From<PAddr> for PhysicalPage {
-    fn from(addr: PAddr) -> Self {
-        PhysicalPage::new(addr)
+    pub fn frame_size(&self) -> FrameSize {
+        self.1
+    }
+
+    pub fn is_valid_pmap_base(&self) -> bool {
+        self.0 < PageMapBase::MAX as PAddr && self.1 == FrameSize::Small
     }
 }
 
-impl From<(u64, u64)> for PhysicalPage {
-    fn from(components: (u64, u64)) -> Self {
-        Self((components.0 as PAddr * Self::SMALL_PAGE_SIZE as PAddr
-            + components.1 as PAddr) as PAddr)
+pub enum ConversionError {
+    OutOfRange,
+    WrongFrameSize
+}
+
+impl TryFrom<PhysicalFrame> for PageMapBase {
+    type Error = ConversionError;
+
+    fn try_from(value: PhysicalFrame) -> Result<Self, Self::Error> {
+        if value.is_valid_pmap_base() {
+            Ok(value.address() as PageMapBase)
+        } else if value.frame_size() != FrameSize::Small {
+            Err(ConversionError::WrongFrameSize)
+        } else {
+            Err(ConversionError::OutOfRange)
+        }
     }
 }
 
-impl From<PhysicalPage> for PAddr {
-    fn from(page: PhysicalPage) -> Self {
-        page.as_address()
+impl From<PhysicalFrame> for PAddr {
+    fn from(page: PhysicalFrame) -> Self {
+        page.address()
     }
 }
 
@@ -65,9 +114,9 @@ impl VirtualPage {
     // 1 GB page
     const UNSWAPPABLE: u32 = 0x00000008;
 
-    pub const SMALL_PAGE_SIZE: usize = PhysicalPage::SMALL_PAGE_SIZE as usize;
-    pub const LARGE_PAGE_SIZE: usize = PhysicalPage::PAE_LARGE_PAGE_SIZE as usize;
-    pub const HUGE_PAGE_SIZE: usize = PhysicalPage::HUGE_PAGE_SIZE as usize;
+    pub const SMALL_PAGE_SIZE: usize = PhysicalFrame::SMALL_PAGE_SIZE as usize;
+    pub const LARGE_PAGE_SIZE: usize = PhysicalFrame::PAE_LARGE_PAGE_SIZE as usize;
+    pub const HUGE_PAGE_SIZE: usize = PhysicalFrame::HUGE_PAGE_SIZE as usize;
 
     pub(crate) fn new(device: DeviceId, offset: u64, flags: u32) -> VirtualPage {
         VirtualPage {
@@ -101,32 +150,21 @@ mod test {
 
     #[test]
     fn test_physical_page() {
-        let p1 = PhysicalPage::new(0x1234 as PAddr);
+        let p1 = PhysicalFrame::new(0x1234 as PAddr, FrameSize::Small);
 
-        assert_eq!(p1.as_address(), 0x1234 as PAddr);
+        assert_eq!(p1.address(), 0x1234 as PAddr);
         assert_eq!(p1.frame(), 1 as PSize);
         assert_eq!(p1.offset(), 0x234 as PSize);
         assert_eq!(p1.components(), (1, 0x234));
     }
 
     #[test]
-    fn test_new_from_components() {
-        let components = (300,816);
-        let p = PhysicalPage::from(components.clone());
-
-        assert_eq!(p.frame(), 300);
-        assert_eq!(p.offset(), 816);
-        assert_eq!(p.as_address(), 0x12C330);
-        assert_eq!(&p.components(), &components);
-    }
-
-    #[test]
     fn test_new_from_frame() {
         let frame = 55132;
-        let p = PhysicalPage::from_frame(frame);
+        let p = PhysicalFrame::new_from_frame(frame, FrameSize::Small);
 
         assert_eq!(p.frame(), frame);
-        assert_eq!(p.as_address(), 0xD75C000);
+        assert_eq!(p.address(), 0xD75C000);
         assert_eq!(p.offset(), 0);
         assert_eq!(p.components(), (frame, 0));
     }

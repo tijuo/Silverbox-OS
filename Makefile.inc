@@ -31,7 +31,7 @@ export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
 		-Wcast-qual -Wcast-align -Wdangling-else \
 		-Wlogical-op -Wpacked
 export LDFLAGS	:=$(if $(RELEASE),,-g) -static -nostdlib -z nodefaultlib
-export FLOPPY_IMG=$(ROOT_DIR)/os_floppy.img
+export DISK_IMG=$(ROOT_DIR)/os_image.img
 TOP		=$(shell if [ -f "Makefile.top" ]; then echo 1; else echo ""; fi)
 DEPDIR		:=.deps
 DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
