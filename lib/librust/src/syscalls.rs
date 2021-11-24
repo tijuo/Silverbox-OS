@@ -54,21 +54,23 @@ macro_rules! syscall_with_number {
             let mut return_args: [u32; 3] = [0; 3];
             unsafe {
                 asm!(
-                    "xchg ecx, esi",
+                    "xchg edx, esi",
                     "push ebp",
                     "push edx",
                     "push ecx",
-                    "mov ecx, 2f",
+                    "lea edx, 2f",
+                    "mov ebp, esp",
                     "sysenter",
                     "2:",
+                    "mov esp, ebp",
                     "pop ecx",
                     "pop edx",
                     "pop ebp",
-                    "xchg ecx, esi",
-                    inlateout("eax") ($sc_num) as u32 => return_value,
-                    inlateout("ebx") ($arg1) as u32 => return_args[0],
-                    lateout("ecx") return_args[1],
-                    lateout("edi") return_args[2],
+                    "xchg edx, esi",
+                    inout("eax") ($sc_num) as u32 => return_value,
+                    inout("ebx") ($arg1) as u32 => return_args[0],
+                    out("edx") return_args[1],
+                    out("edi") return_args[2],
                 );
             }
             (return_value, return_args[0], return_args[1], return_args[2])
@@ -81,22 +83,24 @@ macro_rules! syscall_with_number {
 
             unsafe {
                 asm!(
-                    "xchg ecx, esi",
+                    "xchg edx, esi",
                     "push ebp",
                     "push edx",
                     "push ecx",
-                    "mov ecx, 2f",
+                    "lea edx, 2f",
+                    "mov ebp, esp",
                     "sysenter",
                     "2:",
+                    "mov esp, ebp",
                     "pop ecx",
                     "pop edx",
                     "pop ebp",
-                    "xchg ecx, esi",
-                    inlateout("eax") ($sc_num) as u32 => return_value,
-                    inlateout("ebx") ($arg1) as u32=> return_args[0],
-                    in("edx") ($arg2) as u32,
-                    lateout("ecx") return_args[1],
-                    lateout("edi") return_args[2],
+                    "xchg edx, esi",
+                    inout("eax") ($sc_num) as u32 => return_value,
+                    inout("ebx") ($arg1) as u32=> return_args[0],
+                    in("ecx") ($arg2) as u32,
+                    out("edx") return_args[1],
+                    out("edi") return_args[2],
                 );
             }
             (return_value, return_args[0], return_args[1], return_args[2])
@@ -109,22 +113,24 @@ macro_rules! syscall_with_number {
 
             unsafe {
                 asm!(
-		    "xchg ecx, esi",
+		    "xchg edx, esi",
                     "push ebp",
                     "push edx",
                     "push ecx",
-                    "mov ecx, 2f",
+                    "lea edx, 2f",
+                    "mov ebp, esp",
                     "sysenter",
                     "2:",
+                    "mov esp, ebp",
                     "pop ecx",
                     "pop edx",
                     "pop ebp",
-		    "xchg ecx, esi",
-                    inlateout("eax") ($sc_num) as u32 => return_value,
-                    inlateout("ebx") ($arg1) as u32 => return_args[0],
-                    in("edx") ($arg2) as u32,
-                    inlateout("ecx") ($arg3) as u32 => return_args[1],
-                    lateout("edi") return_args[2],
+		    "xchg edx, esi",
+                    inout("eax") ($sc_num) as u32 => return_value,
+                    inout("ebx") ($arg1) as u32 => return_args[0],
+                    in("ecx") ($arg2) as u32,
+                    inout("edx") ($arg3) as u32 => return_args[1],
+                    out("edi") return_args[2],
                 );
             }
             (return_value, return_args[0], return_args[1], return_args[2])
@@ -137,22 +143,24 @@ macro_rules! syscall_with_number {
 
             unsafe {
                 asm!(
-                    "xchg ecx, esi",
+                    "xchg edx, esi",
                     "push ebp",
                     "push edx",
                     "push ecx",
-                    "mov ecx, 2f",
+                    "lea edx, 2f",
+                    "mov ebp, esp",
                     "sysenter",
                     "2:",
+                    "mov esp, ebp",
                     "pop ecx",
                     "pop edx",
                     "pop ebp",
-                    "xchg ecx, esi",
-                    inlateout("eax") ($sc_num) as u32 => return_value,
-                    inlateout("ebx") ($arg1) as u32 => return_args[0],
-                    in("edx") ($arg2) as u32,
-                    inlateout("ecx") ($arg3) as u32 => return_args[1],
-                    inlateout("edi") ($arg4) as u32 => return_args[2]
+                    "xchg edx, esi",
+                    inout("eax") ($sc_num) as u32 => return_value,
+                    inout("ebx") ($arg1) as u32 => return_args[0],
+                    in("ecx") ($arg2) as u32,
+                    inout("edx") ($arg3) as u32 => return_args[1],
+                    inout("edi") ($arg4) as u32 => return_args[2]
                 );
             }
             (return_value, return_args[0], return_args[1], return_args[2])
@@ -161,21 +169,27 @@ macro_rules! syscall_with_number {
     ($sc_num:expr,?) => {
         {
             let mut return_value: i32;
-            let mut return_arg: u32;
+            let mut return_args: [u32; 3] = [0; 3];
 
             unsafe {
                 asm!(
+                    "xchg edx, esi",
                     "push ebp",
                     "push edx",
                     "push ecx",
-                    "mov ecx, 2f",
+                    "lea edx, 2f",
+                    "mov ebp, esp",
                     "sysenter",
                     "2:",
+                    "mov esp, ebp",
                     "pop ecx",
                     "pop edx",
                     "pop ebp",
-                    inlateout("eax") ($sc_num) as u32 => return_value,
-                    lateout("ebx") return_arg
+                    "xchg edx, esi",
+                    inout("eax") ($sc_num) as u32 => return_value,
+                    out("ebx") return_args[0],
+                    out("edx") return_args[1],
+                    out("edi") return_args[2]
                 );
             }
             (return_value, return_args[0], return_args[1], return_args[2])

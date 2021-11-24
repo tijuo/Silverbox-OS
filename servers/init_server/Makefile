@@ -3,14 +3,16 @@ include ../../Makefile.inc
 ROOT_DIR	:=../..
 
 INSTALL_DIR=sbos/servers/
-OUTPUT=target/i686-unknown-elf/debug/init_server.exe
+OUTPUT=target/i686-pc-unknown-elf/debug/init_server.exe
 EXE_NAME=init.exe
 DMP_NAME=init.dmp
+
+.PHONY: all clean gdb-debug tests
 
 all: $(EXE_NAME) $(DMP_NAME)
 
 $(DMP_NAME): $(EXE_NAME)
-	objdump -g -Dx -M intel $< > $@
+	objdump -C -g -Dx -M intel $< > $@
 
 $(EXE_NAME): $(OUTPUT)
 	cp $(OUTPUT) $(EXE_NAME)
@@ -28,7 +30,10 @@ clean:
 	rm -f *.dmp
 	rm -f $(EXE_NAME)
 
-test:
+tests:
 	cargo test
+
+gdb-debug: $(OUTPUT)
+	$(GDB) $(OUTPUT) -x $(ROOT_DIR)/gdb.cfg
 
 include ../../Makefile_post.inc

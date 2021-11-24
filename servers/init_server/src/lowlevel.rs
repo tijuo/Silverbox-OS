@@ -325,7 +325,7 @@ pub mod phys {
             (0..self.slice.len() / VirtualPage::SMALL_PAGE_SIZE).for_each(|_| {
                 let frame = unsafe {
                     super::unmap(None, v as *mut c_void)
-                        .expect("Unable to map memory")
+                        .expect("Unable to unmap memory")
                 };
 
                 let block_size = match frame.frame_size() {

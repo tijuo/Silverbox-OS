@@ -10,6 +10,3 @@ build = "src/build.rs"
 [dependencies]
 num-traits = { version = "0.2.14", default-features = false }
 rust = { path = "../../lib/librust" }
-
-[profile.release]
-lto = true

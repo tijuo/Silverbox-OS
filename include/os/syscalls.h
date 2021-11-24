@@ -274,7 +274,7 @@ static inline int sys_##syscallName(type1 arg1) { \
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \
-							 "movl 1f, %%ecx\n" \
+							 "lea 1f, %%edx\n" \
 							 "movl %%esp, %%ebp\n" \
 							 "sysenter\n" \
 							 "1:\n" \
@@ -298,7 +298,7 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2) { \
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \
-							 "movl 1f, %%ecx\n" \
+							 "lea 1f, %%edx\n" \
 							 "movl %%esp, %%ebp\n" \
 							 "sysenter\n" \
 							 "1:\n" \
@@ -308,7 +308,7 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2) { \
 							 "popl %%ebp\n" \
 									 : "=a"(retVal), "=d"(dummy) \
 									 : "a"(SYS_##syscallName), \
-										 "b"(arg1), "d"(arg2) \
+										 "b"(arg1), "c"(arg2) \
 									 : "memory"); \
 	return retVal; \
 }
@@ -320,7 +320,7 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3) { \
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \
-							 "movl 1f, %%ecx\n" \
+							 "lea 1f, %%edx\n" \
 							 "movl %%esp, %%ebp\n" \
 							 "sysenter\n" \
 							 "1:\n" \
@@ -330,7 +330,7 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3) { \
 							 "popl %%ebp\n" \
 									: "=a"(retVal), "=d"(dummy) \
 									: "a"(SYS_##syscallName), \
-										"b"(arg1), "d"(arg2), "S"(arg3) \
+										"b"(arg1), "c"(arg2), "S"(arg3) \
 									: "memory"); \
 	return retVal; \
 }
@@ -342,7 +342,7 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 ar
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \
-							 "movl 1f, %%ecx\n" \
+							 "lea 1f, %%edx\n" \
 							 "movl %%esp, %%ebp\n" \
 							 "sysenter\n" \
 							 "1:\n" \
@@ -352,7 +352,7 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 ar
 							 "popl %%ebp\n" \
 								 : "=a"(retVal), "=d"(dummy) \
 								 : "a"(SYS_##syscallName), \
-									 "b"(arg1), "d"(arg2), "S"(arg3), "D"(arg4) \
+									 "b"(arg1), "c"(arg2), "S"(arg3), "D"(arg4) \
 								 : "memory"); \
 	return retVal; \
 }
@@ -364,7 +364,7 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 ar
 	asm volatile("pushl %%ebp\n" \
 							 "pushl %%edx\n" \
 							 "pushl %%ecx\n" \
-							 "movl 1f, %%ecx\n" \
+							 "lea 1f, %%edx\n" \
 							 "movl %%esp, %%ebp\n" \
 							 "sysenter\n" \
 							 "1:\n" \
@@ -374,7 +374,7 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 ar
 							 "popl %%ebp\n" \
 								 : "=a"(retVal), "=d"(dummy) \
 								 : "a"((((uint32_t)wArg << 16) & 0xFFFFu) | SYS_##syscallName), \
-									 "b"(arg1), "d"(arg2), "S"(arg3), "D"(arg4) \
+									 "b"(arg1), "c"(arg2), "S"(arg3), "D"(arg4) \
 								 : "memory"); \
 	return retVal; \
 }

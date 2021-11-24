@@ -14,10 +14,11 @@
 *.cproject
 *.vs
 *.settings
-*.lock
+os_image.img.lock
 .deps/
 bx_enh_dbg.ini
 bochsrc.bxrc
 kernel/kernel
 bin/
 /build/
+lib/librust/target

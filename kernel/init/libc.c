@@ -2,12 +2,6 @@
 #include <types.h>
 #include "init.h"
 
-DISC_CODE static int memcmp(const void *m1, const void *m2, size_t n);
-DISC_CODE static int strncmp(const char*, const char*, size_t num);
-DISC_CODE static size_t strlen(const char *s);
-DISC_CODE static char* strstr(const char*, const char*);
-DISC_CODE static char* strchr(const char*, int);
-
 NON_NULL_PARAMS int memcmp(const void *m1, const void *m2, size_t num) {
   size_t i;
   const char *mem1 = (const char*)m1;

@@ -15,6 +15,7 @@ DISC_CODE static void bootstrapInitServer(multiboot_info_t *info);
 DISC_DATA static addr_t initServerImg;
 
 extern tcb_t *initServerThread;
+extern addr_t firstFreePage;
 
 int loadServers(multiboot_info_t *info) {
   module_t *module;
@@ -112,7 +113,7 @@ tcb_t* loadElfExe(addr_t img, addr_t addrSpace, void *uStack) {
         page = allocPageFrame();
 
         if(page == INVALID_PFRAME)
-          stopInit("loadElfExec(): Unable to allocate PDE.");
+          RET_MSG(NULL, "loadElfExec(): Unable to allocate PDE.");
 
         clearPhysPage(page);
 
@@ -143,7 +144,7 @@ tcb_t* loadElfExe(addr_t img, addr_t addrSpace, void *uStack) {
           page = allocPageFrame();
 
           if(page == INVALID_PFRAME)
-            stopInit("loadElfExe(): No more physical pages are available.");
+            RET_MSG(NULL, "loadElfExe(): No more physical pages are available.");
 
           clearPhysPage(page);
           pte.base = (uint32_t)ADDR_TO_PFRAME(page);
@@ -195,7 +196,7 @@ void bootstrapInitServer(multiboot_info_t *info) {
 
   struct InitStackArgs stackData = {
     .returnAddress = initServerStack - sizeof((struct InitStackArgs*)0)->code,
-    .multibootInfo = info,
+    .multibootInfo = (multiboot_info_t *)KVIRT_TO_PHYS(info),
     .firstFreePage = firstFreePage,
     .stackSize = 0,
     .code = {

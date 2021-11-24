@@ -28,10 +28,11 @@ export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
 		-Werror=nonnull -Winit-self -Wnull-dereference \
 		-Wmisleading-indentation -Wswitch-enum -Wswitch-default \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
-		-Wcast-qual -Wcast-align -Wdangling-else \
-		-Wlogical-op -Wpacked
+		-Wcast-align -Wdangling-else \
+		-Wlogical-op -Wpacked -Wno-discarded-qualifiers
 export LDFLAGS	:=$(if $(RELEASE),,-g) -static -nostdlib -z nodefaultlib
 export DISK_IMG=$(ROOT_DIR)/os_image.img
+export GDB	:=$(TARGET)-gdb
 TOP		=$(shell if [ -f "Makefile.top" ]; then echo 1; else echo ""; fi)
 DEPDIR		:=.deps
 DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d

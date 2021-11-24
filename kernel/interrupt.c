@@ -22,8 +22,9 @@
 // The threads that are responsible for handling IRQs
 
 tcb_t *irqHandlers[NUM_IRQS];
-void handleIRQ(void);
-void handleCpuException(uint32_t intNum, uint32_t errorCode);
+void handleIRQ(uint32_t oldTssEsp0, ExecutionState state);
+void handleCpuException(uint32_t intNum, uint32_t errorCode,
+uint32_t oldTssEsp0, ExecutionState state);
 
 #define CPU_HANDLER(num) \
 NAKED noreturn void cpuEx##num##Handler(void); \
@@ -117,7 +118,7 @@ IRQ_HANDLER(23)
  @param state The saved execution state of the processor before the exception occurred.
  */
 
-void handleIRQ(void) {
+void handleIRQ(uint32_t oldTssEsp0, ExecutionState state) {
   tcb_t *currentThread = getCurrentThread();
   tcb_t *newThread = currentThread;
 
@@ -185,14 +186,14 @@ void handleIRQ(void) {
  @param state The saved execution state of the processor before the exception occurred.
  */
 
-void handleCpuException(uint32_t exNum, uint32_t errorCode) {
+void handleCpuException(uint32_t exNum, uint32_t errorCode, uint32_t oldTssEsp0, ExecutionState state) {
   tcb_t *tcb = getCurrentThread();
-  ExecutionState *state = (ExecutionState*)(tss.esp0 + sizeof(uint32_t));
+//  ExecutionState *state = (ExecutionState*)(tss.esp0 + sizeof(uint32_t));
   uint32_t msgSubject;
 
   if(!tcb) {
     kprintf("NULL tcb. Unable to handle exception. System halted.\n");
-    dump_state(state, exNum, errorCode);
+    dump_state(&state, exNum, errorCode);
 
     while(1) {
       disableInt();
@@ -202,11 +203,11 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode) {
 
   __asm__("fxsave %0\n" :: "m"(tcb->xsaveState));
 
-  if(exNum == 13 && state->cs == UCODE_SEL && isReadable(state->eip, getRootPageMap())
-     && *(uint8_t *)state->eip == HALT_OPCODE) {
+  if(exNum == 13 && state.cs == UCODE_SEL && isReadable(state.eip, getRootPageMap())
+     && *(uint8_t *)state.eip == HALT_OPCODE) {
     msgSubject = EXIT_MSG;
     struct ExitMessage messageData = {
-      .statusCode = state->eax,
+      .statusCode = state.eax,
       .who = getTid(tcb)
     };
 
@@ -225,26 +226,26 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode) {
   else {
     msgSubject = EXCEPTION_MSG;
 
-    struct ExceptionMessage messageData = {
-      .eax = state->eax,
-      .ebx = state->ebx,
-      .ecx = state->ecx,
-      .edx = state->edx,
-      .esi = state->esi,
-      .edi = state->edi,
-      .ebp = state->ebp,
+    _Alignas(16) struct ExceptionMessage messageData = {
+      .eax = state.eax,
+      .ebx = state.ebx,
+      .ecx = state.ecx,
+      .edx = state.edx,
+      .esi = state.esi,
+      .edi = state.edi,
+      .ebp = state.ebp,
       .esp =
-          state->cs == KCODE_SEL ?
-              tss.esp0 + sizeof(uint32_t) + sizeof *state - 2
+          state.cs == KCODE_SEL ?
+              tss.esp0 + sizeof(uint32_t) + sizeof state - 2
                   * sizeof(uint32_t) :
-              state->userEsp,
-      .cs = state->cs,
-      .ds = state->ds,
-      .es = state->es,
-      .fs = state->fs,
-      .gs = state->gs,
-      .ss = state->cs == KCODE_SEL ? getSs() : state->userSS,
-      .eflags = state->eflags,
+              state.userEsp,
+      .cs = state.cs,
+      .ds = state.ds,
+      .es = state.es,
+      .fs = state.fs,
+      .gs = state.gs,
+      .ss = state.cs == KCODE_SEL ? getSs() : state.userSS,
+      .eflags = state.eflags,
       .cr0 = getCR0(),
       .cr2 = getCR2(),
       .cr3 = getCR3(),
@@ -255,7 +256,9 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode) {
       .processorId = getCurrentProcessor(),
       .who = getTid(tcb),
     };
-
+/*
+ * FIXME: This is causing GPFs because messageData isn't aligned to 16 bytes
+ *
     __asm__(
         "movapd (%0), %%xmm0\n"
         "movapd 16(%0), %%xmm1\n"
@@ -267,18 +270,21 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode) {
         "xorpd %%xmm7, %%xmm7\n"
         :: "r"(&messageData)
         : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
+        */
   }
+
+
   if(IS_ERROR(sendMessage(tcb, tcb->exHandler, msgSubject, MSG_STD))) {
     kprintf("Unable to send message to exception handler.\n");
 
     if(msgSubject == EXCEPTION_MSG)
       kprintf(
-          "Tried to send exception %u message (err code: %#x, fault addr: %#x) to tid %hhu.\n",
+          "Tried to send exception %u message to tid %hhu.\n",
           exNum, errorCode, exNum == 14 ? getCR2() : 0, getTid(tcb));
     else
       kprintf("Tried to send exit message (status code: %#x) to tid %hhu.\n",
-              state->eax, getTid(tcb));
-    dump_regs(tcb, &tcb->userExecState, exNum, errorCode);
+              state.eax, getTid(tcb));
+    dump_regs(tcb, &state, exNum, errorCode);
 
     releaseThread(tcb);
   }

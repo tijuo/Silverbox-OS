@@ -3,7 +3,6 @@
 QEMU		:=qemu-system-x86_64
 QEMU_FLAGS	:=-boot order=acn -fda os_floppy.img -smp cores=2,threads=2 -m 768 -cpu kvm64,kvm
 QEMU_DRIVE	:=newimg.img
-GDB		:=i686-elf-gdb
 
 include Makefile.inc
 

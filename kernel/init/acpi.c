@@ -2,13 +2,12 @@
 #include "memory.h"
 #include <stdint.h>
 #include <types.h>
+#include <kernel/apic.h>
+#include <kernel/lowlevel.h>
+#include <oslib.h>
 
 #define RSDP_SIGNATURE  "RSD PTR "
 #define PARAGRAPH_LEN   16
-
-DISC_CODE static bool isValidAcpiHeader(uint64_t physAddress);
-DISC_CODE size_t readAcpiTables(void);
-NON_NULL_PARAMS DISC_CODE static addr_t findRSDP(struct RSDPointer *header);
 
 struct RSDPointer {
   char signature[8]; // should be "RSD PTR "
@@ -72,29 +71,8 @@ struct IOAPIC_Header {
   uint32_t globalSysIntBase;
 };
 
-// Assumes 0xE0000 - 0x100000 has been 1:1 mapped
-addr_t findRSDP(struct RSDPointer *rsdPointer) {
-  addr_t retPtr = (addr_t)NULL;
-
-  for(uint8_t *ptr = (uint8_t*)KPHYS_TO_VIRT(BIOS_EXT_ROM);
-      ptr < (uint8_t*)KPHYS_TO_VIRT(EXTENDED_MEMORY); ptr += PARAGRAPH_LEN)
-  {
-    if(memcmp(ptr, RSDP_SIGNATURE, sizeof rsdPointer->signature) == 0) {
-      uint8_t checksum = 0;
-
-      for(size_t i = 0; i < offsetof(struct RSDPointer, length); i++)
-        checksum += ptr[i];
-
-      if(checksum == 0) {
-        memcpy(rsdPointer, ptr, sizeof *rsdPointer);
-        retPtr = (addr_t)ptr;
-        break;
-      }
-    }
-  }
-
-  return retPtr;
-}
+DISC_CODE static bool isValidAcpiHeader(uint64_t physAddress);
+DISC_CODE int readAcpiTables(void);
 
 bool isValidAcpiHeader(uint64_t physAddress) {
   struct ACPI_DT_Header header;

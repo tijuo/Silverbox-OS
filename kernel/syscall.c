@@ -35,8 +35,8 @@ typedef struct SyscallArgs {
   };
 
   uint32_t arg1;
-  uint32_t returnAddress;
   uint32_t arg2;
+  uint32_t returnAddress;
   uint32_t arg3;
   uint32_t arg4;
   uint32_t userStack;
@@ -84,7 +84,7 @@ int sysGetPageMappings(syscall_args_t args) {
 #define COUNT       (size_t)args.arg2
 #define ADDR_SPACE_VAR args.arg3
 #define ADDR_SPACE  (addr_t)ADDR_SPACE_VAR
-#define MAPPINGS    (struct PageMapping *)args.arg3
+#define MAPPINGS    (struct PageMapping *)args.arg4
 #define LEVEL       (unsigned int)args.subArg.word
 
   struct PageMapping *mappings = MAPPINGS;
@@ -238,7 +238,7 @@ int sysSetPageMappings(syscall_args_t args) {
 #define COUNT       (size_t)args.arg2
 #define ADDR_SPACE_VAR args.arg3
 #define ADDR_SPACE  (uint32_t)ADDR_SPACE_VAR
-#define MAPPINGS    (struct PageMapping *)args.arg3
+#define MAPPINGS    (struct PageMapping *)args.arg4
 #define LEVEL				(unsigned int)args.subArg.word
 
   size_t i;
@@ -279,7 +279,7 @@ int sysSetPageMappings(syscall_args_t args) {
               >> PM_AVAIL_OFFSET);
           pte.isPresent = 1;
 
-          if(isArray ? pframe : mappings->physFrame >= (1 << 20))
+          if((isArray ? pframe : mappings->physFrame) >= (1 << 20))
             RET_MSG((int )i, "Tried to write invalid frame to PTE.");
           else if(availBits & ~0x07u)
             RET_MSG((int )i, "Cannot set available bits (overflow).");
@@ -300,9 +300,10 @@ int sysSetPageMappings(syscall_args_t args) {
 
         pte_t oldPte = readPTE(PTE_INDEX(VIRT), ADDR_SPACE);
 
-        if(oldPte.isPresent && !IS_FLAG_SET(mappings->flags, PM_OVERWRITE))
+        if(oldPte.isPresent && !IS_FLAG_SET(mappings->flags, PM_OVERWRITE)) {
+          kprintf("Mapping for 0x%x in address space 0x%x already exists!\n", VIRT, ADDR_SPACE);
           RET_MSG((int )i, "Attempted to overwrite page mapping.");
-
+        }
         if(IS_ERROR(writePTE(PTE_INDEX(VIRT), pte, ADDR_SPACE)))
           RET_MSG((int )i, "Unable to write to PTE.");
 
@@ -720,6 +721,9 @@ int sysSendAndReceive(syscall_args_t args) {
 #undef RECV_FLAGS
 }
 
+/* XXX: Potential security vulnerability: User shouldn't be allow to set arbitrary
+   return addresses in ecx register.  */
+
 void sysenterEntry(void) {
   __asm__ __volatile__
   (
@@ -731,17 +735,24 @@ void sysenterEntry(void) {
       "push %ecx\n"
       "push %ebx\n"
       "push %eax\n"
+      "mov  $0x10, %bx\n"
+      "mov  %bx, %ds\n"
+      "mov  %bx, %es\n"
       "and  $0xFF, %eax\n"
       "lea  syscallTable, %ebx\n"
       "call *(%ebx,%eax,4)\n"
+      "mov $0x23, %bx\n"
+      "mov %bx, %ds\n"
+      "mov %bx, %es\n"
       "add  $4, %esp\n"
       "pop %ebx\n"
-      "add $8, %esp\n"
+      "add $4, %esp\n"
+      "pop %edx\n"      // edx is the return address that the user saved
       "pop %esi\n"
       "pop %edi\n"
       "pop %ebp\n"
       "popf\n"
-      "mov %ebp, %edx\n"
+      "mov %ebp, %ecx\n" // ebp is the stack pointer that the user saved
       "sti\n"		// STI must be the second to last instruction
                 // to prevent interrupts from firing while in kernel mode
       "sysexit\n"

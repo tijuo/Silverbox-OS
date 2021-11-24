@@ -1126,24 +1126,29 @@ NON_NULL_PARAMS void dump_state(const ExecutionState *execState,
   else
     kprintf("IRQ%u", intNum - IRQ_BASE);
 
-  kprintf(" @ EIP: 0x%lx", execState->eip);
+  kprintf("\nEAX: 0x%lx EBX: 0x%lx ECX: 0x%lx EDX: 0x%lx EFLAGS: 0x%lx",
+          execState->eax, execState->ebx, execState->ecx, execState->edx,
+          execState->eflags);
+  kprintf(
+      "\nESI: 0x%lx EDI: 0x%lx EBP: 0x%lx ESP: 0x%lx EIP: 0x%lx\n",
+      execState->esi,
+      execState->edi,
+      execState->ebp,
+      execState->cs == UCODE_SEL ?
+          execState->userEsp : (uint32_t)(execState + 1) - 2 * sizeof(uint32_t),
+      execState->eip);
+  kprintf(
+      "\nCS: 0x%x DS: 0x%x ES: 0x%x FS: 0x%x GS: 0x%x SS: 0x%x\n",
+      execState->cs, execState->ds, execState->es, execState->fs, execState->gs,
+      execState->cs == UCODE_SEL ? execState->userSS : getSs());
 
-  kprintf("\nEAX: 0x%lx EBX: 0x%lx ECX: 0x%lx EDX: 0x%lx", execState->eax,
-          execState->ebx, execState->ecx, execState->edx);
-  kprintf("\nESI: 0x%lx EDI: 0x%lx EBP: 0x%lx", execState->esi, execState->edi,
-          execState->ebp);
-  kprintf("\nCS: 0x%hhx", execState->cs);
+  kprintf("CR0: 0x%lx CR2: 0x%lx CR3: 0x%lx CR4: 0x%lx", getCR0(), getCR2(),
+          getCR3(), getCR4());
 
-  if(intNum == PAGE_FAULT_INT)
-    kprintf(" CR2: 0x%lx", getCR2());
-
-  kprintf(" error code: 0x%x\n", errorCode);
-
-  kprintf("EFLAGS: 0x%lx ", execState->eflags);
-
-  if(execState->cs == UCODE_SEL)
-    kprintf("ESP: 0x%lx User SS: 0x%hhx\n", execState->userEsp,
-            execState->userSS);
+  if(intNum == 8 || (intNum >= 10 && intNum <= 14) || intNum == 17
+     || intNum == 21) {
+    kprintf(" error code: 0x%x\n", errorCode);
+  }
 }
 
 void dump_stack(addr_t stackFramePtr, addr_t addrSpace) {

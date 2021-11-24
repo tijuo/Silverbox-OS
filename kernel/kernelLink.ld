@@ -15,7 +15,7 @@ SECTIONS
 
   .text kVirtCode : AT(kPhysCode) ALIGN(4096) {
      kCode = .;
-     *(.header)
+     KEEP(*(.header))
      *(.text*)
      *(.rodata*)
      *(.comment)
@@ -47,11 +47,6 @@ SECTIONS
     *(.bss)
     *(.COMMON)
     . = ALIGN(4);
-    /*
-    kernelStacksBottom = .;
-    *(.stacks)
-    kernelStacksTop = .;
-    */
     kVirtPageStack = .;
   }
   
@@ -63,7 +58,7 @@ SECTIONS
   }
   
   kEnd = .;
-  kTcbTableSize = kTcbEnd - kTcbStart;
+  kTcbTableSize = SIZEOF(.tcb);
   
   kSize = kEnd - kCode;
 }

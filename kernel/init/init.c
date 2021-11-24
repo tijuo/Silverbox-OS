@@ -121,7 +121,6 @@ DISC_CODE static void disableIRQ(unsigned int irq);
 
 DISC_DATA ALIGNED(PAGE_SIZE) uint8_t kBootStack[4 * PAGE_SIZE];
 DISC_DATA void *kBootStackTop = kBootStack + sizeof kBootStack;
-DISC_DATA ALIGNED(PAGE_SIZE) pmap_entry_t kPageDir[PMAP_ENTRY_COUNT]; // The initial page directory used by the kernel on bootstrap
 
 extern idt_entry_t kernelIDT[NUM_EXCEPTIONS + NUM_IRQS];
 
@@ -156,7 +155,11 @@ DISC_DATA static void (*IRQ_ISRS[NUM_IRQS])(
       irq18Handler, irq19Handler, irq20Handler, irq21Handler, irq22Handler, irq23Handler
 };
 
+DISC_DATA multiboot_info_t *multibootInfo;
+
 extern int initMemory(multiboot_info_t *info);
+extern int readAcpiTables(void);
+extern int loadServers(multiboot_info_t *info);
 
 /*
  void initPIC( void )
@@ -382,6 +385,7 @@ void init(multiboot_info_t *info) {
     stopInit("Unable to initialize memory.");
 
   info = (multiboot_info_t*)KPHYS_TO_VIRT(info);
+  multibootInfo = info;
 
 #ifdef DEBUG
   init_serial();

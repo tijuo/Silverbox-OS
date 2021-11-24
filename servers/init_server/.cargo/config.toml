@@ -2,11 +2,15 @@
 build-std = ["core", "alloc", "compiler_builtins"]
 
 [build]
-target = "i686-unknown-elf.json"
+target = "i686-pc-unknown-elf.json"
 
 [profile.dev]
+debug = true
+opt-level = 0
 panic = "abort"
-debug = 0
 
 [profile.release]
+lto = true
+opt-level = 2
+debug = false
 panic = "abort"

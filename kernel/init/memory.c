@@ -1,5 +1,6 @@
 #include "init.h"
 #include "memory.h"
+#include <kernel/multiboot.h>
 
 DISC_DATA addr_t firstFreePage;
 
@@ -13,8 +14,11 @@ DISC_CODE int initMemory(multiboot_info_t *info);
 DISC_CODE static void setupGDT(void);
 DISC_CODE static void initPaging(void);
 
+DISC_DATA ALIGNED(PAGE_SIZE) pmap_entry_t kPageDir[PMAP_ENTRY_COUNT]; // The initial page directory used by the kernel on bootstrap
+
 extern pte_t kMapAreaPTab[PTE_ENTRY_COUNT];
 extern gdt_entry_t kernelGDT[8];
+extern multiboot_info_t *multibootInfo;
 
 /**
  Zero out a page frame.
@@ -162,11 +166,13 @@ int initMemory(multiboot_info_t *info) {
   if(IS_FLAG_SET(info->flags, MBI_FLAGS_MEM))
     kprintf("Lower Memory: %d bytes Upper Memory: %d bytes\n",
             info->mem_lower << 10, info->mem_upper << 10);
-  kprintf("Total Memory: %#x. %d pages. ", totalPhysMem,
+  kprintf("Total Memory: %#x. %d pages.\n", totalPhysMem,
           totalPhysMem / PAGE_SIZE);
 
-  if(totalPhysMem < (64 << 20))
-    stopInit("Not enough memory. System must have at least 64 MiB of memory.");
+  if(totalPhysMem < (64 << 20)) {
+    kprintf("Not enough memory. System must have at least 64 MiB of memory.\n");
+    return E_FAIL;
+  }
 
   kprintf("Kernel AddrSpace: %#p\n", kPageDir);
 
@@ -177,7 +183,7 @@ int initMemory(multiboot_info_t *info) {
 
   setupGDT();
 
-  return 0;
+  return E_OK;
 }
 
 void initPaging(void) {

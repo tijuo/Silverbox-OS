@@ -10,6 +10,7 @@ SECTIONS
     *(.comment)
     *(.rodata*)
     *(.eh_frame)
+    *(.debug*)
   }
   
   .data . : ALIGN(4096) {
@@ -24,6 +25,7 @@ SECTIONS
     *(.common*)
   }
 
+  . = ALIGN(0x400000);
   PAGE_MAP_AREA = .;
   GRANT_TABLE = PAGE_MAP_AREA + 0x400000;
   _end = GRANT_TABLE + 0x400000;
