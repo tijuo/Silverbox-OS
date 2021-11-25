@@ -7,8 +7,6 @@
 #include <kernel/interrupt.h>
 #include <stdalign.h>
 
-addr_t *freePageStack = (addr_t*)PAGE_STACK;
-addr_t *freePageStackTop;
 bool tempMapped = false;
 
 gdt_entry_t kernelGDT[8] = {
@@ -82,34 +80,6 @@ gdt_entry_t kernelGDT[8] = {
       .accessFlags = GDT_SYS | GDT_TSS | GDT_DPL0 | GDT_PRESENT,
       .limit2 = 0,
       .flags2 = GDT_BYTE_GRAN,
-      .base3 = 0
-    }
-  },
-
-  // Bootstrap Code Descriptor (0x30) [Base values will be set by boot code]
-  {
-    {
-      .limit1 = 0xFFFFu,
-      .base1 = 0,
-      .base2 = 0,
-      .accessFlags = GDT_READ | GDT_NONSYS | GDT_NONCONF | GDT_CODE | GDT_DPL0
-                     | GDT_PRESENT,
-      .limit2 = 0xFu,
-      .flags2 = GDT_PAGE_GRAN | GDT_BIG,
-      .base3 = 0
-    }
-  },
-
-  // Bootstrap Data Descriptor (0x38) [Base values will be set by boot code]
-  {
-    {
-      .limit1 = 0xFFFFu,
-      .base1 = 0,
-      .base2 = 0,
-      .accessFlags = GDT_RDWR | GDT_NONSYS | GDT_EXPUP | GDT_DATA | GDT_DPL0
-                     | GDT_PRESENT,
-      .limit2 = 0xFu,
-      .flags2 = GDT_PAGE_GRAN | GDT_BIG,
       .base3 = 0
     }
   }

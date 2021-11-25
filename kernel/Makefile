@@ -18,11 +18,12 @@ CFLAGS  :=$(CFLAGS) -mpreferred-stack-boundary=4
 all: $(BIN_GZ) $(BIN).dmp $(BIN).sym $(BIN).bsym
 
 $(BIN): $(OBJ)
-	$(LD) $(LDFLAGS) -T kernelLink.ld $(OBJ) -o $@
+	$(LD) $(LDFLAGS) -T link.ld $(OBJ) -o $@
 
 $(BIN_GZ): $(BIN)
-	gzip -k $<
-	mv $(BIN).gz $@
+#	gzip -k $<
+#	mv $(BIN).gz $@
+	cp $< $@
 
 check:
 	splint +gnuextensions -nolib -standard \
@@ -30,7 +31,13 @@ check:
 #	-I$(CHECK_INC)/include-fixed *.c
 
 install: $(BIN_GZ)
-	$(ROOT_DIR)/tools/copy_files.sh -d boot $<
+#	$(ROOT_DIR)/tools/copy_files.sh -d boot $<
+	~/mount_loop.sh
+	mount ~/os_disk
+	cp $(BIN_GZ) ~/os_disk/boot || umount ~/os_disk
+	umount ~/os_disk
+	losetup -d /dev/loop6
+	rm -f $(DISK_IMG).lock
 
 tests:
 

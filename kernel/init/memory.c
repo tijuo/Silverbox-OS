@@ -7,12 +7,12 @@ DISC_DATA addr_t firstFreePage;
 DISC_CODE addr_t allocPageFrame(void);
 
 DISC_CODE bool isReservedPage(uint64_t addr, multiboot_info_t *info,
-                                     int isLargePage);
+                              int isLargePage);
 
 DISC_CODE int clearPhysPage(uint64_t phys);
 DISC_CODE int initMemory(multiboot_info_t *info);
 DISC_CODE static void setupGDT(void);
-DISC_CODE static void initPaging(void);
+DISC_CODE void initPaging(void);
 
 DISC_DATA ALIGNED(PAGE_SIZE) pmap_entry_t kPageDir[PMAP_ENTRY_COUNT]; // The initial page directory used by the kernel on bootstrap
 
@@ -59,7 +59,7 @@ addr_t allocPageFrame(void) {
 
 bool isReservedPage(uint64_t addr, multiboot_info_t *info, int isLargePage) {
   unsigned int kernelStart = (unsigned int)&kPhysStart;
-  unsigned int kernelLength = (unsigned int)&kSize;
+  unsigned int kernelLength = (unsigned int)kSize;
   uint64_t addrEnd;
 
   if(isLargePage) {
@@ -136,7 +136,7 @@ void setupGDT(void) {
     .limit = 6 * sizeof(gdt_entry_t)
   };
 
-  size_t tssLimit = sizeof tss - 1;
+  size_t tssLimit = sizeof tss;
   tssDescriptor->base1 = (uint32_t)&tss & 0xFFFFu;
   tssDescriptor->base2 = (uint8_t)(((uint32_t)&tss >> 16) & 0xFFu);
   tssDescriptor->base3 = (uint8_t)(((uint32_t)&tss >> 24) & 0xFFu);
@@ -153,12 +153,6 @@ void setupGDT(void) {
 }
 
 int initMemory(multiboot_info_t *info) {
-  setCR0(CR0_PE | CR0_MP | CR0_WP);
-
-  // Paging hasn't been initialized yet. (Debugger may not work property until initPaging() is called.)
-
-  initPaging();
-
   firstFreePage = KVIRT_TO_PHYS((addr_t )&kTcbEnd);
 
   unsigned int totalPhysMem = (info->mem_upper + 1024) * 1024;
@@ -178,21 +172,31 @@ int initMemory(multiboot_info_t *info) {
 
 #ifdef DEBUG
 
-  kprintf("TCB Table size: %d bytes\n", (size_t)&kTcbTableSize);
+  kprintf("TCB Table size: %d bytes\n", kTcbTableSize);
 #endif /* DEBUG */
-
-  setupGDT();
 
   return E_OK;
 }
 
+// Only code/data in the .boot segment can be accesesed without faulting until paging is
+// enabled.
+
 void initPaging(void) {
-  memset(kPageDir, 0, PAGE_SIZE);
-  memset(kMapAreaPTab, 0, PAGE_SIZE);
+  uint32_t oldCR0;
+  pmap_entry_t *mapAreaPTab = (pmap_entry_t *)KVIRT_TO_PHYS(kMapAreaPTab);
+
+  // These are supposed to be cleared, but just in case...
+
+  for(size_t i=0; i < 1024; i++)
+    kPageDir[i].value = 0;
+
+  for(size_t i=0; i < 1024; i++)
+    mapAreaPTab[i].value = 0;
 
   large_pde_t *pde = &kPageDir[0].largePde;
 
-  setLargePdeBase(pde, 0);
+  pde->baseLower = 0;
+  pde->baseUpper = 0;
   pde->isLargePage = 1;
   pde->isPresent = 1;
   pde->isReadWrite = 1;
@@ -202,16 +206,19 @@ void initPaging(void) {
    */
 
   for(addr_t addr = ALIGN_DOWN(KERNEL_VSTART, LARGE_PAGE_SIZE);
-      addr < KERNEL_VEND && addr >= ALIGN_DOWN(KERNEL_VSTART, LARGE_PAGE_SIZE); addr +=
+      addr < KERNEL_VEND && addr >= ALIGN_DOWN(KERNEL_VSTART, LARGE_PAGE_SIZE);
+      addr +=
       LARGE_PAGE_SIZE)
   {
     size_t pdeIndex = PDE_INDEX(addr);
     large_pde_t *largePde = &kPageDir[pdeIndex].largePde;
+    pframe_t pframe = ADDR_TO_PFRAME(KVIRT_TO_PHYS(addr));
 
     largePde->global = 1;
-    setLargePdeBase(largePde, ADDR_TO_PFRAME(KVIRT_TO_PHYS(addr)));
-    largePde->isLargePage = 1;
+    largePde->baseLower = (uint32_t)((pframe >> 10) & 0x3FFu);
+    largePde->baseUpper = (uint32_t)((pframe >> 20) & 0xFFu);
 
+    largePde->isLargePage = 1;
     largePde->isReadWrite = 1;
     largePde->isPresent = 1;
   }
@@ -224,20 +231,36 @@ void initPaging(void) {
   kMapPde->isPresent = 1;
 
   // Set the page directory
-  setCR3((uint32_t)KVIRT_TO_PHYS((addr_t )kPageDir));
 
-  // Enable debugging extensions, large pages, global pages, FXSAVE/FXRSTOR, and SIMD exceptions
-  setCR4(CR4_DE | CR4_PSE | CR4_PGE | CR4_OSFXSR | CR4_OSXMMEXCPT);
+  __asm__("mov %0, %%cr3" :: "r"((uint32_t)kPageDir));
+
+  // Enable debugging extensions, large pages, global pages,
+  // FXSAVE/FXRSTOR, and SIMD exceptions
+
+  __asm__("mov %0, %%cr4" :: "r"(CR4_DE | CR4_PSE | CR4_PGE
+          | CR4_OSFXSR | CR4_OSXMMEXCPT));
 
   // Enable paging
-  setCR0(getCR0() | CR0_PG);
+
+  __asm__("mov %%cr0, %0" : "=r"(oldCR0));
+  __asm__("mov %0, %%cr0" :: "r"(oldCR0 | CR0_PG | CR0_MP) : "memory");
+
+
+  setupGDT();
 
   // Reload segment registers
 
-  setDs(KDATA_SEL);
-  setEs(KDATA_SEL);
-  setFs(KDATA_SEL);
-  setGs(KDATA_SEL);
-  setSs(KDATA_SEL);
-  setCs(KCODE_SEL);
+  __asm__("mov %0, %%ds\n"
+      "mov %0, %%es\n"
+      "mov %0, %%ss\n"
+      "mov %1, %%fs\n"
+      "mov %1, %%gs\n" :: "r"(KDATA_SEL), "r"(0) : "memory");
+
+  __asm__("push %%eax\n"
+          "pushl %0\n"
+          "mov $1f, %%eax\n"
+          "push %%eax\n"
+          "retf\n"
+          "1:\n"
+          "pop %%eax\n" :: "i"(KCODE_SEL) : "memory", "cc");
 }

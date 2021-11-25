@@ -420,9 +420,9 @@ void init(multiboot_info_t *info) {
   kprintf("\n%#x bytes of discardable code.",
           (addr_t)EXT_PTR(kdData) - (addr_t)EXT_PTR(kdCode));
   kprintf(" %#x bytes of discardable data.\n",
-          (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdData));
+          (addr_t)EXT_PTR(kdEnd) - (addr_t)EXT_PTR(kdData));
   kprintf("Discarding %d bytes in total\n",
-          (addr_t)EXT_PTR(kBss) - (addr_t)EXT_PTR(kdCode));
+          (addr_t)EXT_PTR(kdEnd) - (addr_t)EXT_PTR(kdCode));
 
   loadServers(info);
 

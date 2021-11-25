@@ -24,21 +24,4 @@
 #define KERNEL_TSS_LEN		0x68
 #define TSS_IO_PERM_BMP_LEN	2*4096
 
-.extern kCode
-.extern kData
-.extern kBss
-.extern kEnd
-.extern kdCode
-.extern kdData
-.extern kPhysStart
-.extern kVirtStart
-.extern kPhysData
-.extern kVirtData
-.extern kPhysBss
-.extern kVirtBss
-.extern kSize
-.extern kPhysToVirt
-.extern kVirtToPhys
-.extern VPhysMemStart
-
 .endif

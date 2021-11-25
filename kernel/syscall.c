@@ -725,6 +725,7 @@ int sysSendAndReceive(syscall_args_t args) {
    return addresses in ecx register.  */
 
 void sysenterEntry(void) {
+  // This is aligned as long as the frame pointer isn't pushed and no other arguments are pushed
   __asm__ __volatile__
   (
       "pushf\n"

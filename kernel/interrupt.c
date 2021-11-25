@@ -11,6 +11,7 @@
 #include <os/msg/init.h>
 #include <kernel/bits.h>
 #include <os/msg/message.h>
+#include <stdalign.h>
 #include <stdint.h>
 
 #define HALT_OPCODE   0xF4u
@@ -22,9 +23,8 @@
 // The threads that are responsible for handling IRQs
 
 tcb_t *irqHandlers[NUM_IRQS];
-void handleIRQ(uint32_t oldTssEsp0, ExecutionState state);
-void handleCpuException(uint32_t intNum, uint32_t errorCode,
-uint32_t oldTssEsp0, ExecutionState state);
+void handleIRQ(struct IrqInterruptFrame *interruptFrame);
+void handleCpuException(struct CpuExInterruptFrame *interruptFrame);
 
 #define CPU_HANDLER(num) \
 NAKED noreturn void cpuEx##num##Handler(void); \
@@ -32,6 +32,12 @@ NAKED noreturn void cpuEx##num##Handler(void) { \
   SAVE_STATE; \
   __asm__("push $0\n" \
           "push $" #num "\n" \
+          "mov %esp, %ecx\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
+          "mov %ecx, %eax\n" \
+          "sub $4, %eax\n" \
+          "and $0xF, %eax\n" \
+          "sub %eax, %esp\n" \
+          "push %ecx\n" \
           "call handleCpuException\n"); \
 }
 
@@ -40,6 +46,12 @@ NAKED noreturn void cpuEx##num##Handler(void); \
 NAKED noreturn void cpuEx##num##Handler(void) { \
   SAVE_ERR_STATE; \
   __asm__("push $" #num "\n" \
+          "mov %esp, %ecx\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
+          "mov %ecx, %eax\n" \
+          "sub $4, %eax\n" \
+          "and $0xF, %eax\n" \
+          "sub %eax, %esp\n" \
+          "push %ecx\n" \
           "call handleCpuException\n"); \
 }
 
@@ -47,7 +59,14 @@ NAKED noreturn void cpuEx##num##Handler(void) { \
 NAKED noreturn void irq##num##Handler(void); \
 NAKED noreturn void irq##num##Handler(void) { \
   SAVE_STATE; \
-  __asm__("call handleIRQ\n"); \
+  __asm__( \
+  "mov %esp, %ecx\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
+  "mov %ecx, %eax\n" \
+  "sub $4, %eax\n" \
+  "and $0xF, %eax\n" \
+  "sub %eax, %esp\n" \
+  "push %ecx\n" \
+  "call handleIRQ\n"); \
 }
 
 CPU_HANDLER(0)
@@ -118,7 +137,7 @@ IRQ_HANDLER(23)
  @param state The saved execution state of the processor before the exception occurred.
  */
 
-void handleIRQ(uint32_t oldTssEsp0, ExecutionState state) {
+void handleIRQ(struct IrqInterruptFrame *frame) {
   tcb_t *currentThread = getCurrentThread();
   tcb_t *newThread = currentThread;
 
@@ -140,39 +159,38 @@ void handleIRQ(uint32_t oldTssEsp0, ExecutionState state) {
    */
 
   // Set an irq event instead
-
   /*
-  if(handler) {
-    if(currentThread != handler) {
-      __asm__("fxsave %0\n" :: "m"(currentThread->xsaveState));
-      __asm__("movd %0, %%xmm0\n"
-          "xorpd %%xmm1, %%xmm1\n"
-          "xorpd %%xmm2, %%xmm2\n"
-          "xorpd %%xmm3, %%xmm3\n"
-          "xorpd %%xmm4, %%xmm4\n"
-          "xorpd %%xmm5, %%xmm5\n"
-          "xorpd %%xmm6, %%xmm6\n"
-          "xorpd %%xmm7, %%xmm7\n"
-          :: "r"(intNum) : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
+   if(handler) {
+   if(currentThread != handler) {
+   __asm__("fxsave %0\n" :: "m"(currentThread->xsaveState));
+   __asm__("movd %0, %%xmm0\n"
+   "xorpd %%xmm1, %%xmm1\n"
+   "xorpd %%xmm2, %%xmm2\n"
+   "xorpd %%xmm3, %%xmm3\n"
+   "xorpd %%xmm4, %%xmm4\n"
+   "xorpd %%xmm5, %%xmm5\n"
+   "xorpd %%xmm6, %%xmm6\n"
+   "xorpd %%xmm7, %%xmm7\n"
+   :: "r"(intNum) : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
 
-      if(IS_ERROR(
-          sendMessage(currentThread, getTid(handler), IRQ_MSG, MSG_STD))) {
-        kprintf("Unable to send irq %u message to handler.\n", intNum);
-      }
-    }
-    else if(currentThread->threadState != RUNNING) {
-      wakeupThread(currentThread);
-    }
-  }
+   if(IS_ERROR(
+   sendMessage(currentThread, getTid(handler), IRQ_MSG, MSG_STD))) {
+   kprintf("Unable to send irq %u message to handler.\n", intNum);
+   }
+   }
+   else if(currentThread->threadState != RUNNING) {
+   wakeupThread(currentThread);
+   }
+   }
 
-  if(currentThread->threadState != RUNNING) {
-    newThread = schedule(getCurrentProcessor());
+   if(currentThread->threadState != RUNNING) {
+   newThread = schedule(getCurrentProcessor());
 
-    assert(newThread != currentThread);
+   assert(newThread != currentThread);
 
-    // todo: fxsave, do context switch, copy tss io bitmap...
-  }
-*/
+   // todo: fxsave, do context switch, copy tss io bitmap...
+   }
+   */
 
   RESTORE_STATE;
 }
@@ -186,14 +204,15 @@ void handleIRQ(uint32_t oldTssEsp0, ExecutionState state) {
  @param state The saved execution state of the processor before the exception occurred.
  */
 
-void handleCpuException(uint32_t exNum, uint32_t errorCode, uint32_t oldTssEsp0, ExecutionState state) {
+void handleCpuException(struct CpuExInterruptFrame *interruptFrame) {
   tcb_t *tcb = getCurrentThread();
 //  ExecutionState *state = (ExecutionState*)(tss.esp0 + sizeof(uint32_t));
   uint32_t msgSubject;
 
   if(!tcb) {
     kprintf("NULL tcb. Unable to handle exception. System halted.\n");
-    dump_state(&state, exNum, errorCode);
+    dump_state(&interruptFrame->state, interruptFrame->exNum,
+               interruptFrame->errorCode);
 
     while(1) {
       disableInt();
@@ -203,11 +222,11 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode, uint32_t oldTssEsp0,
 
   __asm__("fxsave %0\n" :: "m"(tcb->xsaveState));
 
-  if(exNum == 13 && state.cs == UCODE_SEL && isReadable(state.eip, getRootPageMap())
-     && *(uint8_t *)state.eip == HALT_OPCODE) {
+  if(interruptFrame->exNum == 13&& interruptFrame->state.cs == UCODE_SEL && isReadable(interruptFrame->state.eip, getRootPageMap())
+  && *(uint8_t *)interruptFrame->state.eip == HALT_OPCODE) {
     msgSubject = EXIT_MSG;
     struct ExitMessage messageData = {
-      .statusCode = state.eax,
+      .statusCode = interruptFrame->state.eax,
       .who = getTid(tcb)
     };
 
@@ -226,39 +245,40 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode, uint32_t oldTssEsp0,
   else {
     msgSubject = EXCEPTION_MSG;
 
-    _Alignas(16) struct ExceptionMessage messageData = {
-      .eax = state.eax,
-      .ebx = state.ebx,
-      .ecx = state.ecx,
-      .edx = state.edx,
-      .esi = state.esi,
-      .edi = state.edi,
-      .ebp = state.ebp,
+    alignas(16) struct ExceptionMessage messageData = {
+      .eax = interruptFrame->state.eax,
+      .ebx = interruptFrame->state.ebx,
+      .ecx = interruptFrame->state.ecx,
+      .edx = interruptFrame->state.edx,
+      .esi = interruptFrame->state.esi,
+      .edi = interruptFrame->state.edi,
+      .ebp = interruptFrame->state.ebp,
       .esp =
-          state.cs == KCODE_SEL ?
-              tss.esp0 + sizeof(uint32_t) + sizeof state - 2
-                  * sizeof(uint32_t) :
-              state.userEsp,
-      .cs = state.cs,
-      .ds = state.ds,
-      .es = state.es,
-      .fs = state.fs,
-      .gs = state.gs,
-      .ss = state.cs == KCODE_SEL ? getSs() : state.userSS,
-      .eflags = state.eflags,
+      interruptFrame->state.cs == KCODE_SEL ?
+      tss.esp0 + sizeof(uint32_t) + sizeof interruptFrame->state - 2
+      * sizeof(uint32_t) :
+      interruptFrame->state.userEsp,
+      .cs = interruptFrame->state.cs,
+      .ds = interruptFrame->state.ds,
+      .es = interruptFrame->state.es,
+      .fs = interruptFrame->state.fs,
+      .gs = interruptFrame->state.gs,
+      .ss = interruptFrame->state.cs == KCODE_SEL ? getSs() : interruptFrame->state.userSS,
+      .eflags = interruptFrame->state.eflags,
       .cr0 = getCR0(),
       .cr2 = getCR2(),
       .cr3 = getCR3(),
       .cr4 = getCR4(),
       .eip = tcb->userExecState.eip,
-      .errorCode = errorCode,
-      .faultNum = exNum,
+      .errorCode = interruptFrame->errorCode,
+      .faultNum = interruptFrame->exNum,
       .processorId = getCurrentProcessor(),
       .who = getTid(tcb),
     };
-/*
- * FIXME: This is causing GPFs because messageData isn't aligned to 16 bytes
- *
+
+    // FIXME: This is causing GPFs because messageData (and probably the stack)
+    // FIXME: isn't aligned to 16 bytes
+
     __asm__(
         "movapd (%0), %%xmm0\n"
         "movapd 16(%0), %%xmm1\n"
@@ -270,27 +290,24 @@ void handleCpuException(uint32_t exNum, uint32_t errorCode, uint32_t oldTssEsp0,
         "xorpd %%xmm7, %%xmm7\n"
         :: "r"(&messageData)
         : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
-        */
   }
-
 
   if(IS_ERROR(sendMessage(tcb, tcb->exHandler, msgSubject, MSG_STD))) {
     kprintf("Unable to send message to exception handler.\n");
 
     if(msgSubject == EXCEPTION_MSG)
-      kprintf(
-          "Tried to send exception %u message to tid %hhu.\n",
-          exNum, errorCode, exNum == 14 ? getCR2() : 0, getTid(tcb));
+      kprintf("Tried to send exception %u message to tid %hhu.\n", interruptFrame->exNum,
+              interruptFrame->errorCode, interruptFrame->exNum == 14 ? getCR2() : 0, getTid(tcb));
     else
       kprintf("Tried to send exit message (status code: %#x) to tid %hhu.\n",
-              state.eax, getTid(tcb));
-    dump_regs(tcb, &state, exNum, errorCode);
+              interruptFrame->state.eax, getTid(tcb));
+    dump_regs(tcb, &interruptFrame->state, interruptFrame->exNum, interruptFrame->errorCode);
 
     releaseThread(tcb);
   }
 
   __asm__("leave\n"
-          "ret\n"
-          "add $8, %esp\n");
+      "ret\n"
+      "add $8, %esp\n");
   RESTORE_STATE;
 }

@@ -4,6 +4,9 @@
 
 .code32
 
+.extern init
+.extern initPaging
+
 #define PG_PRESENT 1
 #define PG_READ_WRITE 2
 #define PG_PWT 8
@@ -34,11 +37,11 @@ mboot:
         .int MULTIBOOT_HEADER_FLAGS
         .int MULTIBOOT_CHECKSUM
 
-        .int mboot
-        .int kCode
-        .int kBss
-        .int kEnd
-        .int start
+        .int 0
+        .int 0
+        .int 0
+        .int 0
+        .int 0
 
 	.int MULTIBOOT_EGA_TEXT
 	.int MULTIBOOT_EGA_WIDTH
@@ -50,18 +53,19 @@ mboot:
 // to be accessed *extra* carefully here until paging is enabled.
 
 .section .dtext, "ax", @progbits
-.align 16
+.align 4
 
 EXPORT start
 //  eax has the mulitboot magic value
 //  ebx has multiboot data address
 
-  lea	kBootStack, %esp
-  add   $kVirtToPhys, %esp
-  add   $PAGE_SIZE, %esp
+  mov	$kBootStackTop, %esp
   mov	%esp, %ebp
   cld
 
+  // Ensure the stack is aligned
+
+  sub $8, %esp
   push %ebp
 // Save for main()
 
@@ -78,25 +82,9 @@ EXPORT start
 
 .okMboot:
 
-  mov $kVirtToPhys, %eax
-  lea kernelGDT, %ecx
-  add %eax, %ecx
+  mov $bootGDT, %ecx
 
-  // Set the base values for the bootstrap descriptors
-
-  mov $0x06, %ebx
-  mov %ebx, %edx
-  inc %edx
-
-  mov %ax, 2(%ecx,%ebx,8)
-  mov %ax, 2(%ecx,%edx,8)
-  shr $16, %eax
-  mov %al, 3(%ecx,%ebx,8)
-  mov %al, 3(%ecx,%edx,8)
-  mov %ah, 7(%ecx,%ebx,8)
-  mov %ah, 7(%ecx,%edx,8)
-
-// Load GDT
+// Load Initial GDT
 
   push %ecx
   push $0x400000	// Push 0x40 limit
@@ -105,7 +93,7 @@ EXPORT start
 
  // Load valid linear addresses into the GDTR
 
-  mov  $BOOT_DATA_SEL, %cx
+  mov  $KERNEL_DATA_SEL, %cx
   mov  %cx, %ds
   mov  %cx, %es
   mov  %cx, %ss
@@ -114,20 +102,16 @@ EXPORT start
   mov  %cx, %fs
   mov  %cx, %gs
 
-  ljmp $BOOT_CODE_SEL, $.reloadSel
+  ljmp $KERNEL_CODE_SEL, $.reloadSel
 
 .reloadSel:
 
-
-/* Stack and base pointers point to 1:1 mapped addresses
-   Convert them to their kernel memory equivalents since the
-   1:1 mapped addresses will eventually be unmapped.
-*/
-
-  add $kPhysToVirt, %esp
-  add $kPhysToVirt, %ebp
-
+  call initPaging
   call init
+
+idle:
+  cli
+  hlt
   jmp  idle
 
 printMultibootErrMsg:
@@ -155,14 +139,16 @@ printBootMsg:
   stosb
   jmp .cpyStr
 
-.text
-
-idle:
-  hlt
-  jmp idle
-
 .section .ddata, "a", @progbits
-.align 4
 
+.align 4
 bstrapErrMsg: .asciz "Error: Only Multiboot-compliant loaders are supported."
+
+.align 4
 sizeErrMsg: .asciz "Error: Kernel size is too long!"
+
+.align 8
+bootGDT:
+  .quad 0 // Null descriptor
+  .quad 0x00CF98000000FFFF // 32-bit code, execute-only, non-conforming
+  .quad 0x00CF92000000FFFF // 32-bit data, read-write

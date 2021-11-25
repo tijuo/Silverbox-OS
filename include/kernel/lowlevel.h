@@ -439,14 +439,10 @@ extern const void *const kPhysStart;
 extern const void *const kVirtStart;
 extern const void *const kdCode;
 extern const void *const kdData;
-extern const void *const kPhysData;
-extern const void *const kVirtData;
-extern const void *const kPhysBss;
-extern const void *const kVirtBss;
-extern const void *const kSize;
-extern const void *const kTcbTableSize;
-
-extern const void *const kVirtPageStack;
+extern const void *const kdEnd;
+extern unsigned long int kSize;
+extern unsigned long int kTcbTableSize;
+extern const void *const kVirtLowMemStart;
 
 /*
  extern const void *const kernelStacksTop;
@@ -545,12 +541,13 @@ __asm__ ( \
           "mov %%esp, (%%eax)\n" \
           "1:\n" \
           "push %%ecx\n" \
+          "push %%ecx\n" \
           ::: "eax", "ecx", "edx", "memory", "cc" \
 )
 
 #define RESTORE_STATE \
 __asm__( \
-         "lea tss, %%eax\n" \
+         "lea tss, %%eax\n" /* Restore old stack pointer from tss.esp0 */ \
          "mov 4(%%eax), %%esp\n" \
          "pop %%ecx\n" \
          "mov %%ecx, 4(%%eax)\n" \
@@ -631,5 +628,17 @@ extern void irq20Handler(void);
 extern void irq21Handler(void);
 extern void irq22Handler(void);
 extern void irq23Handler(void);
+
+struct CpuExInterruptFrame {
+  uint32_t exNum;
+  uint32_t errorCode;
+  uint32_t oldTssEsp0;
+  ExecutionState state;
+};
+
+struct IrqInterruptFrame {
+  uint32_t oldTssEsp0;
+  ExecutionState state;
+};
 
 #endif /* KERNEL_LOWLEVEL_H */

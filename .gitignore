@@ -7,6 +7,7 @@
 *.sym
 *.bsym
 *.exe
+*.elf
 *.gz
 *.save*
 *.img
@@ -14,6 +15,7 @@
 *.cproject
 *.vs
 *.settings
+*.rlib
 os_image.img.lock
 .deps/
 bx_enh_dbg.ini
