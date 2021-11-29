@@ -19,14 +19,14 @@
 #define RUNNING			    	4  // Thread is already scheduled to a processor
 #define WAIT_FOR_SEND			5
 #define WAIT_FOR_RECV			6
-#define SLEEPING			7
+#define SLEEPING				7
 
 #define MAX_PROCESSORS   		16u
 
 #define KERNEL_STACK_SIZE		2048
 
-#define getTid(tcb)			({ __typeof__ (tcb) _tcb=(tcb); (_tcb ? (tid_t)(_tcb - tcbTable) : NULL_TID); })
-#define getTcb(tid)			({ __typeof__ (tid) _tid=(tid); (_tid == NULL_TID ? NULL : &tcbTable[_tid]); })
+#define get_tid(tcb)			({ __typeof__ (tcb) _tcb=(tcb); (_tcb ? (tid_t)(_tcb - tcb_table) : NULL_TID); })
+#define get_tcb(tid)			({ __typeof__ (tid) _tid=(tid); (_tid == NULL_TID ? NULL : &tcb_table[_tid]); })
 
 /* This assumes a uniprocessor system */
 
@@ -34,37 +34,36 @@
 /// Contains the necessary data for a thread
 struct ThreadControlBlock;
 typedef struct ThreadControlBlock tcb_t;
-//typedef void (*finish_t)(tcb_t *);
 
 struct ThreadControlBlock {
   uint8_t _padding;
-  uint8_t waitForKernelMsg :1;
-  uint8_t threadState :4;
+  uint8_t wait_for_kernel_msg :1;
+  uint8_t thread_state :4;
   uint8_t priority :3;
-  tid_t waitTid;
-  list_t receiverWaitQueue; // queue of threads waiting to receive a message from this thread
-  list_t senderWaitQueue; // queue of threads waiting to send a message to this thread
-  tid_t prevTid;
-  tid_t nextTid;
+  tid_t wait_tid;
+  list_t receiver_wait_queue; // queue of threads waiting to receive a message from this thread
+  list_t sender_wait_queue; // queue of threads waiting to send a message to this thread
+  tid_t prev_tid;
+  tid_t next_tid;
 
-  tid_t exHandler;
+  tid_t ex_handler;
   tid_t pager;
 
   tid_t parent;
-  tid_t childrenHead;
-  tid_t nextSibling;
+  tid_t children_head;
+  tid_t next_sibling;
 
   uint8_t available[22];
 
-  uint32_t eventMask;
-  uint32_t pendingEvents;
+  uint32_t event_mask;
+  uint32_t pending_events;
 
-  void *capTable;
-  size_t capTableSize;
+  void *cap_table;
+  size_t cap_table_size;
 
   // 64 bytes
 
-  xsave_state_t xsaveState;
+  xsave_state_t xsave_state;
 
   uint8_t available2[32];
 
@@ -72,19 +71,19 @@ struct ThreadControlBlock {
 
   uint8_t available3[68];
 
-  ExecutionState userExecState;
-  uint32_t rootPageMap;
+  ExecutionState user_exec_state;
+  uint32_t root_pmap;
 };
 
 struct Processor {
-  bool isOnline;
-  uint8_t acpiUid;
-  uint8_t lapicId;
-  tcb_t *runningThread;
+  bool is_online;
+  uint8_t acpi_uid;
+  uint8_t lapic_id;
+  tcb_t *running_thread;
 };
 
 typedef uint8_t proc_id_t;
-extern size_t numProcessors;
+extern size_t num_processors;
 
 _Static_assert(sizeof(tcb_t) == 32 || sizeof(tcb_t) == 64 || sizeof(tcb_t) == 128
                || sizeof(tcb_t) == 256 || sizeof(tcb_t) == 512 || sizeof(tcb_t) == 1024
@@ -93,52 +92,30 @@ _Static_assert(sizeof(tcb_t) == 32 || sizeof(tcb_t) == 64 || sizeof(tcb_t) == 12
 
 extern struct Processor processors[MAX_PROCESSORS];
 
-NON_NULL_PARAMS tcb_t* createThread(void *entryAddr, uint32_t addrSpace,
+NON_NULL_PARAMS tcb_t* create_thread(void *entryAddr, uint32_t addrSpace,
                                     void *stackTop);
 
-NON_NULL_PARAMS int startThread(tcb_t *thread);
-NON_NULL_PARAMS int pauseThread(tcb_t *thread);
-NON_NULL_PARAMS int releaseThread(tcb_t *thread);
-NON_NULL_PARAMS void switchContext(tcb_t *thread, int doXSave);
-NON_NULL_PARAMS int removeThreadFromList(tcb_t *thread);
-NON_NULL_PARAMS int wakeupThread(tcb_t *thread);
+NON_NULL_PARAMS int start_thread(tcb_t *thread);
+NON_NULL_PARAMS int pause_thread(tcb_t *thread);
+NON_NULL_PARAMS int release_thread(tcb_t *thread);
+NON_NULL_PARAMS void switch_context(tcb_t *thread, int doXSave);
+NON_NULL_PARAMS int remove_thread_from_list(tcb_t *thread);
+NON_NULL_PARAMS int wakeup_thread(tcb_t *thread);
 
-extern tcb_t *initServerThread;
-extern tcb_t *initPagerThread;
-extern tcb_t tcbTable[MAX_THREADS];
-extern ALIGNED(PAGE_SIZE) uint8_t kernelStack[PAGE_SIZE];
-extern uint8_t *kernelStackTop;
+extern tcb_t *init_server_thread;
+extern tcb_t *init_pager_thread;
+extern tcb_t tcb_table[MAX_THREADS];
+extern ALIGNED(PAGE_SIZE) uint8_t kernel_stack[PAGE_SIZE];
+extern uint8_t *kernel_stack_top;
 
-/*
- static inline void activateContinuation(tcb_t *thread)
- {
- if((uintptr_t)thread->continuationStackTop < ((uintptr_t)thread->continuationStack + sizeof thread->continuationStack))
- {
- uint32_t *ptr = (uint32_t *)tssEsp0;
-
- *--ptr = (uint32_t)thread;
- *--ptr = (uint32_t)*thread->continuationStackTop++;
-
- __asm__("lea %0, %%esp\n"
- "jmp %%esp\n" :: "m"(ptr));
- }
- }
-
- static inline void saveContinuation(tcb_t *thread, finish_t finishFunc)
- {
- if(thread->continuationStackTop != thread->continuationStack)
- *--thread->continuationStackTop = finishFunc;
- }
- */
-
-static inline CONST unsigned int getCurrentProcessor(void) {
+static inline CONST unsigned int get_current_processor(void) {
   return 0;
 }
 
 /// @return The current thread that's running on this processor.
 
-static inline tcb_t* getCurrentThread(void) {
-  return processors[getCurrentProcessor()].runningThread;
+static inline tcb_t* get_current_thread(void) {
+  return processors[get_current_processor()].running_thread;
 }
 
 /**
@@ -146,8 +123,8 @@ static inline tcb_t* getCurrentThread(void) {
  * @param tcb The thread to set for this processor
  */
 
-static inline void setCurrentThread(tcb_t *tcb) {
-  processors[getCurrentProcessor()].runningThread = tcb;
+static inline void set_current_thread(tcb_t *tcb) {
+  processors[get_current_processor()].running_thread = tcb;
 }
 
 #endif /* KERNEL_THREAD_H */

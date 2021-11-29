@@ -54,11 +54,15 @@ use address::PAddr;
 use alloc::string::String;
 use crate::multiboot::{RawMultibootInfo, MultibootInfo};
 use alloc::boxed::Box;
-use crate::phys_alloc::PhysPageAllocator;
+use core::ffi::c_void;
+use crate::phys_alloc::{allocator, PhysPageAllocator};
 use rust::types::CTid;
 use rust::message::kernel::{self, ExceptionMessagePayload, ExitMessagePayload};
 use rust::message::{MessageHeader, Transmit};
 use rust::syscalls;
+use rust::syscalls::PageMapping;
+use crate::page::{FrameSize, PhysicalFrame};
+use crate::phys_alloc::BlockSize::Block4k;
 
 const DATA_BUF_SIZE: usize = 64;
 
@@ -66,6 +70,33 @@ fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Op
     lowlevel::print_debugln("Initializing bootstrap allocator");
 
     PhysPageAllocator::init_bootstrap(first_free_page);
+
+    for ptab_num in 0..=1023 {
+        let vaddr = (ptab_num * PhysicalFrame::SMALL_PAGE_SIZE * 1024) as *mut c_void;
+        let mut page_mapping = [PageMapping {
+            number: 0,
+            flags: 0
+        }];
+
+        syscalls::sys_get_page_mappings(1, vaddr, None, &mut page_mapping)
+            .expect("Unable to retrieve page mapping.");
+
+        if is_flag_set!(page_mapping[0].flags, syscalls::flags::mapping::UNMAPPED) {
+            /*let phys_frame = PhysicalFrame::new(phys_alloc::alloc_phys(Block4k)
+                                               .expect("Unable to allocate memory for page table.")
+                                               .0, FrameSize::Small);
+
+            if !phys_frame.is_valid_pmap_base() {
+                panic!("Physical allocator did not return a valid page table.");
+            }*/
+
+            page_mapping[0].flags = syscalls::flags::mapping::CLEAR;
+            page_mapping[0].number = (0x4000000+ptab_num*4096) as u32 / 4096; //phys_frame.frame() as u32;
+
+            syscalls::sys_set_page_mappings(1, vaddr, None, &page_mapping)
+                .expect("Unable to set page mapping.");
+        }
+    }
 
     let mmap_iter = unsafe {
         RawMultibootInfo::raw_mmap_iter(multiboot_info)

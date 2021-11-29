@@ -21,9 +21,8 @@ $(BIN): $(OBJ)
 	$(LD) $(LDFLAGS) -T link.ld $(OBJ) -o $@
 
 $(BIN_GZ): $(BIN)
-#	gzip -k $<
-#	mv $(BIN).gz $@
-	cp $< $@
+	gzip -k $<
+	mv $(BIN).gz $@
 
 check:
 	splint +gnuextensions -nolib -standard \

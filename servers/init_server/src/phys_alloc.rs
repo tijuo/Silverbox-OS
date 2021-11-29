@@ -66,6 +66,7 @@ impl BootstrapAllocator {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum AllocError {
     TooBig,
     OutOfMemory,

@@ -9,9 +9,9 @@
 #define MAX_PRIORITY            4
 #define NORMAL_PRIORITY         2
 
-tcb_t* schedule(proc_id_t processorId);
-HOT void switchStacks(ExecutionState *state);
+tcb_t* schedule(proc_id_t processor_id);
+HOT void switch_stacks(ExecutionState *state);
 
-extern list_t runQueues[NUM_PRIORITIES];
+extern list_t run_queues[NUM_PRIORITIES];
 
 #endif /* KERNEL_SCHEDULE_H */

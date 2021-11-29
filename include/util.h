@@ -35,4 +35,8 @@
 #define RETURNS_NON_NULL
 #endif /* __GNUC__ */
 
+#ifdef ECLIPSE_GCC
+#define _Noreturn __attribute__((noreturn))
+#endif /* ECLIPSE_GCC */
+
 #endif /* UTIL_H */

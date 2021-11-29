@@ -7,37 +7,37 @@
 #include <kernel/error.h>
 #include <kernel/list.h>
 
-list_t runQueues[NUM_PRIORITIES];
+list_t run_queues[NUM_PRIORITIES];
 
 // Assumes processor id is valid
 
 RETURNS_NON_NULL
-tcb_t* schedule(proc_id_t processorId)
+tcb_t* schedule(proc_id_t processor_id)
 {
-  tcb_t *currentThread = processors[processorId].runningThread;
-  int minPriority = currentThread ? currentThread->priority : MIN_PRIORITY;
+  tcb_t *current_thread = processors[processor_id].running_thread;
+  int min_priority = current_thread ? current_thread->priority : MIN_PRIORITY;
 
-  for(int priority = MAX_PRIORITY; priority >= minPriority; priority--) {
-    if(!isListEmpty(&runQueues[priority])) {
-      tcb_t *newThread = listDequeue(&runQueues[priority]);
+  for(int priority = MAX_PRIORITY; priority >= min_priority; priority--) {
+    if(!is_list_empty(&run_queues[priority])) {
+      tcb_t *new_thread = list_dequeue(&run_queues[priority]);
 
       // If the currently running thread has been preempted, then
       // simply place it back onto its run queue
 
-      if(currentThread) {
-        currentThread->threadState = READY;
-        listEnqueue(&runQueues[currentThread->priority], currentThread);
+      if(current_thread) {
+        current_thread->thread_state = READY;
+        list_enqueue(&run_queues[current_thread->priority], current_thread);
       }
 
-      newThread->threadState = RUNNING;
-      processors[processorId].runningThread = newThread;
+      new_thread->thread_state = RUNNING;
+      processors[processor_id].running_thread = new_thread;
 
-      return newThread;
+      return new_thread;
     }
   }
 
-  if(currentThread)
-    return currentThread;
+  if(current_thread)
+    return current_thread;
   else
     // todo: Have a minimum priority kernel idle thread that does nothing
     panic("No more threads to run.");
@@ -50,31 +50,31 @@ tcb_t* schedule(proc_id_t processorId)
  @param The saved execution state of the processor.
  */
 
-NON_NULL_PARAMS void switchStacks(ExecutionState *state) {
-  tcb_t *oldTcb = getCurrentThread();
+NON_NULL_PARAMS void switch_stacks(ExecutionState *state) {
+  tcb_t *old_tcb = get_current_thread();
 
-  if(!oldTcb || oldTcb->threadState != RUNNING) {
-    tcb_t *newTcb = schedule(getCurrentProcessor());
+  if(!old_tcb || old_tcb->thread_state != RUNNING) {
+    tcb_t *new_tcb = schedule(get_current_processor());
 
-    if(newTcb != oldTcb && newTcb) // if switching to a new thread
+    if(new_tcb != old_tcb && new_tcb) // if switching to a new thread
     {
 //      kprintf("switchStacks: %u -> %u\n", getTid(oldTcb), getTid(newTcb));
 
       // Switch to the new address space
 
-      if((getCR3() & CR3_BASE_MASK) != (newTcb->rootPageMap & CR3_BASE_MASK))
-        setCR3(newTcb->rootPageMap);
+      if((get_cr3() & CR3_BASE_MASK) != (new_tcb->root_pmap & CR3_BASE_MASK))
+        set_cr3(new_tcb->root_pmap);
 
-      if(oldTcb) {
-        oldTcb->userExecState = *state;
-        __asm__("fxsave %0" :: "m"(oldTcb->xsaveState));
+      if(old_tcb) {
+        old_tcb->user_exec_state = *state;
+        __asm__("fxsave %0" :: "m"(old_tcb->xsave_state));
       }
 
-      asm volatile("fxrstor %0\n" :: "m"(newTcb->xsaveState));
+      asm volatile("fxrstor %0\n" :: "m"(new_tcb->xsave_state));
 
-      *state = newTcb->userExecState;
+      *state = new_tcb->user_exec_state;
     }
-    else if(!newTcb)
+    else if(!new_tcb)
       panic("No more threads to schedule.");
   }
 }

@@ -4,7 +4,7 @@ SECTIONS
 {
   virtual = 0x400000;
 
-  .text virtual : ALIGN(4096) {
+  .text virtual : ALIGN(4K) {
     exe_code_start = .;
     *(.text*)
     *(.comment)
@@ -13,20 +13,20 @@ SECTIONS
     *(.debug*)
   }
   
-  .data . : ALIGN(4096) {
+  .data . : ALIGN(4K) {
     exe_data_start = .;
     *(.data*)
     *(.got*)
   }
 
-  .bss . : ALIGN(4096) {
+  .bss . : ALIGN(4K) {
     exe_bss_start = .;
     *(.bss*)
     *(.common*)
   }
 
-  . = ALIGN(0x400000);
+  . = ALIGN(4M);
   PAGE_MAP_AREA = .;
-  GRANT_TABLE = PAGE_MAP_AREA + 0x400000;
-  _end = GRANT_TABLE + 0x400000;
+  GRANT_TABLE = PAGE_MAP_AREA + 4M;
+  _end = GRANT_TABLE + 4M;
 }

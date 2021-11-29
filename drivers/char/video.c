@@ -95,8 +95,8 @@ static textchar_t *cursorPtr = (textchar_t *)VIDEO_RAM;
 int setCursor( unsigned int xPos, unsigned int yPos );
 int setCursorPos( unsigned int pos );
 int setColor( unsigned int color, unsigned int xPos, unsigned int yPos );
-void clearScreen( unsigned int attrib );
-int initVideo( void );
+void clear_screen( unsigned int attrib );
+int init_video( void );
 int handleIoctl( int command, int numArgs, void *args );
 inline int checkPos( unsigned int x, unsigned int y );
 inline int setCharPos( unsigned int x, unsigned int y );
@@ -121,7 +121,7 @@ int putCharAtXY( char c, unsigned int x, unsigned int y );
 int putAttrAt( unsigned char attr, unsigned int pos );
 int putAttrAtXY( unsigned char attr, unsigned int x, unsigned int y );
 
-void _putChar(char c)
+void _put_char(char c)
 {
   cursorPtr->codePoint = (unsigned char)c;
   cursorPtr->attrib.value = defaultAttrib;
@@ -382,7 +382,7 @@ int setColor( unsigned int color, unsigned int xPos, unsigned int yPos )
 }
 
 
-void clearScreen( unsigned int attrib )
+void clear_screen( unsigned int attrib )
 {
   textchar_t c = {
       .codePoint = ' ',
@@ -395,7 +395,7 @@ void clearScreen( unsigned int attrib )
     *ptr++ = c;
 }
 
-int initVideo( void )
+int init_video( void )
 {
   int pmemDevice = 0x00010000;
 
@@ -412,7 +412,7 @@ int initVideo( void )
   setCursor( 0, 0 );
   setCharPos( 0, 0 );
 
-  clearScreen( defaultAttrib );
+  clear_screen( defaultAttrib );
 
   return 0;
 }
@@ -505,7 +505,7 @@ int main(void)
 
   maxLines = VIDEO_RAM_SIZE / (maxWidth * 2);
 
-  if(initVideo() != 0)
+  if(init_video() != 0)
   {
     fprintf(stderr, "Unable to initialize video driver.\n");
     return EXIT_FAILURE;
@@ -570,7 +570,7 @@ int main(void)
       }
       case VCLEAR_SCREEN:
       {
-        clearScreen(defaultAttrib);
+        clear_screen(defaultAttrib);
         retval = SEND_EMPTY_RESPONSE(msg.sender, RESPONSE_OK) == ESYS_OK ? 0 : -1;
         break;
       }

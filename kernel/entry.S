@@ -5,7 +5,8 @@
 .code32
 
 .extern init
-.extern initPaging
+.extern init_paging
+.extern kboot_stack_top
 
 #define PG_PRESENT 1
 #define PG_READ_WRITE 2
@@ -56,17 +57,19 @@ mboot:
 .align 4
 
 EXPORT start
+  cli
 //  eax has the mulitboot magic value
 //  ebx has multiboot data address
 
-  mov	$kBootStackTop, %esp
+  mov	$kboot_stack_top, %esp
   mov	%esp, %ebp
   cld
+  push $0
 
   // Ensure the stack is aligned
 
   sub $8, %esp
-  push %ebp
+
 // Save for main()
 
   push %ebx
@@ -74,15 +77,15 @@ EXPORT start
 // Check if multiboot magic is valid
 
   cmp $MULTIBOOT_MAGIC, %eax
-  jne .badMboot
-  jmp .okMboot
+  jne .bad_mboot
+  jmp .ok_mboot
 
-.badMboot:
-  jmp printMultibootErrMsg
+.bad_mboot:
+  jmp print_multiboot_err_msg
 
-.okMboot:
+.ok_mboot:
 
-  mov $bootGDT, %ecx
+  mov $boot_gdt, %ecx
 
 // Load Initial GDT
 
@@ -102,11 +105,11 @@ EXPORT start
   mov  %cx, %fs
   mov  %cx, %gs
 
-  ljmp $KERNEL_CODE_SEL, $.reloadSel
+  ljmp $KERNEL_CODE_SEL, $.reload_sel
 
-.reloadSel:
+.reload_sel:
 
-  call initPaging
+  call init_paging
   call init
 
 idle:
@@ -114,41 +117,40 @@ idle:
   hlt
   jmp  idle
 
-printMultibootErrMsg:
-  lea  bstrapErrMsg, %eax
+print_multiboot_err_msg:
+  lea  bstrap_err_msg, %eax
   push %eax
-  jmp  printBootMsg
+  jmp  print_boot_msg
 
-printSizeErrMsg:
-  lea  sizeErrMsg, %eax
+print_size_err_msg:
+  lea  size_err_msg, %eax
   push %eax
-  jmp printBootMsg
+  jmp print_boot_msg
 
-printBootMsg:
+print_boot_msg:
   pop %esi
   lea VIDEO_RAM_START, %edi
   mov $0x07, %al
-  mov $BOOT_DATA_SEL, %bx
-  mov %bx, %es
+  cld
 
-.cpyStr:
+.cpy_str:
   cmpb $0, (%esi)
   je idle
 
   movsb
   stosb
-  jmp .cpyStr
+  jmp .cpy_str
 
 .section .ddata, "a", @progbits
 
 .align 4
-bstrapErrMsg: .asciz "Error: Only Multiboot-compliant loaders are supported."
+bstrap_err_msg: .asciz "Error: Only Multiboot2-compliant loaders are supported."
 
 .align 4
-sizeErrMsg: .asciz "Error: Kernel size is too long!"
+size_err_msg: .asciz "Error: Kernel size is too long!"
 
 .align 8
-bootGDT:
+boot_gdt:
   .quad 0 // Null descriptor
   .quad 0x00CF98000000FFFF // 32-bit code, execute-only, non-conforming
   .quad 0x00CF92000000FFFF // 32-bit data, read-write

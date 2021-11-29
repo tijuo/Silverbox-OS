@@ -5,75 +5,76 @@
 #include <elf.h>
 #include "init.h"
 #include "memory.h"
+#include <kernel/memory.h>
 
 #define INIT_SERVER_FLAG  "--init"
 
-DISC_CODE int loadServers(multiboot_info_t *info);
-DISC_CODE static tcb_t* loadElfExe(addr_t, uint32_t, void*);
-DISC_CODE static bool isValidElfExe(elf_header_t *image);
-DISC_CODE static void bootstrapInitServer(multiboot_info_t *info);
-DISC_DATA static addr_t initServerImg;
+DISC_CODE int load_servers(multiboot_info_t *info);
+DISC_CODE static tcb_t* load_elf_exe(addr_t, uint32_t, void*);
+DISC_CODE static bool is_valid_elf_exe(elf_header_t *image);
+DISC_CODE static void bootstrap_init_server(multiboot_info_t *info);
+DISC_DATA static addr_t init_server_img;
 
-extern tcb_t *initServerThread;
-extern addr_t firstFreePage;
+extern tcb_t *init_server_thread;
+extern addr_t first_free_page;
 
-int loadServers(multiboot_info_t *info) {
+int load_servers(multiboot_info_t *info) {
   module_t *module;
-  bool initServerFound = false;
+  bool init_server_found = false;
 
   kprintf("Boot info struct: %#p\nModules located at %#p. %d modules found.\n",
-          (void*)KVIRT_TO_PHYS(info), info->mods_addr, info->mods_count);
+		  (void*)KVIRT_TO_PHYS((addr_t)info), info->mods_addr, info->mods_count);
 
   module = (module_t*)KPHYS_TO_VIRT(info->mods_addr);
 
   /* Locate the initial server module. */
 
   for(size_t i = info->mods_count; i; i--, module++) {
-    if(i == info->mods_count)
-      initServerImg = (addr_t)module->mod_start;
+	if(i == info->mods_count)
+	  init_server_img = (addr_t)module->mod_start;
 
-    if(module->string) {
-      const char *strPtr = (const char*)KPHYS_TO_VIRT(module->string);
+	if(module->string) {
+	  const char *str_ptr = (const char*)KPHYS_TO_VIRT(module->string);
 
-      do {
-        strPtr = (const char*)strstr(strPtr, INIT_SERVER_FLAG);
-        const char *separator = strPtr + strlen(INIT_SERVER_FLAG);
+	  do {
+		str_ptr = (const char*)strstr(str_ptr, INIT_SERVER_FLAG);
+		const char *separator = str_ptr + strlen(INIT_SERVER_FLAG);
 
-        if(*separator == '\0' || (*separator >= '\t' && *separator <= '\r')) {
-          initServerFound = true;
-          initServerImg = (addr_t)module->mod_start;
-          break;
-        }
-        else
-          strPtr = separator;
-      } while(strPtr);
-    }
+		if(*separator == '\0' || (*separator >= '\t' && *separator <= '\r')) {
+		  init_server_found = true;
+		  init_server_img = (addr_t)module->mod_start;
+		  break;
+		}
+		else
+		  str_ptr = separator;
+	  } while(str_ptr);
+	}
   }
 
-  if(!initServerFound) {
-    if(info->mods_count)
-      kprintf(
-          "Initial server was not specified with --init. Using first module.\n");
-    else {
-      kprintf("Can't find initial server.");
-      return E_FAIL;
-    }
+  if(!init_server_found) {
+	if(info->mods_count)
+	  kprintf(
+		  "Initial server was not specified with --init. Using first module.\n");
+	else {
+	  kprintf("Can't find initial server.");
+	  return E_FAIL;
+	}
   }
 
-  bootstrapInitServer(info);
+  bootstrap_init_server(info);
 
   return E_OK;
 }
 
-bool isValidElfExe(elf_header_t *image) {
+bool is_valid_elf_exe(elf_header_t *image) {
   return image && VALID_ELF(image)
-         && image->identifier[EI_VERSION] == EV_CURRENT
-         && image->type == ET_EXEC && image->machine == EM_386
-         && image->version == EV_CURRENT
-         && image->identifier[EI_CLASS] == ELFCLASS32;
+		 && image->identifier[EI_VERSION] == EV_CURRENT
+		 && image->type == ET_EXEC && image->machine == EM_386
+		 && image->version == EV_CURRENT
+		 && image->identifier[EI_CLASS] == ELFCLASS32;
 }
 
-tcb_t* loadElfExe(addr_t img, addr_t addrSpace, void *uStack) {
+tcb_t* load_elf_exe(addr_t img, addr_t addr_space, void *user_stack) {
   elf_header_t image;
   elf_sheader_t sheader;
   tcb_t *thread;
@@ -84,92 +85,94 @@ tcb_t* loadElfExe(addr_t img, addr_t addrSpace, void *uStack) {
   size_t offset;
 
   peek(img, &image, sizeof image);
-  pte.isPresent = 0;
+  pte.is_present = 0;
 
-  if(!isValidElfExe(&image)) {
-    kprintf("Not a valid ELF executable.\n");
-    return NULL;
+  if(!is_valid_elf_exe(&image)) {
+	kprintf("Not a valid ELF executable.\n");
+	return NULL;
   }
 
-  thread = createThread((void*)image.entry, addrSpace, uStack);
+  thread = create_thread((void*)image.entry, addr_space, user_stack);
 
   if(thread == NULL) {
-    kprintf("loadElfExe(): Couldn't create thread.\n");
-    return NULL;
+	kprintf("loadElfExe(): Couldn't create thread.\n");
+	return NULL;
   }
 
   /* Create the page table before mapping memory */
 
   for(i = 0; i < image.shnum; i++) {
-    peek((img + image.shoff + i * image.shentsize), &sheader, sizeof sheader);
+	peek((img + image.shoff + i * image.shentsize), &sheader, sizeof sheader);
 
-    if(!(sheader.flags & SHF_ALLOC))
-      continue;
+	if(!(sheader.flags & SHF_ALLOC))
+	  continue;
 
-    for(offset = 0; offset < sheader.size; offset += PAGE_SIZE) {
-      pde = readPDE(PDE_INDEX(sheader.addr + offset), addrSpace);
+	for(offset = 0; offset < sheader.size; offset += PAGE_SIZE) {
+	  pde = read_pde(PDE_INDEX(sheader.addr + offset), addr_space);
 
-      if(!pde.isPresent) {
-        page = allocPageFrame();
+	  if(!pde.is_present) {
+		page = alloc_page_frame();
 
-        if(page == INVALID_PFRAME)
-          RET_MSG(NULL, "loadElfExec(): Unable to allocate PDE.");
+		if(page == INVALID_PFRAME)
+		  RET_MSG(NULL, "load_elf_exe(): Unable to allocate PDE.");
 
-        clearPhysPage(page);
+		clear_phys_page(page);
 
-        pde.base = (uint32_t)ADDR_TO_PFRAME(page);
-        pde.isReadWrite = 1;
-        pde.isUser = 1;
-        pde.isPresent = 1;
+		pde.base = (uint32_t)ADDR_TO_PFRAME(page);
+		pde.is_read_write = 1;
+		pde.is_user = 1;
+		pde.is_present = 1;
 
-        if(IS_ERROR(writePDE(PDE_INDEX(sheader.addr + offset), pde, addrSpace)))
-          RET_MSG(NULL, "loadElfExe(): Unable to write PDE.");
-      }
-      else if(pde.isLargePage)
-        RET_MSG(
-            NULL,
-            "loadElfExe(): Memory region has already been mapped to a large page.");
+		if(IS_ERROR(
+			write_pde(PDE_INDEX(sheader.addr + offset), pde, addr_space)))
+		  RET_MSG(NULL, "loadElfExe(): Unable to write PDE.");
+	  }
+	  else if(pde.is_large_page)
+		RET_MSG(
+			NULL,
+			"loadElfExe(): Memory region has already been mapped to a large page.");
 
-      pte = readPTE(PTE_INDEX(sheader.addr + offset), PDE_BASE(pde));
+	  pte = read_pte(PTE_INDEX(sheader.addr + offset), PDE_BASE(pde));
 
-      if(!pte.isPresent) {
-        pte.isUser = 1;
-        pte.isReadWrite = IS_FLAG_SET(sheader.flags, SHF_WRITE);
-        pte.isPresent = 1;
+	  if(!pte.is_present) {
+		pte.is_user = 1;
+		pte.is_read_write = IS_FLAG_SET(sheader.flags, SHF_WRITE);
+		pte.is_present = 1;
 
-        if(sheader.type == SHT_PROGBITS)
-          pte.base = (uint32_t)ADDR_TO_PFRAME(
-              (uint32_t )img + sheader.offset + offset);
-        else if(sheader.type == SHT_NOBITS) {
-          page = allocPageFrame();
+		if(sheader.type == SHT_PROGBITS)
+		  pte.base = (uint32_t)ADDR_TO_PFRAME(
+			  (uint32_t )img + sheader.offset + offset);
+		else if(sheader.type == SHT_NOBITS) {
+		  page = alloc_page_frame();
 
-          if(page == INVALID_PFRAME)
-            RET_MSG(NULL, "loadElfExe(): No more physical pages are available.");
+		  if(page == INVALID_PFRAME)
+			RET_MSG(NULL,
+					"loadElfExe(): No more physical pages are available.");
 
-          clearPhysPage(page);
-          pte.base = (uint32_t)ADDR_TO_PFRAME(page);
-        }
-        else
-          continue;
+		  clear_phys_page(page);
+		  pte.base = (uint32_t)ADDR_TO_PFRAME(page);
+		}
+		else
+		  continue;
 
-        if(IS_ERROR(
-            writePTE(PTE_INDEX(sheader.addr + offset), pte, PDE_BASE(pde))))
-          RET_MSG(NULL, "loadElfExe(): Unable to write PDE");
-      }
-      else if(sheader.type == SHT_NOBITS)
-        memset((void*)(sheader.addr + offset), 0,
-        PAGE_SIZE - (offset % PAGE_SIZE));
-    }
+		if(IS_ERROR(
+			write_pte(PTE_INDEX(sheader.addr + offset), pte, PDE_BASE(pde))))
+		  RET_MSG(NULL, "loadElfExe(): Unable to write PDE");
+	  }
+	  else if(sheader.type == SHT_NOBITS)
+		memset((void*)(sheader.addr + offset), 0,
+		PAGE_SIZE - (offset % PAGE_SIZE));
+	}
   }
 
   return thread;
 }
 
 struct InitStackArgs {
-  uint32_t returnAddress;
-  multiboot_info_t *multibootInfo;
-  addr_t firstFreePage;
-  size_t stackSize;
+  uint32_t return_address;
+  multiboot_info_t *multiboot_info;
+  addr_t first_free_page;
+  size_t stack_size;
   unsigned char code[4];
 };
 
@@ -177,9 +180,9 @@ struct InitStackArgs {
  Bootstraps the initial server and passes necessary boot data to it.
  */
 
-void bootstrapInitServer(multiboot_info_t *info) {
-  addr_t initServerStack = (addr_t)INIT_SERVER_STACK_TOP;
-  addr_t initServerPDir = INVALID_PFRAME;
+void bootstrap_init_server(multiboot_info_t *info) {
+  addr_t init_server_stack = (addr_t)INIT_SERVER_STACK_TOP;
+  addr_t init_server_pdir = INVALID_PFRAME;
   elf_header_t elf_header;
 
   /* code:
@@ -194,36 +197,38 @@ void bootstrapInitServer(multiboot_info_t *info) {
    ud2             # Trigger Invalid Opcode Exception: #UD
    */
 
-  struct InitStackArgs stackData = {
-    .returnAddress = initServerStack - sizeof((struct InitStackArgs*)0)->code,
-    .multibootInfo = (multiboot_info_t *)KVIRT_TO_PHYS(info),
-    .firstFreePage = firstFreePage,
-    .stackSize = 0,
-    .code = {
-      0x90,
-      0x90,
-      0x0F,
-      0x0B
-    }
-  };
+  struct InitStackArgs stack_data =
+	{
+	  .return_address = init_server_stack
+		  - sizeof((struct InitStackArgs*)0)->code,
+	  .multiboot_info = (multiboot_info_t*)KVIRT_TO_PHYS((addr_t)info),
+	  .first_free_page = first_free_page,
+	  .stack_size = 0,
+	  .code = {
+		0x90,
+		0x90,
+		0x0F,
+		0x0B
+	  }
+	};
 
   kprintf("Bootstrapping initial server...\n");
 
-  peek(initServerImg, &elf_header, sizeof elf_header);
+  peek(init_server_img, &elf_header, sizeof elf_header);
 
-  if(!isValidElfExe(&elf_header)) {
-    kprintf("Invalid ELF exe\n");
-    goto failedBootstrap;
+  if(!is_valid_elf_exe(&elf_header)) {
+	kprintf("Invalid ELF exe\n");
+	goto failed_bootstrap;
   }
 
-  if((initServerPDir = allocPageFrame()) == INVALID_PFRAME) {
-    kprintf("Unable to create page directory for initial server.\n");
-    goto failedBootstrap;
+  if((init_server_pdir = alloc_page_frame()) == INVALID_PFRAME) {
+	kprintf("Unable to create page directory for initial server.\n");
+	goto failed_bootstrap;
   }
 
-  if(clearPhysPage(initServerPDir) != E_OK) {
-    kprintf("Unable to clear init server page directory.\n");
-    goto failedBootstrap;
+  if(clear_phys_page(init_server_pdir) != E_OK) {
+	kprintf("Unable to clear init server page directory.\n");
+	goto failed_bootstrap;
   }
 
   pde_t pde;
@@ -232,76 +237,116 @@ void bootstrapInitServer(multiboot_info_t *info) {
   memset(&pde, 0, sizeof(pde_t));
   memset(&pte, 0, sizeof(pte_t));
 
-  addr_t stackPTab = allocPageFrame();
+  addr_t stack_ptab = alloc_page_frame();
 
-  if(stackPTab == INVALID_PFRAME) {
-    kprintf("Unable to initialize stack page table\n");
-    goto failedBootstrap;
+  if(stack_ptab == INVALID_PFRAME) {
+	kprintf("Unable to initialize stack page table\n");
+	goto failed_bootstrap;
   }
   else
-    clearPhysPage(stackPTab);
+	clear_phys_page(stack_ptab);
 
-  pde.base = (uint32_t)ADDR_TO_PFRAME(stackPTab);
-  pde.isReadWrite = 1;
-  pde.isUser = 1;
-  pde.isPresent = 1;
+  pde.base = (uint32_t)ADDR_TO_PFRAME(stack_ptab);
+  pde.is_read_write = 1;
+  pde.is_user = 1;
+  pde.is_present = 1;
 
   if(IS_ERROR(
-      writePDE(PDE_INDEX(initServerStack-PAGE_TABLE_SIZE), pde, initServerPDir)))
+	  write_pde(PDE_INDEX(init_server_stack-PAGE_TABLE_SIZE), pde, init_server_pdir)))
   {
-    goto failedBootstrap;
+	goto failed_bootstrap;
   }
 
   for(size_t p = 0; p < (512 * 1024) / PAGE_SIZE; p++) {
-    addr_t stackPage = allocPageFrame();
+	addr_t stack_page = alloc_page_frame();
 
-    if(stackPage == INVALID_PFRAME) {
-      kprintf("Unable to initialize stack page.\n");
-      goto failedBootstrap;
-    }
+	if(stack_page == INVALID_PFRAME) {
+	  kprintf("Unable to initialize stack page.\n");
+	  goto failed_bootstrap;
+	}
 
-    pte.base = (uint32_t)ADDR_TO_PFRAME(stackPage);
-    pte.isReadWrite = 1;
-    pte.isUser = 1;
-    pte.isPresent = 1;
+	pte.base = (uint32_t)ADDR_TO_PFRAME(stack_page);
+	pte.is_read_write = 1;
+	pte.is_user = 1;
+	pte.is_present = 1;
 
-    if(IS_ERROR(
-        writePTE(PTE_INDEX(initServerStack-(p+1)*PAGE_SIZE), pte, stackPTab))) {
-      if(p == 0) {
-        kprintf("Unable to write page map entries for init server stack.\n");
-        goto failedBootstrap;
-      }
-      else
-        break;
-    }
+	if(IS_ERROR(
+		write_pte(PTE_INDEX(init_server_stack-(p+1)*PAGE_SIZE), pte, stack_ptab)))
+	{
+	  if(p == 0) {
+		kprintf("Unable to write page map entries for init server stack.\n");
+		goto failed_bootstrap;
+	  }
+	  else
+		break;
+	}
 
-    if(p == 0) {
-      poke(stackPage + PAGE_SIZE - sizeof(stackData), &stackData,
-           sizeof(stackData));
-    }
+	if(p == 0) {
+	  poke(stack_page + PAGE_SIZE - sizeof(stack_data), &stack_data,
+		   sizeof(stack_data));
+	}
 
-    stackData.stackSize += PAGE_SIZE;
+	stack_data.stack_size += PAGE_SIZE;
   }
 
-  if((initServerThread = loadElfExe(
-      initServerImg, initServerPDir,
-      (void*)(initServerStack - sizeof(stackData))))
-     == NULL) {
-    kprintf("Unable to load ELF executable.\n");
-    goto failedBootstrap;
+  // Let the initial server have access to conventional memory (first 640 KiB)
+
+  pde = read_pde(0, init_server_pdir);
+  addr_t ptab;
+
+  if(!pde.is_present)
+  {
+	addr_t new_ptab = alloc_page_frame();
+
+	if(new_ptab == INVALID_PFRAME)
+	  goto failed_bootstrap;
+
+	clear_phys_page(new_ptab);
+
+	pde.value = 0;
+    pde.is_present = 1;
+	pde.is_read_write = 1;
+	pde.is_user = 1;
+	pde.base = ADDR_TO_PFRAME(new_ptab);
+
+	if(IS_ERROR(write_pde(0, pde, init_server_pdir)))
+	  goto failed_bootstrap;
+
+	ptab = new_ptab;
+  }
+  else
+	ptab = PDE_BASE(pde);
+
+  for(size_t i=0; i < PTE_INDEX(VGA_RAM); i++) {
+	pte.value = 0;
+	pte.is_present = 1;
+	pte.is_read_write = 0;
+	pte.is_user = 1;
+	pte.base = i;
+
+	if(IS_ERROR(write_pte(i, pte, ptab)))
+	  goto failed_bootstrap;
   }
 
-  kprintf("Starting initial server... %#p\n", initServerThread);
+  if((init_server_thread = load_elf_exe(
+	  init_server_img, init_server_pdir,
+	  (void*)(init_server_stack - sizeof(stack_data))))
+	 == NULL) {
+	kprintf("Unable to load ELF executable.\n");
+	goto failed_bootstrap;
+  }
 
-  if(IS_ERROR(startThread(initServerThread)))
-    goto releaseInitThread;
+  kprintf("Starting initial server... %#p\n", init_server_thread);
+
+  if(IS_ERROR(start_thread(init_server_thread)))
+	goto release_init_thread;
 
   return;
 
-releaseInitThread:
-  releaseThread(initServerThread);
+release_init_thread:
+  release_thread(init_server_thread);
 
-failedBootstrap:
+failed_bootstrap:
   kprintf("Unable to start initial server.\n");
   return;
 }

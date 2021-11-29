@@ -11,12 +11,11 @@
 
 #include <kernel/mm.h>
 
-extern addr_t allocPageFrame(void);
+extern addr_t alloc_page_frame(void);
 
-extern bool isReservedPage(uint64_t addr, multiboot_info_t *info,
-                                     int isLargePage);
+extern bool is_reserved_page(uint64_t addr, multiboot_info_t *info,
+                                     int is_large_page);
 
-extern int clearPhysPage(uint64_t phys);
-extern int initMemory(multiboot_info_t *info);
+extern int init_memory(multiboot_info_t *info);
 
 #endif /* KERNEL_INIT_MEMORY_H */

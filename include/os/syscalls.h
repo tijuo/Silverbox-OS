@@ -27,6 +27,7 @@
 #define PM_ACCESSED             0x80u
 #define PM_PAGE_SIZED           0x100u      // PDE points to a large page instead of table
 #define PM_STICKY               0x200u      // Suggestion to not invalidate entry upon context switch
+#define PM_CLEAR				0x400u		// Clear the contents of a frame before mapping
 #define PM_AVAIL_MASK           0x1F000u    // Mask for flags that encode available bits
 #define PM_AVAIL_OFFSET         12
 #define PM_OVERWRITE            0x8000u
@@ -113,8 +114,8 @@
 
 struct PageMapping {
   union {
-    pframe_t physFrame;
-    uint32_t blockNum;
+    pframe_t phys_frame;
+    uint32_t block_num;
   };
   unsigned int flags;
 };
@@ -226,23 +227,23 @@ typedef struct Tcb {
     uint32_t eflags;
   } state;
 
-  uint32_t rootPageMap;
+  uint32_t root_pmap;
   uint8_t status;
-  uint8_t currentProcessorId;
+  uint8_t current_processor_id;
   tid_t tid;
 
   uint8_t priority;
 
-  uint32_t pendingEvents;
-  uint32_t eventMask;
+  uint32_t pending_events;
+  uint32_t event_mask;
 
-  void *capabilityTable;
-  size_t capabilityTableLen;
+  void *capability_table;
+  size_t capability_table_len;
 
-  tid_t exceptionHandler;
+  tid_t exception_handler;
   tid_t pager;
 
-  tid_t waitTid;
+  tid_t wait_tid;
   tid_t parent;
 
   tid_t nextSibling;
@@ -257,7 +258,7 @@ typedef struct Tcb {
   tid_t senderWaitHead;
   tid_t senderWaitTail;
 
-  xsave_state_t xsaveState;
+  xsave_state_t xsave_state;
 
 } thread_info_t;
 

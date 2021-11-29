@@ -36,16 +36,16 @@ struct ExceptionMessage
   uint32_t cr4;
 
   uint32_t eip;
-  uint32_t errorCode;
-  uint8_t faultNum;
-  uint8_t processorId;
+  uint32_t error_code;
+  uint8_t fault_num;
+  uint8_t processor_id;
   tid_t who;
 };
 
 struct ExitMessage
 {
   tid_t who;
-  int  statusCode;
+  int  status_code;
 };
 
 struct IrqMessage

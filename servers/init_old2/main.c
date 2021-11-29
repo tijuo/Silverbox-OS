@@ -36,7 +36,7 @@ static void handleMessage(msg_t *msg);
 tid_t createNewThread(tid_t desiredTid, void *entry, paddr_t *pageMap, void *stackTop);
 
 extern void (*idle)(void);
-int startThread(tid_t tid);
+int start_thread(tid_t tid);
 int setPriority(tid_t tid, int priority);
 
 struct ServerEntry
@@ -183,7 +183,7 @@ static void handleMessage(msg_t *msg)
         addr_t faultAddr = exMessage->faultAddress;
         tid_t tid = exMessage->who;
         int intNum = exMessage->intNum;
-        int errorCode = exMessage->errorCode;
+        int errorCode = exMessage->error_code;
 /*
         print("Exception ");
         printInt(intNum);
@@ -254,7 +254,7 @@ static void handleMessage(msg_t *msg)
                          + ((region->flags & REG_DOWN) ? -PAGE_SIZE : PAGE_SIZE),
                         NULL_PADDR, 1, REG_GUARD | (region->flags & REG_DOWN));
             }
-            startThread(tid);
+            start_thread(tid);
           }
           else
             print("Fault address not found in mapping.\n");
@@ -268,7 +268,7 @@ static void handleMessage(msg_t *msg)
         print("TID ");
         printInt(exitMsg->who);
         print(" exited with status code: ");
-        printInt(exitMsg->statusCode);
+        printInt(exitMsg->status_code);
         print("\n");
         break;
        }
@@ -449,7 +449,7 @@ static int loadElfExe(module_t *module)
       fail = 1;
     else if(mapRegion(addrSpace, STACK_TOP-PAGE_SIZE, NULL_PADDR, 1, REG_DOWN | REG_GUARD) != 0)
       fail = 1;
-    else if(startThread(tid) != 0)
+    else if(start_thread(tid) != 0)
       fail = 1;
   }
 
@@ -481,7 +481,7 @@ static int loadElfExe(module_t *module)
   return 0;
 }
 
-int startThread(tid_t tid)
+int start_thread(tid_t tid)
 {
   thread_info_t threadInfo =
   {
@@ -532,12 +532,12 @@ int main(multiboot_info_t *info, addr_t lastFreeKernelPage)
   sbHashCreate(&fsTable, 128);
   sbHashCreate(&serverTable, 1024);
 
-  initAddrSpace(&initsrvAddrSpace, &inInfo.rootPageMap);
+  initAddrSpace(&initsrvAddrSpace, &inInfo.root_pmap);
   addAddrSpace(&initsrvAddrSpace);
 
   tid_t idleTid = createNewThread(NULL_TID, &idle, NULL, NULL);
 
-  if(idleTid == NULL_TID || setPriority(idleTid, 0) != 0 || startThread(idleTid) != 0)
+  if(idleTid == NULL_TID || setPriority(idleTid, 0) != 0 || start_thread(idleTid) != 0)
   {
     print("Unable to start idle thread\n");
     return 1;

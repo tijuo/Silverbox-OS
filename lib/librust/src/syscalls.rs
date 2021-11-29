@@ -512,6 +512,9 @@ pub mod flags {
         /// upon a context switch.
         pub const STICKY: u32 = 0x200;
 
+        /// If set, then the frame used for the mapping will be cleared prior to mapping.
+        pub const CLEAR: u32 = 0x400;
+
         /// If set, then `sys_set_page_mappings()` will not fail
         /// if an address maps to a previous entry that's already
         /// marked as present.

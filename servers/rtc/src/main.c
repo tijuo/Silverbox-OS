@@ -73,8 +73,8 @@ static unsigned int getTimeInSecs(unsigned int year, unsigned int month,
 }
 
 static int isUpdateInProgress(void) {
-  outPort8(RTC_INDEX, RTC_STATUS_A);
-  return (inPort8(RTC_DATA) & RTC_A_UPDATING);
+  out_port8(RTC_INDEX, RTC_STATUS_A);
+  return (in_port8(RTC_DATA) & RTC_A_UPDATING);
 }
 
 static unsigned int getTime(void) {
@@ -82,8 +82,8 @@ static unsigned int getTime(void) {
   unsigned int bcd, _24hr;
   unsigned char statusData;
 
-  outPort8( RTC_INDEX, RTC_STATUS_B);
-  statusData = inPort8( RTC_DATA);
+  out_port8( RTC_INDEX, RTC_STATUS_B);
+  statusData = in_port8( RTC_DATA);
 
   bcd = (statusData & RTC_BINARY) ? 0 : 1;
   _24hr = (statusData & RTC_24_HR) ? 1 : 0;
@@ -91,15 +91,15 @@ static unsigned int getTime(void) {
   while(isUpdateInProgress())
     ;
 
-  outPort8( RTC_INDEX, RTC_SECOND); // second
-  second = (bcd ? bcd2bin(inPort8( RTC_DATA)) : inPort8( RTC_DATA));
+  out_port8( RTC_INDEX, RTC_SECOND); // second
+  second = (bcd ? bcd2bin(in_port8( RTC_DATA)) : in_port8( RTC_DATA));
 
-  outPort8( RTC_INDEX, RTC_MINUTE); // minute
+  out_port8( RTC_INDEX, RTC_MINUTE); // minute
 
-  minute = (bcd ? bcd2bin(inPort8( RTC_DATA)) : inPort8( RTC_DATA));
+  minute = (bcd ? bcd2bin(in_port8( RTC_DATA)) : in_port8( RTC_DATA));
 
-  outPort8( RTC_INDEX, RTC_HOUR); // hour
-  hour = (bcd ? bcd2bin(inPort8( RTC_DATA)) : inPort8( RTC_DATA));
+  out_port8( RTC_INDEX, RTC_HOUR); // hour
+  hour = (bcd ? bcd2bin(in_port8( RTC_DATA)) : in_port8( RTC_DATA));
 
   if(!_24hr) {
     hour--;
@@ -110,14 +110,14 @@ static unsigned int getTime(void) {
       hour = (hour & 0x7F);
   }
 
-  outPort8( RTC_INDEX, RTC_DAY); // day
-  day = (bcd ? bcd2bin(inPort8( RTC_DATA)) : inPort8( RTC_DATA)) - 1;
+  out_port8( RTC_INDEX, RTC_DAY); // day
+  day = (bcd ? bcd2bin(in_port8( RTC_DATA)) : in_port8( RTC_DATA)) - 1;
 
-  outPort8( RTC_INDEX, RTC_MONTH); // month
-  month = (bcd ? bcd2bin(inPort8( RTC_DATA)) : inPort8( RTC_DATA)) - 1;
+  out_port8( RTC_INDEX, RTC_MONTH); // month
+  month = (bcd ? bcd2bin(in_port8( RTC_DATA)) : in_port8( RTC_DATA)) - 1;
 
-  outPort8( RTC_INDEX, RTC_YEAR); // century year (00-99)
-  year = (bcd ? bcd2bin(inPort8( RTC_DATA)) : inPort8( RTC_DATA));
+  out_port8( RTC_INDEX, RTC_YEAR); // century year (00-99)
+  year = (bcd ? bcd2bin(in_port8( RTC_DATA)) : in_port8( RTC_DATA));
 
   if(!isUpdateInProgress())
     currentTime = getTimeInSecs(year, month, day, hour, minute, second);

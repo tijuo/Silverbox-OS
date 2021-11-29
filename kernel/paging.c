@@ -8,47 +8,72 @@
 #include <string.h>
 #include <kernel/bits.h>
 
-ALIGNED(PAGE_SIZE) pte_t kMapAreaPTab[PTE_ENTRY_COUNT];
+ALIGNED(PAGE_SIZE) pte_t kmap_area_ptab[PTE_ENTRY_COUNT];
 
 NON_NULL_PARAMS
-static int accessPhys(uint64_t phys, void *buffer, size_t len, bool readPhys);
+static int access_phys(uint64_t phys, void *buffer, size_t len, bool read_phys);
 
 NON_NULL_PARAMS
-static int accessMem(addr_t address, size_t len, void *buffer, uint32_t pdir,
+static int access_mem(addr_t address, size_t len, void *buffer, uint32_t pdir,
 bool read);
 
-int mapLargeFrame(uint64_t phys, pmap_entry_t *pmapEntry) {
-  if(phys >= MAX_PHYS_MEMORY)
-    RET_MSG(EFAIL, "Error: Physical frame is out of range.");
+/**
+ Zero out a page frame.
 
-  pde_t oldPde = readPDE(PDE_INDEX(KMAP_AREA), CURRENT_ROOT_PMAP);
-  pmap_entry_t mappedPde = {
-    .value = 0
-  };
+ @param phys Physical address frame to clear.
+ @return E_OK on success. E_FAIL on failure.
+ */
 
-  setLargePdeBase(&mappedPde.largePde, PADDR_TO_PFRAME(phys));
-  mappedPde.largePde.isLargePage = 1;
-  mappedPde.largePde.isReadWrite = 1;
-  mappedPde.largePde.isPresent = 1;
+int clear_phys_page(uint32_t phys) {
+  pmap_entry_t old_pmap_entry;
+  size_t offset = LARGE_PAGE_OFFSET(ALIGN_DOWN(phys, (uint64_t)PAGE_SIZE));
 
-  if(IS_ERROR(
-      writePDE(PDE_INDEX(KMAP_AREA), mappedPde.pde, CURRENT_ROOT_PMAP)))
-    RET_MSG(E_FAIL, "Error: Unable to write PDE.");
+  if(IS_ERROR(map_large_frame(phys, &old_pmap_entry)))
+	RET_MSG(E_FAIL, "Unable to map physical frame.");
 
-  invalidatePage(KMAP_AREA);
+  uint32_t *ptr = (uint32_t *)(KMAP_AREA + offset);
 
-  if(pmapEntry)
-    pmapEntry->pde = oldPde;
+  for(size_t i=0; i < 1024; i++)
+	ptr[i] = 0;
+
+  if(IS_ERROR(unmap_large_frame(old_pmap_entry)))
+	RET_MSG(E_FAIL, "Unable to unmap physical frame.");
 
   return E_OK;
 }
 
-int unmapLargeFrame(pmap_entry_t pmapEntry) {
+int map_large_frame(uint64_t phys, pmap_entry_t *pmap_entry) {
+  if(phys >= MAX_PHYS_MEMORY)
+    RET_MSG(EFAIL, "Error: Physical frame is out of range.");
+
+  pde_t old_pde = read_pde(PDE_INDEX(KMAP_AREA), CURRENT_ROOT_PMAP);
+  pmap_entry_t mapped_pde = {
+    .value = 0
+  };
+
+  set_large_pde_base(&mapped_pde.large_pde, PADDR_TO_PFRAME(phys));
+  mapped_pde.large_pde.is_large_page = 1;
+  mapped_pde.large_pde.is_read_write = 1;
+  mapped_pde.large_pde.is_present = 1;
+
   if(IS_ERROR(
-      writePDE(PDE_INDEX(KMAP_AREA), pmapEntry.pde, CURRENT_ROOT_PMAP)))
+      write_pde(PDE_INDEX(KMAP_AREA), mapped_pde.pde, CURRENT_ROOT_PMAP)))
     RET_MSG(E_FAIL, "Error: Unable to write PDE.");
 
-  invalidatePage(KMAP_AREA);
+  invalidate_page(KMAP_AREA);
+
+  if(pmap_entry)
+    pmap_entry->pde = old_pde;
+
+  return E_OK;
+}
+
+int unmap_large_frame(pmap_entry_t pmap_entry) {
+  if(IS_ERROR(
+      write_pde(PDE_INDEX(KMAP_AREA), pmap_entry.pde, CURRENT_ROOT_PMAP)))
+    RET_MSG(E_FAIL, "Error: Unable to write PDE.");
+
+  invalidate_page(KMAP_AREA);
   return E_OK;
 }
 
@@ -60,20 +85,20 @@ int unmapLargeFrame(pmap_entry_t pmapEntry) {
  @return E_OK, on success. E_FAIL, on error.
  */
 
-int initializeRootPmap(uint32_t pmap) {
+int initialize_root_pmap(uint32_t pmap) {
   // Map kernel memory into the new address space
 
 #ifdef DEBUG
 
   // map the first page table
 
-  if(IS_ERROR(writePDE(0, readPDE(0, CURRENT_ROOT_PMAP), pmap)))
+  if(IS_ERROR(write_pde(0, read_pde(0, CURRENT_ROOT_PMAP), pmap)))
     RET_MSG(E_FAIL, "Unable to copy kernel PDEs (write failed).");
 
 #endif /* DEBUG */
 
   for(unsigned int entry = PDE_INDEX(KERNEL_VSTART); entry < 1024; entry++) {
-    if(IS_ERROR(writePDE(entry, readPDE(entry, CURRENT_ROOT_PMAP), pmap)))
+    if(IS_ERROR(write_pde(entry, read_pde(entry, CURRENT_ROOT_PMAP), pmap)))
       RET_MSG(E_FAIL, "Unable to copy kernel PDEs (write failed).");
   }
 
@@ -85,19 +110,19 @@ int initializeRootPmap(uint32_t pmap) {
  *
  * @param addr The virtual address.
  * @param pdir The physical address of the page directory.
- * @param isRead Is the access a read?
+ * @param is_read Is the access a read?
  *
  * @return true if the address can be accessed. false, otherwise.
  */
 
-bool isAccessible(addr_t addr, uint32_t pdir, bool isRead) {
-  pde_t pde = readPDE(PDE_INDEX(addr), pdir);
+bool is_accessible(addr_t addr, uint32_t pdir, bool is_read) {
+  pde_t pde = read_pde(PDE_INDEX(addr), pdir);
 
-  if(pde.isLargePage)
-    return !!(pde.isPresent && (isRead || pde.isReadWrite));
+  if(pde.is_large_page)
+    return !!(pde.is_present && (is_read || pde.is_read_write));
   else {
-    pte_t pte = readPTE(PTE_INDEX(addr), PDE_BASE(pde));
-    return !!(pte.isPresent && (isRead || pte.isReadWrite));
+    pte_t pte = read_pte(PTE_INDEX(addr), PDE_BASE(pde));
+    return !!(pte.is_present && (is_read || pte.is_read_write));
   }
 }
 
@@ -115,27 +140,27 @@ bool isAccessible(addr_t addr, uint32_t pdir, bool isRead) {
  yet.
  */
 
-pmap_entry_t readPmapEntry(uint32_t pbase, unsigned int entry) {
+pmap_entry_t read_pmap_entry(uint32_t pbase, unsigned int entry) {
   assert(entry < 1024);
 
   if(pbase == CURRENT_ROOT_PMAP)
-    pbase = getRootPageMap();
+    pbase = get_root_page_map();
 
-  pte_t *pte = &kMapAreaPTab[PTE_INDEX(TEMP_PAGE)];
+  pte_t *pte = &kmap_area_ptab[PTE_INDEX(TEMP_PAGE)];
 
   pte->base = ADDR_TO_PFRAME(pbase);
-  pte->isReadWrite = 1;
-  pte->isPresent = 1;
+  pte->is_read_write = 1;
+  pte->is_present = 1;
 
-  invalidatePage(TEMP_PAGE);
+  invalidate_page(TEMP_PAGE);
 
-  pmap_entry_t pmapEntry = *((pmap_entry_t*)TEMP_PAGE + entry);
+  pmap_entry_t pmap_entry = *((pmap_entry_t*)TEMP_PAGE + entry);
 
-  pte->isPresent = 0;
+  pte->is_present = 0;
 
-  invalidatePage(TEMP_PAGE);
+  invalidate_page(TEMP_PAGE);
 
-  return pmapEntry;
+  return pmap_entry;
 }
 
 /**
@@ -151,27 +176,27 @@ pmap_entry_t readPmapEntry(uint32_t pbase, unsigned int entry) {
  yet.
  */
 
-int writePmapEntry(uint32_t pbase, unsigned int entry, pmap_entry_t buffer) {
+int write_pmap_entry(uint32_t pbase, unsigned int entry, pmap_entry_t buffer) {
   assert(entry < 1024);
 
   if(pbase == CURRENT_ROOT_PMAP)
-    pbase = getRootPageMap();
+    pbase = get_root_page_map();
 
-  pte_t *pte = &kMapAreaPTab[PTE_INDEX(TEMP_PAGE)];
+  pte_t *pte = &kmap_area_ptab[PTE_INDEX(TEMP_PAGE)];
 
   pte->base = ADDR_TO_PFRAME(pbase);
-  pte->isReadWrite = 1;
-  pte->isPresent = 1;
+  pte->is_read_write = 1;
+  pte->is_present = 1;
 
-  invalidatePage(TEMP_PAGE);
+  invalidate_page(TEMP_PAGE);
 
-  pmap_entry_t *pmapEntry = ((pmap_entry_t*)TEMP_PAGE + entry);
+  pmap_entry_t *pmap_entry = ((pmap_entry_t*)TEMP_PAGE + entry);
 
-  *pmapEntry = buffer;
+  *pmap_entry = buffer;
 
-  pte->isPresent = 0;
+  pte->is_present = 0;
 
-  invalidatePage(TEMP_PAGE);
+  invalidate_page(TEMP_PAGE);
 
   return E_OK;
 }
@@ -186,7 +211,7 @@ int writePmapEntry(uint32_t pbase, unsigned int entry, pmap_entry_t buffer) {
  */
 
 NON_NULL_PARAMS int poke(uint64_t phys, void *buffer, size_t bytes) {
-  return accessPhys(phys, buffer, bytes, false);
+  return access_phys(phys, buffer, bytes, false);
 }
 
 /**
@@ -199,7 +224,7 @@ NON_NULL_PARAMS int poke(uint64_t phys, void *buffer, size_t bytes) {
  */
 
 NON_NULL_PARAMS int peek(uint64_t phys, void *buffer, size_t bytes) {
-  return accessPhys(phys, buffer, bytes, true);
+  return access_phys(phys, buffer, bytes, true);
 }
 
 /**
@@ -210,42 +235,42 @@ NON_NULL_PARAMS int peek(uint64_t phys, void *buffer, size_t bytes) {
  @param phys The starting physical address
  @param buffer The starting address of the buffer
  @param bytes The number of bytes to be read/written.
- @param readPhys True if operation is a read, false if it's a write
+ @param read_phys True if operation is a read, false if it's a write
  @return E_OK on success. E_BOUNDS if memory region is out of range.
  E_BOUNDS if memory access is out of range.
  */
 
-NON_NULL_PARAMS static int accessPhys(uint64_t phys, void *buffer, size_t len,
-bool readPhys)
+NON_NULL_PARAMS static int access_phys(uint64_t phys, void *buffer, size_t len,
+bool read_phys)
 {
   if(phys >= MAX_PHYS_MEMORY || phys + len >= MAX_PHYS_MEMORY)
     RET_MSG(E_FAIL, "Physical address is out of range.");
 
-  pmap_entry_t oldPmapEntry;
-  size_t bufferOffset = 0;
+  pmap_entry_t old_pmap_entry;
+  size_t buffer_offset = 0;
 
   while(len) {
-    size_t physOffset = LARGE_PAGE_OFFSET(phys);
+    size_t phys_offset = LARGE_PAGE_OFFSET(phys);
     size_t bytes =
-        (len > LARGE_PAGE_SIZE - physOffset) ? LARGE_PAGE_SIZE - physOffset :
+        (len > LARGE_PAGE_SIZE - phys_offset) ? LARGE_PAGE_SIZE - phys_offset :
                                                len;
 
-    if(IS_ERROR(mapLargeFrame(phys, &oldPmapEntry)))
+    if(IS_ERROR(map_large_frame(phys, &old_pmap_entry)))
       RET_MSG(E_FAIL, "Unable to map large page frame.");
 
-    if(readPhys)
-      memcpy((void*)((addr_t)buffer + bufferOffset),
-             (void*)(KMAP_AREA + physOffset), bytes);
+    if(read_phys)
+      memcpy((void*)((addr_t)buffer + buffer_offset),
+             (void*)(KMAP_AREA + phys_offset), bytes);
     else
-      memcpy((void*)(KMAP_AREA + physOffset),
-             (void*)((addr_t)buffer + bufferOffset), bytes);
+      memcpy((void*)(KMAP_AREA + phys_offset),
+             (void*)((addr_t)buffer + buffer_offset), bytes);
 
     phys += bytes;
-    bufferOffset += bytes;
+    buffer_offset += bytes;
     len -= bytes;
   }
 
-  if(IS_ERROR(unmapLargeFrame(oldPmapEntry)))
+  if(IS_ERROR(unmap_large_frame(old_pmap_entry)))
     RET_MSG(E_FAIL, "Unable to unmap large page frame.");
 
   return E_OK;
@@ -268,33 +293,33 @@ bool readPhys)
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS static int accessMem(addr_t address, size_t len, void *buffer,
+NON_NULL_PARAMS static int access_mem(addr_t address, size_t len, void *buffer,
                                      uint32_t pdir,
                                      bool read)
 {
-  size_t bufferOffset = 0;
+  size_t buffer_offset = 0;
 
   assert(address);
 
   while(len) {
-    uint64_t baseAddress;
-    pde_t pde = readPDE(address, pdir);
-    size_t addrOffset = address & (PAGE_SIZE - 1);
+    uint64_t base_address;
+    pde_t pde = read_pde(address, pdir);
+    size_t addr_offset = address & (PAGE_SIZE - 1);
     size_t bytes =
-        (len > PAGE_SIZE - addrOffset) ? PAGE_SIZE - addrOffset : len;
+        (len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
 
-    if(pde.isPresent) {
-      pmap_entry_t pmapEntry = {
+    if(pde.is_present) {
+      pmap_entry_t pmap_entry = {
         .pde = pde
       };
 
-      if(pde.isLargePage)
-        baseAddress = PFRAME_TO_PADDR(getPdeFrameNumber(pmapEntry.pde));
+      if(pde.is_large_page)
+        base_address = PFRAME_TO_PADDR(get_pde_frame_number(pmap_entry.pde));
       else {
-        pte_t pte = readPTE(address, pdir);
+        pte_t pte = read_pte(address, pdir);
 
-        if(pte.isPresent)
-          baseAddress = (uint64_t)PTE_BASE(pte);
+        if(pte.is_present)
+          base_address = (uint64_t)PTE_BASE(pte);
         else
           RET_MSG(E_NOT_MAPPED, "Address is not mapped");
       }
@@ -303,14 +328,14 @@ NON_NULL_PARAMS static int accessMem(addr_t address, size_t len, void *buffer,
       RET_MSG(E_NOT_MAPPED, "Address region is not mapped");
 
     if(read)
-      peek(baseAddress + addrOffset, (void*)((addr_t)buffer + bufferOffset),
+      peek(base_address + addr_offset, (void*)((addr_t)buffer + buffer_offset),
            bytes);
     else
-      poke(baseAddress + addrOffset, (void*)((addr_t)buffer + bufferOffset),
+      poke(base_address + addr_offset, (void*)((addr_t)buffer + buffer_offset),
            bytes);
 
     address += bytes;
-    bufferOffset += bytes;
+    buffer_offset += bytes;
     len -= bytes;
   }
 
@@ -320,7 +345,7 @@ NON_NULL_PARAMS static int accessMem(addr_t address, size_t len, void *buffer,
 /**
  Write data to an address in an address space.
 
- Equivalent to an accessMem( address, len, buffer, pdir, false ).
+ Equivalent to an access_mem( address, len, buffer, pdir, false ).
 
  @param address The address in the address space to perform the write.
  @param len The length of the block to write.
@@ -329,15 +354,15 @@ NON_NULL_PARAMS static int accessMem(addr_t address, size_t len, void *buffer,
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS int pokeVirt(addr_t address, size_t len, void *buffer,
+NON_NULL_PARAMS int poke_virt(addr_t address, size_t len, void *buffer,
                              uint32_t pdir)
 {
-  if(pdir == getRootPageMap() || pdir == CURRENT_ROOT_PMAP) {
+  if(pdir == get_root_page_map() || pdir == CURRENT_ROOT_PMAP) {
     memcpy((void*)address, buffer, len);
     return E_OK;
   }
   else
-    return accessMem(address, len, buffer, pdir, false);
+    return access_mem(address, len, buffer, pdir, false);
 }
 
 /* data in 'address' goes to 'buffer' */
@@ -345,7 +370,7 @@ NON_NULL_PARAMS int pokeVirt(addr_t address, size_t len, void *buffer,
 /**
  Read data from an address in an address space.
 
- Equivalent to an accessMem( address, len, buffer, pdir, true ).
+ Equivalent to an access_mem( address, len, buffer, pdir, true ).
 
  @param address The address in the address space to perform the read.
  @param len The length of the block to read.
@@ -354,13 +379,13 @@ NON_NULL_PARAMS int pokeVirt(addr_t address, size_t len, void *buffer,
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS int peekVirt(addr_t address, size_t len, void *buffer,
+NON_NULL_PARAMS int peek_virt(addr_t address, size_t len, void *buffer,
                              uint32_t pdir)
 {
-  if(pdir == getRootPageMap() || pdir == CURRENT_ROOT_PMAP) {
+  if(pdir == get_root_page_map() || pdir == CURRENT_ROOT_PMAP) {
     memcpy(buffer, (void*)address, len);
     return E_OK;
   }
   else
-    return accessMem(address, len, buffer, pdir, true);
+    return access_mem(address, len, buffer, pdir, true);
 }

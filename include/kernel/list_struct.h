@@ -4,8 +4,8 @@
 #include <types.h>
 
 struct List {
-  tid_t headTid;
-  tid_t tailTid;
+  tid_t head_tid;
+  tid_t tail_tid;
 };
 
 typedef struct List list_t;

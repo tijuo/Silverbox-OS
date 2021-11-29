@@ -12,26 +12,26 @@
  *         should be added at the head.
  */
 
-NON_NULL_PARAMS void listInsertAtEnd(list_t *list, tcb_t *thread, int atTail) {
-  tid_t threadTid = getTid(thread);
+NON_NULL_PARAMS void list_insert_at_end(list_t *list, tcb_t *thread, int at_tail) {
+  tid_t threadTid = get_tid(thread);
 
-  if(isListEmpty(list)) {
-    list->headTid = threadTid;
-    list->tailTid = threadTid;
-    thread->nextTid = NULL_TID;
-    thread->prevTid = NULL_TID;
+  if(is_list_empty(list)) {
+    list->head_tid = threadTid;
+    list->tail_tid = threadTid;
+    thread->next_tid = NULL_TID;
+    thread->prev_tid = NULL_TID;
   }
-  else if(atTail) {
-    thread->nextTid = NULL_TID;
-    getTcb(list->tailTid)->nextTid = threadTid;
-    thread->prevTid = list->tailTid;
-    list->tailTid = threadTid;
+  else if(at_tail) {
+    thread->next_tid = NULL_TID;
+    get_tcb(list->tail_tid)->next_tid = threadTid;
+    thread->prev_tid = list->tail_tid;
+    list->tail_tid = threadTid;
   }
   else {
-    thread->prevTid = NULL_TID;
-    getTcb(list->headTid)->prevTid = threadTid;
-    thread->nextTid = list->headTid;
-    list->headTid = threadTid;
+    thread->prev_tid = NULL_TID;
+    get_tcb(list->head_tid)->prev_tid = threadTid;
+    thread->next_tid = list->head_tid;
+    list->head_tid = threadTid;
   }
 }
 
@@ -44,39 +44,39 @@ NON_NULL_PARAMS void listInsertAtEnd(list_t *list, tcb_t *thread, int atTail) {
  *  @return The removed thread's TCB on success. NULL, if the list is empty.
  */
 
-NON_NULL_PARAMS tcb_t* listRemoveFromEnd(list_t *list, int atTail) {
-  tcb_t *removedTcb = getTcb(atTail ? list->tailTid : list->headTid);
+NON_NULL_PARAMS tcb_t* list_remove_from_end(list_t *list, int at_tail) {
+  tcb_t *removed_tcb = get_tcb(at_tail ? list->tail_tid : list->head_tid);
 
 #ifdef DEBUG
-  if(!list->headTid || !list->tailTid)
-    assert(list->headTid == NULL_TID && list->tailTid == NULL_TID);
+  if(!list->head_tid || !list->tail_tid)
+    assert(list->head_tid == NULL_TID && list->tail_tid == NULL_TID);
 
-  if(list->headTid || list->tailTid)
-    assert(list->headTid != NULL_TID && list->tailTid != NULL_TID);
+  if(list->head_tid || list->tail_tid)
+    assert(list->head_tid != NULL_TID && list->tail_tid != NULL_TID);
 #endif /* DEBUG */
 
-  if(removedTcb) {
-    if(atTail) {
-      list->tailTid = removedTcb->prevTid;
+  if(removed_tcb) {
+    if(at_tail) {
+      list->tail_tid = removed_tcb->prev_tid;
 
-      if(list->tailTid == NULL_TID)
-        list->headTid = NULL_TID;
+      if(list->tail_tid == NULL_TID)
+        list->head_tid = NULL_TID;
       else
-        getTcb(list->tailTid)->nextTid = NULL_TID;
+        get_tcb(list->tail_tid)->next_tid = NULL_TID;
     }
     else {
-      list->headTid = removedTcb->nextTid;
+      list->head_tid = removed_tcb->next_tid;
 
-      if(list->headTid == NULL_TID)
-        list->tailTid = NULL_TID;
+      if(list->head_tid == NULL_TID)
+        list->tail_tid = NULL_TID;
       else
-        getTcb(list->headTid)->prevTid = NULL_TID;
+        get_tcb(list->head_tid)->prev_tid = NULL_TID;
     }
 
-    removedTcb->prevTid = NULL_TID;
-    removedTcb->nextTid = NULL_TID;
+    removed_tcb->prev_tid = NULL_TID;
+    removed_tcb->next_tid = NULL_TID;
 
-    return removedTcb;
+    return removed_tcb;
   }
   else
     return NULL;
@@ -90,24 +90,21 @@ NON_NULL_PARAMS tcb_t* listRemoveFromEnd(list_t *list, int atTail) {
  *  @param thread The TCB of the thread to be removed. (Must not be null)
  */
 
-void listRemove(list_t *list, tcb_t *thread) {
-  assert(list);
-  assert(thread);
+NON_NULL_PARAMS void list_remove(list_t *list, tcb_t *thread) {
+  tid_t thread_tid = get_tid(thread);
 
-  tid_t threadTid = getTid(thread);
+  if(thread->next_tid != NULL_TID)
+    get_tcb(thread->next_tid)->prev_tid = thread->prev_tid;
 
-  if(thread->nextTid != NULL_TID)
-    getTcb(thread->nextTid)->prevTid = thread->prevTid;
+  if(thread->prev_tid != NULL_TID)
+    get_tcb(thread->prev_tid)->next_tid = thread->next_tid;
 
-  if(thread->prevTid != NULL_TID)
-    getTcb(thread->prevTid)->nextTid = thread->nextTid;
+  if(list->head_tid == thread_tid)
+    list->head_tid = thread->next_tid;
 
-  if(list->headTid == threadTid)
-    list->headTid = thread->nextTid;
+  if(list->tail_tid == thread_tid)
+    list->tail_tid = thread->prev_tid;
 
-  if(list->tailTid == threadTid)
-    list->tailTid = thread->prevTid;
-
-  thread->prevTid = NULL_TID;
-  thread->nextTid = NULL_TID;
+  thread->prev_tid = NULL_TID;
+  thread->next_tid = NULL_TID;
 }

@@ -5,11 +5,11 @@
 extern "C" {
 #endif
 
+#include <util.h>
+
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
-
-#include <util.h>
 
 typedef uint8_t u8;
 typedef int8_t s8;
@@ -60,15 +60,15 @@ typedef struct {
   uint8_t ftw;
   uint8_t _resd1;
   uint16_t fop;
-  uint32_t fpuIp;
-  uint16_t fpuCs;
+  uint32_t fpu_ip;
+  uint16_t fpu_cs;
   uint16_t _resd2;
 
-  uint32_t fpuDp;
-  uint16_t fpuDs;
+  uint32_t fpu_dp;
+  uint16_t fpu_ds;
   uint16_t _resd3;
   uint32_t mxcsr;
-  uint32_t mxcsrMask;
+  uint32_t mxcsr_mask;
 
   union {
     struct MMX_Register {

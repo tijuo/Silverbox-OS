@@ -2,67 +2,67 @@ OUTPUT_FORMAT("elf32-i386")
 ENTRY(start)
 SECTIONS
 {
-  kPhysStart = 0x00100000;
-  kVirtLowMemStart = 0xF8000000;
-  kVirtStart = 0xF8100000;
+  kphys_start = 0x00100000;
+  kvirt_low_mem_start = 0xF8000000;
+  kvirt_start = 0xF8100000;
 
-  .boot kPhysStart : AT(kPhysStart) ALIGN(4K) {
+  .boot kphys_start : AT(kphys_start) ALIGN(4K) {
     KEEP(*(.header))
-    kVirtDisc = .;
-    kdCode = .;
+    kvirt_disc = .;
+    kdcode = .;
     *(.dtext)
     . = ALIGN(4);
-    kdData = .;
+    kddata = .;
     *(.ddata)
     . = ALIGN(4K);
-    kdEnd = .;
+    kdend = .;
   }
 
   /* Note that this is the address of the bottom of the stack. */
 
-  .text kVirtStart + SIZEOF(.boot) : AT(kPhysStart + SIZEOF(.boot)) ALIGN(4K) {
-     kCode = .;
+  .text kvirt_start + SIZEOF(.boot) : AT(kphys_start + SIZEOF(.boot)) ALIGN(4K) {
+     kcode = .;
      *(.text*)
      . = ALIGN(4);
      *(.rodata*)
      . = ALIGN(4);
      *(.debug*)
      . = ALIGN(4K);
-     kCodeEnd = .;
+     kcode_end = .;
   }
 
   .data : ALIGN(4K) {
-     kData = .;
+     kdata = .;
 
-     kSize = .;
+     ksize = .;
      LONG(SIZEOF(.text) + SIZEOF(.data) + SIZEOF(.bss));
-     kTcbTableSize = .;
+     ktcb_table_size = .;
      LONG(SIZEOF(.tcb));
 
      *(.data*)
      . = ALIGN(4K);
      *(.tss)
      . = ALIGN(4K);
-     kDataEnd = .;
+     kdata_end = .;
   }
-  
+
   .bss : ALIGN(4K) {
-    kBss = .;
+    kbss = .;
     *(.bss*)
     *(.COMMON)
      . = ALIGN(4K);
-    kBssEnd = .;
+    kbss_end = .;
   }
-  
+
   .tcb : ALIGN(4M) {
-    kTcbStart = .;
-    tcbTable = .;
+    ktcb_start = .;
+    tcb_table = .;
     *(.tcb)
      . = ALIGN(4K);
-    kTcbEnd = .;
+    ktcb_end = .;
   }
-  
-  kEnd = .;
+
+  kend = .;
 
   /DISCARD/ : {
     *(.comment*)

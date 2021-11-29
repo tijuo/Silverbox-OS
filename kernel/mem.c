@@ -5,11 +5,10 @@
 #include <oslib.h>
 #include <kernel/lowlevel.h>
 #include <kernel/interrupt.h>
+#include <kernel/memory.h>
 #include <stdalign.h>
 
-bool tempMapped = false;
-
-gdt_entry_t kernelGDT[8] = {
+gdt_entry_t kernel_gdt[8] = {
   // Null Descriptor (0x00)
   {
     .value = 0
@@ -21,7 +20,7 @@ gdt_entry_t kernelGDT[8] = {
       .limit1 = 0xFFFFu,
       .base1 = 0,
       .base2 = 0,
-      .accessFlags = GDT_READ | GDT_NONSYS | GDT_NONCONF | GDT_CODE | GDT_DPL0
+      .access_flags = GDT_READ | GDT_NONSYS | GDT_NONCONF | GDT_CODE | GDT_DPL0
                      | GDT_PRESENT,
       .limit2 = 0xFu,
       .flags2 = GDT_PAGE_GRAN | GDT_BIG,
@@ -35,7 +34,7 @@ gdt_entry_t kernelGDT[8] = {
       .limit1 = 0xFFFFu,
       .base1 = 0,
       .base2 = 0,
-      .accessFlags = GDT_RDWR | GDT_NONSYS | GDT_EXPUP | GDT_DATA | GDT_DPL0
+      .access_flags = GDT_RDWR | GDT_NONSYS | GDT_EXPUP | GDT_DATA | GDT_DPL0
                      | GDT_PRESENT,
       .limit2 = 0xFu,
       .flags2 = GDT_PAGE_GRAN | GDT_BIG,
@@ -49,7 +48,7 @@ gdt_entry_t kernelGDT[8] = {
       .limit1 = 0xFFFFu,
       .base1 = 0,
       .base2 = 0,
-      .accessFlags = GDT_READ | GDT_NONSYS | GDT_NONCONF | GDT_CODE | GDT_DPL3
+      .access_flags = GDT_READ | GDT_NONSYS | GDT_NONCONF | GDT_CODE | GDT_DPL3
                      | GDT_PRESENT,
       .limit2 = 0xFu,
       .flags2 = GDT_PAGE_GRAN | GDT_BIG,
@@ -63,7 +62,7 @@ gdt_entry_t kernelGDT[8] = {
       .limit1 = 0xFFFFu,
       .base1 = 0,
       .base2 = 0,
-      .accessFlags = GDT_RDWR | GDT_NONSYS | GDT_EXPUP | GDT_DATA | GDT_DPL3
+      .access_flags = GDT_RDWR | GDT_NONSYS | GDT_EXPUP | GDT_DATA | GDT_DPL3
                      | GDT_PRESENT,
       .limit2 = 0xFu,
       .flags2 = GDT_PAGE_GRAN | GDT_BIG,
@@ -77,7 +76,7 @@ gdt_entry_t kernelGDT[8] = {
       .limit1 = 0,
       .base1 = 0,
       .base2 = 0,
-      .accessFlags = GDT_SYS | GDT_TSS | GDT_DPL0 | GDT_PRESENT,
+      .access_flags = GDT_SYS | GDT_TSS | GDT_DPL0 | GDT_PRESENT,
       .limit2 = 0,
       .flags2 = GDT_BYTE_GRAN,
       .base3 = 0
@@ -85,7 +84,7 @@ gdt_entry_t kernelGDT[8] = {
   }
 };
 
-struct IdtEntry kernelIDT[NUM_EXCEPTIONS + NUM_IRQS];
+struct IdtEntry kernel_idt[NUM_EXCEPTIONS + NUM_IRQS];
 
 alignas(PAGE_SIZE) struct TSS_Struct tss SECTION(".tss");
 

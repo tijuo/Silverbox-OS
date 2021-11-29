@@ -98,6 +98,6 @@
 
 #define IA32_APIC_BASE_MSR 0x1Bu
 
-extern uint32_t lapicPtr;
-extern uint32_t ioapicPtr;
+extern uint32_t lapic_ptr;
+extern uint32_t ioapic_ptr;
 #endif /* APIC_H */

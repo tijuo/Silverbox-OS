@@ -23,7 +23,12 @@ $(OUTPUT): $(ROOT_DIR)/lib/libc/libc.a $(ROOT_DIR)/lib/libos/libos_init.a \
 #	strip $(OUTPUT)
 
 install: $(EXE_NAME)
-	$(ROOT_DIR)/tools/copy_files.sh -d $(INSTALL_DIR) $(EXE_NAME)
+	~/mount_loop.sh
+	mount ~/os_disk
+	cp $(EXE_NAME) ~/os_disk/$(INSTALL_DIR) || umount ~/os_disk
+	umount ~/os_disk
+	losetup -d /dev/loop6
+	rm -f $(DISK_IMG).lock
 
 clean:
 	cargo clean

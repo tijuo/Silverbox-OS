@@ -3,6 +3,8 @@
 
 #include <types.h>
 #include <util.h>
+#include <kernel/mm.h>
+#include <kernel/debug.h>
 
 NON_NULL_PARAMS RETURNS_NON_NULL
 void* memcpy(void *restrict dest, const void *restrict src, size_t len);

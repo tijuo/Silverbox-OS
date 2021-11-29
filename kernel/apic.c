@@ -7,8 +7,8 @@ void send_apic_eoi(void);
 void init_apic_timer(void);
 void enable_apic(void);
 
-uint32_t lapicPtr;
-uint32_t ioapicPtr;
+uint32_t lapic_ptr;
+uint32_t ioapic_ptr;
 
 typedef volatile unsigned long int * apic_ptr_t;
 

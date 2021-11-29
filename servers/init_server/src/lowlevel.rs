@@ -477,9 +477,13 @@ pub unsafe fn map(root_map: Option<CPageMap>, vaddr: *mut c_void, paddr: PAddr, 
 pub unsafe fn map_frames(root_map: Option<CPageMap>, vaddr: *mut c_void, page_frames: &[PAddr],
                          flags: u32)
                          -> syscalls::Result<usize> {
+    let page_size: usize;
+
     let level = if is_flag_set!(flags, flags::mapping::PAGE_SIZED) {
+        page_size = PhysicalFrame::PSE_LARGE_PAGE_SIZE;
         1
     } else {
+        page_size = PhysicalFrame::SMALL_PAGE_SIZE;
         0
     };
 
@@ -487,13 +491,15 @@ pub unsafe fn map_frames(root_map: Option<CPageMap>, vaddr: *mut c_void, page_fr
     let mut count = 0;
 
     for c in page_frames.chunks(page_mappings.len()) {
+        let addr_start = vaddr.offset((count * page_size) as isize);
+
         for i in 0..c.len() {
             page_mappings[i] = PageMapping {
                 number: PhysicalFrame::new(c[i], FrameSize::Small).frame() as u32,
-                flags: flags | flags::mapping::ARRAY
+                flags: syscalls::flags::mapping::ARRAY,
             };
 
-            count += syscalls::sys_set_page_mappings(level, vaddr as *const c_void, root_map,
+            count += syscalls::sys_set_page_mappings(level, addr_start as *const c_void, root_map,
                                             &page_mappings[..c.len()])
                 .map_err(|e| if let SyscallError::PartiallyMapped(map_count)=e {
                     SyscallError::PartiallyMapped(map_count + count)

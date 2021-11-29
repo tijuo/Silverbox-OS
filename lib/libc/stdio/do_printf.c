@@ -43,9 +43,9 @@ struct PrintfState {
 
 int do_printf(void **s, int (*writeFunc)(int, void**), const char *formatStr,
               va_list args);
-void resetPrintfState(struct PrintfState *state);
+void reset_printf_state(struct PrintfState *state);
 
-void resetPrintfState(struct PrintfState *state) {
+void reset_printf_state(struct PrintfState *state) {
   memset(state, 0, sizeof *state);
   state->precision = -1;
 }
@@ -58,7 +58,7 @@ int do_printf(void **s, int (*writeFunc)(int, void**), const char *formatStr,
   size_t i;
   int charsWritten = 0;
 
-  resetPrintfState(&state);
+  reset_printf_state(&state);
 
   for(i = 0; formatStr[i]; i++) {
     if(state.inPercent) {
@@ -506,7 +506,7 @@ int do_printf(void **s, int (*writeFunc)(int, void**), const char *formatStr,
           }
         }
       }
-      resetPrintfState(&state);
+      reset_printf_state(&state);
     }
     else {
       switch(formatStr[i]) {
