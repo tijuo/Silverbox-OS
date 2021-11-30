@@ -22,12 +22,12 @@ static inline void ioWait(void) {
   unsigned int dummy;
 
   __asm__ __volatile__("cpuid" : "=a"(dummy): "a"(0) : "ebx","ecx","edx");
-  unsigned long long time1 = _rdtsc();
+  uint64_t time1 = _rdtsc();
 
 	while(1) {
 		__pause();
 	  __asm__ __volatile__("cpuid" : "=a"(dummy) : "a"(0) : "eax","ebx","ecx","edx");
-		unsigned long long time2 = _rdtsc();
+		uint64_t time2 = _rdtsc();
 
 		if(time2 < time1) {
 			time1 = time2;

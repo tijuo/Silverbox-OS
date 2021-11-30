@@ -1,31 +1,26 @@
-OUTPUT_FORMAT("elf32-i386")
+OUTPUT_FORMAT("elf64-x86-64")
 ENTRY(start)
 SECTIONS
 {
-  kphys_start = 0x00100000;
-  kvirt_low_mem_start = 0xF8000000;
-  kvirt_start = 0xF8100000;
+  kphys_start = 0x100000;
+  kvirt_low_mem_start = 0;
+  kvirt_start = 0x100000;
 
   .boot kphys_start : AT(kphys_start) ALIGN(4K) {
     KEEP(*(.header))
     kvirt_disc = .;
     kdcode = .;
     *(.dtext)
-    . = ALIGN(4);
     kddata = .;
     *(.ddata)
     . = ALIGN(4K);
     kdend = .;
   }
 
-  /* Note that this is the address of the bottom of the stack. */
-
   .text kvirt_start + SIZEOF(.boot) : AT(kphys_start + SIZEOF(.boot)) ALIGN(4K) {
      kcode = .;
      *(.text*)
-     . = ALIGN(4);
      *(.rodata*)
-     . = ALIGN(4);
      *(.debug*)
      . = ALIGN(4K);
      kcode_end = .;
@@ -54,7 +49,7 @@ SECTIONS
     kbss_end = .;
   }
 
-  .tcb : ALIGN(4M) {
+  .tcb : ALIGN(2M) {
     ktcb_start = .;
     tcb_table = .;
     *(.tcb)

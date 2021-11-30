@@ -112,8 +112,8 @@ NON_NULL_PARAMS int detach_receive_wait_queue(tcb_t *recipient) {
 // XXX: receive()s from that TID should result in E_INTERRUPT.
 NON_NULL_PARAMS
 int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid, tid_t replier_tid,
-                           uint32_t subject, uint32_t send_flags,
-                           uint32_t recv_flags, bool send_only)
+                           unsigned long int subject, unsigned long int send_flags,
+                           unsigned long int recv_flags, bool send_only)
 {
   tid_t sender_tid = get_tid(sender);
   tcb_t *recipient;
@@ -148,10 +148,10 @@ int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid, tid_t replier_
 
     start_thread(recipient);
 
-    recipient->user_exec_state.eax = E_OK;
-    recipient->user_exec_state.ebx = sender_tid;
-    recipient->user_exec_state.esi = subject;
-    recipient->user_exec_state.edi = send_flags;
+    recipient->user_exec_state.rax = E_OK;
+    recipient->user_exec_state.rbx = sender_tid;
+    recipient->user_exec_state.rsi = subject;
+    recipient->user_exec_state.rdi = send_flags;
 
     //kprintf("%d: Called %d with subject %d now waiting for response\n", getTid(sender), getTid(recipient), msg->subject);
     if(!send_only && IS_ERROR(receive_message(sender, replier_tid, recv_flags)))
@@ -173,7 +173,7 @@ int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid, tid_t replier_
     //kprintf("Waiting until recipient is read...\n");
 
     sender->wait_for_kernel_msg = !!is_kernel_message;
-    sender->user_exec_state.eax = E_INTERRUPT;
+    sender->user_exec_state.rax = E_INTERRUPT;
 
     // todo: Set a flag so that on receive(), it completes the sendAndReceive
     switch_context(schedule(get_current_processor()), 1);
@@ -198,7 +198,7 @@ int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid, tid_t replier_
  */
 
 NON_NULL_PARAMS
-int receive_message(tcb_t *recipient, tid_t sender_tid, uint32_t flags)
+int receive_message(tcb_t *recipient, tid_t sender_tid, unsigned long int flags)
 {
   tcb_t *sender = get_tcb(sender_tid);
   tid_t recipient_tid = get_tid(recipient);
@@ -231,11 +231,11 @@ int receive_message(tcb_t *recipient, tid_t sender_tid, uint32_t flags)
 
     sender->wait_for_kernel_msg = 0;
 
-    sender->user_exec_state.eax = E_OK;
-    recipient->user_exec_state.eax = E_OK;
-    recipient->user_exec_state.ebx = sender_tid;
-    recipient->user_exec_state.esi = sender->user_exec_state.esi; // sender flags
-    recipient->user_exec_state.edi = sender->user_exec_state.edi;
+    sender->user_exec_state.rax = E_OK;
+    recipient->user_exec_state.rax = E_OK;
+    recipient->user_exec_state.rbx = sender_tid;
+    recipient->user_exec_state.rsi = sender->user_exec_state.rsi; // sender flags
+    recipient->user_exec_state.rdi = sender->user_exec_state.rdi;
 
     //kprintf("%d is receiving message from %d subject %#x flags: %#x\n", recipient_tid, sender_tid, msg->subject, msg->flags);
 
@@ -256,7 +256,7 @@ int receive_message(tcb_t *recipient, tid_t sender_tid, uint32_t flags)
     attach_receive_wait_queue(recipient, sender_tid);
 
     recipient->wait_for_kernel_msg = !!is_kernel_message;
-    recipient->user_exec_state.eax = E_INTERRUPT;
+    recipient->user_exec_state.rax = E_INTERRUPT;
 
     // Receive will be completed when sender does a send
 

@@ -14,8 +14,8 @@
 
 #define TID_START           0u
 
-ALIGNED(PAGE_SIZE) uint8_t kernel_stack[PAGE_SIZE]; // The single kernel stack used by all threads (assumes a uniprocessor system)
-uint8_t *kernel_stack_top = kernel_stack + PAGE_SIZE;
+ALIGNED(PAGE_SIZE) uint8_t kernel_stack[4*PAGE_SIZE]; // The single kernel stack used by all threads (assumes a uniprocessor system)
+uint8_t *kernel_stack_top = kernel_stack + sizeof kernel_stack;
 
 SECTION(".tcb") tcb_t tcb_table[MAX_THREADS];
 tcb_t *init_server_thread;
@@ -146,7 +146,7 @@ NON_NULL_PARAMS tcb_t* create_thread(void *entry_addr, addr_t addr_space,
                                     void *stack_top)
 {
   tcb_t *thread = NULL;
-  uint32_t root_pmap =
+  paddr_t root_pmap =
       addr_space == CURRENT_ROOT_PMAP ? get_root_page_map() : addr_space;
 
   if(IS_ERROR(initialize_root_pmap(root_pmap)))
@@ -165,14 +165,14 @@ NON_NULL_PARAMS tcb_t* create_thread(void *entry_addr, addr_t addr_space,
   memset(thread, 0, sizeof(tcb_t));
   thread->root_pmap = (dword)root_pmap;
 
-  thread->user_exec_state.eflags = EFLAGS_IOPL3 | EFLAGS_IF;
-  thread->user_exec_state.eip = (dword)entry_addr;
+  thread->user_exec_state.rflags = RFLAGS_IOPL3 | RFLAGS_IF;
+  thread->user_exec_state.rip = (dword)entry_addr;
 
-  thread->user_exec_state.user_esp = (dword)stack_top;
+  thread->user_exec_state.rsp = (dword)stack_top;
   thread->user_exec_state.cs = UCODE_SEL;
   thread->user_exec_state.ds = UDATA_SEL;
   thread->user_exec_state.es = UDATA_SEL;
-  thread->user_exec_state.user_ss = UDATA_SEL;
+  thread->user_exec_state.ss = UDATA_SEL;
 
   thread->priority = NORMAL_PRIORITY;
 
@@ -234,7 +234,7 @@ NON_NULL_PARAMS int release_thread(tcb_t *thread) {
 
       if(t) {
         t->wait_tid = NULL_TID;
-        t->user_exec_state.eax = E_UNREACH;
+        t->user_exec_state.rax = E_UNREACH;
         kprintf("Releasing thread. Starting %u\n", get_tid(t));
         t->thread_state = READY;
       }
@@ -305,11 +305,11 @@ NON_NULL_PARAMS void switch_context(tcb_t *thread, int do_xsave) {
 
 // Restore user state
 
-  tss.esp0 = (uint32_t)((ExecutionState*)kernel_stack_top - 1) - sizeof(uint32_t);
-  uint32_t *s = (uint32_t*)tss.esp0;
-  ExecutionState *state = (ExecutionState*)(s + 1);
+  tss.rsp0 = (uint64_t)((exec_state_t*)kernel_stack_top - 1) - sizeof(uint64_t);
+  uint64_t *s = (uint64_t*)tss.rsp0;
+  exec_state_t *state = (exec_state_t*)(s + 1);
 
-  *s = (uint32_t)kernel_stack_top;
+  *s = (uint64_t)kernel_stack_top;
   *state = thread->user_exec_state;
 
   set_cr3(init_server_thread->root_pmap);

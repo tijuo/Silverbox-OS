@@ -205,19 +205,16 @@ void add_idt_entry(void (*f)(void), unsigned int entry_num, unsigned int dpl) {
   idt_entry_t *new_entry = &kernel_idt[entry_num];
 
   new_entry->offset_lower = (uint16_t)((uint32_t)f & 0xFFFFu);
-  new_entry->selector = KCODE_SEL;
+  new_entry->code_selector = KCODE_SEL;
   new_entry->_resd = 0;
-  new_entry->gate_type = I_INT;
-  new_entry->is_storage = 0;
-  new_entry->dpl = MIN(dpl, 3u);
-  new_entry->is_present = 1;
+  new_entry->flags = I_PRESENT | (MIN(dpl, 3) << I_DPL_BITS) | I_INT;
   new_entry->offset_upper = (uint16_t)((uint32_t)f >> 16);
 }
 
 void load_idt(void) {
-  struct IdtPointer idt_pointer = {
+  struct PseudoDescriptor idt_pointer = {
     .limit = KERNEL_IDT_LEN,
-    .base = (uint32_t)kernel_idt
+    .base = (uint64_t)kernel_idt
   };
 
   __asm__("lidt %0" :: "m"(idt_pointer) : "memory");
@@ -384,7 +381,6 @@ void init(multiboot_info_t *info) {
   if(IS_ERROR(init_memory(info)))
     stop_init("Unable to initialize memory.");
 
-  info = (multiboot_info_t*)KPHYS_TO_VIRT((addr_t)info);
   multiboot_info = info;
 
 #ifdef DEBUG
@@ -436,7 +432,7 @@ void init(multiboot_info_t *info) {
 
   // Initialize FPU to a known state
   __asm__("fninit\n"
-      "fxsave %0\n" :: "m"(init_server_thread->xsave_state));
+		  "fxsave %0\n" :: "m"(init_server_thread->xsave_state));
 
   // Set MSRs to enable sysenter/sysexit functionality
 

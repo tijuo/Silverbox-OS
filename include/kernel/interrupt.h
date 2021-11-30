@@ -13,15 +13,15 @@
 #define is_valid_irq(irq)		({ __typeof__ (irq) _irq=(irq); (_irq < NUM_IRQS); })
 
 struct CpuExInterruptFrame {
-  uint32_t ex_num;
-  uint32_t error_code;
-  uint32_t old_tss_esp0;
-  ExecutionState state;
+  unsigned long int ex_num;
+  unsigned long int error_code;
+  unsigned long int old_tss_esp0;
+  exec_state_t state;
 };
 
 struct IrqInterruptFrame {
-  uint32_t old_tss_esp0;
-  ExecutionState state;
+  unsigned long int old_tss_esp0;
+  exec_state_t state;
 };
 
 extern NAKED noreturn void cpu_ex0_handler(void);

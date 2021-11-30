@@ -7,13 +7,11 @@ SRC	:=list.c message.c syscall.c debug.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
 	apic.c init/init.c init/acpi.c init/loader.c init/libc.c \
 	init/memory.c
-ASM_SRC	=entry.S
-OBJ	:=$(SRC:%.c=%.o) $(ASM_SRC:%.S=%.o)
+ASM_SRC	=entry.asm
+OBJ	:=$(SRC:%.c=%.o) $(ASM_SRC:%.asm=%.o)
 BIN	:=kernel.elf
 BIN_GZ	:=kernel.gz
 CFLAGS  :=$(CFLAGS) -mpreferred-stack-boundary=4
-
-#CHECK_INC=/opt/cross/i686-elf/lib/gcc/i686-elf/12.0.0
 
 all: $(BIN_GZ) $(BIN).dmp $(BIN).sym $(BIN).bsym
 
@@ -26,8 +24,7 @@ $(BIN_GZ): $(BIN)
 
 check:
 	splint +gnuextensions -nolib -standard \
-	-I$(ROOT_DIR)/include #-I$(CHECK_INC)/include \
-#	-I$(CHECK_INC)/include-fixed *.c
+	-I$(ROOT_DIR)/include
 
 install: $(BIN_GZ)
 #	$(ROOT_DIR)/tools/copy_files.sh -d boot $<

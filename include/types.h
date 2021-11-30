@@ -1,15 +1,17 @@
 #ifndef TYPES_H
 #define TYPES_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <util.h>
 
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef uint64_t paddr_t;
 
 typedef uint8_t u8;
 typedef int8_t s8;
@@ -52,7 +54,7 @@ typedef unsigned short int pid_t;
 
 typedef unsigned long int pframe_t;
 
-// 288 bytes
+// 416 bytes
 
 typedef struct {
   uint16_t fcw;
@@ -85,23 +87,21 @@ typedef struct {
   struct XMM_Register {
     uint64_t low;
     uint64_t high;
-  } xmm[8];
+  } xmm[16];
 
-// Even though the area is reserved, the processor won't access the reserved bits in 32-bit mode
-/*
- uint8_t _resd12[176];
+
+ uint8_t _resd12[48];
  uint8_t available[48];
- */
 } xsave_state_t;
+
+#ifdef __cplusplus
+}
+#endif
 
 #define NULL_TID  		((tid_t)0)
 #define NULL_PID  		((pid_t)0)
 #define CURRENT_ROOT_PMAP   	~0ul
 #define INVALID_PFRAME		~0ul
-#ifndef __cplusplus
-/* typedef char _Bool; */
-
-#endif /* __cplusplus */
 
 #ifndef NULL
   #define NULL 0
@@ -115,8 +115,5 @@ typedef struct {
   #endif  /* __GNUC__ */
 #endif /* UNUSED_PARAM */
 
-#ifdef __cplusplus
-}
-#endif
 
-#endif
+#endif /* TYPES_H */

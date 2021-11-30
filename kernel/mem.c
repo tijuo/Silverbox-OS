@@ -8,120 +8,22 @@
 #include <kernel/memory.h>
 #include <stdalign.h>
 
-gdt_entry_t kernel_gdt[8] = {
-  // Null Descriptor (0x00)
-  {
-    .value = 0
-  },
-
-  // Kernel Code Descriptor (0x08)
-  {
-    {
-      .limit1 = 0xFFFFu,
-      .base1 = 0,
-      .base2 = 0,
-      .access_flags = GDT_READ | GDT_NONSYS | GDT_NONCONF | GDT_CODE | GDT_DPL0
-                     | GDT_PRESENT,
-      .limit2 = 0xFu,
-      .flags2 = GDT_PAGE_GRAN | GDT_BIG,
-      .base3 = 0
-    }
-  },
-
-  // Kernel Data Descriptor (0x10)
-  {
-    {
-      .limit1 = 0xFFFFu,
-      .base1 = 0,
-      .base2 = 0,
-      .access_flags = GDT_RDWR | GDT_NONSYS | GDT_EXPUP | GDT_DATA | GDT_DPL0
-                     | GDT_PRESENT,
-      .limit2 = 0xFu,
-      .flags2 = GDT_PAGE_GRAN | GDT_BIG,
-      .base3 = 0
-    }
-  },
-
-  // User Code Descriptor (0x1B)
-  {
-    {
-      .limit1 = 0xFFFFu,
-      .base1 = 0,
-      .base2 = 0,
-      .access_flags = GDT_READ | GDT_NONSYS | GDT_NONCONF | GDT_CODE | GDT_DPL3
-                     | GDT_PRESENT,
-      .limit2 = 0xFu,
-      .flags2 = GDT_PAGE_GRAN | GDT_BIG,
-      .base3 = 0
-    }
-  },
-
-  // User Data Descriptor (0x23)
-  {
-    {
-      .limit1 = 0xFFFFu,
-      .base1 = 0,
-      .base2 = 0,
-      .access_flags = GDT_RDWR | GDT_NONSYS | GDT_EXPUP | GDT_DATA | GDT_DPL3
-                     | GDT_PRESENT,
-      .limit2 = 0xFu,
-      .flags2 = GDT_PAGE_GRAN | GDT_BIG,
-      .base3 = 0
-    }
-  },
-
-  // TSS Descriptor (0x28)
-  {
-    {
-      .limit1 = 0,
-      .base1 = 0,
-      .base2 = 0,
-      .access_flags = GDT_SYS | GDT_TSS | GDT_DPL0 | GDT_PRESENT,
-      .limit2 = 0,
-      .flags2 = GDT_BYTE_GRAN,
-      .base3 = 0
-    }
-  }
-};
-
 struct IdtEntry kernel_idt[NUM_EXCEPTIONS + NUM_IRQS];
 
-alignas(PAGE_SIZE) struct TSS_Struct tss SECTION(".tss");
+alignas(PAGE_SIZE) struct tss_struct tss SECTION(".tss");
 
 NON_NULL_PARAMS RETURNS_NON_NULL
 void* memset(void *ptr, int value, size_t len)
 {
-  int dummy;
+  long int dummy;
+  long int dummy2;
 
-  if((unsigned char)value)
-    __asm__ __volatile__("rep stosb\n"
-                      : "=c"(dummy)
-                      : "a"((unsigned char)value), "c"(len), "D"(ptr)
-                      : "memory", "cc");
-  else {
-    char *p = (char*)ptr;
-
-    while(len && ((uintptr_t)p % 4)) {
-      *p++ = 0;
-      len--;
-    }
-
-    if(len) {
-      if(!(unsigned char)value)
-        __asm__ __volatile__("rep stosl\n"
-                          : "=c"(dummy)
-                          : "a"(0), "c"(len / 4), "D"(p)
-                          : "memory", "cc");
-
-      p += (len & ~0x03u);
-      len -= (len & ~0x03u);
-    }
-
-    while(len) {
-      *p++ = 0;
-      len--;
-    }
-  }
+  __asm__ __volatile__(
+	  "cld\n"
+	  "rep stosb\n"
+	  : "=c"(dummy), "D"(dummy2)
+	  : "a"((unsigned char)value), "c"(len), "D"(ptr)
+	  : "memory", "cc");
 
   return ptr;
 }
@@ -131,15 +33,16 @@ void* memset(void *ptr, int value, size_t len)
 NON_NULL_PARAMS RETURNS_NON_NULL
 void* memcpy(void *restrict dest, const void *restrict src, size_t num)
 {
-  char *d = (char*)dest;
-  const char *s = (const char*)src;
+  long int dummy;
+  long int dummy2;
+  long int dummy3;
 
-  while(num) {
-    *d = *s;
-    d++;
-    s++;
-    num--;
-  }
+  __asm__ __volatile__(
+	  "cld\n"
+	  "rep movsb\n"
+	  : "=c"(dummy), "D"(dummy2), "S"(dummy3)
+	  : "c"(len), "S"(src), "D"(dest)
+	  : "memory", "cc");
 
   return dest;
 }

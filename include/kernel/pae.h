@@ -1,4 +1,3 @@
-#if 0
 #ifndef KERNEL_PAE_H
 #define KERNEL_PAE_H
 
@@ -21,93 +20,98 @@
 
 #include <stdint.h>
 
-#define PAE_PRESENT         (1ull << 0)
-#define PAE_RW              (1ull << 1)
-#define PAE_US              (1ull << 2)
-#define PAE_PWT             (1ull << 3)
-#define PAE_PCD             (1ull << 4)
-#define PAE_ACCESSED        (1ull << 5)
-#define PAE_DIRTY           (1ull << 6)
-#define PAE_4K_PAT          (1ull << 7)
-#define PAE_PS              (1ull << 7)
-#define PAE_GLOBAL          (1ull << 8)
-#define PAE_2MB_PAT         (1ull << 12)
-#define PAE_XD              (1ull << 63)
+#define PAGE_BITS		12u
+#define PAGE_SIZE		(1ul << PAGE_BITS)
 
-#define LARGE_PAGE_SIZE     0x200000
-#define MAX_PHYS_ADDR_BITS  52
+/*
+ * CR3 contains the physical address of the PML4 table.
+ * * Page directories and page tables must be aligned to a 4-KiB boundary.
+ * * 2 MB pages must be aligned to a 2-MiB boundary.
+ * * 1 GiB pages must be aligned to a 1-GiB boundary.
+ *
+ * Only PDPTEs, PDEs, and PTEs that point to pages have dirty, global, and PAT bits.
+ */
 
-#define PDPTE_INDEX(addr)   (size_t)(((addr) >> 30) & 0x03)
-#define PDE_INDEX(addr)     (size_t)(((addr) >> 21) & 0x1FF)
-#define PTE_INDEX(addr)     (size_t)(((addr) >> 12)  & 0x1FF)
-#define PAGE_OFFSET(addr)   (size_t)(((addr) & 0x1FF)
+#define PAE_PRESENT         (1ul << 0)
+#define PAE_RW              (1ul << 1)
+#define PAE_US              (1ul << 2)
+#define PAE_PWT             (1ul << 3)
+#define PAE_PCD             (1ul << 4)
+#define PAE_ACCESSED        (1ul << 5)
+#define PAE_DIRTY           (1ul << 6)
+#define PAE_PTE_PAT			(1ul << 7)
+#define PAE_PS				(1ul << 7)
+#define PAE_GLOBAL          (1ul << 8)
+#define PAE_PDE_PAT         (1ul << 12)
+#define PAE_PDPTE_PAT		(1ul << 12)
+#define PAE_XD              (1ul << 63)	// EFER.NXE must be set for this bit to be valid
 
-#define INDEX_TO_ADDR(pdpte, pde, pte, offset)  (addr_t)((((pdpte) & 0x1FF) << 30) | (((pde) & 0x1FF) << 21) | (((pte) & 0x1FF) << 12) | (offset & 0xFFF))
+#define PAE_HUGE_PAGE_SIZE	(PAE_LARGE_PAGE_SIZE * PAE_PMAP_ENTRIES)
+#define PAE_LARGE_PAGE_SIZE	(PAGE_SIZE * PAE_PMAP_ENTRIES)
+#define MAX_PHYS_ADDR_BITS  52				// this value needs to be determined from cpuid
 
-typedef struct {
-  uint64_t present :1;
-  uint64_t rwPriv :1;
-  uint64_t usPriv :1;
-  uint64_t pwt :1;
-  uint64_t pcd :1;
-  uint64_t accessed :1;
-  uint64_t dirty :1;
-  uint64_t pat :1;
-  uint64_t global :1;
-  uint64_t available :3;
-  uint64_t base :40;
-  uint64_t _resd :11;
-  uint64_t noExec :1;
-} pte_t;
+#define PAE_ENTRY_BITS		9u
 
-typedef struct {
-  uint64_t present :1;
-  uint64_t rwPriv :1;
-  uint64_t usPriv :1;
-  uint64_t pwt :1;
-  uint64_t pcd :1;
-  uint64_t accessed :1;
-  uint64_t available :1;
-  uint64_t pageSize :1;
-  uint64_t available2 :4;
-  uint64_t base :40;
-  uint64_t _resd :11;
-  uint64_t noExec :1;
-} pde_t;
+#define PAE_PMAP_ENTRIES	(1u << PAE_ENTRY_BITS)
 
-typedef struct {
-  uint64_t present :1;
-  uint64_t rwPriv :1;
-  uint64_t usPriv :1;
-  uint64_t pwt :1;
-  uint64_t pcd :1;
-  uint64_t accessed :1;
-  uint64_t available :1;
-  uint64_t pageSize :1;
-  uint64_t global :1;
-  uint64_t available2 :3;
-  uint64_t pat :1;
-  uint64_t _resd :8;
-  uint64_t base :31;
-  uint64_t _resd2 :11;
-  uint64_t noExec :1;
-} large_pde_t;
+#define PML4_INDEX(addr)	(size_t)(((addr) >> (PAGE_BITS + 3*PAGE_ENTRY_BITS)) % PAE_PMAP_ENTRIES)
+#define PDPTE_INDEX(addr)   (size_t)(((addr) >> (PAGE_BITS + 2*PAGE_ENTRY_BITS)) % PAE_PMAP_ENTRIES)
+#define PDE_INDEX(addr)     (size_t)(((addr) >> (PAGE_BITS + PAGE_ENTRY_BITS)) % PAE_PMAP_ENTRIES)
+#define PTE_INDEX(addr)     (size_t)(((addr) >> PAGE_BITS) % PAE_PMAP_ENTRIES)
+#define PAGE_OFFSET(addr)   (size_t)(((addr) % PAGE_SIZE)
 
-typedef struct {
-  uint64_t present :1;
-  uint64_t _resd :2;
-  uint64_t pwt :1;
-  uint64_t pcd :1;
-  uint64_t _resd2 :4;
-  uint64_t available2 :3;
-  uint64_t base :40;
-  uint64_t _resd :12;
-} pdpte_t;
+#define INDEX_TO_ADDR(pml4e, pdpte, pde, pte, offset)	\
+  (addr_t)((((pml4e) % PAE_PMAP_ENTRIES) << (PAGE_BITS + 3*PAE_ENTRY_BITS)) \
+      | (((pdpte) % PAE_PMAP_ENTRIES) << (PAGE_BITS + 2*PAE_ENTRY_BITS)) \
+	  | (((pde) % PAE_PMAP_ENTRIES) << (PAGE_BITS + PAE_ENTRY_BITS)) \
+	  | (((pte) % PAE_PMAP_ENTRIES) << PAGE_BITS) | (offset % PAGE_SIZE))
 
-typedef struct {
-  uint32_t _resd :5;
-  uint32_t base :27;
-} cr3_t;
+#define CR3_BASE_MASK		0xFFFFFFFFFFFFF000ul
+
+typedef uint64_t pmap_entry_t;
+
+static inline void set_pte_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr-1);
+}
+
+static inline void set_pde_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr-1);
+}
+
+static inline void set_pdpte_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr-1);
+}
+
+static inline void set_large_pde_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAE_LARGE_PAGE_SIZE-1) & (max_phys_addr-1);
+}
+
+static inline void set_huge_pdpte_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAE_HUGE_PAGE_SIZE-1) & (max_phys_addr-1);
+}
+
+static inline paddr_t get_pte_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr-1));
+}
+
+static inline paddr_t get_pde_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr-1));
+}
+
+static inline paddr_t get_pdpte_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr-1));
+}
+
+static inline paddr_t get_large_pde_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAE_LARGE_PAGE_SIZE-1) & (max_phys_addr-1));
+}
+
+static inline paddr_t get_huge_pde_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAE_HUGE_PAGE_SIZE-1) & (max_phys_addr-1));
+}
+
+extern paddr_t max_phys_addr;
+extern int is_1gb_pages_supported;
+extern unsigned int num_paging_levels;
 
 #endif /* KERNEL_PAE_H */
-#endif /* 0 */

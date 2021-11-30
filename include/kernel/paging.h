@@ -1,3 +1,4 @@
+
 #ifndef PAGING_H
 #define PAGING_H
 
@@ -5,6 +6,33 @@
 #include <kernel/error.h>
 #include <stdint.h>
 
+/**
+ Flushes the entire TLB by reloading the CR3 register.
+
+ This must be done when switching to a new address space.
+ If only a few entries need to be flushed, use invalidatePage().
+ */
+
+static inline void invalidate_tlb(void) {
+  set_cr3(get_cr3());
+}
+
+/**
+ Flushes a single page from the TLB.
+
+ Instead of flushing the entire TLB, only a single page is flushed.
+ This is faster than reload_cr3() for flushing a few entries.
+ */
+
+static inline void invalidate_page(addr_t virt) {
+  __asm__ __volatile__( "invlpg (%0)\n" :: "r"( virt ) : "memory" );
+}
+
+static inline paddr_t get_root_page_map(void) {
+  return (paddr_t)(get_cr3() & CR3_BASE_MASK);
+}
+
+#if 0
 #define MAX_PHYS_MEMORY           0x10000000000ull
 
 #define PAGE_SIZE		            	0x1000u
@@ -311,3 +339,4 @@ static inline void set_large_pde_base(large_pde_t *large_pde, pframe_t pframe)
 }
 
 #endif /* PAGING_H */
+#endif /* 0 */

@@ -7,28 +7,31 @@
 #include <os/msg/kernel.h>
 
 NON_NULL_PARAMS
-int receive_message(tcb_t *recipient, tid_t sender_tid, uint32_t flags);
+int receive_message(tcb_t *recipient, tid_t sender_tid, unsigned long int flags);
 
 NON_NULL_PARAMS
-int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid, tid_t replier_tid,
-                           uint32_t subject, uint32_t send_flags,
-                           uint32_t recv_flags, bool send_only);
+int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid,
+							  tid_t replier_tid, unsigned long int subject,
+							  unsigned long int send_flags,
+							  unsigned long int recv_flags, bool send_only);
 
 NON_NULL_PARAMS
 static inline int send_message(tcb_t *sender, tid_t recipient_tid,
-                              uint32_t subject, uint32_t flags)
+							   uint32_t subject, unsigned long int flags)
 {
-  return _send_and_receive_message(sender, recipient_tid, NULL_TID, subject, flags,
-                                0, true);
+  return _send_and_receive_message(sender, recipient_tid, NULL_TID, subject,
+								   flags, 0, true);
 }
 
 NON_NULL_PARAMS
 static inline int send_and_receive_message(tcb_t *sender, tid_t recipient_tid,
-                                        tid_t replier_tid, uint32_t subject,
-                                        uint32_t send_flags, uint32_t recv_flags)
+										   tid_t replier_tid,
+										   unsigned long int subject,
+										   unsigned long int send_flags,
+										   unsigned long int recv_flags)
 {
   return _send_and_receive_message(sender, recipient_tid, replier_tid, subject,
-                                send_flags, recv_flags, false);
+								   send_flags, recv_flags, false);
 }
 
 NON_NULL_PARAMS

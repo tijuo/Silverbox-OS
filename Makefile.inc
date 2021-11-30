@@ -1,24 +1,26 @@
 .PHONY:	all clean
+.SUFFIXES: .asm
 
 export RELEASE		=
 export SHELL		:=/bin/bash
 export ROOT_DIR		=$(CURDIR)/$(ROOT_PATH)
 export BUILD_DIR	=$(ROOT_DIR)/build
 export BIN_DIR		=$(ROOT_DIR)/bin
-export TARGET		:=i686-elf
+export TARGET		:=x86_64-elf
 export CC		:=$(TARGET)-gcc
 export LD		:=$(TARGET)-ld
 export AR		:=$(TARGET)-ar
 export ASFLAGS		=-I$(ROOT_DIR)/include \
-			-Wa,-I$(ROOT_DIR)/include,--32
+			-Wa,-I$(ROOT_DIR)/include,--64
 export DEPEND		:=makedepend
 export DD		:=dd
 export EN_DEBUG		:=$(if $(RELEASE),,-DDEBUG -g)
 export OPT_LEVEL	:=$(if $(RELEASE),2,0)
-export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
+export CFLAGS	=-m64 -I$(ROOT_DIR)/include -std=gnu11 \
 	     	-fno-leading-underscore -ffreestanding \
 		-fno-stack-protector -fno-stack-check \
-		-fno-asynchronous-unwind-tables -march=pentium4 \
+		-fno-asynchronous-unwind-tables \
+		-mno-red-zone \
 		$(if $(RELEASE),,-DDEBUG -ggdb) \
 		-O$(OPT_LEVEL) -Wall -Wextra -Wshadow \
 		-Wpointer-arith -Wsign-compare -Wsystem-headers \
@@ -43,6 +45,9 @@ TESTDIR		:=test
 
 %.o: %.S $(DEPDIR)/%.d | $(DEPDIR)
 	$(CC) -c $(DEPFLAGS) $(ASFLAGS) $< -o $@
+
+%.o: %.asm
+	nasm -f elf64 $< -o $@
 
 %.dmp: %
 	objdump -Dx $< > $@

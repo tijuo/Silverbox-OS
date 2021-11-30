@@ -12,15 +12,23 @@
 
 struct ExceptionMessage
 {
-  uint32_t eax;
-  uint32_t ebx;
-  uint32_t ecx;
-  uint32_t edx;
+  uint64_t rax;
+  uint64_t rbx;
+  uint64_t rcx;
+  uint64_t rdx;
+  uint64_t rsi;
+  uint64_t rdi;
+  uint64_t rbp;
+  uint64_t rsp;
 
-  uint32_t esi;
-  uint32_t edi;
-  uint32_t ebp;
-  uint32_t esp;
+  uint64_t r8;
+  uint64_t r9;
+  uint64_t r10;
+  uint64_t r11;
+  uint64_t r12;
+  uint64_t r13;
+  uint64_t r14;
+  uint64_t r15;
 
   uint16_t cs;
   uint16_t ds;
@@ -28,18 +36,21 @@ struct ExceptionMessage
   uint16_t fs;
   uint16_t gs;
   uint16_t ss;
-  uint32_t eflags;
-
-  uint32_t cr0;
-  uint32_t cr2;
-  uint32_t cr3;
-  uint32_t cr4;
-
-  uint32_t eip;
-  uint32_t error_code;
   uint8_t fault_num;
   uint8_t processor_id;
   tid_t who;
+
+  uint64_t cr0;
+  uint64_t cr2;
+
+  uint64_t cr3;
+  uint64_t cr4;
+
+  uint64_t cr8;
+  uint64_t rip;
+
+  uint64_t error_code;
+  uint64_t rflags;
 };
 
 struct ExitMessage

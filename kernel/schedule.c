@@ -50,7 +50,7 @@ tcb_t* schedule(proc_id_t processor_id)
  @param The saved execution state of the processor.
  */
 
-NON_NULL_PARAMS void switch_stacks(ExecutionState *state) {
+NON_NULL_PARAMS void switch_stacks(exec_state_t *state) {
   tcb_t *old_tcb = get_current_thread();
 
   if(!old_tcb || old_tcb->thread_state != RUNNING) {
