@@ -3,6 +3,7 @@
 
 #include <types.h>
 #include <kernel/bits.h>
+#include <os/exec_state.h>
 
 #define MODE_BIT_WIDTH      64u
 
@@ -70,7 +71,7 @@
 
 #define IRQ_BASE	0x20u
 
-#define IRQ(num) (IRQ_BASE + (uint8_t)num)
+#define IRQ(num) (IRQ_BASE + (num))
 
 #define RFLAGS_DEFAULT	0x02u
 #define RFLAGS_CF	(1u << 0)
@@ -126,6 +127,10 @@
 #define SYSENTER_ESP_MSR    0x175u
 #define SYSENTER_EIP_MSR    0x176u
 
+#define SYSCALL_FMASK_MSR	0xC0000084
+#define SYSCALL_STAR_MSR	0xC0000081
+#define SYSCALL_LSTAR_MSR	0xC0000082
+
 #define enable_int()     __asm__ __volatile__("sti" ::: "cc")
 #define disable_int()   __asm__ __volatile__("cli" ::: "cc")
 #define halt()          __asm__ __volatile__("hlt")
@@ -165,38 +170,9 @@ struct tss_struct {
   uint16_t _resd4;
   uint16_t io_map_base;
   uint8_t tss_io_bitmap[8192];
-};
+} PACKED;
 
-_Static_assert(sizeof(gdt_entry_t) == 104+8192, "tss_struct should be 8296 bytes");
-
-// 168 bytes
-
-typedef struct {
-  uint16_t gs;
-  uint16_t fs;
-  uint16_t es;
-  uint16_t ds;
-  uint64_t r15;
-  uint64_t r14;
-  uint64_t r13;
-  uint64_t r12;
-  uint64_t r11;
-  uint64_t r10;
-  uint64_t r9;
-  uint64_t r8;
-  uint64_t rdi;
-  uint64_t rsi;
-  uint64_t rbp;
-  uint64_t rdx;
-  uint64_t rcx;
-  uint64_t rbx;
-  uint64_t rax;
-  uint64_t rip;
-  uint64_t cs;
-  uint64_t rflags;
-  uint64_t rsp;
-  uint64_t ss;
-} exec_state_t;
+_Static_assert(sizeof(struct tss_struct) == 104+8192, "tss_struct should be 8296 bytes");
 
 union GdtEntry {
   struct {
@@ -215,6 +191,28 @@ union GdtEntry {
 typedef union GdtEntry gdt_entry_t;
 
 _Static_assert(sizeof(gdt_entry_t) == 8, "GDTEntry should be 8 bytes");
+
+union tss64_descriptor {
+  struct {
+	uint16_t limit1;
+	uint16_t base1;
+	uint8_t base2;
+	uint8_t access_flags;
+	uint8_t limit2 :4;
+	uint8_t flags2 :4;
+	uint8_t base3;
+	uint32_t base4;
+	uint32_t _resd;
+  };
+
+  struct {
+	uint64_t values[2];
+  };
+};
+
+typedef union tss64_descriptor tss64_entry_t;
+
+_Static_assert(sizeof(tss64_entry_t) == 16, "tss64_entry_t should be 16 bytes");
 
 struct pseudo_descriptor {
   uint16_t limit;
@@ -255,13 +253,13 @@ static inline void set_cr4(uint64_t new_cr4) {
   __asm__("mov %0, %%cr4" :: "r"(new_cr4));
 }
 
-static inline void set_cr4(uint64_t new_cr8) {
-  __asm__("mov %0, %%cr4" :: "r"(new_cr8));
+static inline void set_cr8(uint64_t new_cr8) {
+  __asm__("mov %0, %%cr8" :: "r"(new_cr8));
 }
 
 static inline void set_rflags(uint64_t new_rflags) {
   __asm__("push %0\n"
-	      "popfq\n" :: "r"(new_rflags) : "cc");
+	  "popfq\n" :: "r"(new_rflags) : "cc");
 }
 
 static inline uint64_t get_cr0(void) {
@@ -303,7 +301,7 @@ static inline uint64_t get_rflags(void) {
   uint64_t rflags;
 
   __asm__("pushfq\n"
-		  "pop %0\n" : "=r"(eflags));
+	  "pop %0\n" : "=r"(rflags));
 
   return rflags;
 }
@@ -350,9 +348,9 @@ static inline uint16_t get_ss(void) {
 
 static inline void set_cs(uint16_t cs) {
   __asm__("pushq %0\n"
-		  "pushq $1f\n"
-		  "retfq\n"
-		  "1:\n" :: "r"(cs) : "memory");
+	  "pushq $1f\n"
+	  "retfq\n"
+	  "1:\n" :: "r"(cs) : "memory");
 }
 
 static inline void set_ds(uint16_t ds) {
@@ -451,7 +449,7 @@ __asm__ ( \
           "mov %%ds, %%ax\n" \
           "shl $16, %%rax\n" \
           "mov %%es, %%ax\n" \
-          "shl $16, %%rax" \
+          "shl $16, %%rax\n" \
           "mov %%fs, %%ax\n" \
           "shl $16, %%rax\n" \
           "mov %%gs, %%ax\n" \
@@ -495,7 +493,7 @@ __asm__ ( \
           "mov %%ds, %%ax\n" \
           "shl $16, %%rax\n" \
           "mov %%es, %%ax\n" \
-          "shl $16, %%rax" \
+          "shl $16, %%rax\n" \
           "mov %%fs, %%ax\n" \
           "shl $16, %%rax\n" \
           "mov %%gs, %%ax\n" \
@@ -516,7 +514,7 @@ __asm__ ( \
           "mov %%rsp, (%%rax)\n" \
           "1:\n" \
           "push %%rbx\n" \
-          ::: "rax", "rcx", "rdx", "memory", "cc" \
+          ::: "rax", "rbx", "rcx", "memory", "cc" \
 )
 
 #define RESTORE_STATE \

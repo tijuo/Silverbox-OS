@@ -176,7 +176,7 @@ int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid, tid_t replier_
     sender->user_exec_state.rax = E_INTERRUPT;
 
     // todo: Set a flag so that on receive(), it completes the sendAndReceive
-    switch_context(schedule(get_current_processor()), 1);
+    switch_context(schedule(get_current_processor()));
 
     // Does not return
   }
@@ -239,9 +239,7 @@ int receive_message(tcb_t *recipient, tid_t sender_tid, unsigned long int flags)
 
     //kprintf("%d is receiving message from %d subject %#x flags: %#x\n", recipient_tid, sender_tid, msg->subject, msg->flags);
 
-    __asm__("fxrstor %0\n" :: "m"(sender->xsave_state));
-
-    switch_context(recipient, 0); // don't use sysexit. do an iret instead so that args are restored
+    switch_context(recipient); // don't use sysexit. do an iret instead so that args are restored
     // Does not return
   }
   else if(IS_FLAG_SET(flags, MSG_NOBLOCK))
@@ -260,7 +258,7 @@ int receive_message(tcb_t *recipient, tid_t sender_tid, unsigned long int flags)
 
     // Receive will be completed when sender does a send
 
-    switch_context(schedule(get_current_processor()), 1);
+    switch_context(schedule(get_current_processor()));
   }
 
   RET_MSG(E_FAIL, "This should never happen.");

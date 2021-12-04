@@ -5,6 +5,6 @@
 #include <util.h>
 #include <stdnoreturn.h>
 
-extern noreturn NAKED void sysenter_entry(void);
+extern noreturn NAKED void syscall_entry(void);
 
 #endif /* KERNEL_SYSCALL_H */

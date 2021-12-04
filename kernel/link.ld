@@ -22,6 +22,8 @@ SECTIONS
      *(.text*)
      *(.rodata*)
      *(.debug*)
+     *(.interp*)
+     *(.rela*)
      . = ALIGN(4K);
      kcode_end = .;
   }
@@ -30,12 +32,21 @@ SECTIONS
      kdata = .;
 
      ksize = .;
-     LONG(SIZEOF(.text) + SIZEOF(.data) + SIZEOF(.bss));
+     QUAD(SIZEOF(.text) + SIZEOF(.data) + SIZEOF(.bss));
      ktcb_table_size = .;
-     LONG(SIZEOF(.tcb));
+     QUAD(SIZEOF(.tcb));
 
      *(.data*)
      . = ALIGN(4K);
+     *(.dynamic*)
+     *(.dynstr*)
+     *(.dynsym*)
+     *(.got*)
+     *(.rel*)
+     *(.shstrtab*)
+     *(.strtab*)
+     *(.symtab*)
+     *(.hash*)
      *(.tss)
      . = ALIGN(4K);
      kdata_end = .;

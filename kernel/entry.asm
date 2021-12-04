@@ -1,6 +1,6 @@
 [BITS 32]
 
-[extern main]
+[extern init]
 [global boot_stack_top]
 [global start]
 [global kernel_gdt]
@@ -32,19 +32,19 @@ MB2_END_TYPE		equ 0
 CPUID_EDX_MSR			equ (1 << 5)
 CPUID_EDX_PAE			equ (1 << 6)
 CPUID_EDX_APIC			equ (1 << 9)
-CPUID_EDX_SEP			equ (1 << 10)
+CPUID_EDX_SEP			equ (1 << 11)
 CPUID_EDX_PGE			equ (1 << 13)
 CPUID_EDX_FXSR			equ (1 << 24)
 CPUID_EDX_SSE			equ (1 << 25)
 CPUID_EDX_SSE2			equ (1 << 26)
 
-CPUID_EDX				equ CPUID_EDX_MSR | CPUID_EDX_PAE | CPUID_EDX_APIC | CPUID_EDX_SEP | CPUID_EDX_PGE | CPUID_EDX_FXSR | CPUID_EDX_SSE | CPUID_EDX_SSE2
+CPUID_EDX			equ CPUID_EDX_MSR | CPUID_EDX_PAE | CPUID_EDX_APIC | CPUID_EDX_SEP | CPUID_EDX_PGE | CPUID_EDX_FXSR | CPUID_EDX_SSE | CPUID_EDX_SSE2
 
 CPUID_ECX_SSE3			equ (1 << 0)
 
 CPUID_SYSCALL			equ (1 << 11)
-CPUID_NX				equ (1 << 20)
-CPUID_1GB				equ (1 << 26)
+CPUID_NX			equ (1 << 20)
+CPUID_1GB			equ (1 << 26)
 CPUID_LONG_MODE			equ (1 << 29)
 
 CPUID_MAX_PADDR_MASK	equ 0xFF
@@ -114,68 +114,49 @@ start:
 ; Save multiboot2 header
 
   cmp eax, MB2_LOADER_MAGIC
-  jne stop_init
+  jne stop_init.bad_multiboot2
 
   push ebx
 
 ; Check for needed CPUID features
 
+; Determine whether this processor is a pentium 4 or newer
+
   mov eax, 0
   cpuid
 
   cmp eax, 5
-  jl $stop_init.missing_cpuid
+  jl $stop_init.old_processor
 
   mov eax, 0x80000000
   cpuid
 
   cmp eax, 0x80000008
-  jl $stop_init.missing_cpuid
+  jl $stop_init.old_processor
+
+; Check for needed cpuid features
 
   mov eax, 1
   cpuid
 
+  not edx
   test edx, CPUID_EDX
-  jne $stop_init.missing_cpuid
+  jnz $stop_init.old_processor
 
+  not ecx
   test ecx, CPUID_ECX_SSE3
-  jne $stop_init.missing_cpuid
-
-  ; Test for syscall/sysret and NX bit
+  jnz $stop_init.old_processor
 
   mov eax, 0x80000001
   cpuid
 
-  test eax, CPUID_SYSCALL | CPUID_NX | CPUID_LONG_MODE
-  jne $stop_init.missing_cpuid
-
-  ; Determine if 1 GB pages are supported
-
-  test eax, CPUID_1GB
-  sete byte [is_1gb_pages_supported]
-
-  ; Get the maximum physical address bits from CPUID
-
-  mov eax, 0x80000008
-  cpuid
-
-  cmp al, 32
-  jl $stop_init.missing_cpuid
-
-  sub al, 32
-
-  mov edx, 1
-  mov cl, al
-  shr edx, cl
-
-  lea ebx, [max_phys_addr]
-  mov dword [ebx], 0
-  mov [ebx+4], edx
+  test edx, CPUID_LONG_MODE
+  jz $stop_init.long_mode_missing
 
 ; Load gdt and set data segment selectors to known values
 
   push dword $kernel_gdt
-  push dword (0x20 << 16)
+  push dword (0x30 << 16)
   lgdt [esp+2]
 
   add esp, 8
@@ -254,10 +235,34 @@ stop_init:
   push dword $init_error_msg
   jmp .print
 
-.missing_cpuid:
+.low_bits:
   push dword 0
   push dword 0
-  push dword $missing_cpuid_msg
+  push dword $low_bits_msg
+  jmp .print
+
+.long_mode_missing:
+  push dword 0
+  push dword 0
+  push dword $long_mode_missing_msg
+  jmp .print
+
+.syscall_missing:
+  push dword 0
+  push dword 0
+  push dword $syscall_missing_msg
+  jmp .print
+
+.nx_bit_missing:
+  push dword 0
+  push dword 0
+  push dword $nx_bit_missing_msg
+  jmp .print
+
+.old_processor:
+  push dword 0
+  push dword 0
+  push dword $old_processor_msg
 
 .print:
   call print_message
@@ -288,7 +293,7 @@ print_message:
 
 .count_str_bytes:
   scasb
-  jnz .print_msg
+  je .print_msg
   jmp .count_str_bytes
 
 .print_msg:
@@ -318,13 +323,58 @@ print_message:
   leave
   ret
 
-init_error_msg: db "Invalid multiboot2 magic. System halted.", 0
-missing_cpuid_msg: db "Missing CPU features.", 0
+init_error_msg: db "Error: Invalid multiboot2 magic.", 0
+old_processor_msg: db "Error: Processor must be a Pentium 4 Prescott or newer.", 0
+low_bits_msg: db "Error: Processor should support at least 1 TiB of physical memory.", 0
+long_mode_missing_msg: db "Error: Processor doesn't support 64-bit mode.", 0
+syscall_missing_msg: db "Error: Processor doesn't support SYSCALL/SYSRET instrutions.", 0
+nx_bit_missing_msg: db "Error: Processor doesn't support NX bit.", 0
 
 [BITS 64]
 
 reload_cs2:
-  mov rax, $main
+  ; Test for syscall/sysret and NX bit
+
+  mov eax, 0x80000001
+  cpuid
+
+  ; Determine if 1 GB pages are supported
+
+  test edx, CPUID_1GB
+  setnz byte [is_1gb_pages_supported]
+
+  test edx, CPUID_NX
+  jnz .test_syscall
+  push dword 0x28
+  push dword stop_init.syscall_missing
+  retf
+
+.test_syscall:
+  test edx, CPUID_SYSCALL
+  jnz .get_max_bits
+  push dword 0x28
+  push dword stop_init.syscall_missing
+  retf
+
+  ; Get the maximum physical address bits from CPUID
+
+.get_max_bits:
+  mov eax, 0x80000008
+  cpuid
+
+  cmp al, 40
+  jb $stop_init.low_bits
+
+  mov rdx, 1
+  mov cl, al
+  shl rdx, cl
+  dec rbx
+
+  lea rbx, [max_phys_addr]
+  mov [rbx], rdx
+
+  add rsp, 16
+  mov rax, $init
   jmp rax
 
 [section .bdata]
@@ -359,4 +409,4 @@ kernel_gdt:
   dq 0x00AFF8000000FFFF ; 64-bit user code
   dq 0x00CFF2000000FFFF ; User data
   dq 0x00CF98000000FFFF ; 32-bit boot code
-
+  dq 0

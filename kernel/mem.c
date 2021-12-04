@@ -8,8 +8,6 @@
 #include <kernel/memory.h>
 #include <stdalign.h>
 
-struct IdtEntry kernel_idt[NUM_EXCEPTIONS + NUM_IRQS];
-
 alignas(PAGE_SIZE) struct tss_struct tss SECTION(".tss");
 
 NON_NULL_PARAMS RETURNS_NON_NULL
@@ -21,7 +19,7 @@ void* memset(void *ptr, int value, size_t len)
   __asm__ __volatile__(
 	  "cld\n"
 	  "rep stosb\n"
-	  : "=c"(dummy), "D"(dummy2)
+	  : "=c"(dummy), "=D"(dummy2)
 	  : "a"((unsigned char)value), "c"(len), "D"(ptr)
 	  : "memory", "cc");
 
@@ -31,7 +29,7 @@ void* memset(void *ptr, int value, size_t len)
 // XXX: Assumes that the memory regions don't overlap
 
 NON_NULL_PARAMS RETURNS_NON_NULL
-void* memcpy(void *restrict dest, const void *restrict src, size_t num)
+void* memcpy(void *restrict dest, const void *restrict src, size_t len)
 {
   long int dummy;
   long int dummy2;
@@ -40,7 +38,7 @@ void* memcpy(void *restrict dest, const void *restrict src, size_t num)
   __asm__ __volatile__(
 	  "cld\n"
 	  "rep movsb\n"
-	  : "=c"(dummy), "D"(dummy2), "S"(dummy3)
+	  : "=c"(dummy), "=D"(dummy2), "=S"(dummy3)
 	  : "c"(len), "S"(src), "D"(dest)
 	  : "memory", "cc");
 

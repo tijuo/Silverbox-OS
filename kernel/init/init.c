@@ -5,7 +5,7 @@
 #include <kernel/debug.h>
 #include <kernel/mm.h>
 #include <kernel/schedule.h>
-#include <kernel/paging.h>
+#include <kernel/pae.h>
 #include <kernel/memory.h>
 #include <kernel/mm.h>
 #include <oslib.h>
@@ -22,23 +22,9 @@
 #include <kernel/pic.h>
 #include <os/io.h>
 #include "init.h"
+#include <kernel/multiboot2.h>
 
-#define KERNEL_IDT_LEN	(64 * sizeof(struct IdtEntry))
-
-DISC_DATA const char *MB_INFO_NAMES[] = {
-  "MEM",
-  "BOOT_DEV",
-  "CMDLINE",
-  "MODS",
-  "SYMTAB",
-  "SHDR",
-  "MMAP",
-  "DRIVES",
-  "CONFIG",
-  "BOOTLDR",
-  "APM_TAB",
-  "GFX_TAB"
-};
+#define KERNEL_IDT_LEN	(64 * sizeof(union idt_entry))
 
 DISC_DATA const char *FEATURES_STR[32] = {
   "fpu",
@@ -76,7 +62,7 @@ DISC_DATA const char *FEATURES_STR[32] = {
 };
 
 DISC_DATA const char *FEATURES_STR2[32] = {
-  "sse",
+  "sse3",
   "pclmulqdq",
   "dtes64",
   "monitor",
@@ -117,49 +103,44 @@ DISC_DATA const char *PROCESSOR_TYPE[4] = {
   "???"
 };
 
-DISC_CODE static void disable_irq(unsigned int irq);
+DISC_CODE static void disable_pics(void);
 
 DISC_DATA ALIGNED(PAGE_SIZE) uint8_t kboot_stack[4 * PAGE_SIZE];
 DISC_DATA void *kboot_stack_top = kboot_stack + sizeof kboot_stack;
 
 extern idt_entry_t kernel_idt[NUM_EXCEPTIONS + NUM_IRQS];
 
-extern uint8_t *kernel_stack_top;
-
 DISC_CODE static void init_interrupts(void);
 //DISC_CODE static void initTimer( void ));
 
 DISC_CODE static void stop_init(const char*);
-DISC_CODE void init(multiboot_info_t*);
+DISC_CODE void init(const struct multiboot_info_header*);
 //DISC_CODE static void initPIC( void ));
 
-DISC_CODE void add_idt_entry(void (*f)(void), unsigned int entry_num,
-                           unsigned int dpl);
+DISC_CODE void add_idt_entry(void (*f)(void), int entry_num, int dpl);
 DISC_CODE void load_idt(void);
 
 DISC_DATA static void (*CPU_EX_ISRS[NUM_EXCEPTIONS])(
-    void) = {
-      cpu_ex0_handler, cpu_ex1_handler, cpu_ex2_handler, cpu_ex3_handler, cpu_ex4_handler, cpu_ex5_handler,
-      cpu_ex6_handler, cpu_ex7_handler, cpu_ex8_handler, cpu_ex9_handler, cpu_ex10_handler, cpu_ex11_handler,
-      cpu_ex12_handler, cpu_ex13_handler, cpu_ex14_handler, cpu_ex15_handler, cpu_ex16_handler, cpu_ex17_handler,
-      cpu_ex18_handler, cpu_ex19_handler, cpu_ex20_handler, cpu_ex21_handler, cpu_ex22_handler, cpu_ex23_handler,
-      cpu_ex24_handler, cpu_ex25_handler, cpu_ex26_handler, cpu_ex27_handler, cpu_ex28_handler, cpu_ex29_handler,
-      cpu_ex30_handler, cpu_ex31_handler
+	void) = {
+	  cpu_ex0_handler, cpu_ex1_handler, cpu_ex2_handler, cpu_ex3_handler, cpu_ex4_handler, cpu_ex5_handler,
+	  cpu_ex6_handler, cpu_ex7_handler, cpu_ex8_handler, cpu_ex9_handler, cpu_ex10_handler, cpu_ex11_handler,
+	  cpu_ex12_handler, cpu_ex13_handler, cpu_ex14_handler, cpu_ex15_handler, cpu_ex16_handler, cpu_ex17_handler,
+	  cpu_ex18_handler, cpu_ex19_handler, cpu_ex20_handler, cpu_ex21_handler, cpu_ex22_handler, cpu_ex23_handler,
+	  cpu_ex24_handler, cpu_ex25_handler, cpu_ex26_handler, cpu_ex27_handler, cpu_ex28_handler, cpu_ex29_handler,
+	  cpu_ex30_handler, cpu_ex31_handler
 };
 
 DISC_DATA static void (*IRQ_ISRS[NUM_IRQS])(
-    void) = {
-      irq0_handler, irq1_handler, irq2_handler, irq3_handler, irq4_handler, irq5_handler,
-      irq6_handler, irq7_handler, irq8_handler, irq9_handler, irq10_handler, irq11_handler,
-      irq12_handler, irq13_handler, irq14_handler, irq15_handler, irq16_handler, irq17_handler,
-      irq18_handler, irq19_handler, irq20_handler, irq21_handler, irq22_handler, irq23_handler
+	void) = {
+	  irq0_handler, irq1_handler, irq2_handler, irq3_handler, irq4_handler, irq5_handler,
+	  irq6_handler, irq7_handler, irq8_handler, irq9_handler, irq10_handler, irq11_handler,
+	  irq12_handler, irq13_handler, irq14_handler, irq15_handler, irq16_handler, irq17_handler,
+	  irq18_handler, irq19_handler, irq20_handler, irq21_handler, irq22_handler, irq23_handler
 };
 
-DISC_DATA multiboot_info_t *multiboot_info;
-
-extern int init_memory(multiboot_info_t *info);
+extern int init_memory(const struct multiboot_info_header *tags);
 extern int read_acpi_tables(void);
-extern int load_servers(multiboot_info_t *info);
+extern int load_init_server(struct multiboot_info_header *tags);
 
 /*
  void initPIC( void )
@@ -199,39 +180,32 @@ extern int load_servers(multiboot_info_t *info);
  */
 /* Various call once functions */
 
-void add_idt_entry(void (*f)(void), unsigned int entry_num, unsigned int dpl) {
+void add_idt_entry(void (*f)(void), int entry_num, int dpl) {
   assert(entry_num < 256);
 
   idt_entry_t *new_entry = &kernel_idt[entry_num];
 
-  new_entry->offset_lower = (uint16_t)((uint32_t)f & 0xFFFFu);
+  new_entry->offset_lower = (uint16_t)((uintptr_t)f & 0xFFFFu);
   new_entry->code_selector = KCODE_SEL;
   new_entry->_resd = 0;
   new_entry->flags = I_PRESENT | (MIN(dpl, 3) << I_DPL_BITS) | I_INT;
-  new_entry->offset_upper = (uint16_t)((uint32_t)f >> 16);
+  new_entry->offset_upper = (uint16_t)((uintptr_t)f >> 16);
 }
 
 void load_idt(void) {
-  struct PseudoDescriptor idt_pointer = {
-    .limit = KERNEL_IDT_LEN,
-    .base = (uint64_t)kernel_idt
+  struct pseudo_descriptor idt_pointer = {
+	.limit = KERNEL_IDT_LEN,
+	.base = (uint64_t)kernel_idt
   };
 
   __asm__("lidt %0" :: "m"(idt_pointer) : "memory");
 }
 
-void disable_irq(unsigned int irq) {
-  assert(irq < 16);
-
+void disable_pics(void) {
   // Send OCW1 (set IRQ mask)
 
-  if(irq < PIC2_IRQ_START)
-    out_port8( PIC1_PORT | 0x01,
-             in_port8(PIC1_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq));
-  else
-    out_port8(
-        PIC2_PORT | 0x01,
-        in_port8(PIC2_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq-PIC2_IRQ_START));
+  out_port8(PIC1_PORT | 0x01, in_port8(PIC1_PORT | 0x01) | 0xFF);
+  out_port8(PIC2_PORT | 0x01, in_port8(PIC2_PORT | 0x01) | 0xFF);
 }
 
 void stop_init(const char *msg) {
@@ -239,7 +213,7 @@ void stop_init(const char *msg) {
   kprintf("Init failed: %s\nSystem halted.", msg);
 
   while(1)
-    __asm__("hlt");
+	__asm__("hlt");
 }
 
 /*
@@ -255,14 +229,13 @@ void stop_init(const char *msg) {
  */
 
 void init_interrupts(void) {
-  for(unsigned int i = 0; i < NUM_EXCEPTIONS; i++)
-    add_idt_entry(CPU_EX_ISRS[i], i, 0);
+  for(size_t i = 0; i < NUM_EXCEPTIONS; i++)
+	add_idt_entry(CPU_EX_ISRS[i], (int)i, 0);
 
-  for(unsigned int i = 0; i < NUM_IRQS; i++)
-    add_idt_entry(IRQ_ISRS[i], IRQ(i), 0);
+  for(size_t i = 0; i < NUM_IRQS; i++)
+	add_idt_entry(IRQ_ISRS[i], (int)IRQ(i), 0);
 
-  for(int i = 0; i < 16; i++)
-    disable_irq(i);
+  disable_pics();
 
   //initPIC();
   load_idt();
@@ -270,40 +243,147 @@ void init_interrupts(void) {
 
 #ifdef DEBUG
 DISC_CODE static void show_cpu_features(void);
-DISC_CODE static void show_mb_info_flags(multiboot_info_t*);
+DISC_CODE static void show_mb_info(const struct multiboot_info_header*);
 
 union ProcessorVersion {
   struct {
-    uint32_t stepping_id :4;
-    uint32_t model :4;
-    uint32_t family_id :4;
-    uint32_t processor_type :2;
-    uint32_t _resd :2;
-    uint32_t ext_model_id :4;
-    uint32_t ext_family_id :8;
-    uint32_t _resd2 :4;
+	uint32_t stepping_id :4;
+	uint32_t model :4;
+	uint32_t family_id :4;
+	uint32_t processor_type :2;
+	uint32_t _resd :2;
+	uint32_t ext_model_id :4;
+	uint32_t ext_family_id :8;
+	uint32_t _resd2 :4;
   };
   uint32_t value;
 };
 
 union AdditionalCpuidInfo {
   struct {
-    uint8_t brand_index;
-    uint8_t cflush_size;
-    uint8_t max_logical_processors;
-    uint8_t lapic_id;
+	uint8_t brand_index;
+	uint8_t cflush_size;
+	uint8_t max_logical_processors;
+	uint8_t lapic_id;
   };
   uint32_t value;
 };
 
-void show_mb_info_flags(multiboot_info_t *info) {
-  kprintf("Mulitboot Information Flags:\n\n");
+void show_mb_info(const struct multiboot_info_header *header) {
+  kprintf("Mulitboot2 Information:\n\n");
 
-  for(size_t i = 0; i < 12; i++) {
-    if(IS_FLAG_SET(info->flags, (1u << i)))
-      kprintf("%s\n", MB_INFO_NAMES[i]);
+  const struct multiboot_tag *tags = header->tags;
+
+  while(tags->type != MULTIBOOT_TAG_TYPE_END) {
+	switch(tags->type) {
+	  case MULTIBOOT_TAG_TYPE_BASIC_MEMINFO: {
+		const struct multiboot_tag_basic_meminfo *meminfo =
+		  (const struct multiboot_tag_basic_meminfo*)tags;
+
+		unsigned long int total_phys_mem = (meminfo->mem_upper + 1024) * 1024ul;
+
+		kprintf("Lower Memory: %lu bytes Upper Memory: %lu bytes\n",
+				meminfo->mem_lower * 1024ul, meminfo->mem_upper * 1024ul);
+		kprintf("Total Memory: %#x. %lu pages.\n", total_phys_mem,
+				total_phys_mem / PAGE_SIZE);
+
+		break;
+	  }
+	  case MULTIBOOT_TAG_TYPE_BOOTDEV: {
+		const struct multiboot_tag_bootdev *bootdev =
+		  (const struct multiboot_tag_bootdev*)tags;
+
+		kprintf("Boot drive: ");
+
+		if(bootdev->biosdev != 0xFFFFFFFFu)
+		  kprintf("%s%u", bootdev->biosdev & 0x80 ? "hd" : "fd",
+				  bootdev->biosdev & 0x7F);
+
+		if(bootdev->slice != 0xFFFFFFFFu)
+		  kprintf("p%u", bootdev->slice);
+
+		if(bootdev->part != 0xFFFFFFFFu)
+		  kprintf(".%u", bootdev->part);
+
+		kprintf("\n");
+
+		break;
+	  }
+	  case MULTIBOOT_TAG_TYPE_CMDLINE: {
+		const struct multiboot_tag_string *cmdline =
+		  (const struct multiboot_tag_string*)tags;
+
+		kprintf("Command: \"%s\"\n", cmdline->string);
+		break;
+	  }
+	  case MULTIBOOT_TAG_TYPE_MMAP: {
+		const struct multiboot_tag_mmap *mmap = (const struct multiboot_tag_mmap*)tags;
+		const struct multiboot_mmap_entry *entry = mmap->entries;
+		size_t offset = offsetof(const struct multiboot_tag_mmap, entries);
+		const char *type;
+
+		kprintf("Memory map: \n");
+
+		while(offset < mmap->size) {
+		  switch(entry->type) {
+			case MULTIBOOT_MEMORY_AVAILABLE:
+			  type = "Available";
+			  break;
+			case MULTIBOOT_MEMORY_ACPI_RECLAIMABLE:
+			  type = "ACPI Reclaimable";
+			  break;
+			case MULTIBOOT_MEMORY_NVS:
+			  type = "Non-Volatile Storage";
+			  break;
+			case MULTIBOOT_MEMORY_BADRAM:
+			  type = "Defective RAM";
+			  break;
+			case MULTIBOOT_MEMORY_RESERVED:
+			default:
+			  type = "Reserved";
+			  break;
+		  }
+
+		  kprintf("Addr: %p Length: %#x Type: %s\n", (void*)entry->addr,
+				  entry->len, type);
+
+		  offset += mmap->entry_size;
+		  entry = (const struct multiboot_mmap_entry*)((uintptr_t)entry
+			  + mmap->entry_size);
+		}
+
+		break;
+	  }
+	  case MULTIBOOT_TAG_TYPE_MODULE: {
+		const struct multiboot_tag_module *module = (const struct multiboot_tag_module*)tags;
+
+		kprintf("Module: load addr: %p size: %u command: \"%s\"\n",
+				(void *)(uintptr_t)module->mod_start, module->mod_end - module->mod_start,
+				module->cmdline);
+
+		break;
+	  }
+	  case MULTIBOOT_TAG_TYPE_EFI32: {
+		const struct multiboot_tag_efi32 *efi = (const struct multiboot_tag_efi32*)tags;
+
+		kprintf("EFI 32-bit system table: %p\n", (void*)(uintptr_t)efi->pointer);
+		break;
+	  }
+	  case MULTIBOOT_TAG_TYPE_EFI64: {
+		const struct multiboot_tag_efi64 *efi = (const struct multiboot_tag_efi64*)tags;
+
+		kprintf("EFI 64-bit system table: %p\n", (void*)efi->pointer);
+		break;
+	  }
+	  default:
+		kprintf("Multiboot Info Tag: %u\n", tags->type);
+		break;
+	  case MULTIBOOT_TAG_TYPE_END:
+		return;
+	}
+
+	tags = (const struct multiboot_tag*)((uintptr_t)tags + tags->size + ((tags->size % 8) == 0 ? 0 : 8 - (tags->size % 8)));
   }
-  kprintf("\n");
 }
 
 void show_cpu_features(void) {
@@ -319,50 +399,50 @@ void show_cpu_features(void) {
   kprintf("%s\n", PROCESSOR_TYPE[proc_version.processor_type]);
 
   kprintf(
-      "Model: %d\n",
-      proc_version.model + (
-          (proc_version.family_id == 6 || proc_version.family_id == 15) ?
-              (proc_version.ext_model_id << 4) : 0));
+	  "Model: %d\n",
+	  proc_version.model + (
+		  (proc_version.family_id == 6 || proc_version.family_id == 15) ?
+			  (proc_version.ext_model_id << 4) : 0));
 
   kprintf(
-      "Family: %d\n",
-      proc_version.family_id + (
-          proc_version.family_id == 15 ? proc_version.ext_family_id : 0));
+	  "Family: %d\n",
+	  proc_version.family_id + (
+		  proc_version.family_id == 15 ? proc_version.ext_family_id : 0));
   kprintf("Stepping: %d\n\n", proc_version.stepping_id);
 
   kprintf("Brand Index: %d\n", additional_info.brand_index);
 
   if(IS_FLAG_SET(features, 1 << 19))
-    kprintf("Cache Line Size: %d bytes\n", 8 * additional_info.cflush_size);
+	kprintf("Cache Line Size: %d bytes\n", 8 * additional_info.cflush_size);
 
   if(IS_FLAG_SET(features, 1 << 28)) {
-    size_t num_ids;
+	size_t num_ids;
 
-    if(additional_info.max_logical_processors) {
-      uint32_t msb = _bit_scan_reverse(additional_info.max_logical_processors);
+	if(additional_info.max_logical_processors) {
+	  uint32_t msb = _bit_scan_reverse(additional_info.max_logical_processors);
 
-      if(additional_info.max_logical_processors & ((1 << msb) - 1))
-        num_ids = (1 << (msb + 1));
-      else
-        num_ids = 1 << msb;
-    }
-    else
-      num_ids = 0;
+	  if(additional_info.max_logical_processors & ((1 << msb) - 1))
+		num_ids = (1 << (msb + 1));
+	  else
+		num_ids = 1 << msb;
+	}
+	else
+	  num_ids = 0;
 
-    kprintf("Unique APIC IDs per physical processor: %d\n", num_ids);
+	kprintf("Unique APIC IDs per physical processor: %d\n", num_ids);
   }
   kprintf("Local APIC ID: %#x\n\n", additional_info.lapic_id);
 
   kprintf("Processor Features:");
 
   for(size_t i = 0; i < 32; i++) {
-    if(IS_FLAG_SET(features, 1 << i))
-      kprintf(" %s", FEATURES_STR[i]);
+	if(IS_FLAG_SET(features, 1 << i))
+	  kprintf(" %s", FEATURES_STR[i]);
   }
 
   for(size_t i = 0; i < 32; i++) {
-    if(IS_FLAG_SET(features2, 1 << i))
-      kprintf(" %s", FEATURES_STR2[i]);
+	if(IS_FLAG_SET(features2, 1 << i))
+	  kprintf(" %s", FEATURES_STR2[i]);
   }
 
   kprintf("\n");
@@ -375,13 +455,11 @@ void show_cpu_features(void) {
  @param info The multiboot structure passed by the bootloader.
  */
 
-void init(multiboot_info_t *info) {
+void init(const struct multiboot_info_header *info_header) {
   /* Initialize memory */
 
-  if(IS_ERROR(init_memory(info)))
-    stop_init("Unable to initialize memory.");
-
-  multiboot_info = info;
+  if(IS_ERROR(init_memory(info_header)))
+	stop_init("Unable to initialize memory.");
 
 #ifdef DEBUG
   init_serial();
@@ -389,8 +467,13 @@ void init(multiboot_info_t *info) {
   clear_screen();
 #endif /* DEBUG */
 
-  show_mb_info_flags(info);
+  show_mb_info(info_header);
   show_cpu_features();
+
+  kprintf("1 GiB pages: %s\n", is_1gb_pages_supported ? "yes" : "no");
+  kprintf("Maximum physical address: %#lx\n", max_phys_addr);
+
+  kprintf("TCB Table size: %lx bytes\n", ktcb_table_size);
 
   kprintf("Initializing interrupt handling.\n");
   init_interrupts();
@@ -398,12 +481,12 @@ void init(multiboot_info_t *info) {
   int retval = read_acpi_tables();
 
   if(IS_ERROR(retval))
-    stop_init("Unable to read ACPI tables.");
+	stop_init("Unable to read ACPI tables.");
   else {
-    num_processors = (size_t)retval;
+	num_processors = (size_t)retval;
 
-    if(num_processors == 0)
-      num_processors = 1;
+	if(num_processors == 0)
+	  num_processors = 1;
   }
 
   //  enable_apic();
@@ -414,34 +497,33 @@ void init(multiboot_info_t *info) {
    */
 
   kprintf("\n%#x bytes of discardable code.",
-          (addr_t)EXT_PTR(kddata) - (addr_t)EXT_PTR(kdcode));
+		  (addr_t)EXT_PTR(kddata) - (addr_t)EXT_PTR(kdcode));
   kprintf(" %#x bytes of discardable data.\n",
-          (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kddata));
+		  (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kddata));
   kprintf("Discarding %d bytes in total\n",
-          (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kdcode));
+		  (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kdcode));
 
-  load_servers(info);
+  //load_servers(tags);
 
   /* Release the pages for the code and data that will never be used again. */
 
   for(addr_t addr = (addr_t)EXT_PTR(kdcode); addr < (addr_t)EXT_PTR(kbss);
-      addr += PAGE_SIZE)
+	  addr += PAGE_SIZE)
   {
-    // todo: Mark these pages as free for init server
+	// todo: Mark these pages as free for init server
   }
 
   // Initialize FPU to a known state
-  __asm__("fninit\n"
-		  "fxsave %0\n" :: "m"(init_server_thread->xsave_state));
+  __asm__("fninit\n");
 
-  // Set MSRs to enable sysenter/sysexit functionality
+  // Set MSRs to enable syscall/sysret functionality
 
-  wrmsr(SYSENTER_CS_MSR, KCODE_SEL);
-  wrmsr(SYSENTER_ESP_MSR, (uint64_t)(uintptr_t)kernel_stack_top);
-  wrmsr(SYSENTER_EIP_MSR, (uint64_t)(uintptr_t)sysenter_entry);
+  wrmsr(SYSCALL_FMASK_MSR, RFLAGS_IF | RFLAGS_DF);
+  wrmsr(SYSCALL_STAR_MSR,
+		((uint64_t)KCODE_SEL << 32) | ((uint64_t)UCODE_SEL << 48));
+  wrmsr(SYSCALL_LSTAR_MSR, (uint64_t)syscall_entry);
 
   kprintf("Context switching...\n");
-
-  switch_context(schedule(0), 0);
+  switch_context(schedule(get_current_processor()));
   stop_init("Error: Context switch failed.");
 }

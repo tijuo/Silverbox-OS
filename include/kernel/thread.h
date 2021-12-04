@@ -93,14 +93,14 @@ NON_NULL_PARAMS tcb_t* create_thread(void *entryAddr, paddr_t addrSpace,
 NON_NULL_PARAMS int start_thread(tcb_t *thread);
 NON_NULL_PARAMS int pause_thread(tcb_t *thread);
 NON_NULL_PARAMS int release_thread(tcb_t *thread);
-NON_NULL_PARAMS void switch_context(tcb_t *thread, int doXSave);
+NON_NULL_PARAMS void switch_context(tcb_t *thread);
 NON_NULL_PARAMS int remove_thread_from_list(tcb_t *thread);
 NON_NULL_PARAMS int wakeup_thread(tcb_t *thread);
 
 extern tcb_t *init_server_thread;
 extern tcb_t *init_pager_thread;
 extern tcb_t tcb_table[MAX_THREADS];
-extern ALIGNED(PAGE_SIZE) uint8_t kernel_stack[PAGE_SIZE];
+extern ALIGNED(PAGE_SIZE) uint8_t kernel_stack[4*PAGE_SIZE];
 extern uint8_t *kernel_stack_top;
 
 static inline CONST unsigned int get_current_processor(void) {

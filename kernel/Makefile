@@ -5,13 +5,14 @@ include $(ROOT_PATH)/Makefile.inc
 
 SRC	:=list.c message.c syscall.c debug.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
-	apic.c init/init.c init/acpi.c init/loader.c init/libc.c \
+	apic.c init/init.c init/acpi.c init/libc.c \
 	init/memory.c
 ASM_SRC	=entry.asm
 OBJ	:=$(SRC:%.c=%.o) $(ASM_SRC:%.asm=%.o)
 BIN	:=kernel.elf
 BIN_GZ	:=kernel.gz
 CFLAGS  :=$(CFLAGS) -mpreferred-stack-boundary=4
+LDFLAGS :=$(LDFLAGS) -z max-page-size=4096
 
 all: $(BIN_GZ) $(BIN).dmp $(BIN).sym $(BIN).bsym
 

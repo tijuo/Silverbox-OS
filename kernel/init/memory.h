@@ -10,12 +10,12 @@
 #define EXTENDED_MEMORY     0x100000u
 
 #include <kernel/mm.h>
+#include <kernel/multiboot2.h>
 
 extern addr_t alloc_page_frame(void);
 
-extern bool is_reserved_page(uint64_t addr, multiboot_info_t *info,
-                                     int is_large_page);
+extern bool is_reserved_page(uint64_t addr, const struct multiboot_info_header *header);
 
-extern int init_memory(multiboot_info_t *info);
+extern int init_memory(const struct multiboot_info_header *header);
 
 #endif /* KERNEL_INIT_MEMORY_H */

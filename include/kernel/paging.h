@@ -1,4 +1,4 @@
-
+#if 0
 #ifndef PAGING_H
 #define PAGING_H
 
@@ -32,7 +32,6 @@ static inline paddr_t get_root_page_map(void) {
   return (paddr_t)(get_cr3() & CR3_BASE_MASK);
 }
 
-#if 0
 #define MAX_PHYS_MEMORY           0x10000000000ull
 
 #define PAGE_SIZE		            	0x1000u

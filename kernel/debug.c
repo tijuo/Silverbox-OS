@@ -107,13 +107,13 @@ struct PrintfState {
 };
 
 bool bad_assert_hlt;
-dword upper1;
-dword lower1;
-dword upper2;
-dword lower2;
+uint32_t upper1;
+uint32_t lower1;
+uint32_t upper2;
+uint32_t lower2;
 
-unsigned int cursor_x = 0;
-unsigned int cursor_y = 0;
+unsigned long int cursor_x = 0;
+unsigned long int cursor_y = 0;
 
 NON_NULL_PARAMS void reset_printf_state(struct PrintfState *state);
 
@@ -121,7 +121,7 @@ static void print_char(int c);
 NON_NULL_PARAMS static void _kprintf(void (*write_func)(int), const char *str,
 									 va_list args);
 NON_NULL_PARAM(1) void kprintf(const char *str, ...) __attribute__((format(printf, 1, 2)));
-NON_NULL_PARAM(3) void kprintf_at(unsigned int x, unsigned int y,
+NON_NULL_PARAM(3) void kprintf_at(unsigned long int x, unsigned long int y,
 								  const char *str, ...) __attribute__((format(printf, 3, 4)));
 static int scroll(int up);
 static void set_scroll(word addr);
@@ -139,14 +139,14 @@ NON_NULL_PARAMS int kullitoa(unsigned long long int value, char *str, int base);
 void _put_char(char c, int x, int y, unsigned char attrib);
 void put_char(char c, int x, int y);
 NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const exec_state_t *state,
-							   unsigned int int_num, unsigned int error_code);
-NON_NULL_PARAMS void dump_state(const exec_state_t *state, unsigned int int_num,
-								unsigned int error_code);
+							   unsigned long int int_num, unsigned long int error_code);
+NON_NULL_PARAMS void dump_state(const exec_state_t *state, unsigned long int int_num,
+								unsigned long int error_code);
 void dump_stack(addr_t, addr_t);
 static const char *DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";
 
-unsigned int sx = 0;
-unsigned int sy = 1;
+unsigned long int sx = 0;
+unsigned long int sy = 1;
 
 #define COM1 0x3f8
 #define COM2 0x2f8
@@ -156,24 +156,6 @@ unsigned int sy = 1;
 /** Sets up the serial ports for printing debug messages
  (and possibly receiving commands).
  */
-
-void start_time_stamp(void) {
-  rdtsc(&upper1, &lower1);
-}
-
-void stop_time_stamp(void) {
-  rdtsc(&upper2, &lower2);
-}
-
-unsigned int get_time_difference(void) {
-  if(upper1 == upper2)
-	return (unsigned)(lower2 - lower1);
-  else if(upper2 == upper1 + 1) {
-	if(lower2 < lower1)
-	  return (0xFFFFFFFFu - lower1) + lower2;
-  }
-  return 0xFFFFFFFFu;
-}
 
 void init_serial(void) {
   out_port8(COMBASE + 3, in_port8(COMBASE + 3) | 0x80u); // Set DLAB for
@@ -294,6 +276,7 @@ NON_NULL_PARAMS int kuitoa(unsigned int value, char *str, int base) {
   return charsWritten;
 }
 
+
 NON_NULL_PARAMS int klitoa(long int value, char *str, int base) {
   size_t strEnd = 0;
   int negative = base == 10 && value < 0;
@@ -303,26 +286,16 @@ NON_NULL_PARAMS int klitoa(long int value, char *str, int base) {
 	return -1;
 
   if(negative) {
-	if(value == (long int)LONG_MIN) {
-#ifdef __LONG_LEN__
-#if __LONG_LEN__ == 8
-      memcpy(str, "-9223372036854775808", 20);
-      return 20;
-#else
-      memcpy(str, "-2147483648", 11);
-      return 11;
-#endif /* __LONG__LEN == 8 */
-#else
-	  memcpy(str, "-2147483648", 11);
-	  return 11;
-#endif /* __LONG_LEN__ */
+	if(value == LONG_MIN) {
+	  memcpy(str, "-9223372036854775808", 20);
+	  return 20;
 	}
 	else
 	  value = ~value + 1;
   }
 
   do {
-	long int quot = base * (value / base);
+	unsigned long int quot = base * ((unsigned long int)value / base);
 
 	str[strEnd++] = DIGITS[value - quot];
 	value = quot / base;
@@ -354,7 +327,7 @@ NON_NULL_PARAMS int kulitoa(unsigned long int value, char *str, int base) {
 	return -1;
 
   do {
-	unsigned long int quot = base * ((unsigned long int)value / base);
+	unsigned long int quot = base * (value / base);
 
 	str[strEnd++] = DIGITS[value - quot];
 	value = quot / base;
@@ -376,95 +349,12 @@ NON_NULL_PARAMS int kulitoa(unsigned long int value, char *str, int base) {
 }
 
 NON_NULL_PARAMS int kllitoa(long long int value, char *str, int base) {
-  size_t strEnd = 0;
-  int negative = base == 10 && value < 0;
-  int charsWritten = 0;
-  unsigned int v[2] = {
-	(unsigned int)(value & 0xFFFFFFFFu),
-	(unsigned int)(value >> 32)
-  };
-
-  assert(base == 2 || base == 4 || base == 8 || base == 16 || base == 32);
-
-  if(base < 2 || base > 36)
-	return -1;
-
-  if(negative) {
-	if(value == (long long int)LLONG_MIN) {
-	  memcpy(str, "-9223372036854775808", 20);
-	  return 20;
-	}
-	else
-	  value = ~value + 1;
-  }
-
-  for(int i = 0; i < 2; i++) {
-	if(i == 1 && v[i] == 0)
-	  break;
-
-	do {
-	  unsigned int quot = base * ((unsigned int)v[i] / base);
-
-	  str[strEnd++] = DIGITS[v[i] - quot];
-	  v[i] = quot / base;
-	} while(v[i]);
-  }
-
-  if(negative)
-	str[strEnd++] = '-';
-
-  charsWritten = strEnd;
-
-  if(strEnd) {
-	strEnd--;
-
-	for(size_t i = 0; i < strEnd; i++, strEnd--) {
-	  char tmp = str[i];
-	  str[i] = str[strEnd];
-	  str[strEnd] = tmp;
-	}
-  }
-
-  return charsWritten;
+  return klitoa((long int)value, str, base);
 }
 
 NON_NULL_PARAMS int kullitoa(unsigned long long int value, char *str, int base)
 {
-  size_t str_end = 0;
-  int chars_written = 0;
-  unsigned int v[2] = {
-	(unsigned int)(value & 0xFFFFFFFFu),
-	(unsigned int)(value >> 32)
-  };
-
-  if(base < 2 || base > 36)
-	return -1;
-
-  for(int i = 0; i < 2; i++) {
-	if(i == 1 && v[i] == 0)
-	  break;
-
-	do {
-	  unsigned int quot = base * ((unsigned int)v[i] / base);
-
-	  str[str_end++] = DIGITS[v[i] - quot];
-	  v[i] = quot / base;
-	} while(v[i]);
-  }
-
-  chars_written = str_end;
-
-  if(str_end) {
-	str_end--;
-
-	for(size_t i = 0; i < str_end; i++, str_end--) {
-	  char tmp = str[i];
-	  str[i] = str[str_end];
-	  str[str_end] = tmp;
-	}
-  }
-
-  return chars_written;
+  return kulitoa((unsigned long int)value, str, base);
 }
 
 void init_video(void) {
@@ -533,11 +423,11 @@ int scroll_down(void) {
   return scroll(DOWN_DIR);
 }
 
-NON_NULL_PARAM(3) void kprintf_at(unsigned int x, unsigned int y,
+NON_NULL_PARAM(3) void kprintf_at(unsigned long int x, unsigned long int y,
 								  const char *str, ...)
 {
-  unsigned int c_x = cursor_x;
-  unsigned int c_y = cursor_y;
+  unsigned long int c_x = cursor_x;
+  unsigned long int c_y = cursor_y;
   va_list args;
 
   cursor_x = x;
@@ -1123,12 +1013,12 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char *str,
 }
 
 NON_NULL_PARAMS void dump_state(const exec_state_t *exec_state,
-								unsigned int int_num, unsigned int error_code)
+								unsigned long int int_num, unsigned long int error_code)
 {
   if(int_num < IRQ_BASE)
-	kprintf("Exception %u", int_num);
+	kprintf("Exception %lu", int_num);
   else
-	kprintf("IRQ%u", int_num - IRQ_BASE);
+	kprintf("IRQ%lu", int_num - IRQ_BASE);
 
   kprintf("\nRAX: 0x%#lx RBX: 0x%#lx RCX: 0x%#lx RDX: 0x%#lx", exec_state->rax,
 		  exec_state->rbx, exec_state->rcx, exec_state->rdx);
@@ -1142,10 +1032,10 @@ NON_NULL_PARAMS void dump_state(const exec_state_t *exec_state,
 
   if(int_num == 8 || (int_num >= 10 && int_num <= 14) || int_num == 17
 	 || int_num == 21) {
-	kprintf(" error code: 0x%x", error_code);
+	kprintf(" error code: 0x%lx", error_code);
   }
 
-  kprintf("\nCS: 0x%x DS: 0x%x ES: 0x%x FS: 0x%x GS: 0x%x SS: 0x%x\n",
+  kprintf("\nCS: 0x%lx DS: 0x%hhx ES: 0x%hhx FS: 0x%hhx GS: 0x%hhx SS: 0x%lx\n",
 		  exec_state->cs, exec_state->ds, exec_state->es, exec_state->fs,
 		  exec_state->gs, exec_state->ss);
 
@@ -1161,26 +1051,26 @@ void dump_stack(addr_t stack_frame_ptr, addr_t addr_space) {
   while(stack_frame_ptr) {
 	kprintf("<0x%#lx>:", stack_frame_ptr);
 
-	if(is_readable(stack_frame_ptr + sizeof(dword), addr_space))
-	  kprintf(" [0x%#lx]", *(dword*)(stack_frame_ptr + sizeof(dword)));
+	if(is_readable(stack_frame_ptr + sizeof(unsigned long int), addr_space))
+	  kprintf(" [0x%#lx]", *(unsigned long int *)(stack_frame_ptr + sizeof(unsigned long int)));
 	else
 	  kprintf(" [???]");
 
 	for(int i = 2; i < 8; i++) {
-	  if(is_readable(stack_frame_ptr + sizeof(dword) * i, addr_space))
-		kprintf(" 0x%#lx", *(dword*)(stack_frame_ptr + sizeof(dword) * i));
+	  if(is_readable(stack_frame_ptr + sizeof(unsigned long int) * i, addr_space))
+		kprintf(" 0x%#lx", *(unsigned long int*)(stack_frame_ptr + sizeof(unsigned long int) * i));
 	  else
 		break;
 	}
 
 	kprintf("\n");
 
-	if(!is_readable(*(dword*)stack_frame_ptr, addr_space)) {
-	  kprintf("<0x%#lx (invalid)>:\n", *(dword*)stack_frame_ptr);
+	if(!is_readable(*(unsigned long int*)stack_frame_ptr, addr_space)) {
+	  kprintf("<0x%#lx (invalid)>:\n", *(unsigned long int*)stack_frame_ptr);
 	  break;
 	}
 	else
-	  stack_frame_ptr = *(dword*)stack_frame_ptr;
+	  stack_frame_ptr = *(unsigned long int*)stack_frame_ptr;
   }
 }
 
@@ -1193,14 +1083,14 @@ void dump_stack(addr_t stack_frame_ptr, addr_t addr_space) {
 
 NON_NULL_PARAMS void dump_regs(const tcb_t *thread,
 							   const exec_state_t *exec_state,
-							   unsigned int int_num, unsigned int error_code)
+							   unsigned long int int_num, unsigned long int error_code)
 {
   kprintf("Thread: %p (TID: %u) ", thread, get_tid(thread));
 
   dump_state(exec_state, int_num, error_code);
 
   kprintf("Thread CR3: %#lx Current CR3: %#lx\n",
-		  *(const unsigned long int)&thread->root_pmap, get_cr3());
+		  *(const unsigned long int *)&thread->root_pmap, get_cr3());
 
   dump_stack((addr_t)exec_state->rbp, (addr_t)thread->root_pmap);
 }

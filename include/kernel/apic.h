@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define LAPIC_VADDR			0x100000000ul
+
 // Memory mapped IOAPIC registers
 
 // I/O register select register
@@ -97,6 +99,8 @@
 #define LAPIC_UNMASKED	    0
 
 #define IA32_APIC_BASE_MSR 0x1Bu
+
+typedef volatile uint32_t apic_register_t;
 
 extern void *lapic_ptr;
 extern void *ioapic_ptr;

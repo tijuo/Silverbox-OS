@@ -4,7 +4,6 @@
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
 #include <kernel/lowlevel.h>
-#include <kernel/paging.h>
 #include <kernel/interrupt.h>
 #include <kernel/error.h>
 #include <os/msg/kernel.h>
@@ -17,6 +16,8 @@
 #define HALT_OPCODE   0xF4u
 
 #define FIRST_VALID_PAGE        0x1000u
+
+union idt_entry kernel_idt[NUM_EXCEPTIONS + NUM_IRQS];
 
 // The threads that are responsible for handling IRQs
 
@@ -209,8 +210,10 @@ void handle_cpu_exception(struct CpuExInterruptFrame *interrupt_frame) {
   if(tcb->xsave_state)
 	__asm__("fxsave %0\n" :: "m"(tcb->xsave_state));
 
-  if(interrupt_frame->ex_num == 13&& interrupt_frame->state.cs == UCODE_SEL && is_readable(interrupt_frame->state.rip, get_root_page_map())
-  && *(uint8_t *)interrupt_frame->state.rip == HALT_OPCODE) {
+  if(interrupt_frame->ex_num == 13
+	  && interrupt_frame->state.cs == UCODE_SEL
+	  && is_readable(interrupt_frame->state.rip, get_root_page_map())
+	  && *(uint8_t *)interrupt_frame->state.rip == HALT_OPCODE) {
 	msg_subject = EXIT_MSG;
 	struct ExitMessage message_data = {
 	  .status_code = interrupt_frame->state.rax,
@@ -236,9 +239,9 @@ void handle_cpu_exception(struct CpuExInterruptFrame *interrupt_frame) {
 		"xorpd %%xmm15, %%xmm15\n"
 		:: "r"(&message_data)
 		: "xmm0", "xmm1", "xmm2", "xmm3",
-		  "xmm4", "xmm5", "xmm6", "xmm7",
-		  "xmm8", "xmm9", "xmm10", "xmm11",
-		  "xmm12", "xmm13", "xmm14", "xmm15");
+		"xmm4", "xmm5", "xmm6", "xmm7",
+		"xmm8", "xmm9", "xmm10", "xmm11",
+		"xmm12", "xmm13", "xmm14", "xmm15");
   }
   else {
 	msg_subject = EXCEPTION_MSG;
@@ -269,8 +272,8 @@ void handle_cpu_exception(struct CpuExInterruptFrame *interrupt_frame) {
 	  .fs = interrupt_frame->state.fs,
 	  .gs = interrupt_frame->state.gs,
 	  .ss =
-		  interrupt_frame->state.cs == KCODE_SEL ?
-			  get_ss() : interrupt_frame->state.ss,
+		  interrupt_frame->state.cs == KCODE_SEL ? get_ss() :
+			  interrupt_frame->state.ss,
 	  .rflags = interrupt_frame->state.rflags,
 	  .cr0 = get_cr0(),
 	  .cr2 = get_cr2(),
@@ -305,10 +308,10 @@ void handle_cpu_exception(struct CpuExInterruptFrame *interrupt_frame) {
 		"xorpd %%xmm14, %%xmm14\n"
 		"xorpd %%xmm15, %%xmm15\n"
 		:: "r"(&message_data)
-		: "xmm0", "xmm1", "xmm2", "xmm3", \
-		  "xmm4", "xmm5", "xmm6", "xmm7", \
-		  "xmm8", "xmm9", "xmm10", "xmm11", \
-		  "xmm12", "xmm13");
+		: "xmm0", "xmm1", "xmm2", "xmm3",
+		"xmm4", "xmm5", "xmm6", "xmm7",
+		"xmm8", "xmm9", "xmm10", "xmm11",
+		"xmm12", "xmm13");
   }
 
   if(IS_ERROR(send_message(tcb, tcb->ex_handler, msg_subject, MSG_STD))) {

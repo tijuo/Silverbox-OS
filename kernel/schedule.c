@@ -2,7 +2,6 @@
 #include <kernel/debug.h>
 #include <kernel/memory.h>
 #include <kernel/schedule.h>
-#include <kernel/paging.h>
 #include <kernel/lowlevel.h>
 #include <kernel/error.h>
 #include <kernel/list.h>

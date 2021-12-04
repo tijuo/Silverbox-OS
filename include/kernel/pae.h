@@ -70,48 +70,183 @@
 
 typedef uint64_t pmap_entry_t;
 
-static inline void set_pte_base(pmap_entry_t *entry, paddr_t addr) {
-  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr-1);
-}
-
-static inline void set_pde_base(pmap_entry_t *entry, paddr_t addr) {
-  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr-1);
-}
-
-static inline void set_pdpte_base(pmap_entry_t *entry, paddr_t addr) {
-  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr-1);
-}
-
-static inline void set_large_pde_base(pmap_entry_t *entry, paddr_t addr) {
-  *entry |= addr & ~(PAE_LARGE_PAGE_SIZE-1) & (max_phys_addr-1);
-}
-
-static inline void set_huge_pdpte_base(pmap_entry_t *entry, paddr_t addr) {
-  *entry |= addr & ~(PAE_HUGE_PAGE_SIZE-1) & (max_phys_addr-1);
-}
-
-static inline paddr_t get_pte_base(pmap_entry_t entry) {
-  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr-1));
-}
-
-static inline paddr_t get_pde_base(pmap_entry_t entry) {
-  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr-1));
-}
-
-static inline paddr_t get_pdpte_base(pmap_entry_t entry) {
-  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr-1));
-}
-
-static inline paddr_t get_large_pde_base(pmap_entry_t entry) {
-  return (paddr_t)(entry & ~(PAE_LARGE_PAGE_SIZE-1) & (max_phys_addr-1));
-}
-
-static inline paddr_t get_huge_pde_base(pmap_entry_t entry) {
-  return (paddr_t)(entry & ~(PAE_HUGE_PAGE_SIZE-1) & (max_phys_addr-1));
-}
-
 extern paddr_t max_phys_addr;
 extern int is_1gb_pages_supported;
 extern unsigned int num_paging_levels;
 
+NON_NULL_PARAMS static inline void set_pte_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr);
+}
+
+NON_NULL_PARAMS static inline void set_pde_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr);
+}
+
+NON_NULL_PARAMS static inline void set_pdpte_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr);
+}
+
+NON_NULL_PARAMS static inline void set_pml4e_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAGE_SIZE-1) & (max_phys_addr);
+}
+
+NON_NULL_PARAMS static inline void set_large_page_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAE_LARGE_PAGE_SIZE-1) & (max_phys_addr);
+}
+
+NON_NULL_PARAMS static inline void set_huge_pdpte_base(pmap_entry_t *entry, paddr_t addr) {
+  *entry |= addr & ~(PAE_HUGE_PAGE_SIZE-1) & (max_phys_addr);
+}
+
+static inline paddr_t get_pte_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr));
+}
+
+static inline paddr_t get_pde_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr));
+}
+
+static inline paddr_t get_pdpte_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr));
+}
+
+static inline paddr_t get_pml4e_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr));
+}
+
+NON_NULL_PARAMS static inline void set_pmap_entry_base(unsigned int level, pmap_entry_t *entry, paddr_t addr) {
+  switch(level) {
+	case 3:
+	  set_pml4e_base(entry, addr);
+	  break;
+	case 2:
+	  set_pdpte_base(entry, addr);
+	  break;
+	case 1:
+	  set_pde_base(entry, addr);
+	  break;
+	case 0:
+	  set_pte_base(entry, addr);
+	  break;
+	default:
+	  break;
+  }
+}
+
+static inline paddr_t get_pmap_entry_base(unsigned int level, pmap_entry_t entry) {
+  switch(level) {
+	case 3:
+	  return get_pml4e_base(entry);
+	case 2:
+	  return get_pdpte_base(entry);
+	case 1:
+	  return get_pde_base(entry);
+	case 0:
+	  return get_pte_base(entry);
+	default:
+	  return get_pte_base(entry);
+  }
+}
+
+static inline paddr_t get_page_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAGE_SIZE-1) & (max_phys_addr));
+}
+
+static inline paddr_t get_large_page_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAE_LARGE_PAGE_SIZE-1) & (max_phys_addr));
+}
+
+static inline paddr_t get_huge_page_base(pmap_entry_t entry) {
+  return (paddr_t)(entry & ~(PAE_HUGE_PAGE_SIZE-1) & (max_phys_addr));
+}
+
+static inline size_t get_page_offset(addr_t vaddr) {
+  return (size_t)(vaddr % PAGE_SIZE);
+}
+
+static inline size_t get_large_page_offset(addr_t vaddr) {
+  return (size_t)(vaddr % PAE_LARGE_PAGE_SIZE);
+}
+
+static inline size_t get_huge_page_offset(addr_t vaddr) {
+  return (size_t)(vaddr % PAE_HUGE_PAGE_SIZE);
+}
+
+static inline paddr_t get_page_sized_base(unsigned int level, pmap_entry_t entry) {
+  switch(level) {
+	case 2:
+	  return get_huge_page_base(entry);
+	case 1:
+	  return get_large_page_base(entry);
+	case 0:
+	  return get_page_base(entry);
+	default:
+	  return get_page_base(entry);
+  }
+}
+
+static inline size_t get_page_sized_offset(unsigned int level, addr_t addr) {
+  switch(level) {
+	case 2:
+	  return get_huge_page_offset(addr);
+	case 1:
+	  return get_large_page_offset(addr);
+	case 0:
+	  return get_page_offset(addr);
+	default:
+	  return get_page_offset(addr);
+  }
+}
+
+static inline paddr_t get_root_page_map(void) {
+  return get_cr3() & ~CR3_BASE_MASK;
+}
+
+/**
+ Flushes the entire TLB by reloading the CR3 register.
+
+ This must be done when switching to a new address space.
+ If only a few entries need to be flushed, use invalidatePage().
+ */
+
+static inline void invalidate_tlb(void) {
+  set_cr3(get_cr3());
+}
+
+/**
+ Flushes a single page from the TLB.
+
+ Instead of flushing the entire TLB, only a single page is flushed.
+ This is faster than reload_cr3() for flushing a few entries.
+ */
+
+static inline void invalidate_page(addr_t virt) {
+  __asm__ __volatile__( "invlpg (%0)\n" :: "r"( virt ) : "memory" );
+}
+
+/*
+ * Resolves a virtual address into a physical address by performing a page walk.
+ *
+ * @param vaddr The virtual address
+ * @param paddr A pointer to the physical address that will be returned.
+ * @param root_pmap The top-level page map table.
+ * @return E_OK on success with paddr pointing to the resolved physical address. -1, if the
+ * PTE is marked as not present. -2, if the PDE is marked as not present. -3, if the PDPTE
+ * is marked as not present. -4, if the PML4E is marked as not present.
+ */
+
+NON_NULL_PARAMS int translate_vaddr(addr_t vaddr, paddr_t *paddr, paddr_t root_pmap);
+
+/*
+ * Returns a page map table entry.
+ *
+ * @param level The level of the page map entry. 0 for PTE, 1 for PDE, 2 for PDPTE, 3 for PML4E.
+ * @param vaddr The virtual address.
+ * @param entry A pointer to the page map entry that will be returned.
+ * @param root_pmap The top-level page map table.
+ * @return E_OK on success with entry pointing to the pointer to the page map table entry.
+ * -2, if the PDE is marked as not present or PDE is page-sized (and level=0). -3, if the PDPTE
+ * is marked as not present or PDPTE is page-sized (and level <= 1). -4, if the PML4E is marked as not present.
+ */
+NON_NULL_PARAMS int get_pmap_entry(unsigned int level, addr_t vaddr, volatile pmap_entry_t **entry, paddr_t root_pmap);
 #endif /* KERNEL_PAE_H */

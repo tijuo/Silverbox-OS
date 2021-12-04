@@ -8,7 +8,6 @@
 #include <kernel/message.h>
 #include <kernel/error.h>
 #include <kernel/lowlevel.h>
-#include <kernel/paging.h>
 #include <kernel/interrupt.h>
 #include <kernel/memory.h>
 
@@ -142,7 +141,7 @@ NON_NULL_PARAMS int pause_thread(tcb_t *thread) {
  @return The TCB of the newly created thread. NULL on failure.
  */
 
-NON_NULL_PARAMS tcb_t* create_thread(void *entry_addr, addr_t addr_space,
+NON_NULL_PARAMS tcb_t* create_thread(void *entry_addr, paddr_t addr_space,
                                     void *stack_top)
 {
   tcb_t *thread = NULL;
@@ -163,12 +162,12 @@ NON_NULL_PARAMS tcb_t* create_thread(void *entry_addr, addr_t addr_space,
     RET_MSG(NULL, "Thread is already active.");
 
   memset(thread, 0, sizeof(tcb_t));
-  thread->root_pmap = (dword)root_pmap;
+  thread->root_pmap = root_pmap;
 
   thread->user_exec_state.rflags = RFLAGS_IOPL3 | RFLAGS_IF;
-  thread->user_exec_state.rip = (dword)entry_addr;
+  thread->user_exec_state.rip = (uint64_t)entry_addr;
 
-  thread->user_exec_state.rsp = (dword)stack_top;
+  thread->user_exec_state.rsp = (uint64_t)stack_top;
   thread->user_exec_state.cs = UCODE_SEL;
   thread->user_exec_state.ds = UDATA_SEL;
   thread->user_exec_state.es = UDATA_SEL;
@@ -178,7 +177,7 @@ NON_NULL_PARAMS tcb_t* create_thread(void *entry_addr, addr_t addr_space,
 
   thread->children_head = NULL_TID;
 
-  kprintf("Created new thread at %#p (tid: %u, pmap: %#p)\n", thread, tid,
+  kprintf("Created new thread at %#p (tid: %hhu, pmap: %#p)\n", thread, tid,
           (void*)(uintptr_t)thread->root_pmap);
 
   thread->thread_state = PAUSED;
@@ -286,7 +285,7 @@ tid_t get_new_tid(void) {
   return (tid_t)last_tid;
 }
 
-NON_NULL_PARAMS void switch_context(tcb_t *thread, int do_xsave) {
+NON_NULL_PARAMS void switch_context(tcb_t *thread) {
   assert(thread->thread_state == RUNNING);
 
   if((thread->root_pmap & CR3_BASE_MASK) != (get_cr3() & CR3_BASE_MASK))
@@ -295,11 +294,12 @@ NON_NULL_PARAMS void switch_context(tcb_t *thread, int do_xsave) {
   tcb_t *current_thread = get_current_thread();
 
   if(current_thread) {
-    if(do_xsave)
+    if(current_thread->xsave_state)
       __asm__("fxsave  %0\n" :: "m"(current_thread->xsave_state));
   }
 
-  __asm__("fxrstor %0\n" :: "m"(thread->xsave_state));
+  if(thread->xsave_state)
+	__asm__("fxrstor %0\n" :: "m"(thread->xsave_state));
 
 //  activateContinuation(thread); // doesn't return if successful
 

@@ -12,8 +12,8 @@
 				              __FILE__, __func__, __LINE__, (ret), (msg)); \
 				              return ret; })
 
-#define DECL_CALL_COUNTER(fname)		extern unsigned int fname ## _counter;
-#define CALL_COUNTER(fname)			unsigned int fname ## _counter;
+#define DECL_CALL_COUNTER(fname)		extern unsigned long int fname ## _counter;
+#define CALL_COUNTER(fname)			unsigned long int fname ## _counter;
 #define INC_COUNT()				__func__ _counter++
 
 #define BOCHS_BREAKPOINT		asm volatile("xchgw %bx, %bx\n")
@@ -31,19 +31,11 @@ NON_NULL_PARAMS void print_assert_msg(const char *exp, const char *file,
                                     const char *func, int line);
 void set_bad_assert_hlt( bool value);
 void set_video_low_mem( bool value);
-NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const ExecutionState *state,
-                               unsigned int int_num, unsigned int error_code);
-NON_NULL_PARAMS void dump_state(const ExecutionState *state,
-                                unsigned int int_num, unsigned int error_code);
+NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const exec_state_t *state,
+                               unsigned long int int_num, unsigned long int error_code);
+NON_NULL_PARAMS void dump_state(const exec_state_t *state,
+                                unsigned long int int_num, unsigned long int error_code);
 
-/*
- char *_toHexString(unsigned int num);
- char *__toHexString(unsigned int, int);
- char *_toIntString(int num);
- char *__toIntString(int, int);
- void putChar( char, int, int );
- void _putChar( char, int, int, unsigned char );
- */
 NON_NULL_PARAMS void print_string(const char*, ...);
 void init_video(void);
 
@@ -52,16 +44,6 @@ void init_video(void);
  */
 
 #define rdtsc( upper, lower ) asm __volatile__( "rdtsc\n" : "=a"( *lower ), "=d"( *upper ) )
-
-void start_time_stamp(void);
-void stop_time_stamp(void);
-unsigned int get_time_difference(void);
-
-#define calc_time(function, ret) \
-  start_time_stamp(); \
-  function; \
-  stop_time_stamp();\
-  ret = get_time_difference();
 
 #define assert(exp)  { \
 	__typeof__ (exp) _exp=(exp); \
@@ -88,7 +70,6 @@ unsigned int get_time_difference(void);
 
 //#define kprintInt( num )
 //#define kprintHex( num )
-#define calc_time(func, ret) func
 //#define kprint3Nums( str, ... )
 //#define putChar(c, i, j)
 //#define _putChar(c, i, j, attr)
