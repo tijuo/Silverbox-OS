@@ -2,11 +2,11 @@
 #include <elf.h>
 #include <os/progload.h>
 
-bool isValidElfExe(elf_header_t *image) {
+bool isValidElf32Exe(elf32_header_t *image) {
   if(!VALID_ELF(image))
     return false;
   else {
-    if(image->identifier[ EI_VERSION] != EV_CURRENT)
+    if(image->identifier[EI_VERSION] != EV_CURRENT)
       return false;
     if(image->type != ET_EXEC)
       return false;

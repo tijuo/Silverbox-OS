@@ -368,7 +368,7 @@ reload_cs2:
   mov rdx, 1
   mov cl, al
   shl rdx, cl
-  dec rbx
+  dec rdx
 
   lea rbx, [max_phys_addr]
   mov [rbx], rdx

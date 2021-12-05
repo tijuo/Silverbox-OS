@@ -342,12 +342,12 @@ typedef struct {
 
 typedef struct {
   uint32_t type;
-  uint32_t offset;
+  uint32_t flags;
+  uint64_t offset;
   uint64_t vaddr;
   uint64_t paddr;
   uint64_t filesz;
   uint64_t memsz;
-  uint64_t flags;
   uint64_t align;
 } elf64_pheader_t;
 

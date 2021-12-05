@@ -54,17 +54,17 @@
 
 #define PAE_PMAP_ENTRIES	(1u << PAE_ENTRY_BITS)
 
-#define PML4_INDEX(addr)	(size_t)(((addr) >> (PAGE_BITS + 3*PAGE_ENTRY_BITS)) % PAE_PMAP_ENTRIES)
-#define PDPTE_INDEX(addr)   (size_t)(((addr) >> (PAGE_BITS + 2*PAGE_ENTRY_BITS)) % PAE_PMAP_ENTRIES)
-#define PDE_INDEX(addr)     (size_t)(((addr) >> (PAGE_BITS + PAGE_ENTRY_BITS)) % PAE_PMAP_ENTRIES)
-#define PTE_INDEX(addr)     (size_t)(((addr) >> PAGE_BITS) % PAE_PMAP_ENTRIES)
-#define PAGE_OFFSET(addr)   (size_t)(((addr) % PAGE_SIZE)
+#define PML4_INDEX(addr)	(size_t)(((addr) >> (PAGE_BITS + 3*PAGE_ENTRY_BITS)) & (PAE_PMAP_ENTRIES-1))
+#define PDPTE_INDEX(addr)   (size_t)(((addr) >> (PAGE_BITS + 2*PAGE_ENTRY_BITS)) & (PAE_PMAP_ENTRIES-1))
+#define PDE_INDEX(addr)     (size_t)(((addr) >> (PAGE_BITS + PAGE_ENTRY_BITS)) & (PAE_PMAP_ENTRIES-1))
+#define PTE_INDEX(addr)     (size_t)(((addr) >> PAGE_BITS) & (PAE_PMAP_ENTRIES-1))
+#define PAGE_OFFSET(addr)   (size_t)(((addr) & (PAGE_SIZE-1)))
 
 #define INDEX_TO_ADDR(pml4e, pdpte, pde, pte, offset)	\
-  (addr_t)((((pml4e) % PAE_PMAP_ENTRIES) << (PAGE_BITS + 3*PAE_ENTRY_BITS)) \
-      | (((pdpte) % PAE_PMAP_ENTRIES) << (PAGE_BITS + 2*PAE_ENTRY_BITS)) \
-	  | (((pde) % PAE_PMAP_ENTRIES) << (PAGE_BITS + PAE_ENTRY_BITS)) \
-	  | (((pte) % PAE_PMAP_ENTRIES) << PAGE_BITS) | (offset % PAGE_SIZE))
+  (addr_t)((((pml4e) & (PAE_PMAP_ENTRIES-1)) << (PAGE_BITS + 3*PAE_ENTRY_BITS)) \
+      | (((pdpte) & (PAE_PMAP_ENTRIES-1)) << (PAGE_BITS + 2*PAE_ENTRY_BITS)) \
+	  | (((pde) & (PAE_PMAP_ENTRIES-1)) << (PAGE_BITS + PAE_ENTRY_BITS)) \
+	  | (((pte) & (PAE_PMAP_ENTRIES-1)) << PAGE_BITS) | (offset & (PAGE_SIZE-1)))
 
 #define CR3_BASE_MASK		0xFFFFFFFFFFFFF000ul
 
@@ -161,15 +161,15 @@ static inline paddr_t get_huge_page_base(pmap_entry_t entry) {
 }
 
 static inline size_t get_page_offset(addr_t vaddr) {
-  return (size_t)(vaddr % PAGE_SIZE);
+  return (size_t)(vaddr & (PAGE_SIZE-1));
 }
 
 static inline size_t get_large_page_offset(addr_t vaddr) {
-  return (size_t)(vaddr % PAE_LARGE_PAGE_SIZE);
+  return (size_t)(vaddr & (PAE_LARGE_PAGE_SIZE-1));
 }
 
 static inline size_t get_huge_page_offset(addr_t vaddr) {
-  return (size_t)(vaddr % PAE_HUGE_PAGE_SIZE);
+  return (size_t)(vaddr & (PAE_HUGE_PAGE_SIZE-1));
 }
 
 static inline paddr_t get_page_sized_base(unsigned int level, pmap_entry_t entry) {
@@ -199,7 +199,7 @@ static inline size_t get_page_sized_offset(unsigned int level, addr_t addr) {
 }
 
 static inline paddr_t get_root_page_map(void) {
-  return get_cr3() & ~CR3_BASE_MASK;
+  return get_cr3() & CR3_BASE_MASK;
 }
 
 /**

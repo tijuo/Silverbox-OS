@@ -1,6 +1,3 @@
-#include <oslib.h>
-#include <os/mutex.h>
-#include <os/syscalls.h>
 #include <stdlib.h>
 
 extern int main(int, char**);
@@ -8,13 +5,13 @@ extern int main(int, char**);
 void _start(void);
 
 void _start(void) {
-  int retVal;
-
+  int result;
   /* Init stuff here */
 
-  retVal = main(0, NULL);
+  result = main(0, NULL);
 
   /* Cleanup stuff here */
 
-  exit(retVal);
+  exit(result);
+
 }

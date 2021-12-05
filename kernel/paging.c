@@ -49,7 +49,7 @@ NON_NULL_PARAMS int get_pmap_entry(unsigned int level, addr_t vaddr,
 	  paging_level--)
   {
 	*entry = &table[(vaddr >> (PAGE_BITS + PAE_ENTRY_BITS * (paging_level - 1)))
-		% PAE_PMAP_ENTRIES];
+		& (PAE_PMAP_ENTRIES-1)];
 
 	if(level + 1 == paging_level)
 	  return E_OK;
@@ -235,7 +235,7 @@ NON_NULL_PARAMS int access_mem(addr_t address, size_t len, void *buffer,
 
   while(len) {
 	paddr_t base_address;
-	size_t addr_offset = address % PAGE_SIZE;
+	size_t addr_offset = PAGE_OFFSET(address);
 	size_t bytes =
 		(len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
 

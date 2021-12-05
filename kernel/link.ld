@@ -21,7 +21,6 @@ SECTIONS
      kcode = .;
      *(.text*)
      *(.rodata*)
-     *(.debug*)
      *(.interp*)
      *(.rela*)
      . = ALIGN(4K);
@@ -38,15 +37,8 @@ SECTIONS
 
      *(.data*)
      . = ALIGN(4K);
-     *(.dynamic*)
-     *(.dynstr*)
-     *(.dynsym*)
      *(.got*)
      *(.rel*)
-     *(.shstrtab*)
-     *(.strtab*)
-     *(.symtab*)
-     *(.hash*)
      *(.tss)
      . = ALIGN(4K);
      kdata_end = .;

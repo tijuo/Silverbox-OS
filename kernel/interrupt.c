@@ -40,8 +40,7 @@ NAKED noreturn void cpu_ex##num##_handler(void) { \
 NAKED noreturn void cpu_ex##num##_handler(void); \
 NAKED noreturn void cpu_ex##num##_handler(void) { \
   SAVE_ERR_STATE; \
-  __asm__("push %rdi\n" \
-          "pushq $" #num "\n" \
+  __asm__("pushq $" #num "\n" \
           "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
 		  "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
           "call handle_cpu_exception\n"); \
@@ -328,6 +327,7 @@ void handle_cpu_exception(struct CpuExInterruptFrame *interrupt_frame) {
 			  interrupt_frame->error_code);
 
 	release_thread(tcb);
+	switch_context(schedule(get_current_processor()));
   }
 
   RESTORE_STATE;

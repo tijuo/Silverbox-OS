@@ -286,8 +286,6 @@ tid_t get_new_tid(void) {
 }
 
 NON_NULL_PARAMS void switch_context(tcb_t *thread) {
-  assert(thread->thread_state == RUNNING);
-
   if((thread->root_pmap & CR3_BASE_MASK) != (get_cr3() & CR3_BASE_MASK))
     set_cr3(thread->root_pmap);
 

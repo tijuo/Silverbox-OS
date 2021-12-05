@@ -11,27 +11,17 @@
 .type	mutex_unlock, @function
 
 mutex_lock:
-	push %ebp
-	mov %esp, %ebp
-	mov $1, %eax
+	mov $1, %rax
 	jmp _mutex_op
 
 mutex_unlock:
-	push %ebp
-	mov %esp, %ebp
 	xor %eax, %eax
 	jmp _mutex_op
 
 _mutex_op:
-	mov 8(%ebp), %ecx
-	lock xchg %eax, (%ecx)
-	leave
+	lock xchg %rax, (%rdi)
 	ret
 
 mutex_is_locked:
-	push %ebp
-	mov %esp, %ebp
-	mov 8(%ebp), %ecx
-	mov (%ecx), %eax
-	leave
+	mov (%rdi), %rax
 	ret

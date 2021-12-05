@@ -139,10 +139,11 @@ NON_NULL_PARAMS int kullitoa(unsigned long long int value, char *str, int base);
 void _put_char(char c, int x, int y, unsigned char attrib);
 void put_char(char c, int x, int y);
 NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const exec_state_t *state,
-							   unsigned long int int_num, unsigned long int error_code);
-NON_NULL_PARAMS void dump_state(const exec_state_t *state, unsigned long int int_num,
+							   unsigned long int int_num,
+							   unsigned long int error_code);
+NON_NULL_PARAMS void dump_state(const exec_state_t *state,
+								unsigned long int int_num,
 								unsigned long int error_code);
-void dump_stack(addr_t, addr_t);
 static const char *DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 unsigned long int sx = 0;
@@ -275,7 +276,6 @@ NON_NULL_PARAMS int kuitoa(unsigned int value, char *str, int base) {
 
   return charsWritten;
 }
-
 
 NON_NULL_PARAMS int klitoa(long int value, char *str, int base) {
   size_t strEnd = 0;
@@ -521,7 +521,7 @@ NON_NULL_PARAMS void do_new_line(int *x, int *y) {
 
 void print_char(int c) {
   volatile word *vidmem = (volatile word*)VIDMEM_START + cursor_y * SCREEN_WIDTH
-						  + cursor_x;
+	  + cursor_x;
 
   *vidmem = (*vidmem & 0xFF00) | (unsigned char)c;
 
@@ -880,8 +880,9 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char *str,
 		  break;
 		case 'n':
 		  if(state.printf_state == WIDTH || state.printf_state == PRECISION
-			 || state.is_forced_plus || state.is_blank_plus || state.is_zero_pad
-			 || state.use_prefix || state.is_left_justify) {
+			  || state.is_forced_plus || state.is_blank_plus
+			  || state.is_zero_pad || state.use_prefix || state.is_left_justify)
+		  {
 			state.is_error = 1;
 			break;
 		  }
@@ -940,15 +941,15 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char *str,
 		  prefix_length = 0;
 
 		if(str[i] == 's' || state.precision == -1 || arg_length > INT_MAX
-		   || (int)arg_length >= state.precision)
+			|| (int)arg_length >= state.precision)
 		  zero_pad_length = 0;
 		else
 		  zero_pad_length = state.precision - arg_length;
 
-		if(arg_length + sign_length + prefix_length + zero_pad_length < state
-			 .width)
+		if(arg_length + sign_length + prefix_length + zero_pad_length
+			< state.width)
 		  space_pad_length = state.width - arg_length - sign_length
-							 - prefix_length - zero_pad_length;
+			  - prefix_length - zero_pad_length;
 		else
 		  space_pad_length = 0;
 
@@ -1013,65 +1014,42 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char *str,
 }
 
 NON_NULL_PARAMS void dump_state(const exec_state_t *exec_state,
-								unsigned long int int_num, unsigned long int error_code)
+								unsigned long int int_num,
+								unsigned long int error_code)
 {
-  if(int_num < IRQ_BASE)
+  if(int_num < IRQ_BASE) {
 	kprintf("Exception %lu", int_num);
+
+	if(int_num == 8 || (int_num >= 10 && int_num <= 14) || int_num == 17
+		  || int_num == 21) {
+		kprintf(" (error code: %#lx)", error_code);
+	}
+  }
   else
 	kprintf("IRQ%lu", int_num - IRQ_BASE);
 
-  kprintf("\nRAX: 0x%#lx RBX: 0x%#lx RCX: 0x%#lx RDX: 0x%#lx", exec_state->rax,
-		  exec_state->rbx, exec_state->rcx, exec_state->rdx);
-  kprintf("\nRSI: 0x%#lx RDI: 0x%#lx RBP: 0x%#lx RSP: 0x%#lx\n",
-		  exec_state->rsi, exec_state->rdi, exec_state->rbp, exec_state->rsp);
-  kprintf("\nR8: 0x%#lx R9: 0x%#lx R10: 0x%#lx R11: 0x%#lx", exec_state->r8,
-		  exec_state->r9, exec_state->r10, exec_state->r11);
-  kprintf("\nR12: 0x%#lx R13: 0x%#lx R14: 0x%#lx R15: 0x%#lx\n",
-		  exec_state->r12, exec_state->r13, exec_state->r14, exec_state->r15);
-  kprintf("RIP: 0x%#lx RFLAGS: 0x%#lx", exec_state->rip, exec_state->rflags);
+  kprintf("\nRAX: %#.16lx RBX: %#.16lx RCX: %#.16lx\n", exec_state->rax,
+		  exec_state->rbx, exec_state->rcx);
+  kprintf("RDX: %#.16lx RSI: %#.16lx RDI: %#.16lx\n", exec_state->rdx,
+		  exec_state->rsi, exec_state->rdi);
+  kprintf("RBP: %#.16lx RSP: %#.16lx R8:  %#.16lx\n", exec_state->rbp,
+		  exec_state->rsp, exec_state->r8);
+  kprintf("R9:  %#.16lx R10: %#.16lx R11: %#.16lx\n", exec_state->r9,
+		  exec_state->r10, exec_state->r11);
+  kprintf("R12: %#.16lx R13: %#.16lx R14: %#.16lx\n", exec_state->r12,
+		  exec_state->r13, exec_state->r14);
+  kprintf("R15: %#.16lx RIP: %#.16lx RFLAGS: %#.16lx\n", exec_state->r15,
+		  exec_state->rip, exec_state->rflags);
 
-  if(int_num == 8 || (int_num >= 10 && int_num <= 14) || int_num == 17
-	 || int_num == 21) {
-	kprintf(" error code: 0x%lx", error_code);
-  }
+  kprintf(
+	  "CS:  %#.4hhx DS: %#.4hhx ES: %#.4hhx FS: %#.4hhx GS: %#.4hhx SS: %#.4hhx\n",
+	  (uint16_t)exec_state->cs, exec_state->ds, exec_state->es, exec_state->fs,
+	  exec_state->gs, (uint16_t)exec_state->ss);
 
-  kprintf("\nCS: 0x%lx DS: 0x%hhx ES: 0x%hhx FS: 0x%hhx GS: 0x%hhx SS: 0x%lx\n",
-		  exec_state->cs, exec_state->ds, exec_state->es, exec_state->fs,
-		  exec_state->gs, exec_state->ss);
+  kprintf("CR0: %#.16lx CR2: %#.16lx CR3: %#.16lx\n", get_cr0(),
+		  get_cr2(), get_cr3());
+  kprintf("CR4: %#.16lx CR8: %#.16lx\n", get_cr4(), get_cr8());
 
-  kprintf("CR0: 0x%#lx CR2: 0x%#lx CR3: 0x%#lx CR4: 0x%#lx", get_cr0(),
-		  get_cr2(), get_cr3(), get_cr4());
-  kprintf("CR8: 0x%#lx\n", get_cr8());
-
-}
-
-void dump_stack(addr_t stack_frame_ptr, addr_t addr_space) {
-  kprintf("\n\nStack Trace:\n<Stack Frame>: [Return-EIP] args*\n");
-
-  while(stack_frame_ptr) {
-	kprintf("<0x%#lx>:", stack_frame_ptr);
-
-	if(is_readable(stack_frame_ptr + sizeof(unsigned long int), addr_space))
-	  kprintf(" [0x%#lx]", *(unsigned long int *)(stack_frame_ptr + sizeof(unsigned long int)));
-	else
-	  kprintf(" [???]");
-
-	for(int i = 2; i < 8; i++) {
-	  if(is_readable(stack_frame_ptr + sizeof(unsigned long int) * i, addr_space))
-		kprintf(" 0x%#lx", *(unsigned long int*)(stack_frame_ptr + sizeof(unsigned long int) * i));
-	  else
-		break;
-	}
-
-	kprintf("\n");
-
-	if(!is_readable(*(unsigned long int*)stack_frame_ptr, addr_space)) {
-	  kprintf("<0x%#lx (invalid)>:\n", *(unsigned long int*)stack_frame_ptr);
-	  break;
-	}
-	else
-	  stack_frame_ptr = *(unsigned long int*)stack_frame_ptr;
-  }
 }
 
 /** Prints useful debugging information about the current thread
@@ -1083,16 +1061,12 @@ void dump_stack(addr_t stack_frame_ptr, addr_t addr_space) {
 
 NON_NULL_PARAMS void dump_regs(const tcb_t *thread,
 							   const exec_state_t *exec_state,
-							   unsigned long int int_num, unsigned long int error_code)
+							   unsigned long int int_num,
+							   unsigned long int error_code)
 {
-  kprintf("Thread: %p (TID: %u) ", thread, get_tid(thread));
+  kprintf("Tid: %u @ %p ", get_tid(thread), thread);
 
   dump_state(exec_state, int_num, error_code);
-
-  kprintf("Thread CR3: %#lx Current CR3: %#lx\n",
-		  *(const unsigned long int *)&thread->root_pmap, get_cr3());
-
-  dump_stack((addr_t)exec_state->rbp, (addr_t)thread->root_pmap);
 }
 
 #endif /* DEBUG */
@@ -1100,11 +1074,7 @@ NON_NULL_PARAMS void dump_regs(const tcb_t *thread,
 noreturn void abort(void);
 
 noreturn void abort(void) {
-  addr_t stack_frame_ptr;
-
   kprintf("Debug Error: abort() has been called.\n");
-  __asm__("mov %%ebp, %0\n" : "=m"(stack_frame_ptr));
-  dump_stack(stack_frame_ptr, get_root_page_map());
 
   while(1) {
 	disable_int();
@@ -1115,12 +1085,8 @@ noreturn void abort(void) {
 NON_NULL_PARAMS noreturn void print_panic_msg(const char *msg, const char *file,
 											  const char *func, int line)
 {
-  addr_t stack_frame_ptr;
-  kprintf("\nKernel panic - %s(): %d (%s). %s\nSystem halted\n", func, line,
+  kprintf("\nKernel panic - %s(): %d (%s). %s\nSystem halted.\n", func, line,
 		  file, msg);
-
-  __asm__("mov %%ebp, %0\n" : "=m"(stack_frame_ptr));
-  dump_stack(stack_frame_ptr, get_root_page_map());
 
   while(1) {
 	disable_int();

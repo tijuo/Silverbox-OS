@@ -6,7 +6,7 @@ ARFLAGS =rs
 
 DIRS	=ostypes
 SRC	=bitmap.c elf.c sbrk.c strings.c message.c
-ASM_SRC	=mutex.S state.S
+ASM_SRC	=mutex.S
 OBJ	=$(SRC:%.c=%.o) $(ASM_SRC:%.S=%.o)
 
 .PHONY:	$(DIRS) all tests clean install

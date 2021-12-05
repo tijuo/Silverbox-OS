@@ -4,6 +4,9 @@ include ../Makefile.inc
 libc-clean libos-clean librust-clean librust-tests librust
 
 all: libc libos librust
+	cp libc/libc.a .
+	cp libos/libos.a .
+	cp librust/librust.rlib .
 
 libc:
 	make -C libc all
@@ -26,6 +29,8 @@ libos-tests:
 tests: libc-tests libos-tests librust-tests
 
 clean: libc-clean libos-clean librust-clean
+	rm -f *.a
+	rm -f *.rlib
 
 libc-clean:
 	make -C libc clean

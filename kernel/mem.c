@@ -1,5 +1,4 @@
 #include <kernel/mm.h>
-#include <kernel/paging.h>
 #include <kernel/error.h>
 #include <kernel/debug.h>
 #include <oslib.h>

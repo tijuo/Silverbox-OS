@@ -185,11 +185,12 @@ void add_idt_entry(void (*f)(void), int entry_num, int dpl) {
 
   idt_entry_t *new_entry = &kernel_idt[entry_num];
 
+  new_entry->value = 0;
   new_entry->offset_lower = (uint16_t)((uintptr_t)f & 0xFFFFu);
   new_entry->code_selector = KCODE_SEL;
-  new_entry->_resd = 0;
   new_entry->flags = I_PRESENT | (MIN(dpl, 3) << I_DPL_BITS) | I_INT;
-  new_entry->offset_upper = (uint16_t)((uintptr_t)f >> 16);
+  new_entry->offset_mid = (uint16_t)((uintptr_t)f >> 16);
+  new_entry->offset_upper = (uint32_t)((uintptr_t)f >> 32);
 }
 
 void load_idt(void) {
@@ -503,7 +504,7 @@ void init(const struct multiboot_info_header *info_header) {
   kprintf("Discarding %d bytes in total\n",
 		  (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kdcode));
 
-  //load_servers(tags);
+  load_init_server(info_header);
 
   /* Release the pages for the code and data that will never be used again. */
 
@@ -524,6 +525,7 @@ void init(const struct multiboot_info_header *info_header) {
   wrmsr(SYSCALL_LSTAR_MSR, (uint64_t)syscall_entry);
 
   kprintf("Context switching...\n");
+
   switch_context(schedule(get_current_processor()));
-  stop_init("Error: Context switch failed.");
+  stop_init("Context switch failed.");
 }

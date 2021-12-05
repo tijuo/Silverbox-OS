@@ -48,13 +48,19 @@ NON_NULL_PARAMS bool is_reserved_page(uint64_t addr,
 
   const struct multiboot_tag *tags = header->tags;
 
-  if(addr < (uint64_t)EXTENDED_MEMORY)
+  if(addr < (uint64_t)EXTENDED_MEMORY) {
+	kprintf("%#lx-%#lx overlaps conventional memory.\n", addr, addr_end);
 	return true;
+  }
   else if((addr >= kernel_start && addr < kernel_start + kernel_length)
-	  || (addr_end >= kernel_start && addr_end < kernel_start + kernel_length))
+	  || (addr_end > kernel_start && addr_end <= kernel_start + kernel_length)) {
+	kprintf("%#lx-%#lx overlaps the kernel.\n", addr, addr_end);
 	return true;
-  else if(addr >= (uint64_t)&ktcb_start && addr < (uint64_t)&ktcb_end)
+  }
+  else if(addr >= (uint64_t)&ktcb_start && addr < (uint64_t)&ktcb_end) {
+	kprintf("%#lx-%#lx overlaps the TCB.\n", addr, addr_end);
 	return true;
+  }
   else {
 	int in_some_region = 0;
 
@@ -77,6 +83,7 @@ NON_NULL_PARAMS bool is_reserved_page(uint64_t addr,
 				case MULTIBOOT_MEMORY_AVAILABLE:
 				  break;
 				default:
+					kprintf("%#lx-%#lx is in reserved memory.\n", addr, addr_end);
 				  return true;
 			  }
 			}
@@ -86,8 +93,10 @@ NON_NULL_PARAMS bool is_reserved_page(uint64_t addr,
 				+ mmap->entry_size);
 		  }
 
-		  if(!in_some_region)
+		  if(!in_some_region) {
+			kprintf("%#lx-%#lx lies outside of the memory map.\n", addr, addr_end);
 			return true;
+		  }
 
 		  break;
 		}
@@ -98,6 +107,8 @@ NON_NULL_PARAMS bool is_reserved_page(uint64_t addr,
 		  if((addr >= module->mod_start && addr < module->mod_end)
 			  || (addr_end > module->mod_start && addr_end <= module->mod_end))
 		  {
+			kprintf("%#lx-%#lx overlaps a module.\n", addr, addr_end);
+
 			return true;
 		  }
 

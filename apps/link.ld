@@ -1,47 +1,50 @@
-OUTPUT_FORMAT("elf32-i386")
+OUTPUT_FORMAT("elf64-x86-64")
 ENTRY(_start)
 SECTIONS
 {
-  . = 0x400000;
-
-  _begin = .;
-
-  .text : {
-    _textStart = .;
-    *(.text)
-    *(.text.*)
-    *(.ctors)
-    *(.dtors)
-    _textEnd = .;
-  }
-  
-  .rodata : ALIGN(4096) {
-    _rodataStart = .;
-    *(.rodata)
-    *(.rodata.*)
-    *(.rdata)
-    *(.rdata.*)
-    *(.comment)
-    *(.comment.*)
-    *(.note)
-    *(.note.*)
-    _rodataEnd = .;
+  .text 0x8000000000 : ALIGN(4K) {
+     elf64_image_start = .;
+     segment_text_start = .;
+     *(.text*)
+     *(.interp*)
+     . = ALIGN(4K);
+     segment_text_end = .;
   }
 
-  .data : ALIGN(4096) {
-    _dataStart = .;
-    *(.data)
-    *(.data.*)
-    _dataEnd = .;
+  .rodata : ALIGN(4K) {
+    *(.rodata*)
+    *(.rela*)
   }
 
-  .bss : ALIGN(4096) {
-    _bssStart = .;
-    *(.bss)
-    *(.bss.*)
-    *(.common)
-    *(.common.*)
-    _bssEnd = .;
+  .data : ALIGN(4K) {
+     segment_data_start = .;
+
+     *(.data*)
+     *(.dynamic*)
+     *(.dynstr*)
+     *(.dynsym*)
+     *(.got*)
+     *(.rel*)
+     *(.shstrtab*)
+     *(.strtab*)
+     *(.symtab*)
+     *(.hash*)
+     . = ALIGN(4K);
+     segment_data_end = .;
   }
-  _end = .;
+
+  .bss : ALIGN(4K) {
+    segment_bss_start = .;
+    *(.bss*)
+    *(.COMMON)
+     . = ALIGN(4K);
+    segment_bss_end = .;
+  }
+
+  elf64_image_end = .;
+
+  /DISCARD/ : {
+    *(.comment*)
+    *(.note*)
+  }
 }

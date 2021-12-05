@@ -75,33 +75,7 @@ static inline bool is_readable(addr_t addr, paddr_t root_pmap) {
   return !IS_ERROR(translate_vaddr(addr, &paddr, root_pmap));
 }
 
-/**
- Can the kernel write data to some virtual address in a particular address space?
-
- @param addr The virtual address to be tested.
- @param root_pmap The physical address of the address space
- @return true if address is writable. false, otherwise.
- **/
-/*
-static inline bool is_writable(addr_t addr, paddr_t root_pmap) {
-  return is_accessible(addr, root_pmap, false);
-}
-*/
 #if 0
-
-#include <types.h>
-#include <kernel/lowlevel.h>
-#include <kernel/paging.h>
-
-/* FIXME: Changing any of these values may require changing
- the asm code */
-
-#define KERNEL_TCB_START	((addr_t)&ktcb_start)
-#define KERNEL_TCB_END		((addr_t)&ktcb_end)
-#define KERNEL_VSTART		((addr_t)&kvirt_start)
-#define KERNEL_VEND			((addr_t)&kend)
-
-/* The first 120 MiB of physical memory are mapped in kernel space. */
 
 #define KERNEL_PHYS_START	((addr_t)&kvirt_low_mem_start)
 #define KERNEL_START		((addr_t)&kPhysStart)
@@ -115,12 +89,6 @@ static inline bool is_writable(addr_t addr, paddr_t root_pmap) {
 #define IOAPIC_VADDR		KMAP_AREA2
 #define LAPIC_VADDR         (IOAPIC_VADDR + 0x100000u)
 #define TEMP_PAGE			(KMAP_AREA2 + 0x3FF000u)
-#define INVALID_VADDR       ((addr_t)0xFFFFFFFF)
-#define INVALID_ADDR        ((addr_t)0xFFFFFFFF)
-
-#define INIT_SERVER_STACK_TOP	(ALIGN_DOWN((addr_t)KERNEL_VSTART, PAGE_TABLE_SIZE))
-#define INIT_SERVER_STACK_SIZE   0x400000u
-/** Aligns an address to the previous boundary (if not already aligned) */
 
 #endif
 #endif /* MM_H */

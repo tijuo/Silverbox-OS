@@ -123,10 +123,6 @@
 #define PCID_BITS   12
 #define PCID_MASK   0xFFFu
 
-#define SYSENTER_CS_MSR     0x174u
-#define SYSENTER_ESP_MSR    0x175u
-#define SYSENTER_EIP_MSR    0x176u
-
 #define SYSCALL_FMASK_MSR	0xC0000084
 #define SYSCALL_STAR_MSR	0xC0000081
 #define SYSCALL_LSTAR_MSR	0xC0000082
@@ -190,7 +186,7 @@ union GdtEntry {
 
 typedef union GdtEntry gdt_entry_t;
 
-_Static_assert(sizeof(gdt_entry_t) == 8, "GDTEntry should be 8 bytes");
+_Static_assert(sizeof(gdt_entry_t) == 8, "gdt_entry_t should be 8 bytes");
 
 union tss64_descriptor {
   struct {
@@ -235,7 +231,7 @@ union idt_entry {
 
 typedef union idt_entry idt_entry_t;
 
-_Static_assert(sizeof(idt_entry_t) == 16, "IDTEntry should be 8 bytes");
+_Static_assert(sizeof(idt_entry_t) == 16, "idt_entry_t should be 16 bytes");
 
 extern void atomic_inc(volatile void*);
 extern void atomic_dec(volatile void*);

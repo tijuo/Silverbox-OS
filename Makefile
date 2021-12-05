@@ -22,10 +22,10 @@ servers:
 drivers:
 
 kernel/kernel.elf:
-	make -C kernel kernel.elf
+	$(MAKE) -C kernel kernel.elf
 
-gdb-debug: kernel/kernel.elf
-	$(GDB) kernel/kernel.elf -x gdb.cfg
+gdb-debug:
+	$(MAKE) -C kernel gdb-debug
 
 tests:
 	$(MAKE) -C kernel tests

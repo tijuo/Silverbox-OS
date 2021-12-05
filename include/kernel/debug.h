@@ -66,7 +66,6 @@ void init_video(void);
 #define set_video_low_mem( val )       ({})
 #define dump_regs( t, s, i, e )     ({})
 #define dump_state( s, i, e )       ({})
-#define dump_stack( x, y )          ({})
 
 //#define kprintInt( num )
 //#define kprintHex( num )

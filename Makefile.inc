@@ -32,7 +32,8 @@ export CFLAGS	=-m64 -I$(ROOT_DIR)/include -std=gnu11 \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
 		-Wcast-align -Wdangling-else \
 		-Wlogical-op -Wpacked -Wno-discarded-qualifiers
-export LDFLAGS	:=$(if $(RELEASE),,-g) -static -nostdlib -z nodefaultlib
+export LDFLAGS	:=-melf_x86_64 $(if $(RELEASE),,-g) -static \
+-nostdlib -z nodefaultlib -z max-page-size=4096
 export DISK_IMG=$(ROOT_DIR)/os_image.img
 export GDB	:=$(TARGET)-gdb
 TOP		=$(shell if [ -f "Makefile.top" ]; then echo 1; else echo ""; fi)
