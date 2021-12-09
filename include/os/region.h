@@ -1,9 +1,10 @@
 #ifndef MEM_REGION_H
+
 #define MEM_REGION_H
 
 #include <stddef.h>
 #include <stdbool.h>
-#include <types.h>
+#include "../type.h"
 
 struct MemRegion
 {

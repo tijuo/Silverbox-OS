@@ -1,6 +1,6 @@
-#include <types.h>
 #include <elf.h>
 #include <os/progload.h>
+#include "../../include/type.h"
 
 bool isValidElf32Exe(elf32_header_t *image) {
   if(!VALID_ELF(image))

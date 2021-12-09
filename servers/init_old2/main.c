@@ -1,7 +1,6 @@
 #include <os/multiboot.h>
 #include <os/syscalls.h>
 #include <oslib.h>
-#include <types.h>
 #include <string.h>
 #include <stdlib.h>
 #include "phys_mem.h"
@@ -12,6 +11,7 @@
 #include <os/msg/message.h>
 #include <os/msg/init.h>
 #include <os/msg/kernel.h>
+#include "../../include/type.h"
 #include "name/name.h"
 #include "elf.h"
 

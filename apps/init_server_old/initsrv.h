@@ -1,9 +1,10 @@
 #ifndef INITSRV_H
+
 #define INITSRV_H
 
 #include "addr_space.h"
 #include "resources.h"
-#include <types.h>
+#include "../../include/type.h"
 
 void *allocEnd;
 unsigned int availBytes;

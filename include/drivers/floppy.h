@@ -1,7 +1,7 @@
 #ifndef FLOPPY_DRIVER
 #define FLOPPY_DRIVER
 
-#include <types.h>
+#include "../type.h"
 
 /* 82077AA Floppy Controller */
 

@@ -1,7 +1,7 @@
 #ifndef OS_SERVICES_H
 #define OS_SERVICES_H
 
-#include <types.h>
+#include "../type.h"
 #include <os/device.h>
 #include <os/region.h>
 #include <os/vfs.h>

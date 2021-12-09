@@ -1,7 +1,8 @@
 #ifndef KERNEL_VARIABLES
+
 #define KERNEL_VARIABLES
 
-#include <types.h>
+#include "../type.h"
 
 #define TICKS_PER_SEC		1024
 

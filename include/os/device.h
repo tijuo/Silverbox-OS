@@ -1,7 +1,7 @@
 #ifndef DEVICE_REGISTRAR
 #define DEVICE_REGISTRAR
 
-#include <types.h>
+#include "../type.h"
 #include <oslib.h>
 
 #define DEV_NUM(major, minor)	((((major) & 0xFFFF) << 16) | ((minor) & 0xFFFF))

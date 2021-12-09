@@ -1,7 +1,7 @@
 #ifndef KERNEL_THREAD_H
 #define KERNEL_THREAD_H
 
-#include <types.h>
+#include "../type.h"
 #include <kernel/list_struct.h>
 #include <kernel/mm.h>
 #include <kernel/lowlevel.h>

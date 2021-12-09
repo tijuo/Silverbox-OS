@@ -1,7 +1,8 @@
 #ifndef FS_H
+
 #define FS_H
 
-#include <types.h>
+#include "../type.h"
 /*
 #define CREATE_FILE		0xE0
 #define CREATE_DIR		0xE1

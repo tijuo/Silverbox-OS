@@ -1,7 +1,8 @@
 #ifndef KERNEL_LIST_STRUCT_H
+
 #define KERNEL_LIST_STRUCT_H
 
-#include <types.h>
+#include "../type.h"
 
 struct List {
   tid_t head_tid;

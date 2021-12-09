@@ -1,11 +1,11 @@
 #include "init.h"
 #include "memory.h"
 #include <stdint.h>
-#include <types.h>
 #include <kernel/apic.h>
 #include <kernel/lowlevel.h>
 #include <kernel/memory.h>
 #include <oslib.h>
+#include "../../include/type.h"
 
 #define RSDP_SIGNATURE  "RSD PTR "
 #define PARAGRAPH_LEN   16

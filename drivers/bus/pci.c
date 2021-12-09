@@ -1,4 +1,3 @@
-#include	<types.h>
 #include	<oslib.h>
 #include	<os/io.h>
 #include	<stdio.h>
@@ -6,6 +5,8 @@
 #include	<os/dev_interface.h>
 #include	<os/services.h>
 #include	<drivers/pci.h>
+
+#include "../../include/type.h"
 /*
 char *class_codes[][] = {
 { "Unknown PCI device", "VGA device" },

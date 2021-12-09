@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <util.h>
-#include <types.h>
+#include "../type.h"
 #include <kernel/lowlevel.h>
 #include <kernel/pae.h>
 #include <kernel/error.h>

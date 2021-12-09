@@ -1,7 +1,7 @@
 #ifndef OS_MSG_MESSAGE_H
 #define OS_MSG_MESSAGE_H
 
-#include <types.h>
+#include "../../type.h"
 
 #define RESPONSE_OK         0
 #define RESPONSE_FAIL	    1

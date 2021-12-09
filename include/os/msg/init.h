@@ -1,8 +1,9 @@
 #ifndef OS_MSG_INIT_H
+
 #define OS_MSG_INIT_H
 
 #include <util.h>
-#include <types.h>
+#include "../../type.h"
 
 #define INIT_SERVER_TID			256u
 

@@ -1,7 +1,8 @@
 #ifndef TIME_H
+
 #define TIME_H
 
-#include <types.h>
+#include "type.h"
 #include <stddef.h>
 
 #define CLOCKS_PER_SEC		TICKS_PER_SEC

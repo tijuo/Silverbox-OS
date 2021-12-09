@@ -1,7 +1,8 @@
 #ifndef OS_MEMORY_H
+
 #define OS_MEMORY_H
 
-#include <types.h>
+#include "../type.h"
 
 #ifdef __cplusplus
 extern "C" {

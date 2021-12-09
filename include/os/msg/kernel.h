@@ -1,7 +1,8 @@
 #ifndef OS_MSG_KERNEL_H
+
 #define OS_MSG_KERNEL_H
 
-#include <types.h>
+#include "../../type.h"
 #include <os/msg/message.h>
 
 #define IRQ0_TID            1

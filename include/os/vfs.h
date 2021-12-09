@@ -1,7 +1,7 @@
 #ifndef VIRTUAL_FS
 #define VIRTUAL_FS
 
-#include <types.h>
+#include "../type.h"
 #include <os/file.h>
 #include <os/os_types.h>
 //#include <time.h>

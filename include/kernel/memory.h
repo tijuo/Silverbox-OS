@@ -1,7 +1,8 @@
 #ifndef KERNEL_MEMORY_H
+
 #define KERNEL_MEMORY_H
 
-#include <types.h>
+#include "../type.h"
 #include <util.h>
 #include <kernel/mm.h>
 #include <kernel/debug.h>

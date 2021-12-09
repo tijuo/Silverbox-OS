@@ -1,4 +1,4 @@
-#include <types.h>
+#include "../type.h"
 
 #define PCI_BIOS_PHYS                   0xE0000
 #define PCI_BIOS_ADDR                   0xE0000

@@ -1,7 +1,7 @@
 #ifndef OS_SYSCALLS
 #define OS_SYSCALLS
 
-#include <types.h>
+#include "../type.h"
 #include <oslib.h>
 #include <os/msg/message.h>
 

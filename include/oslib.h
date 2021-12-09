@@ -1,8 +1,8 @@
 #ifndef OSLIB_H
 #define OSLIB_H
 
-#include <types.h>
 #include <os/mutex.h>
+#include "type.h"
 
 #define INIT_EXHANDLER 		    1
 #define INIT_SERVER		        1

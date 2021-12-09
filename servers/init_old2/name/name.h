@@ -1,7 +1,8 @@
 #ifndef NAME_H
+
 #define NAME_H
 
-#include <types.h>
+#include "../../../include/type.h"
 #include <oslib.h>
 #include <os/device.h>
 #include <os/os_types.h>

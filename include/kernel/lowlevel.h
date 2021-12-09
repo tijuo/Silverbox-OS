@@ -1,9 +1,8 @@
 #ifndef KERNEL_LOWLEVEL_H
 #define KERNEL_LOWLEVEL_H
 
-#include <types.h>
+#include <stdint.h>
 #include <kernel/bits.h>
-#include <os/exec_state.h>
 
 #define MODE_BIT_WIDTH      64u
 
@@ -130,6 +129,46 @@
 #define enable_int()     __asm__ __volatile__("sti" ::: "cc")
 #define disable_int()   __asm__ __volatile__("cli" ::: "cc")
 #define halt()          __asm__ __volatile__("hlt")
+
+// 416 bytes
+
+typedef struct {
+  uint16_t fcw;
+  uint16_t fsw;
+  uint8_t ftw;
+  uint8_t _resd1;
+  uint16_t fop;
+  uint32_t fpu_ip;
+  uint16_t fpu_cs;
+  uint16_t _resd2;
+
+  uint32_t fpu_dp;
+  uint16_t fpu_ds;
+  uint16_t _resd3;
+  uint32_t mxcsr;
+  uint32_t mxcsr_mask;
+
+  union {
+    struct MMX_Register {
+      uint64_t value;
+      uint64_t _resd;
+    } mm[8];
+
+    struct FPU_Register {
+      uint8_t value[10];
+      uint8_t _resd[6];
+    } st[8];
+  };
+
+  struct XMM_Register {
+    uint64_t low;
+    uint64_t high;
+  } xmm[16];
+
+
+ uint8_t _resd12[48];
+ uint8_t available[48];
+} xsave_state_t;
 
 //#define IOMAP_LAZY_OFFSET	0xFFFF
 

@@ -1,7 +1,8 @@
 #ifndef PHYS_MEM_H
+
 #define PHYS_MEM_H
 
-#include <types.h>
+#include "../../include/type.h"
 
 #define PAGE_SIZE       4096
 

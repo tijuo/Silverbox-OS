@@ -1,7 +1,8 @@
 #ifndef CONSOLE_H
+
 #define CONSOLE_H
 
-#include <types.h>
+#include "../type.h"
 
 #define TAB_WIDTH           4
 

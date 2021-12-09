@@ -1,9 +1,9 @@
 #include "phys_mem.h"
 #include <os/syscalls.h>
 #include <oslib.h>
-#include <types.h>
 #include <string.h>
 #include "phys_mem.h"
+#include "../../include/type.h"
 
 #define PAGE_SIZE       4096
 

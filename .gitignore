@@ -16,6 +16,7 @@
 *.vs
 *.settings
 *.rlib
+*.stackdump
 os_image.img.lock
 .deps/
 bx_enh_dbg.ini
