@@ -1,7 +1,6 @@
 #include <kernel/mm.h>
 #include <kernel/error.h>
 #include <kernel/debug.h>
-#include <oslib.h>
 #include <kernel/lowlevel.h>
 #include <kernel/interrupt.h>
 #include <kernel/memory.h>

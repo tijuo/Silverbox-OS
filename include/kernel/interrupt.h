@@ -2,7 +2,6 @@
 #define INTERRUPT_H
 
 #include <kernel/thread.h>
-#include <kernel/message.h>
 #include <stdnoreturn.h>
 #include <util.h>
 

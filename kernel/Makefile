@@ -3,10 +3,12 @@ include $(ROOT_PATH)/Makefile.inc
 
 .PHONY:	all check clean tests install
 
-SRC	:=list.c message.c syscall.c debug.c \
+SRC	:=syscall.c debug.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
 	apic.c init/init.c init/acpi.c init/libc.c \
-	init/memory.c init/loader.c
+	init/memory.c init/loader.c types/vector.c \
+	types/list.c
+
 ASM_SRC	=entry.asm
 OBJ	:=$(SRC:%.c=%.o) $(ASM_SRC:%.asm=%.o)
 BIN	:=kernel.elf

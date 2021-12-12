@@ -4,7 +4,6 @@
 #include <kernel/schedule.h>
 #include <kernel/lowlevel.h>
 #include <kernel/error.h>
-#include <kernel/list.h>
 
 list_t run_queues[NUM_PRIORITIES];
 
@@ -24,11 +23,11 @@ tcb_t* schedule(proc_id_t processor_id)
       // simply place it back onto its run queue
 
       if(current_thread) {
-        current_thread->thread_state = READY;
+        current_thread->state = READY;
         list_enqueue(&run_queues[current_thread->priority], current_thread);
       }
 
-      new_thread->thread_state = RUNNING;
+      new_thread->state = RUNNING;
       processors[processor_id].running_thread = new_thread;
 
       return new_thread;
@@ -52,7 +51,7 @@ tcb_t* schedule(proc_id_t processor_id)
 NON_NULL_PARAMS void switch_stacks(exec_state_t *state) {
   tcb_t *old_tcb = get_current_thread();
 
-  if(!old_tcb || old_tcb->thread_state != RUNNING) {
+  if(!old_tcb || old_tcb->state != RUNNING) {
     tcb_t *new_tcb = schedule(get_current_processor());
 
     if(new_tcb != old_tcb && new_tcb) // if switching to a new thread

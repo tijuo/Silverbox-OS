@@ -2,7 +2,6 @@
 
 #define KERNEL_MEMORY_H
 
-#include "../type.h"
 #include <util.h>
 #include <kernel/mm.h>
 #include <kernel/debug.h>

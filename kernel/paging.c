@@ -4,7 +4,6 @@
 #include <kernel/memory.h>
 #include <kernel/pae.h>
 #include <kernel/error.h>
-#include <oslib.h>
 #include <string.h>
 #include <kernel/bits.h>
 

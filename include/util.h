@@ -39,4 +39,7 @@
 #define _Noreturn __attribute__((noreturn))
 #endif /* ECLIPSE_GCC */
 
+#define MAX(a, b) ({ __typeof(a) _max_a=a; __typeof(b) _max_b=b; _max_a < _max_b ? _max_a : _max_b; })
+#define MIN(a, b) ({ __typeof(a) _min_a=a; __typeof(b) _min_b=b; _min_a < _min_b ? _min_a : _min_b; })
+
 #endif /* UTIL_H */

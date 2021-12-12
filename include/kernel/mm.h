@@ -3,10 +3,11 @@
 
 #include <stdbool.h>
 #include <util.h>
-#include "../type.h"
 #include <kernel/lowlevel.h>
 #include <kernel/pae.h>
 #include <kernel/error.h>
+#include <types.h>
+#include <stddef.h>
 
 /* FIXME: Changing any of these values may require changing
  the asm code */
@@ -16,12 +17,12 @@
 #define KERNEL_VSTART		((addr_t)&kvirt_start)
 #define KERNEL_VEND			((addr_t)&kend)
 
-/* The first 120 MiB of physical memory are mapped in kernel space. */
-
 #define KERNEL_PHYS_START	((addr_t)&kvirt_low_mem_start)
 
 #define INVALID_VADDR       ((addr_t)0xFFFFFFFFFFFFFFFFul)
 #define INVALID_ADDR        ((addr_t)0xFFFFFFFFFFFFFFFFul)
+
+#define CURRENT_ROOT_PMAP	(paddr_t)0xFFFFFFFFFFFFFFFFul
 
 /** Aligns an address to the previous boundary (if not already aligned) */
 #define ALIGN_DOWN(addr, boundary)	((addr_t)((addr) & ~((boundary) - 1) ))

@@ -1,5 +1,5 @@
-#ifndef INCLUDE_OS_EXEC_STATE_H_
-#define INCLUDE_OS_EXEC_STATE_H_
+#ifndef KERNEL_EXEC_STATE_H
+#define KERNEL_EXEC_STATE_H
 
 #include <stdint.h>
 
@@ -122,4 +122,4 @@ struct LegacyXSaveState {
 
 _Static_assert(sizeof(struct LegacyXSaveState) == 512, "LegacyXSaveState should have a size of 512 bytes");
 
-#endif /* INCLUDE_OS_EXEC_STATE_H_ */
+#endif /* KERNEL_EXEC_STATE_H */

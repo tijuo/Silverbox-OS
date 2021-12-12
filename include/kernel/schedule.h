@@ -3,6 +3,7 @@
 
 #include <kernel/lowlevel.h>
 #include <kernel/thread.h>
+#include <kernel/types/list.h>
 
 #define NUM_PRIORITIES          5
 #define MIN_PRIORITY            0

@@ -22,9 +22,6 @@ void init_serial(void);
 int get_debug_char(void);
 void put_debug_char(int ch);
 
-DECL_CALL_COUNTER(inc_sched_count)
-void inc_sched_count(void);
-void inc_timer_count(void);
 void clear_screen(void);
 NON_NULL_PARAM(1) void kprintf(const char *str, ...);
 NON_NULL_PARAMS void print_assert_msg(const char *exp, const char *file,
@@ -57,8 +54,6 @@ void init_video(void);
 #else
 
 #define assert(exp)         ({})
-#define inc_sched_count()     ({})
-#define inc_timer_count()     ({})
 #define clear_screen()       ({})
 #define kprintf( ... )   ({})
 #define print_assert_msg( w, x, y, z )    ({})

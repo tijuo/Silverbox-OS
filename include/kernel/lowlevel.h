@@ -209,39 +209,39 @@ struct tss_struct {
 
 _Static_assert(sizeof(struct tss_struct) == 104+8192, "tss_struct should be 8296 bytes");
 
-union GdtEntry {
+union gdt_entry {
   struct {
-	uint16_t limit1;
-	uint16_t base1;
-	uint8_t base2;
-	uint8_t access_flags;
-	uint8_t limit2 :4;
-	uint8_t flags2 :4;
-	uint8_t base3;
+    uint16_t limit1;
+    uint16_t base1;
+    uint8_t base2;
+    uint8_t access_flags;
+    uint8_t limit2 :4;
+    uint8_t flags2 :4;
+    uint8_t base3;
   };
 
   uint64_t value;
 };
 
-typedef union GdtEntry gdt_entry_t;
+typedef union gdt_entry gdt_entry_t;
 
 _Static_assert(sizeof(gdt_entry_t) == 8, "gdt_entry_t should be 8 bytes");
 
 union tss64_descriptor {
   struct {
-	uint16_t limit1;
-	uint16_t base1;
-	uint8_t base2;
-	uint8_t access_flags;
-	uint8_t limit2 :4;
-	uint8_t flags2 :4;
-	uint8_t base3;
-	uint32_t base4;
-	uint32_t _resd;
+    uint16_t limit1;
+    uint16_t base1;
+    uint8_t base2;
+    uint8_t access_flags;
+    uint8_t limit2 :4;
+    uint8_t flags2 :4;
+    uint8_t base3;
+    uint32_t base4;
+    uint32_t _resd;
   };
 
   struct {
-	uint64_t values[2];
+    uint64_t values[2];
   };
 };
 
@@ -256,13 +256,13 @@ struct pseudo_descriptor {
 
 union idt_entry {
   struct {
-	uint16_t offset_lower;
-	uint16_t code_selector;
-	uint8_t ist; // 0-7
-	uint8_t flags; // type (bits 0-3), dpl (bits 5,6), present (bit 7)
-	uint16_t offset_mid;
-	uint32_t offset_upper;
-	uint32_t _resd;
+    uint16_t offset_lower;
+    uint16_t code_selector;
+    uint8_t ist; // 0-7
+    uint8_t flags; // type (bits 0-3), dpl (bits 5,6), present (bit 7)
+    uint16_t offset_mid;
+    uint32_t offset_upper;
+    uint32_t _resd;
   };
 
   uint64_t value;

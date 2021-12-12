@@ -16,10 +16,10 @@
 #define E_BOUNDS		    -5
 #define E_PERM		    	-6
 #define E_BLOCK		    	-7
-#define E_UNREACH       -8
+#define E_NOT_FOUND     -8
 #define E_INTERRUPT     -9
-#define E_SIZE			-10
-#define E_OOM			-11
+#define E_SIZE			    -10
+#define E_OOM			      -11
 
 #define IS_ERROR(x)	((x) < 0)
 

@@ -2,7 +2,7 @@
 #define OSLIB_H
 
 #include <os/mutex.h>
-#include "type.h"
+#include <types.h>
 
 #define INIT_EXHANDLER 		    1
 #define INIT_SERVER		        1

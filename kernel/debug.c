@@ -5,7 +5,6 @@
 #include <os/io.h>
 #include <stdarg.h>
 #include <kernel/lowlevel.h>
-#include <os/syscalls.h>
 #include <kernel/interrupt.h>
 #include <kernel/bits.h>
 #include <string.h>
@@ -58,7 +57,7 @@ enum TextColors {
 };
 
 #define COLOR_ATTR(fg, bg)  ((fg) | ((bg) << 4))
-#define VGA_CHAR(c, fg, bg) (word)((c) | COLOR_ATTR(fg, bg) << 8)
+#define VGA_CHAR(c, fg, bg) (uint16_t)((c) | COLOR_ATTR(fg, bg) << 8)
 
 #define VGA_CHAR_AT(vidmem, line, col)	(vidmem)[(CHARS_PER_LINE*(line)+(col))]
 #define CHAR_OF(c)			((c) & 0xFF)
@@ -124,7 +123,7 @@ NON_NULL_PARAM(1) void kprintf(const char *str, ...) __attribute__((format(print
 NON_NULL_PARAM(3) void kprintf_at(unsigned long int x, unsigned long int y,
 								  const char *str, ...) __attribute__((format(printf, 3, 4)));
 static int scroll(int up);
-static void set_scroll(word addr);
+static void set_scroll(uint16_t addr);
 void reset_scroll(void);
 void scroll_up(void);
 int scroll_down(void);
@@ -174,10 +173,10 @@ int get_debug_char(void) {
 }
 
 void put_debug_char(int ch) {
-  out_port8(0xE9, (byte)ch); // Use E9 hack to output characters
+  out_port8(0xE9, (uint8_t)ch); // Use E9 hack to output characters
   while(!(in_port8(COMBASE + 5) & 0x20u))
 	;
-  out_port8(COMBASE, (byte)ch);
+  out_port8(COMBASE, (uint8_t)ch);
   /*
    if( ch == '\r' )
    {
@@ -369,9 +368,9 @@ void set_bad_assert_hlt( bool value) {
   bad_assert_hlt = value;
 }
 
-static void set_scroll(word addr) {
-  byte high = (addr >> 8) & 0xFFu;
-  byte low = addr & 0xFFu;
+static void set_scroll(uint16_t addr) {
+  uint8_t high = (addr >> 8) & 0xFFu;
+  uint8_t low = addr & 0xFFu;
 
   out_port8( CRT_CONTR_INDEX, START_ADDR_HIGH);
   out_port8( CRT_CONTR_DATA, high);
@@ -385,15 +384,15 @@ void reset_scroll(void) {
 
 static int scroll(int up) {
   int ret = 0;
-  byte high;
-  byte low;
-  word address;
+  uint8_t high;
+  uint8_t low;
+  uint16_t address;
 
   out_port8( CRT_CONTR_INDEX, START_ADDR_HIGH);
   high = in_port8( CRT_CONTR_DATA);
   out_port8( CRT_CONTR_INDEX, START_ADDR_LOW);
   low = in_port8( CRT_CONTR_DATA);
-  address = (((word)high << 8) | low);
+  address = (((uint16_t)high << 8) | low);
 
   if(up) {
 	if(address == 0)
@@ -459,44 +458,10 @@ NON_NULL_PARAMS void print_assert_msg(const char *exp, const char *file,
   }
 }
 
-/** Increments a counter that keeps track of the number of times that
- the scheduler was called.
- */
-
-CALL_COUNTER(inc_sched_count)
-void inc_sched_count(void) {
-  tcb_t *current_thread = get_current_thread();
-
-  volatile word *vidmem = (volatile word*)(VIDMEM_START);
-
-  word w = VGA_CHAR_AT(vidmem, 0, 0);
-
-  VGA_CHAR_AT(vidmem, 0, 0)= VGA_CHAR(CHAR_OF(w + 1), RED, GRAY);
-
-  assert( current_thread != NULL);
-
-  if(current_thread) {
-	kprintf_at(2, 0, "tid: %5u cr3: %p", get_tid(current_thread),
-			   (void*)current_thread->root_pmap);
-  }
-}
-
-/** Increments a counter that keeps track of the number of times that
- the timer interrupt was called.
- */
-
-void inc_timer_count(void) {
-  volatile word *vidmem = (volatile word*)( VIDMEM_START);
-
-  word w = VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1);
-
-  VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH-1)= VGA_CHAR(CHAR_OF(w + 1), GREEN, GRAY);
-}
-
 /// Blanks the screen
 
 void clear_screen(void) {
-  volatile word *vidmem = (volatile word*)( VIDMEM_START);
+  volatile uint16_t *vidmem = (volatile uint16_t*)( VIDMEM_START);
 
   for(int col = 0; col < SCREEN_WIDTH; col++)
 	VGA_CHAR_AT(vidmem, 0, col)= VGA_CHAR(' ', BLACK, GRAY);
@@ -520,7 +485,7 @@ NON_NULL_PARAMS void do_new_line(int *x, int *y) {
 }
 
 void print_char(int c) {
-  volatile word *vidmem = (volatile word*)VIDMEM_START + cursor_y * SCREEN_WIDTH
+  volatile uint16_t *vidmem = (volatile uint16_t*)VIDMEM_START + cursor_y * SCREEN_WIDTH
 	  + cursor_x;
 
   *vidmem = (*vidmem & 0xFF00) | (unsigned char)c;
@@ -534,7 +499,7 @@ void print_char(int c) {
 }
 
 void _put_char(char c, int x, int y, unsigned char attrib) {
-  volatile word *vidmem = (volatile word*)(VIDMEM_START);
+  volatile uint16_t *vidmem = (volatile uint16_t*)(VIDMEM_START);
 
   VGA_CHAR_AT(vidmem, y, x)= VGA_CHAR(c, attrib & 0x0F, (attrib >> 4) & 0x0F);
 }

@@ -19,6 +19,8 @@
  */
 
 #include <stdint.h>
+#include <stddef.h>
+#include <types.h>
 
 #define PAGE_BITS		12u
 #define PAGE_SIZE		(1ul << PAGE_BITS)
