@@ -1,11 +1,11 @@
-.PHONY:	all clean kernel
+.PHONY:	all clean tests
 .SUFFIXES: .asm .S
 
 export ROOT_DIR		=..
 
-all: kernel
+all: tests
 
-kernel:
+tests:
 	$(MAKE) -C kernel all
 
 clean:

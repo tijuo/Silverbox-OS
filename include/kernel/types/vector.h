@@ -4,6 +4,11 @@
 #include <util.h>
 #include <stddef.h>
 #include <kernel/error.h>
+#include <limits.h>
+
+#define MAX_CAPACITY          (size_t)LONG_MAX
+
+_Static_assert(MAX_CAPACITY <= (size_t)LONG_MAX, "MAX_CAPACITY cannot be larger than LONG_MAX");
 
 /** A pointer to the ith item in the vector
   @param v The vector.
@@ -23,10 +28,10 @@ typedef struct vec {
   size_t item_size;
 
   /// The maximum number of items the vector can hold without resizing.
-  uint32_t capacity;
+  size_t capacity;
 
   /// The number of items contained in the vector.
-  uint32_t count;
+  size_t count;
 } vector_t;
 
 /**
@@ -45,7 +50,7 @@ NON_NULL_PARAMS int vector_init(vector_t *v, size_t item_size);
   @param vector The vector to be initialized.
   @param capacity The number of items for which the buffer should initially
   be capable of storing. If the capacity is zero, then no memory will be
-  allocated. capacity must not be greater than than UINT32_MAX.
+  allocated. capacity must not be greater than than MAX_CAPACITY.
   @param item_size The size, in bytes, of each item. Must be non-zero.
   @return E_OK, if successful. E_FAIL, on failure.
 */

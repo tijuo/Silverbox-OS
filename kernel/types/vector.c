@@ -6,10 +6,8 @@
 #include <kernel/debug.h>
 
 #define DEFAULT_CAPACITY      4
-#define MAX_CAPACITY          UINT32_MAX
 
-_Static_assert(DEFAULT_CAPACITY <= UINT32_MAX, "DEFAULT_CAPACITY cannot be larger than UINT32_MAX");
-_Static_assert(MAX_CAPACITY <= UINT32_MAX, "MAX_CAPACITY cannot be larger than UINT32_MAX");
+_Static_assert(DEFAULT_CAPACITY <= LONG_MAX, "DEFAULT_CAPACITY cannot be larger than LONG_MAX");
 
 /**
   Resize a vector's buffer.
@@ -29,7 +27,7 @@ int vector_init_with_capacity(vector_t *vector, size_t capacity, size_t item_siz
   if(item_size == 0)
     RET_MSG(E_FAIL, "Item size must be non-zero");
   else if(capacity > MAX_CAPACITY)
-    RET_MSG(E_FAIL, "Capacity must not be greater than UINT32_MAX");
+    RET_MSG(E_FAIL, "Capacity must not be greater than LONG_MAX");
 
   vector->capacity = capacity;
   vector->item_size = item_size;
@@ -56,7 +54,7 @@ int vector_release(vector_t *vector) {
 
 int vector_get_copy(const vector_t * restrict vector, size_t index, void * restrict item) {
   if(index > MAX_CAPACITY)
-    RET_MSG(E_FAIL, "Index must not be greater than UINT32_MAX");
+    RET_MSG(E_FAIL, "Index must not be greater than LONG_MAX");
   else if(index >= vector->count)
     return E_NOT_FOUND;
 
@@ -80,7 +78,7 @@ int vector_resize(vector_t *vector, size_t new_capacity) {
   new_capacity = MIN(new_capacity, MAX_CAPACITY);
 
   if(new_data) {
-    vector->capacity = (uint32_t)new_capacity;
+    vector->capacity = new_capacity;
     vector->data = new_data;
 
     return E_OK;
