@@ -1,15 +1,16 @@
 #ifndef KERNEL_TYPES_VECTOR_H
 #define KERNEL_TYPES_VECTOR_H
 
-#include <util.l>
+#include <util.h>
 #include <stddef.h>
+#include <kernel/error.h>
 
 /** A pointer to the ith item in the vector
   @param v The vector.
   @param i The index of the item.
 */
 
-#define VECTOR_ITEM(v, i) ({ __typeof(v) _v=(v); (void *)((uintptr_t)_v->data + i * _v->item_size); })
+#define VECTOR_ITEM(v, i) ({ __typeof(v) _v=(v); (void *)((uintptr_t)_v->data + (i) * _v->item_size); })
 
 /** A resizable array that dynamically expands as items are added
 to it.
@@ -58,7 +59,7 @@ NON_NULL_PARAMS int vector_init_with_capacity(vector_t *v, size_t capacity, size
   @return E_OK, on success. E_FAIL, on failure.
 */
 
-NON_NULL_PARAMS int vector_destroy(vector_t *v);
+NON_NULL_PARAMS int vector_release(vector_t *v);
 
 /**
   Retrieves a copy of an item from a vector at the specified index.
@@ -74,7 +75,7 @@ NON_NULL_PARAMS int vector_destroy(vector_t *v);
   vector capacity.
 */
 
-NON_NULL_PARAM(1) int vector_get_copy(vector_t * restrict v, size_t index, void * restrict item);
+NON_NULL_PARAM(1) int vector_get_copy(const vector_t * restrict vector, size_t index, void * restrict item);
 
 /**
   Place an item into a vector at the specified index.
@@ -86,7 +87,7 @@ NON_NULL_PARAM(1) int vector_get_copy(vector_t * restrict v, size_t index, void 
   @return E_OK, on success. E_FAIL, on failure.
 */
 
-NON_NULL_PARAMS int vector_set(vector_t * restrict v, size_t index, void * restrict item);
+NON_NULL_PARAMS int vector_set(vector_t * restrict vector, size_t index, const void * restrict item);
 
 /**
   Provide a hint to resize a vector's buffer if it's too large.
@@ -97,20 +98,21 @@ NON_NULL_PARAMS int vector_set(vector_t * restrict v, size_t index, void * restr
   did not need to be resized.
 */
 
-NON_NULL_PARAMS int vector_shrink_to_fit(vector_t *v);
+NON_NULL_PARAMS int vector_shrink_to_fit(vector_t *vector);
 
 /**
   Insert a new item into the vector at a specified index. Any existing items
   at indicies greater than or equal to the specified index are shifted forward by one.
 
   @param vector The vector.
-  @param index The index at which to insert the new item.
+  @param index The index at which to insert the new item. Index must not be greater
+  than the number of items in the vector.
   @param item The item to be inserted (must not be NULL).
-  @return E_OK, if the item was inserted successfully. E_FAIL, if the vector
-  was not able to increase in size.
+  @return E_OK, if the item was inserted successfully. E_FAIL, if the index is invalid
+  or if the vector was not able to increase in size.
 */
 
-NON_NULL_PARAMS int vector_insert(vector_t * restrict vector, size_t index, void * restrict item);
+NON_NULL_PARAMS int vector_insert(vector_t * restrict vector, size_t index, const void * restrict item);
 
 /**
   Remove an item from the vector at a specified index. Any existing items
@@ -133,7 +135,7 @@ NON_NULL_PARAM(1) int vector_remove(vector_t * restrict vector, size_t index, vo
   wasn't found in the vector.
 */
 
-NON_NULL_PARAMS int vector_index_of(vector_t *restrict vector, void * restrict item);
+NON_NULL_PARAMS PURE int vector_index_of(const vector_t *restrict vector, const void * restrict item);
 
 /**
   Return the index of the last occurrence of an item in a vector, if it exists.
@@ -144,14 +146,16 @@ NON_NULL_PARAMS int vector_index_of(vector_t *restrict vector, void * restrict i
   wasn't found in the vector.
 */
 
-NON_NULL_PARAMS int vector_rindex_of(vector_t *restrict vector, void * restrict item);
+NON_NULL_PARAMS PURE int vector_rindex_of(const vector_t *restrict vector, const void * restrict item);
 
 /**
   Return the number of items in a vector.
   @param vector The vector.
   @return The number of items in the vector.
 */
-NON_NULL_PARAMS PURE static inline size_t vector_get_count(vector_t *vector) { return (size_t)vector->count; }
+NON_NULL_PARAMS PURE static inline size_t vector_get_count(const vector_t *vector) {
+  return (size_t)vector->count;
+}
 
 /**
   Return the current capacity of a vector.
@@ -159,7 +163,9 @@ NON_NULL_PARAMS PURE static inline size_t vector_get_count(vector_t *vector) { r
   @return The current item capacity of the vector.
 */
 
-NON_NULL_PARAMS PURE static inline size_t vector_get_capacity(vector_t *vector) { return (size_t)vector->capacity; }
+NON_NULL_PARAMS PURE static inline size_t vector_get_capacity(const vector_t *vector) {
+  return (size_t)vector->capacity;
+}
 
 /**
   Return a vector's item size.
@@ -167,7 +173,9 @@ NON_NULL_PARAMS PURE static inline size_t vector_get_capacity(vector_t *vector) 
   @return The size of each item, in bytes.
 */
 
-NON_NULL_PARAMS PURE static inline size_t vector_get_item_size(vector_t *vector) { return (size_t)vector->item_size; }
+NON_NULL_PARAMS PURE static inline size_t vector_get_item_size(const vector_t *vector) {
+  return (size_t)vector->item_size;
+}
 
 /**
   Append an item to the end of a vector.
@@ -176,7 +184,7 @@ NON_NULL_PARAMS PURE static inline size_t vector_get_item_size(vector_t *vector)
   @return E_OK, on success. E_FAIL, on failure
 */
 
-NON_NULL_PARAMS static inline int vector_push_back(vector_t * restrict vector, void * restrict item) {
+NON_NULL_PARAMS static inline int vector_push_back(vector_t * restrict vector, const void * restrict item) {
   return vector_insert(vector, vector->count, item);
 }
 
@@ -187,7 +195,7 @@ NON_NULL_PARAMS static inline int vector_push_back(vector_t * restrict vector, v
   @return E_OK, on success. E_FAIL, on failure
 */
 
-NON_NULL_PARAMS static inline int vector_push_front(vector_t * restrict vector, void * restrict item) {
+NON_NULL_PARAMS static inline int vector_push_front(vector_t * restrict vector, const void * restrict item) {
   return vector_insert(vector, 0, item);
 }
 
@@ -195,18 +203,18 @@ NON_NULL_PARAMS static inline int vector_push_front(vector_t * restrict vector, 
   Removes an item from the end of a vector.
   @param vector The vector.
   @param item The removed item. If NULL, the removed item will be ignored.
-  @return E_OK, on success. E_FAIL, on failure
+  @return E_OK, on success. E_FAIL, if the vector is empty.
 */
 
 NON_NULL_PARAM(1) static inline int vector_pop_back(vector_t * restrict vector, void * restrict item) {
-  return vector_remove(vector, vector->count, item);
+  return vector->count ? vector_remove(vector, vector->count-1, item) : E_FAIL;
 }
 
 /**
   Removes an item from the front of a vector, shifting all other items backward by one.
   @param vector The vector.
   @param item The removed item. If NULL, the removed item will be ignored.
-  @return E_OK, on success. E_FAIL, on failure
+  @return E_OK, on success. E_FAIL, if the vector is empty.
 */
 
 NON_NULL_PARAM(1) static inline int vector_pop_front(vector_t * restrict vector, void * restrict item) {
@@ -221,7 +229,7 @@ NON_NULL_PARAM(1) static inline int vector_pop_front(vector_t * restrict vector,
   exist in the vector. E_FAIL, on failure.
 */
 
-NON_NULL_PARAMS static inline int vector_remove_item(vector_t * restrict vector, void * restrict item) {
+NON_NULL_PARAMS static inline int vector_remove_item(vector_t * restrict vector, const void * restrict item) {
   int i = vector_index_of(vector, item);
 
   return IS_ERROR(i) ? i : vector_remove(vector, (size_t)i, NULL);
@@ -235,7 +243,7 @@ NON_NULL_PARAMS static inline int vector_remove_item(vector_t * restrict vector,
   exist in the vector. E_FAIL, on failure.
 */
 
-NON_NULL_PARAMS static inline int vector_rremove_item(vector_t * restrict vector, void * restrict item) {
+NON_NULL_PARAMS static inline int vector_rremove_item(vector_t * restrict vector, const void * restrict item) {
   int i = vector_rindex_of(vector, item);
 
   return IS_ERROR(i) ? i : vector_remove(vector, (size_t)i, NULL);

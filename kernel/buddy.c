@@ -5,24 +5,6 @@
 #include <string.h>
 #include <kernel/pae.h>
 
-#define BITMAP_SET(bitmap, bit) (bitmap)->data[(bit) >> 64] |= 1 << ((bit) & 0x3F)
-#define BITMAP_CLEAR(bitmap, bit) (bitmap)->data[(bit) >> 64] &= ~(1 << ((bit) & 0x3F))
-#define BITMAP_TOGGLE(bitmap, bit) (bitmap)->data[(bit) >> 64] ^= 1 << ((bit) & 0x3F)
-#define BITMAP_IS_CLEAR(bitmap, bit) !((bitmap)->data[(bit) >> 64] & 1 << ((bit) & 0x3F))
-#define BITMAP_IS_SET(bitmap, bit) !BITMAP_IS_CLEAR(bitmap, bit)
-
-struct bitmap {
-  uint64_t *data;
-  size_t count;
-};
-
-void bitmap_init(struct bitmap *restrict bitmap, size_t elements, void *restrict mem_region) {
-  bitmap->data = (uint64_t *)mem_region;
-  bitmap->count = elements;
-
-  memset(bitmap->data, 0, ALIGN(elements, sizeof(uint64_t)) / sizeof(uint64_t));
-}
-
 int buddies_init(struct buddies *restrict buddies, size_t mem_size,
 				 void *restrict mem_region)
 {

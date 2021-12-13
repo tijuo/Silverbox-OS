@@ -2,7 +2,7 @@
 #define KERNEL_LOWLEVEL_H
 
 #include <stdint.h>
-#include <kernel/bits.h>
+#include <bits.h>
 
 #define MODE_BIT_WIDTH      64u
 

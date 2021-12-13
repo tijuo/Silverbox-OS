@@ -5,6 +5,7 @@
 #include <kernel/mm.h>
 #include <kernel/exec_state.h>
 #include <util.h>
+#include <kernel/process.h>
 
 enum thread_state {
   /// Thread has not been initialized. Fields are not in a valid state.
@@ -24,7 +25,7 @@ enum thread_state {
 
   /// Thread has stopped executing and is waiting to be released.
   ZOMBIE
-}
+};
 
 #define MAX_PROCESSORS   		16u
 
@@ -43,10 +44,11 @@ typedef struct {
 
   /// The fields for which XSAVE should operate on
   uint64_t xsave_state_flags;
+  pcb_t *pcb;
+
   tid_t tid;
   uint8_t priority;
   uint8_t state;
-  pcb_t *pcb;
 
   uint8_t _padding[26];
 } tcb_t;

@@ -1,7 +1,9 @@
-#include <kernel/mem.h>
+#include <kernel/mm.h>
 #include <kernel/types/vector.h>
 #include <kernel/error.h>
 #include <stdint.h>
+#include <string.h>
+#include <kernel/debug.h>
 
 #define DEFAULT_CAPACITY      4
 #define MAX_CAPACITY          UINT32_MAX
@@ -41,7 +43,7 @@ int vector_init_with_capacity(vector_t *vector, size_t capacity, size_t item_siz
     return E_OK;
 }
 
-int vector_destroy(vector_t *vector) {
+int vector_release(vector_t *vector) {
   if(vector->data)
     kfree(vector->data);
 
@@ -52,7 +54,7 @@ int vector_destroy(vector_t *vector) {
   return E_OK;
 }
 
-int vector_get(vector_t * restrict vector, size_t index, void * restrict item) {
+int vector_get_copy(const vector_t * restrict vector, size_t index, void * restrict item) {
   if(index > MAX_CAPACITY)
     RET_MSG(E_FAIL, "Index must not be greater than UINT32_MAX");
   else if(index >= vector->count)
@@ -64,7 +66,7 @@ int vector_get(vector_t * restrict vector, size_t index, void * restrict item) {
   return E_OK;
 }
 
-int vector_set(vector_t * restrict vector, size_t index, void * restrict item) {
+int vector_set(vector_t * restrict vector, size_t index, const void * restrict item) {
   if(index == vector->count)
     return vector_insert(vector, index, item);
 
@@ -89,18 +91,20 @@ int vector_resize(vector_t *vector, size_t new_capacity) {
 
 int vector_shrink_to_fit(vector_t *vector) {
   return vector->capacity > vector->count ?
-    vector_resize(vector->data, vector->count)) :
+    vector_resize(vector->data, vector->count) :
     E_OK;
 }
 
-int vector_insert(vector_t * restrict vector, size_t index, void * restrict item) {
-  if(vector->count + 1 > vector->capacity && IS_ERROR(vector_resize(vector, 2*vector->capacity)))
+int vector_insert(vector_t * restrict vector, size_t index, const void * restrict item) {
+  if(index > vector->count)
+    RET_MSG(E_FAIL, "Invalid index.");
+  else if(vector->count + 1 > vector->capacity && IS_ERROR(vector_resize(vector, 2*vector->capacity)))
     RET_MSG(E_FAIL, "Unable to insert item to the end of the vector.");
   else {
     for(size_t i=vector->count; i > index; i--)
-      memcpy(VECTOR_DATA(i), VECTOR_DATA(i-1), vector->item_size);
+      memcpy(VECTOR_ITEM(vector, i), VECTOR_ITEM(vector, i-1), vector->item_size);
 
-    memcpy(VECTOR_DATA(index), item, vector->item_size);
+    memcpy(VECTOR_ITEM(vector, index), item, vector->item_size);
 
     vector->count++;
 
@@ -111,12 +115,14 @@ int vector_insert(vector_t * restrict vector, size_t index, void * restrict item
 int vector_remove(vector_t * restrict vector, size_t index, void * restrict item) {
   if(vector->count == 0)
     RET_MSG(E_FAIL, "Tried to removed item from empty vector.");
+  else if(index > vector->count)
+    RET_MSG(E_FAIL, "Tried to remove non-existent item.");
   else {
     if(item)
-      memcpy(item, VECTOR_DATA(index), vector->item_size);
+      memcpy(item, VECTOR_ITEM(vector, index), vector->item_size);
 
     for(size_t i=index+1; i < vector->count; i++)
-      memcpy(VECTOR_DATA(i-1), VECTOR_DATA(i), vector->item_size);
+      memcpy(VECTOR_ITEM(vector, i-1), VECTOR_ITEM(vector, i), vector->item_size);
 
     vector->count--;
 
@@ -124,18 +130,18 @@ int vector_remove(vector_t * restrict vector, size_t index, void * restrict item
   }
 }
 
-int vector_index_of(vector_t *restrict vector, void * restrict item) {
+int vector_index_of(const vector_t *restrict vector, const void * restrict item) {
   for(size_t i=0; i < vector->count; i++) {
-    if(memcmp(VECTOR_DATA(i), item, vector->item_size) == 0)
+    if(memcmp(VECTOR_ITEM(vector, i), item, vector->item_size) == 0)
       return (int)i;
   }
 
   return E_NOT_FOUND;
 }
 
-int vector_rindex_of(vector_t *restrict vector, void * restrict item) {
+int vector_rindex_of(const vector_t *restrict vector, const void * restrict item) {
   for(size_t i=vector->count; i > 0; i--) {
-    if(memcmp(VECTOR_DATA(i-1), item, vector->item_size) == 0)
+    if(memcmp(VECTOR_ITEM(vector, i-1), item, vector->item_size) == 0)
       return (int)(i-1);
   }
 

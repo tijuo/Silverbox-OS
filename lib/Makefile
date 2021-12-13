@@ -3,10 +3,10 @@ include ../Makefile.inc
 .PHONY: all tests clean libc libos libc-tests libos-tests \
 libc-clean libos-clean librust-clean librust-tests librust
 
-all: libc libos librust
+all: libc libos #librust
 	cp libc/libc.a .
 	cp libos/libos.a .
-	cp librust/librust.rlib .
+#	cp librust/librust.rlib .
 
 libc:
 	make -C libc all
@@ -26,9 +26,9 @@ libc-tests:
 libos-tests:
 	make -C libos tests
 
-tests: libc-tests libos-tests librust-tests
+tests: libc-tests libos-tests #librust-tests
 
-clean: libc-clean libos-clean librust-clean
+clean: libc-clean libos-clean #librust-clean
 	rm -f *.a
 	rm -f *.rlib
 

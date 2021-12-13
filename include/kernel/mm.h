@@ -76,6 +76,11 @@ static inline bool is_readable(addr_t addr, paddr_t root_pmap) {
   return !IS_ERROR(translate_vaddr(addr, &paddr, root_pmap));
 }
 
+void *kmalloc(size_t size);
+void *kcalloc(size_t count, size_t elem_size);
+void *krealloc(void *mem, size_t new_size);
+void kfree(void *mem);
+
 #if 0
 
 #define KERNEL_PHYS_START	((addr_t)&kvirt_low_mem_start)
