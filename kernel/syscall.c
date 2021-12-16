@@ -6,6 +6,7 @@ noreturn void syscall_entry(void) NAKED;
 void *syscall_table[] = {
 };
 
+
 void syscall_entry(void) {
 __asm__(
 	"cmp $12, %rax\n"

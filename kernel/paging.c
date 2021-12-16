@@ -5,7 +5,7 @@
 #include <kernel/pae.h>
 #include <kernel/error.h>
 #include <string.h>
-#include <kernel/bits.h>
+#include <bits.h>
 
 paddr_t max_phys_addr = (1ul << MAX_PHYS_ADDR_BITS);
 int is_1gb_pages_supported;

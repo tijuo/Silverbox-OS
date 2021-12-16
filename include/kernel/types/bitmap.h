@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 #include <util.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 /**
   A bitmap is a compact array of bits.
@@ -16,6 +18,18 @@ typedef struct bitmap {
 } bitmap_t;
 
 /**
+  Calculate the number of array elements needed to represent a bitmap.
+  This only calculates the size of the bit array itself, not
+  including the bitmap struct.
+  @param bits The number of bits in the bitmap.
+  @return The number of array elements.
+*/
+
+static inline CONST size_t bitmap_words(size_t bits) {
+  return bits / (8 * sizeof(uint64_t)) + ((bits & (8 * sizeof(uint64_t) - 1)) ? 1 : 0);
+}
+
+/**
   Calculate number of bytes needed to store a bitmap
   according to the number of bits in the bitmap. This
   only calculates the size of the bit array itself, not
@@ -24,18 +38,10 @@ typedef struct bitmap {
   @return The bitmap size in bytes.
 */
 
-#define BITMAP_BYTES(bits) (ALIGN(bits, 8 * sizeof(uint64_t)) / 8)
+#define BITMAP_BYTES(bits) (bitmap_words(bits) * sizeof(uint64_t))
 
-/**
-  Calculate the number of array elements needed to represent a bitmap.
-  This only calculates the size of the bit array itself, not
-  including the bitmap struct.
-  @param bits The number of bits in the bitmap.
-  @return The number of array elements.
-*/
-
-#define BITMAP_ELEMS(bits) (ALIGN(bits, 8 * sizeof(uint64_t)) / sizeof(uint64_t))
-
+#define BITMAP_ELEM_OFFSET(bit) (bit / (8 * sizeof(uint64_t)))
+#define BITMAP_BIT_OFFSET(bit)  (bit & (8 * sizeof(uint64_t) - 1))
 /**
   Set the value of a bit to 1.
 
@@ -43,8 +49,8 @@ typedef struct bitmap {
   @param bit The index of the bit.
 */
 
-NON_NULL_PARAMS static inline void bitmap_set(const bitmap_t *bitmap, size_t bit) {
-  bitmap->data[bit / 64] |= 1 << ((bit) & 0x3F);
+NON_NULL_PARAMS static inline void bitmap_set(bitmap_t *bitmap, size_t bit) {
+  bitmap->data[BITMAP_ELEM_OFFSET(bit)] |= 1ul << BITMAP_BIT_OFFSET(bit);
 }
 
 /**
@@ -54,8 +60,8 @@ NON_NULL_PARAMS static inline void bitmap_set(const bitmap_t *bitmap, size_t bit
   @param bit The index of the bit.
 */
 
-NON_NULL_PARAMS static inline void bitmap_clear(const bitmap_t *bitmap, size_t bit) {
-  bitmap->data[bit / 64] &= ~(1 << ((bit) & 0x3F));
+NON_NULL_PARAMS static inline void bitmap_clear(bitmap_t *bitmap, size_t bit) {
+  bitmap->data[BITMAP_ELEM_OFFSET(bit)] &= ~(1ul << BITMAP_BIT_OFFSET(bit));
 }
 
 /**
@@ -66,8 +72,8 @@ NON_NULL_PARAMS static inline void bitmap_clear(const bitmap_t *bitmap, size_t b
   @param bit The index of the bit.
 */
 
-NON_NULL_PARAMS static inline void bitmap_toggle(const bitmap_t *bitmap, size_t bit) {
-  bitmap->data[bit / 64] ^= 1 << ((bit) & 0x3F);
+NON_NULL_PARAMS static inline void bitmap_toggle(bitmap_t *bitmap, size_t bit) {
+  bitmap->data[BITMAP_ELEM_OFFSET(bit)] ^= 1ul << BITMAP_BIT_OFFSET(bit);
 }
 
 /**
@@ -79,7 +85,7 @@ NON_NULL_PARAMS static inline void bitmap_toggle(const bitmap_t *bitmap, size_t 
 */
 
 NON_NULL_PARAMS PURE static inline bool bitmap_is_set(const bitmap_t *bitmap, size_t bit) {
-  return !(bitmap->data[bit / 64] & 1 << ((bit) & 0x3F));
+  return !!(bitmap->data[BITMAP_ELEM_OFFSET(bit)] & (1ul << BITMAP_BIT_OFFSET(bit)));
 }
 
 /**
@@ -91,7 +97,7 @@ NON_NULL_PARAMS PURE static inline bool bitmap_is_set(const bitmap_t *bitmap, si
 */
 
 NON_NULL_PARAMS PURE static inline bool bitmap_is_clear(const bitmap_t *bitmap, size_t bit) {
-  return !(bitmap_is_set(bitmap, bit);
+  return !(bitmap_is_set(bitmap, bit));
 }
 
 /**

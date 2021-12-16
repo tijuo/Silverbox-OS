@@ -18,5 +18,5 @@ void *krealloc(void *mem, size_t new_size) {
 }
 
 void kfree(void *mem) {
-  return free(mem);
+  free(mem);
 }

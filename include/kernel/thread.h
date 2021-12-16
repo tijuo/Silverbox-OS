@@ -70,11 +70,11 @@ _Static_assert(sizeof(tcb_t) == 32 || sizeof(tcb_t) == 64 || sizeof(tcb_t) == 12
 
 extern struct processor processors[MAX_PROCESSORS];
 
-NON_NULL_PARAMS tcb_t* create_thread(void *entryAddr, paddr_t addrSpace,
+NON_NULL_PARAMS tcb_t* create_thread(pcb_t *pcb, void *entryAddr,
                                      void *stackTop);
 
 NON_NULL_PARAMS int start_thread(tcb_t *thread);
-NON_NULL_PARAMS int pause_thread(tcb_t *thread);
+NON_NULL_PARAMS int block_thread(tcb_t *thread);
 NON_NULL_PARAMS int release_thread(tcb_t *thread);
 NON_NULL_PARAMS void switch_context(tcb_t *thread);
 NON_NULL_PARAMS int remove_thread_from_list(tcb_t *thread);
@@ -86,7 +86,7 @@ static inline CONST unsigned int get_current_processor(void) {
 
 /// @return The current thread that's running on this processor.
 
-static inline tcb_t* get_current_thread(void) {
+static inline PURE tcb_t* get_current_thread(void) {
   return processors[get_current_processor()].running_thread;
 }
 

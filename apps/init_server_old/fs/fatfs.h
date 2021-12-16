@@ -1,7 +1,7 @@
 #ifndef FAT_FS
 #define FAT_FS
 
-#include "../../../include/type.h"
+#include <types.h>
 #include <os/device.h>
 
 /* Only the Data Area is divided into clusters!
@@ -33,9 +33,9 @@ struct fatCache
 {
 /*  union
   {
-    word *fat12;  // 12-bits
-    word *fat16;
-    dword *fat32;
+    uint16_t *fat12;  // 12-bits
+    uint16_t *fat16;
+    uint32_t *fat32;
   } table; */
 
   unsigned rootDirSecs;
@@ -48,96 +48,96 @@ struct fatCache
 
 struct FAT32_BPB
 {
-  byte  jmp_bootstrap[3];
-  byte  name[8];
-  word  bytes_per_sec;
-  byte  secs_per_clus;
-  word  resd_secs;
-  byte  fat_copies;
-  word  root_ents;
-  word  total_secs;
-  byte  type;
-  word  secs_per_fat16; /* Should be zero */
-  word  secs_per_track;
-  word  heads;
-  dword hidden_secs;
-  dword secs_in_fs;
-  dword secs_per_fat;
-  word  mirror_flags;
-  word  fs_version;
-  dword root_first_clus;
-  word  backup_bootsector;
-  byte  _resd[13];
-  byte  drive_num;
-  byte  _resd2;
-  byte  ext_signature;
-  dword serial_num;
-  byte  label[11];
-  byte  fs_type[8];
-  byte  bootstrap[410];
-  word  signature;
+  uint8_t  jmp_bootstrap[3];
+  uint8_t  name[8];
+  uint16_t  uint8_ts_per_sec;
+  uint8_t  secs_per_clus;
+  uint16_t  resd_secs;
+  uint8_t  fat_copies;
+  uint16_t  root_ents;
+  uint16_t  total_secs;
+  uint8_t  type;
+  uint16_t  secs_per_fat16; /* Should be zero */
+  uint16_t  secs_per_track;
+  uint16_t  heads;
+  uint32_t hidden_secs;
+  uint32_t secs_in_fs;
+  uint32_t secs_per_fat;
+  uint16_t  mirror_flags;
+  uint16_t  fs_version;
+  uint32_t root_first_clus;
+  uint16_t  backup_bootsector;
+  uint8_t  _resd[13];
+  uint8_t  drive_num;
+  uint8_t  _resd2;
+  uint8_t  ext_signature;
+  uint32_t serial_num;
+  uint8_t  label[11];
+  uint8_t  fs_type[8];
+  uint8_t  bootstrap[410];
+  uint16_t  signature;
 } PACKED;
 
 struct FAT12_BPB
 {
-  byte  jmp_bootstrap[3];
-  byte  name[8];
-  word  bytes_per_sec;
-  byte  secs_per_clus;
-  word  resd_secs;
-  byte  fat_copies;
-  word  root_ents;
-  word  total_secs;
-  byte  type;
-  word  secs_per_fat;
-  word  secs_per_track;
-  word  heads;
-  dword hidden_secs;
-  dword large_secs;
-  byte  drive_num;
-  byte  _resd;
-  byte  ext_signature;
-  dword serial_num;
-  byte  label[11];
-  byte  fs_type[8];
-  byte  bootstrap[448];
-  word  signature;
+  uint8_t  jmp_bootstrap[3];
+  uint8_t  name[8];
+  uint16_t  uint8_ts_per_sec;
+  uint8_t  secs_per_clus;
+  uint16_t  resd_secs;
+  uint8_t  fat_copies;
+  uint16_t  root_ents;
+  uint16_t  total_secs;
+  uint8_t  type;
+  uint16_t  secs_per_fat;
+  uint16_t  secs_per_track;
+  uint16_t  heads;
+  uint32_t hidden_secs;
+  uint32_t large_secs;
+  uint8_t  drive_num;
+  uint8_t  _resd;
+  uint8_t  ext_signature;
+  uint32_t serial_num;
+  uint8_t  label[11];
+  uint8_t  fs_type[8];
+  uint8_t  bootstrap[448];
+  uint16_t  signature;
 } PACKED;
 
 struct FAT16_BPB {
-  byte  jmp_bootstrap[3];
-  byte  name[8];
-  word  bytes_per_sec;
-  byte  secs_per_clus;
-  word  resd_secs;
-  byte  fat_copies;
-  word  root_ents;
-  word  total_secs;
-  byte  type;
-  word  secs_per_fat;
-  word  secs_per_track;
-  word  heads;
-  dword hidden_secs;
-  dword large_secs;
-  byte  drive_num;
-  byte  _resd;
-  byte  ext_signature;
-  dword serial_num;
-  byte  label[11];
-  byte  fs_type[8];
-  byte  bootstrap[426];
-  word  signature;
+  uint8_t  jmp_bootstrap[3];
+  uint8_t  name[8];
+  uint16_t  uint8_ts_per_sec;
+  uint8_t  secs_per_clus;
+  uint16_t  resd_secs;
+  uint8_t  fat_copies;
+  uint16_t  root_ents;
+  uint16_t  total_secs;
+  uint8_t  type;
+  uint16_t  secs_per_fat;
+  uint16_t  secs_per_track;
+  uint16_t  heads;
+  uint32_t hidden_secs;
+  uint32_t large_secs;
+  uint8_t  drive_num;
+  uint8_t  _resd;
+  uint8_t  ext_signature;
+  uint32_t serial_num;
+  uint8_t  label[11];
+  uint8_t  fs_type[8];
+  uint8_t  bootstrap[426];
+  uint16_t  signature;
 } PACKED;
 
 struct FAT_DirEntry
 {
-  byte  filename[11];
-  byte  attrib;
-  byte  _resd[10];
-  word  time;
-  word  date;
-  word  start_clus;
-  dword file_size;
+  uint8_t  filename[11];
+  uint8_t  attrib;
+  uint8_t  _resd[10];
+  uint16_t  time;
+  uint16_t  date;
+  uint16_t  start_clus;
+  uint32_t file_size;
 } PACKED;
 
 union FAT_BPB

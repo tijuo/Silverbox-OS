@@ -8,11 +8,8 @@
 #include <kernel/pae.h>
 #include <kernel/memory.h>
 #include <kernel/mm.h>
-#include <oslib.h>
 #include <kernel/error.h>
-#include <os/msg/init.h>
-#include <os/syscalls.h>
-#include <kernel/bits.h>
+#include <bits.h>
 #include <kernel/syscall.h>
 #include <kernel/lowlevel.h>
 #include <cpuid.h>

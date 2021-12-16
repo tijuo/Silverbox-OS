@@ -116,4 +116,9 @@ NON_NULL_PARAMS bool buddy_coalesce_blocks(struct buddy_allocator *allocator);
 
 NON_NULL_PARAMS PURE size_t buddy_free_bytes(const struct buddy_allocator *allocator);
 
+NON_NULL_PARAMS PURE static inline size_t buddy_free_count(const struct buddy_allocator *allocator,
+  unsigned int order) {
+  return order >= allocator->orders ? 0 : (size_t)allocator->free_counts[order];
+}
+
 #endif /* KERNEL_BUDDY_H_ */

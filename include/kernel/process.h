@@ -9,4 +9,6 @@ typedef struct process_control_block {
   vector_t threads;
 } pcb_t;
 
+extern vector_t process_vector;
+
 #endif /* PROCESS_H */

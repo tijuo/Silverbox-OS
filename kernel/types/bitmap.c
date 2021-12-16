@@ -1,6 +1,11 @@
+#include <kernel/mm.h>
+#include <kernel/error.h>
 #include <kernel/types/bitmap.h>
-#include <ia32intrin.h>
+#include <x86intrin.h>
 #include <limits.h>
+#include <kernel/memory.h>
+
+#include <munit.h>
 
 int bitmap_init_at(bitmap_t *restrict bitmap, size_t elements, void *restrict mem_region,
     bool set_bits) {
@@ -29,14 +34,14 @@ int bitmap_init(bitmap_t *bitmap, size_t elements, bool set_bits) {
     return E_FAIL;
   }
   else
-    return E_FAIL;
+    return E_OK;
 }
 
 int bitmap_release(bitmap_t *bitmap) {
-  kfree(buffer->data);
+  kfree(bitmap->data);
 
-  buffer->data = NULL;
-  buffer->count = 0;
+  bitmap->data = NULL;
+  bitmap->count = 0;
 
   return E_OK;
 }
@@ -44,23 +49,31 @@ int bitmap_release(bitmap_t *bitmap) {
 long int bitmap_find(const bitmap_t *bitmap, bool set) {
   size_t i=0;
 
-  while(i < BITMAP_ELEMS(bitmap->count) && bitmap->data[i] == (set ? UINT64_MAX : 0))
+  while(i < bitmap_words(bitmap->count) && bitmap->data[i] == (set ? 0ul : ~0ul))
     i++;
 
-  if(i == BITMAP_ELEMS(bitmap->count))
+  if(i == bitmap_words(bitmap->count))
     return E_NOT_FOUND;
-  else
-    return (int)(i * sizeof(uint64_t) * 8 + __bsfq(set ? bitmap->data[i] : ~bitmap->data[i]));
+  else {
+    long int bit = (i * sizeof(uint64_t) * 8
+      + __bsfq(set ? bitmap->data[i] : ~bitmap->data[i]));
+
+    return ((size_t)bit < bitmap->count) ? bit : E_NOT_FOUND;
+  }
 }
 
 long int bitmap_rfind(const bitmap_t *bitmap, bool set) {
-  long int i = (long int)BITMAP_ELEMS(bitmap->count)-1;
+  long int i = (long int)bitmap_words(bitmap->count) - 1;
 
-  while(i >= 0 && bitmap->data[i] == (set ? UINT64_MAX : 0))
+  while(i >= 0 && bitmap->data[i] == (set ? 0ul : ~0ul))
     i--;
 
   if(i < 0)
     return E_NOT_FOUND;
-  else
-    return (int)(i * sizeof(uint64_t) * 8 + __bsrq(set ? bitmap->data[i] : ~bitmap->data[i]));
+  else {
+      long int bit = (long int)(i * sizeof(uint64_t) * 8
+      + __bsrq(set ? bitmap->data[i] : ~bitmap->data[i]));
+
+    return ((size_t)bit < bitmap->count) ? bit : E_NOT_FOUND;
+  }
 }

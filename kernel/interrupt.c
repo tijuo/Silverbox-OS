@@ -6,7 +6,7 @@
 #include <kernel/lowlevel.h>
 #include <kernel/interrupt.h>
 #include <kernel/error.h>
-#include <kernel/bits.h>
+#include <bits.h>
 #include <stdint.h>
 
 union idt_entry kernel_idt[NUM_EXCEPTIONS + NUM_IRQS];
@@ -23,7 +23,7 @@ NAKED noreturn void cpu_ex##num##_handler(void) { \
   __asm__("pushq $0\n" \
           "pushq $" #num "\n" \
           "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
-		  "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
+          "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
           "call handle_cpu_exception\n"); \
 }
 
@@ -33,7 +33,7 @@ NAKED noreturn void cpu_ex##num##_handler(void) { \
   SAVE_ERR_STATE; \
   __asm__("pushq $" #num "\n" \
           "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
-		  "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
+	  "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
           "call handle_cpu_exception\n"); \
 }
 

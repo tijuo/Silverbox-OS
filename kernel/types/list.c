@@ -3,6 +3,12 @@
 #include <kernel/error.h>
 #include <kernel/debug.h>
 
+CONST static int list_ptr_compare(void *p1, void *p2);
+
+int list_ptr_compare(void *p1, void *p2) {
+  return (intptr_t)p1 - (intptr_t)p2;
+}
+
 /**
  *  Insert an item into a list at the head or tail.
  *
@@ -42,22 +48,23 @@ void list_insert_at_end(list_t *list, void *item, bool at_tail) {
  *
  *  @param list The list from which to remove the item.
  *  @param item A pointer to the removed item. If NULL, the removed item
-           will not be returned.
- *  @param at_tail true, if the thread should be removed from the tail of the list. false, if it
- *         should be removed from the head.
+ *  will not be returned.
+ *  @param at_tail true, if the thread should be removed from the tail of
+ *  the list. false, if it should be removed from the head.
  *  @return E_OK, if the list successfully removed the item. E_FAIL, if empty.
  */
 
-int list_remove_from_end(list_t *list, void **item, int at_tail) {
-  assert(!!list->head == !!list->tail)
+int list_remove_from_end(list_t *list, void **item, bool at_tail) {
+  assert(!!list->head == !!list->tail);
+  list_node_t *node;
 
   if(is_list_empty(list))
     return E_FAIL;
   else {
     if(at_tail) {
-      list_node_t *node = list->tail;
+      node = list->tail;
 
-      if(item) {
+      if(item)
         *item = node->item;
 
       list->tail = node->prev;
@@ -69,9 +76,9 @@ int list_remove_from_end(list_t *list, void **item, int at_tail) {
         list->head = NULL;
     }
     else {
-      list_node_t *node = list->head;
+      node = list->head;
 
-      if(item) {
+      if(item)
         *item = node->item;
 
       list->head = node->next;
@@ -90,14 +97,17 @@ int list_remove_from_end(list_t *list, void **item, int at_tail) {
 /**
  *  Removes the first occurrence of an item from a list.
  *
- *  @param list The list from which the thread will be removed. (Must not be null)
+ *  @param list The list from which the thread will be removed.
+ *  (Must not be null)
  *  @param item The item to be removed.
- *  @param compare A comparison function pointer that determines whether two elements
+ *  @param compare A comparison function pointer that determines whether
+ *  two elements
  *  are equivalent. Returns 0 if equivalent, non-zero, otherwise.
- *  @return E_OK, on successful removal. E_NOT_FOUND, if the item wasn't in the list
+ *  @return E_OK, on successful removal. E_NOT_FOUND, if the item wasn't
+ *  in the list
  */
 
-int list_remove(list_t *list, void *item, int (*compare)(void *, void *)) {
+int list_remove_deep(list_t *list, void *item, int (*compare)(void *, void *)) {
   for(list_node_t *node=list->head; node; node = node->next) {
     if(compare(node->item, item) == 0) {
       if(node->prev) {
@@ -120,9 +130,22 @@ int list_remove(list_t *list, void *item, int (*compare)(void *, void *)) {
       }
 
       kfree(node);
-      return E_OK
+      return E_OK;
     }
   }
 
   return E_NOT_FOUND;
+}
+
+/**
+ *  Removes the first occurrence of an item from a list.
+ *
+ *  @param list The list from which the thread will be removed.
+ *  (Must not be null)
+ *  @param item The item to be removed.
+ *  @return E_OK, on successful removal. E_NOT_FOUND, if the item wasn't
+ *  in the list
+ */
+int list_remove(list_t *list, void *item) {
+  return list_remove_deep(list, item, list_ptr_compare);
 }

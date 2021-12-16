@@ -13,11 +13,13 @@ RETURNS_NON_NULL
 tcb_t* schedule(proc_id_t processor_id)
 {
   tcb_t *current_thread = processors[processor_id].running_thread;
+  tcb_t *new_thread;
   int min_priority = current_thread ? current_thread->priority : MIN_PRIORITY;
 
   for(int priority = MAX_PRIORITY; priority >= min_priority; priority--) {
     if(!is_list_empty(&run_queues[priority])) {
-      tcb_t *new_thread = list_dequeue(&run_queues[priority]);
+      if(IS_ERROR(list_dequeue(&run_queues[priority], (void **)&new_thread)))
+        continue;
 
       // If the currently running thread has been preempted, then
       // simply place it back onto its run queue
@@ -60,17 +62,19 @@ NON_NULL_PARAMS void switch_stacks(exec_state_t *state) {
 
       // Switch to the new address space
 
-      if((get_cr3() & CR3_BASE_MASK) != (new_tcb->root_pmap & CR3_BASE_MASK))
-        set_cr3(new_tcb->root_pmap);
+      if((get_cr3() & CR3_BASE_MASK) != (new_tcb->pcb->root_pmap & CR3_BASE_MASK))
+        set_cr3(new_tcb->pcb->root_pmap);
 
       if(old_tcb) {
-        old_tcb->user_exec_state = *state;
+        exec_state_t *old_state = (exec_state_t *)old_tcb->kernel_stack;
+        *old_state = *state;
         __asm__("fxsave %0" :: "m"(old_tcb->xsave_state));
       }
 
       asm volatile("fxrstor %0\n" :: "m"(new_tcb->xsave_state));
 
-      *state = new_tcb->user_exec_state;
+      exec_state_t *new_state = (exec_state_t *)new_tcb->kernel_stack;
+      *state = *new_state;
     }
     else if(!new_tcb)
       panic("No more threads to schedule.");

@@ -195,7 +195,7 @@ MunitResult test_vector_push_back(const MunitParameter params[], void *data) {
   assert_size(vector_get_capacity(v), >=, 16);
 
   for(size_t i=0; i < 16; i++) {
-    assert_int(*(int *)VECTOR_ITEM(v, i), ==, int_data[i]);
+    assert_int(*(int *)vector_item(v, i), ==, int_data[i]);
   }
 
   return MUNIT_OK;
@@ -217,7 +217,7 @@ MunitResult test_vector_push_front(const MunitParameter params[], void *data) {
   assert_size(vector_get_capacity(v), >=, 16);
 
   for(size_t i=0; i < 16; i++) {
-    assert_int(*(int *)VECTOR_ITEM(v, 16-i-1), ==, int_data[i]);
+    assert_int(*(int *)vector_item(v, 16-i-1), ==, int_data[i]);
   }
 
   return MUNIT_OK;
@@ -236,8 +236,8 @@ MunitResult test_vector_getters(const MunitParameter params[], void *data) {
   assert_size(vector_get_capacity(&v), ==, 8);
   assert_size(vector_get_item_size(&v), ==, sizeof(int));
 
-  assert_int(*(int *)VECTOR_ITEM(&v, 2), ==, 6);
-  assert_int(*(int *)VECTOR_ITEM(&v, 0), ==, 7);
+  assert_int(*(int *)vector_item(&v, 2), ==, 6);
+  assert_int(*(int *)vector_item(&v, 0), ==, 7);
 
   return MUNIT_OK;
 }
@@ -421,7 +421,7 @@ MunitResult test_vector_insert(const MunitParameter params[], void *data) {
       return MUNIT_FAIL;
 
   for(size_t i=0; i < 13; i++) {
-    assert_int(*(int *)VECTOR_ITEM(v, i), ==, int_data2[i]);
+    assert_int(*(int *)vector_item(v, i), ==, int_data2[i]);
   }
 
   if(!IS_ERROR(vector_insert(v, 100, &item)))
@@ -453,7 +453,7 @@ MunitResult test_vector_remove_item(const MunitParameter params[], void *data) {
   for(size_t i=0; i < 9; i++) {
     item=-1;
 
-    assert_int(*(int *)VECTOR_ITEM(v, i), ==, int_data2[i]);
+    assert_int(*(int *)vector_item(v, i), ==, int_data2[i]);
   }
 
   item = 33;
@@ -463,7 +463,7 @@ MunitResult test_vector_remove_item(const MunitParameter params[], void *data) {
   for(size_t i=0; i < 9; i++) {
     item=-1;
 
-    assert_int(*(int *)VECTOR_ITEM(v, i), ==, int_data2[i]);
+    assert_int(*(int *)vector_item(v, i), ==, int_data2[i]);
   }
 
   return MUNIT_OK;
@@ -492,7 +492,7 @@ MunitResult test_vector_rremove_item(const MunitParameter params[], void *data) 
   for(size_t i=0; i < 9; i++) {
     item=-1;
 
-    assert_int(*(int *)VECTOR_ITEM(v, i), ==, int_data2[i]);
+    assert_int(*(int *)vector_item(v, i), ==, int_data2[i]);
   }
 
   item = -6823;
@@ -502,7 +502,7 @@ MunitResult test_vector_rremove_item(const MunitParameter params[], void *data) 
   for(size_t i=0; i < 9; i++) {
     item=-1;
 
-    assert_int(*(int *)VECTOR_ITEM(v, i), ==, int_data2[i]);
+    assert_int(*(int *)vector_item(v, i), ==, int_data2[i]);
   }
 
   return MUNIT_OK;
@@ -537,7 +537,7 @@ MunitResult test_vector_remove(const MunitParameter params[], void *data) {
       return MUNIT_FAIL;
 
   for(size_t i=0; i < 7; i++) {
-    assert_int(*(int *)VECTOR_ITEM(v, i), ==, int_data2[i]);
+    assert_int(*(int *)vector_item(v, i), ==, int_data2[i]);
   }
 
   if(!IS_ERROR(vector_remove(v, 200, NULL)))

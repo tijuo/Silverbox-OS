@@ -5,17 +5,11 @@
 #include <stddef.h>
 #include <kernel/error.h>
 #include <limits.h>
+#include <stdint.h>
 
 #define MAX_CAPACITY          (size_t)LONG_MAX
 
 _Static_assert(MAX_CAPACITY <= (size_t)LONG_MAX, "MAX_CAPACITY cannot be larger than LONG_MAX");
-
-/** A pointer to the ith item in the vector
-  @param v The vector.
-  @param i The index of the item.
-*/
-
-#define VECTOR_ITEM(v, i) ({ __typeof(v) _v=(v); (void *)((uintptr_t)_v->data + (i) * _v->item_size); })
 
 /** A resizable array that dynamically expands as items are added
 to it.
@@ -33,6 +27,15 @@ typedef struct vec {
   /// The number of items contained in the vector.
   size_t count;
 } vector_t;
+
+/** A pointer to the ith item in the vector
+  @param v The vector.
+  @param i The index of the item.
+*/
+
+NON_NULL_PARAMS PURE static inline void *vector_item(const vector_t *v, size_t i) {
+  return (void *)((uintptr_t)v->data + i * v->item_size);
+}
 
 /**
   Initialize a vector by allocating memory to hold items.

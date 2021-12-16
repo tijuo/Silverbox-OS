@@ -16,7 +16,7 @@ export DEPEND		:=makedepend
 export DD		:=dd
 export EN_DEBUG		:=$(if $(RELEASE),,-DDEBUG -g)
 export OPT_LEVEL	:=$(if $(RELEASE),2,0)
-export CFLAGS	=-m64 -I$(ROOT_DIR)/include -std=gnu11 \
+export CFLAGS	=-m64 -I$(ROOT_DIR)/include -std=gnu17 \
 	     	-fno-leading-underscore -ffreestanding \
 		-fno-stack-protector -fno-stack-check \
 		-fno-asynchronous-unwind-tables \

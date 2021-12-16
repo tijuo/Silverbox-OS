@@ -6,7 +6,7 @@
 #include <stdarg.h>
 #include <kernel/lowlevel.h>
 #include <kernel/interrupt.h>
-#include <kernel/bits.h>
+#include <bits.h>
 #include <string.h>
 #include <limits.h>
 #include <stdint.h>
@@ -69,7 +69,7 @@ enum TextColors {
     unsigned int: kuitoa, \
     long int: klitoa, \
     unsigned long int: kulitoa, \
-default: kitoa)((value), (str), (base))
+    default: kitoa)((value), (str), (base))
 
 enum PrintfLength {
   DEFAULT = 0,
@@ -82,6 +82,7 @@ enum PrintfLength {
   PTRDIFF,
   LONG_DOUBLE
 };
+
 enum PrintfParseState {
   FLAGS = 0, WIDTH, PRECISION, LENGTH, SPECIFIER
 };
@@ -118,17 +119,19 @@ NON_NULL_PARAMS void reset_printf_state(struct PrintfState *state);
 
 static void print_char(int c);
 NON_NULL_PARAMS static void _kprintf(void (*write_func)(int), const char *str,
-									 va_list args);
-NON_NULL_PARAM(1) void kprintf(const char *str, ...) __attribute__((format(printf, 1, 2)));
+				     va_list args);
+NON_NULL_PARAM(1) void kprintf(const char *str, ...)
+   __attribute__((format(printf, 1, 2)));
 NON_NULL_PARAM(3) void kprintf_at(unsigned long int x, unsigned long int y,
-								  const char *str, ...) __attribute__((format(printf, 3, 4)));
+				  const char *str, ...)
+   __attribute__((format(printf, 3, 4)));
 static int scroll(int up);
 static void set_scroll(uint16_t addr);
 void reset_scroll(void);
 void scroll_up(void);
 int scroll_down(void);
 NON_NULL_PARAMS void do_new_line(int *x, int *y);
-int kitoa(int value, char *str, int base);
+NON_NULL_PARAMS int kitoa(int value, char *str, int base);
 NON_NULL_PARAMS int kuitoa(unsigned int value, char *str, int base);
 NON_NULL_PARAMS int klitoa(long int value, char *str, int base);
 NON_NULL_PARAMS int kulitoa(unsigned long int value, char *str, int base);
@@ -138,11 +141,11 @@ NON_NULL_PARAMS int kullitoa(unsigned long long int value, char *str, int base);
 void _put_char(char c, int x, int y, unsigned char attrib);
 void put_char(char c, int x, int y);
 NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const exec_state_t *state,
-							   unsigned long int int_num,
-							   unsigned long int error_code);
+			       unsigned long int int_num,
+			       unsigned long int error_code);
 NON_NULL_PARAMS void dump_state(const exec_state_t *state,
-								unsigned long int int_num,
-								unsigned long int error_code);
+				unsigned long int int_num,
+				unsigned long int error_code);
 static const char *DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 unsigned long int sx = 0;
@@ -211,15 +214,15 @@ NON_NULL_PARAMS int kitoa(int value, char *str, int base) {
   int charsWritten = 0;
 
   if(base < 2 || base > 36)
-	return -1;
+    return -1;
 
   if(negative) {
-	if(value == INT_MIN) {
-	  memcpy(str, "-2147483648", 11);
-	  return 11;
-	}
-	else
-	  value = ~value + 1;
+    if(value == INT_MIN) {
+      memcpy(str, "-2147483648", 11);
+      return 11;
+    }
+    else
+      value = ~value + 1;
   }
 
   do {
@@ -441,14 +444,14 @@ NON_NULL_PARAM(3) void kprintf_at(unsigned long int x, unsigned long int y,
 }
 
 NON_NULL_PARAMS void print_assert_msg(const char *exp, const char *file,
-									  const char *func, int line)
+  				      const char *func, int line)
 {
   tcb_t *current_thread = get_current_thread();
 
   kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
 
   if(current_thread)
-	dump_regs((tcb_t*)current_thread, &current_thread->user_exec_state, -1, 0);
+    dump_regs((tcb_t*)current_thread, current_thread->kernel_stack, -1, 0);
 
   if(bad_assert_hlt) {
 	kprintf("\nSystem halted.");
@@ -1025,12 +1028,10 @@ NON_NULL_PARAMS void dump_state(const exec_state_t *exec_state,
  */
 
 NON_NULL_PARAMS void dump_regs(const tcb_t *thread,
-							   const exec_state_t *exec_state,
-							   unsigned long int int_num,
-							   unsigned long int error_code)
+			   const exec_state_t *exec_state,
+			   unsigned long int int_num,
+			   unsigned long int error_code)
 {
-  kprintf("Tid: %u @ %p ", get_tid(thread), thread);
-
   dump_state(exec_state, int_num, error_code);
 }
 

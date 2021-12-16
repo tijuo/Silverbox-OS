@@ -30,7 +30,7 @@ addr_t alloc_page_frame(void) {
   }
 
   if(frame < EXTENDED_MEMORY)
-	return INVALID_PFRAME;
+    return INVALID_PADDR;
 
   first_free_page = frame + PAGE_SIZE;
 
@@ -38,7 +38,7 @@ addr_t alloc_page_frame(void) {
 }
 
 NON_NULL_PARAMS bool is_reserved_page(uint64_t addr,
-									  const struct multiboot_info_header *header)
+  const struct multiboot_info_header *header)
 {
   uintptr_t kernel_start = (uintptr_t)&kphys_start;
   unsigned long int kernel_length = (unsigned long int)ksize;
@@ -144,10 +144,6 @@ void setup_gdt(void) {
   tss_desc->limit2 = (uint8_t)(tss_limit >> 16);
   tss_desc->base4 = (uint32_t)(((uintptr_t)&tss >> 32) & 0xFFFFFFFFul);
   tss_desc->_resd = 0;
-
-  // Set the single kernel stack that will be shared between threads
-
-  tss.rsp0 = (uint64_t)kernel_stack_top;
 
   __asm__ __volatile__("lgdt %0" :: "m"(gdt_pointer) : "memory");
   __asm__ __volatile__("ltr %%ax" :: "a"(TSS_SEL));

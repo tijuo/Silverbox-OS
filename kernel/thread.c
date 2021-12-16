@@ -4,17 +4,22 @@
 #include <util.h>
 #include <kernel/error.h>
 #include <kernel/memory.h>
+#include <kernel/types/list.h>
+#include <kernel/schedule.h>
+#include <kernel/process.h>
+
+struct tss_struct tss;
 
 list_t blocked_list;
 list_t zombie_list;
 
-struct Processor processors[MAX_PROCESSORS];
+struct processor processors[MAX_PROCESSORS];
 size_t num_processors;
 
 static tid_t generate_new_tid(void);
 
 NON_NULL_PARAMS int wakeup_thread(tcb_t *thread) {
-  switch(thread->thread_state) {
+  switch(thread->state) {
     case RUNNING:
     case READY:
       RET_MSG(E_DONE, "Thread is already awake.");
@@ -23,7 +28,7 @@ NON_NULL_PARAMS int wakeup_thread(tcb_t *thread) {
       RET_MSG(E_FAIL, "Unable to wake up inactive thread.");
     default:
       remove_thread_from_list(thread);
-      thread->thread_state = READY;
+      thread->state = READY;
       list_enqueue(&run_queues[thread->priority], thread);
       break;
   }
@@ -32,19 +37,11 @@ NON_NULL_PARAMS int wakeup_thread(tcb_t *thread) {
 }
 
 NON_NULL_PARAMS int remove_thread_from_list(tcb_t *thread) {
-  switch(thread->thread_state) {
-    case WAIT_FOR_RECV:
-      detach_send_wait_queue(thread);
-      thread->wait_tid = NULL_TID;
-      break;
-    case WAIT_FOR_SEND:
-      detach_receive_wait_queue(thread);
-      thread->wait_tid = NULL_TID;
-      break;
+  switch(thread->state) {
     case READY:
       list_remove(&run_queues[thread->priority], thread);
       break;
-    case PAUSED:
+    case BLOCKED:
       list_remove(&blocked_list, thread);
       break;
     case ZOMBIE:
@@ -73,10 +70,9 @@ NON_NULL_PARAMS int remove_thread_from_list(tcb_t *thread) {
  @return E_OK on success. E_FAIL on failure. E_DONE if the thread is already started.
  */
 NON_NULL_PARAMS int start_thread(tcb_t *thread) {
-  switch(thread->thread_state) {
-    case WAIT_FOR_RECV:
-    case WAIT_FOR_SEND:
-    case PAUSED:
+  switch(thread->state) {
+    case BLOCKED:
+    case WAITING:
       remove_thread_from_list(thread);
       break;
     case READY:
@@ -87,7 +83,7 @@ NON_NULL_PARAMS int start_thread(tcb_t *thread) {
       RET_MSG(E_FAIL, "Unable to start thread.");
   }
 
-  thread->thread_state = READY;
+  thread->state = READY;
   list_enqueue(&run_queues[thread->priority], thread);
 
   return E_OK;
@@ -99,7 +95,7 @@ NON_NULL_PARAMS int start_thread(tcb_t *thread) {
  */
 
 NON_NULL_PARAMS int block_thread(tcb_t *thread) {
-  switch(thread->thread_state) {
+  switch(thread->state) {
     case READY:
     case RUNNING:
       remove_thread_from_list(thread);
@@ -110,7 +106,7 @@ NON_NULL_PARAMS int block_thread(tcb_t *thread) {
       RET_MSG(E_FAIL, "Thread cannot be blocked.");
   }
 
-  thread->thread_state = BLOCKED;
+  thread->state = BLOCKED;
   list_enqueue(&blocked_list, thread);
 
   return E_OK;
@@ -136,7 +132,7 @@ NON_NULL_PARAM(1) tcb_t* create_thread(pcb_t *pcb, void *entry_addr,
   if(tid == INVALID_TID)
     RET_MSG(NULL, "Unable to create a new thread id.");
 
-  tcb_t thread = kcalloc(1, sizeof(tcb_t));
+  tcb_t *thread = kcalloc(1, sizeof(tcb_t));
 
   if(thread == NULL)
     RET_MSG(NULL, "Unable to create a new thread");
@@ -147,6 +143,9 @@ NON_NULL_PARAM(1) tcb_t* create_thread(pcb_t *pcb, void *entry_addr,
   }
 
   exec_state_t *exec_state = (exec_state_t *)stack_top - 1;
+  uint64_t *restored_rsp0 = (uint64_t *)exec_state - 1;
+
+  *restored_rsp0 = (uint64_t)stack_top;
 
   memset(exec_state, 0, sizeof *exec_state);
 
@@ -161,13 +160,10 @@ NON_NULL_PARAM(1) tcb_t* create_thread(pcb_t *pcb, void *entry_addr,
   thread->kernel_stack = stack_top;
   thread->priority = NORMAL_PRIORITY;
 
-  if(IS_ERROR(list_enqueue(&blocked_list, thread))) {
-    kfree(thread);
-    RET_MSG(NULL, "Unable to enqueue thread to paused list.");
-  }
+  list_enqueue(&blocked_list, thread);
 
   thread->pcb = pcb;
-  thread->thread_state = WAITING;
+  thread->state = WAITING;
 
   return thread;
 }
@@ -201,10 +197,10 @@ tid_t generate_new_tid(void) {
       last_tid = 0;
 
     for(size_t i=0; i < vector_get_count(&process_vector); i++) {
-      pcb_t *pcb = (pcb_t *)VECTOR_ITEM(&process_vector, i);
+      pcb_t *pcb = (pcb_t *)vector_item(&process_vector, i);
 
       for(size_t j=0; j < vector_get_count(&pcb->threads); j++) {
-        tid_t *tcb = (tid_t)VECTOR_ITEM(&pcb->threads, j);
+        tcb_t *tcb = (tcb_t *)vector_item(&pcb->threads, j);
 
         if(tcb->tid == last_tid)
           goto continue_tid_search;
@@ -218,6 +214,7 @@ continue_tid_search:
   RET_MSG(INVALID_TID, "No more TIDs are available");
 }
 
+
 NON_NULL_PARAMS void switch_context(tcb_t *thread) {
   if((thread->pcb->root_pmap & CR3_BASE_MASK) != (get_cr3() & CR3_BASE_MASK))
     set_cr3(thread->pcb->root_pmap);
@@ -227,6 +224,7 @@ NON_NULL_PARAMS void switch_context(tcb_t *thread) {
   if(current_thread) {
     if(current_thread->xsave_state)
       __asm__("fxsave  %0\n" :: "m"(current_thread->xsave_state));
+    current_thread->kernel_stack = (void *)tss.rsp0;
   }
 
   if(thread->xsave_state)
@@ -236,13 +234,7 @@ NON_NULL_PARAMS void switch_context(tcb_t *thread) {
 
 // Restore user state
 
-  tss.rsp0 = (uint64_t)((exec_state_t*)kernel_stack_top - 1) - sizeof(uint64_t);
-  uint64_t *s = (uint64_t*)tss.rsp0;
-  exec_state_t *state = (exec_state_t*)(s + 1);
-
-  *s = (uint64_t)kernel_stack_top;
-  *state = thread->exec_state;
-
-  set_cr3(init_server_thread->root_pmap);
+  tss.rsp0 = (uint64_t)thread->kernel_stack;
+  set_cr3(thread->pcb->root_pmap);
   RESTORE_STATE;
 }

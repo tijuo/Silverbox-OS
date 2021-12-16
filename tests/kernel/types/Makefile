@@ -7,7 +7,7 @@ LD		:=ld
 ASFLAGS		:=-I$(ROOT_DIR)/include -Wa,-I$(ROOT_DIR)/include,--64
 DEPEND		:=makedepend
 DD		:=dd
-CFLAGS		:=-m64 -std=gnu17 -O2 -Wall -Wextra \
+CFLAGS		:=-m64 -std=c17 -pedantic -O0 -g -Wall -Wextra \
 		-I$(ROOT_DIR)/munit -I../../include -Wshadow \
 		-Wpointer-arith -Wsign-compare -Wsystem-headers \
 		-Wstrict-prototypes -Wno-unused-parameter -Wmissing-prototypes \
@@ -16,22 +16,27 @@ CFLAGS		:=-m64 -std=gnu17 -O2 -Wall -Wextra \
 		-Werror=nonnull -Winit-self -Wnull-dereference \
 		-Wmisleading-indentation -Wswitch-enum -Wswitch-default \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
-		-Wcast-align -Wdangling-else \
+		-Wcast-align -Wdangling-else -Wno-unused-parameter \
+		-Wno-unused-function \
 		-Wlogical-op -Wpacked -Wno-discarded-qualifiers
 DEPDIR		:=.deps
 DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
-SRC		:=vector_tests.c kmalloc.c $(ROOT_DIR)/kernel/types/vector.c \
-		$(ROOT_DIR)/munit/munit.c
+SRC		:=kmalloc.c $(ROOT_DIR)/munit/munit.c
 
 
-all: vector_tests
+all: vector_tests bitmap_tests
 	./vector_tests
+	./bitmap_tests
 
-vector_tests: $(SRC)
-	$(CC) $(CFLAGS) $(SRC) -o $@
+vector_tests: vector_tests.c $(ROOT_DIR)/kernel/types/vector.c $(SRC)
+	$(CC) $(CFLAGS) $^ -o $@
+
+bitmap_tests: bitmap_tests.c $(ROOT_DIR)/kernel/types/bitmap.c $(SRC)
+	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
 	rm -f vector_tests
+	rm -f bitmap_tests
 
 %.o.c: $(DEPDIR)/%.d | $(DEPDIR)
 	$(CC) -c $(DEPFLAGS) $(CFLAGS) $< -o $@

@@ -1,5 +1,5 @@
 #include <util.h>
-#include "../../include/type.h"
+#include <types.h>
 #include "init.h"
 
 NON_NULL_PARAMS int memcmp(const void *m1, const void *m2, size_t num) {
