@@ -6,7 +6,7 @@ include $(ROOT_PATH)/Makefile.inc
 SRC	:=syscall.c debug.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
 	apic.c init/init.c init/acpi.c init/libc.c \
-	init/memory.c types/vector.c \
+	init/memory.c types/vector.c algo.c \
 	types/list.c process.c mm.c
 
 ASM_SRC	=entry.asm

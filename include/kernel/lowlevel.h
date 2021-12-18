@@ -492,18 +492,7 @@ __asm__ ( \
           "lea tss, %%rax\n" \
           "lea 4(%%rax), %%rax\n" \
           "pushq (%%rax)\n" \
-          "cmpq $0, (%%rax)\n" /* Is tss.esp0 NULL? (because exception occurred during init()) */ \
-          "je 1f\n" \
           "mov %%rsp, (%%rax)\n" \
-          "mov %%ss, %%cx\n" \
-          "cmpw 144(%%rsp), %%cx\n" /* Privilege Change? */ \
-          "je 2f\n" \
-          "lea kernel_stack_top, %%rcx\n" \
-          "mov %%rcx, (%%rax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \
-          "jmp 1f\n" \
-          "2:\n" /* No privilege change (kernel->kernel switch) */\
-          "mov %%rsp, (%%rax)\n" \
-          "1:\n" \
           ::: "rax", "rcx", "memory", "cc" \
 )
 
@@ -536,20 +525,9 @@ __asm__ ( \
           "lea tss, %%rax\n" \
           "lea 4(%%rax), %%rax\n" \
           "pushq (%%rax)\n" \
-          "cmpq $0, (%%rax)\n" /* Is tss.esp0 NULL? (because exception occurred during init()) */ \
-          "je 1f\n" \
           "mov %%rsp, (%%rax)\n" \
-          "mov %%ss, %%cx\n" \
-          "cmpw 144(%%rsp), %%cx\n" /* Privilege Change? */ \
-          "je 2f\n" \
-          "lea kernel_stack_top, %%rcx\n" \
-          "mov %%rcx, (%%rax)\n" /* (user-> kernel switch) Set tss kernel stack ptr as top of kernel stack. */ \
-          "jmp 1f\n" \
-          "2:\n" /* No privilege change (kernel->kernel switch) */\
-          "mov %%rsp, (%%rax)\n" \
-          "1:\n" \
           "push %%rbx\n" \
-          ::: "rax", "rbx", "rcx", "memory", "cc" \
+          ::: "rax", "rbx", "memory", "cc" \
 )
 
 #define RESTORE_STATE \

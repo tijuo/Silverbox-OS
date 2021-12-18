@@ -6,22 +6,18 @@
 #include <stddef.h>
 #include <util.h>
 
-#define BUDDIES_SIZE(orders) (sizeof(uint16_t) * (((1 << (orders+1)) - 1) + orders) \
-	+ orders * sizeof(uint16_t*))
+typedef uint16_t bitmap_blk_t;
+typedef uint16_t bitmap_count_t;
+
+#define BUDDIES_SIZE(orders)  ((sizeof(bitmap_blk_t) << (orders+1)) - 1)
+#define MAX_ORDERS            17
 
 struct buddy_allocator {
   /**
       An array of pointers each pointing to a free block array of size 2^N,
       where N is the block order.
   */
-  uint16_t **free_blocks;
-
-  /**
-      The array of free block counts, one count for each order indicating
-      the number of free blocks that are available in the corresponding
-      free block array.
-  */
-  uint16_t *free_counts;
+  bitmap_blk_t *free_blocks[MAX_ORDERS];
 
   /// The number of block sizes, the smallest order (order 0) of size MIN_ORDER_SIZE.
   unsigned char orders;
@@ -32,6 +28,13 @@ struct buddy_allocator {
   */
 
   unsigned char log2_min_order_size;
+
+  /**
+      The array of free block counts, one count for each order indicating
+      the number of free blocks that are available in the corresponding
+      free block array.
+  */
+  bitmap_count_t free_counts[MAX_ORDERS];
 };
 
 struct memory_block {

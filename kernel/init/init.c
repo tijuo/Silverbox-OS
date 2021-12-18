@@ -137,7 +137,6 @@ DISC_DATA static void (*IRQ_ISRS[NUM_IRQS])(
 
 extern int init_memory(const struct multiboot_info_header *tags);
 extern int read_acpi_tables(void);
-extern int load_init_server(struct multiboot_info_header *tags);
 
 /*
  void initPIC( void )
@@ -471,8 +470,6 @@ void init(const struct multiboot_info_header *info_header) {
   kprintf("1 GiB pages: %s\n", is_1gb_pages_supported ? "yes" : "no");
   kprintf("Maximum physical address: %#lx\n", max_phys_addr);
 
-  kprintf("TCB Table size: %lx bytes\n", ktcb_table_size);
-
   kprintf("Initializing interrupt handling.\n");
   init_interrupts();
 
@@ -501,7 +498,7 @@ void init(const struct multiboot_info_header *info_header) {
   kprintf("Discarding %d bytes in total\n",
 		  (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kdcode));
 
-  load_init_server(info_header);
+  //load_init_server(info_header);
 
   /* Release the pages for the code and data that will never be used again. */
 

@@ -25,7 +25,7 @@ DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 all: types buddy_tests
 	./buddy_tests
 
-buddy_tests: buddy_tests.c $(ROOT_DIR)/kernel/buddy.c $(ROOT_DIR)/munit/munit.c
+buddy_tests: buddy_tests.c klibc.c $(ROOT_DIR)/kernel/buddy.c $(ROOT_DIR)/munit/munit.c
 	$(CC) $(CFLAGS) $^ -o $@
 
 types:

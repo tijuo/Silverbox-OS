@@ -2,9 +2,9 @@ OUTPUT_FORMAT("elf64-x86-64")
 ENTRY(start)
 SECTIONS
 {
-  kphys_start = 0x100000;
+  kphys_start = 0x200000;
   kvirt_low_mem_start = 0;
-  kvirt_start = 0x100000;
+  kvirt_start = 0x200000;
 
   .boot kphys_start : AT(kphys_start) ALIGN(4K) {
     KEEP(*(.header))
@@ -32,8 +32,6 @@ SECTIONS
 
      ksize = .;
      QUAD(SIZEOF(.text) + SIZEOF(.data) + SIZEOF(.bss));
-     ktcb_table_size = .;
-     QUAD(SIZEOF(.tcb));
 
      *(.data*)
      . = ALIGN(4K);
@@ -49,15 +47,10 @@ SECTIONS
     *(.bss*)
     *(.COMMON)
      . = ALIGN(4K);
-    kbss_end = .;
-  }
+     free_phys_blocks = .;
+     . += 0x40000;
 
-  .tcb : ALIGN(2M) {
-    ktcb_start = .;
-    tcb_table = .;
-    *(.tcb)
-     . = ALIGN(4K);
-    ktcb_end = .;
+    kbss_end = .;
   }
 
   kend = .;

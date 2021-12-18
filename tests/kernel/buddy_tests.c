@@ -87,7 +87,7 @@ void *test_setup_buddy(const MunitParameter params[],
 void test_teardown_buddy(void *fixture) {
   if(fixture) {
     struct buddy_allocator *b = (struct buddy_allocator *)fixture;
-    free(b->free_counts);
+    free(b->free_blocks[b->orders-1]);
     free(b);
   }
 }
