@@ -16,7 +16,9 @@
 *.vs
 *.settings
 *.rlib
-os_image.img.lock
+*.log
+*.txt
+*.lock
 .deps/
 bx_enh_dbg.ini
 bochsrc.bxrc

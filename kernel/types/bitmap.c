@@ -5,8 +5,6 @@
 #include <limits.h>
 #include <kernel/memory.h>
 
-#include <munit.h>
-
 int bitmap_init_at(bitmap_t *restrict bitmap, size_t elements, void *restrict mem_region,
     bool set_bits) {
 
@@ -18,7 +16,7 @@ int bitmap_init_at(bitmap_t *restrict bitmap, size_t elements, void *restrict me
   bitmap->data = (uint64_t *)mem_region;
   bitmap->count = elements;
 
-  memset(bitmap->data, set_bits ? 0xFF : 0, BITMAP_BYTES(elements));
+  kmemset(bitmap->data, set_bits ? 0xFF : 0, BITMAP_BYTES(elements));
 
   return E_OK;
 }

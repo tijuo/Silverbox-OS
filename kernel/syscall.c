@@ -1,9 +1,11 @@
 #include <util.h>
 #include <stdnoreturn.h>
+#include <stddef.h>
 
 noreturn void syscall_entry(void) NAKED;
 
 void *syscall_table[] = {
+NULL
 };
 
 /* todo: This function needs to save the user stack, and then load

@@ -6,6 +6,10 @@
 #include <util.h>
 #include <kernel/algo.h>
 
+_Static_assert(sizeof(size_t) == 8, "size_t is not 8 bytes.");
+_Static_assert(sizeof(long int) == 8, "long int is not 8 bytes.");
+_Static_assert(sizeof(unsigned long int) == 8, "unsigned long int is not 8 bytes.");
+
 size_t total_phys_memory;
 
 enum memory_map_type {
@@ -78,64 +82,64 @@ NON_NULL_PARAMS bool is_reserved_page(uint64_t addr,
 
 	while(tags->type != MULTIBOOT_TAG_TYPE_END) {
 	  switch(tags->type) {
-		case MULTIBOOT_TAG_TYPE_MMAP: {
-		  const struct multiboot_tag_mmap *mmap =
-			  (const struct multiboot_tag_mmap*)tags;
-		  const struct multiboot_mmap_entry *entry =
-			  (const struct multiboot_mmap_entry*)mmap->entries;
-		  size_t offset = offsetof(struct multiboot_tag_mmap, entries);
+      case MULTIBOOT_TAG_TYPE_MMAP: {
+        const struct multiboot_tag_mmap *mmap =
+          (const struct multiboot_tag_mmap*)tags;
+        const struct multiboot_mmap_entry *entry =
+          (const struct multiboot_mmap_entry*)mmap->entries;
+        size_t offset = offsetof(struct multiboot_tag_mmap, entries);
 
-		  while(offset < mmap->size) {
-			if((addr >= entry->addr && addr < entry->addr + entry->len)
-				|| (addr_end > entry->addr
-					&& addr_end < entry->addr + entry->len)) {
-			  in_some_region = 1;
+        while(offset < mmap->size) {
+          if((addr >= entry->addr && addr < entry->addr + entry->len)
+            || (addr_end > entry->addr
+              && addr_end < entry->addr + entry->len)) {
+            in_some_region = 1;
 
-			  switch(entry->type) {
-				case MULTIBOOT_MEMORY_AVAILABLE:
-				  break;
-				default:
-				  return true;
-			  }
-			}
+            switch(entry->type) {
+            case MULTIBOOT_MEMORY_AVAILABLE:
+              break;
+            default:
+              return true;
+            }
+          }
 
-			offset += mmap->entry_size;
-			entry = (const struct multiboot_mmap_entry*)((uintptr_t)entry
-				+ mmap->entry_size);
-		  }
+          offset += mmap->entry_size;
+          entry = (const struct multiboot_mmap_entry*)((uintptr_t)entry
+            + mmap->entry_size);
+        }
 
-		  if(!in_some_region) {
-			return true;
-		  }
+        if(!in_some_region) {
+          return true;
+        }
 
-		  break;
-		}
-		/*
-		case MULTIBOOT_TAG_TYPE_MODULE: {
-		  const struct multiboot_tag_module *module =
-			  (const struct multiboot_tag_module*)tags;
+        break;
+      }
+      /*
+      case MULTIBOOT_TAG_TYPE_MODULE: {
+        const struct multiboot_tag_module *module =
+          (const struct multiboot_tag_module*)tags;
 
-		  if((addr >= module->mod_start && addr < module->mod_end)
-			  || (addr_end > module->mod_start && addr_end <= module->mod_end))
-		  {
-			kprintf("%#lx-%#lx overlaps a module.\n", addr, addr_end);
+        if((addr >= module->mod_start && addr < module->mod_end)
+          || (addr_end > module->mod_start && addr_end <= module->mod_end))
+        {
+        kprintf("%#lx-%#lx overlaps a module.\n", addr, addr_end);
 
-			return true;
-		  }
+        return true;
+        }
 
-		  break;
-		}
-		*/
-		default:
-		  break;
-		case MULTIBOOT_TAG_TYPE_END:
-		  return false;
-	  }
+        break;
+      }
+      */
+      default:
+        break;
+      case MULTIBOOT_TAG_TYPE_END:
+        return false;
+      }
 
-	  tags = (const struct multiboot_tag*)((uintptr_t)tags + tags->size + ((tags->size % 8) == 0 ? 0 : 8 - (tags->size % 8)));
-	}
+      tags = (const struct multiboot_tag*)((uintptr_t)tags + tags->size + ((tags->size % 8) == 0 ? 0 : 8 - (tags->size % 8)));
+    }
 
-	return false;
+    return false;
   }
 }
 
@@ -175,35 +179,24 @@ NON_NULL_PARAMS int init_memory(const struct multiboot_info_header *header) {
 
   while(tags->type != MULTIBOOT_TAG_TYPE_END) {
     switch(tags->type) {
-    /*
-      case MULTIBOOT_TAG_TYPE_BASIC_MEMINFO: {
-      const struct multiboot_tag_basic_meminfo *meminfo =
-        (const struct multiboot_tag_basic_meminfo*)tags;
-
-      unsigned long int total_phys_mem = (meminfo->mem_upper + 1024) * 1024;
-
-      if(total_phys_mem < (MIN_MEM_MB_REQ * 1048576)) {
-        kprintf(
-          "Not enough memory. System must have at least %u MiB of memory, but only %lu bytes are available.\n",
-          MIN_MEM_MB_REQ,
-          total_phys_mem);
-        return E_FAIL;
-      }
-
-      return E_OK;
-      }
-      */
       case MULTIBOOT_TAG_TYPE_MMAP: {
-        const multiboot_memory_map_t *mmap = (const multiboot_memory_map_t *)tags;
+        const struct multiboot_tag_mmap *mmap =
+          (const struct multiboot_tag_mmap*)tags;
+        const struct multiboot_mmap_entry *entry =
+          (const struct multiboot_mmap_entry*)mmap->entries;
+        size_t offset = offsetof(struct multiboot_tag_mmap, entries);
 
+        while(offset < mmap->size) {
           if(map_count < 128) {
-            if(mmap->type == MULTIBOOT_MEMORY_AVAILABLE && mmap->addr + mmap->len < total_phys_memory)
-              total_phys_memory = mmap->addr + mmap->len;
+            if((entry->type == MULTIBOOT_MEMORY_AVAILABLE
+            || entry->type == MULTIBOOT_MEMORY_ACPI_RECLAIMABLE)
+            && entry->addr + entry->len > total_phys_memory)
+              total_phys_memory = entry->addr + entry->len;
 
-            mem_map[map_count].start = mmap->addr;
-            mem_map[map_count].length = mmap->len;
+            mem_map[map_count].start = entry->addr;
+            mem_map[map_count].length = entry->len;
 
-            switch(mmap->type) {
+            switch(entry->type) {
               case MULTIBOOT_MEMORY_AVAILABLE:
                 mem_map[map_count].type = AVAILABLE;
                 break;
@@ -217,6 +210,8 @@ NON_NULL_PARAMS int init_memory(const struct multiboot_info_header *header) {
                 mem_map[map_count].type = ACPI_NVS;
                 break;
               case MULTIBOOT_MEMORY_RESERVED:
+                mem_map[map_count].type = RESERVED;
+                break;
               default:
                 mem_map[map_count].type = UNKNOWN;
                 break;
@@ -227,58 +222,70 @@ NON_NULL_PARAMS int init_memory(const struct multiboot_info_header *header) {
           else
             RET_MSG(E_FAIL, "Too many memory map entries.");
 
-          kqsort(mem_map, map_count, sizeof(struct memory_map), memory_map_compare);
-
-          addr_t addr = 0;
-          size_t j=0;
-
-          for(size_t i=0; i < map_count; i++) {
-            if(mem_map[i].start != addr) {
-              if(map_count + j + 1 >= 128)
-                RET_MSG(E_FAIL, "Too many memory map entries. Unable to add memory hole entry.");
-
-              mem_map[i+j].start = addr;
-              mem_map[i+j].length = mem_map[i].start - addr;
-              mem_map[i+j].type = HOLE;
-              j++;
-            }
-
-            addr = mem_map[i].start + mem_map[i].length;
-          }
-
-          if(addr != 0) {
-            if(map_count + j + 1 >= 128)
-              RET_MSG(E_FAIL, "Too many memory map entries. Unable to add memory hole entry.");
-
-            mem_map[map_count+j].start = addr;
-            mem_map[map_count+j].length = -mem_map[map_count-1].length;
-            mem_map[map_count+j].type = HOLE;
-            j++;
-          }
-
-          map_count += j;
-          kqsort(mem_map, map_count, sizeof(struct memory_map), memory_map_compare);
+          offset += mmap->entry_size;
+          entry = (const struct multiboot_mmap_entry*)((uintptr_t)entry
+          + mmap->entry_size);
         }
         break;
+      }
+      default:
       case MULTIBOOT_TAG_TYPE_END:
         break;
-      default:
-        // Each tag must be aligned to an 8-byte boundary.
+    }
+
+    if(tags->type != MULTIBOOT_TAG_TYPE_END) {
+    // Each tag must be aligned to an 8-byte boundary.
         tags = (const struct multiboot_tag*)((uintptr_t)tags + tags->size + ((tags->size % 8) == 0 ? 0 : 8 - (tags->size % 8)));
-        break;
     }
   }
 
   if(map_count == 0)
     RET_MSG(E_FAIL, "Unable to determine total system memory.");
+  else {
+    // Add hole regions
+
+    kqsort(mem_map, map_count, sizeof(struct memory_map), memory_map_compare);
+
+    paddr_t addr = 0;
+    size_t j=0;
+
+    for(size_t i=0; i < map_count; i++) {
+      if(mem_map[i].start != addr) {
+        if(map_count + j + 1 >= 128)
+          RET_MSG(E_FAIL, "Too many memory map entries. Unable to add memory hole entry.");
+
+        mem_map[map_count+j].start = addr;
+        mem_map[map_count+j].length = mem_map[i].start - addr;
+        mem_map[map_count+j].type = HOLE;
+        j++;
+      }
+
+      addr = mem_map[i].start + mem_map[i].length;
+    }
+
+    if(addr != 0) {
+      if(map_count + j + 1 >= 128)
+        RET_MSG(E_FAIL, "Too many memory map entries. Unable to add memory hole entry.");
+
+      mem_map[map_count+j].start = addr;
+      mem_map[map_count+j].length = -addr;
+      mem_map[map_count+j].type = HOLE;
+      j++;
+    }
+
+    map_count += j;
+    kqsort(mem_map, map_count, sizeof(struct memory_map), memory_map_compare);
+  }
 
   kprintf("Memory map: \n\n");
+
   const char *type_name[] = { "Available", "ACPI", "ACPI NVS", "Reserved",
                               "Kernel", "MMIO", "Unusable", "Unknown", "Hole" };
 
   for(size_t i=0; i < map_count; i++) {
-    kprintf("%#lx:%#lx %s\n", mem_map[i].start, mem_map[i].start+mem_map[i].length-1, type_name[mem_map[i].type]);
+    kprintf("%lu: %p:%p %s\n", i, (void *)mem_map[i].start, (void *)(mem_map[i].start+mem_map[i].length-1), type_name[mem_map[i].type]);
   }
 
+  kprintf("\nTotal physical memory: %lu bytes\n", total_phys_memory);
   return E_OK;
 }

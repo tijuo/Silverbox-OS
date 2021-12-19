@@ -165,7 +165,7 @@ NON_NULL_PARAMS PURE long int bitmap_find(const bitmap_t *bitmap, bool set);
   @return The index of the found bit. E_NOT_FOUND if the bit couldn't be located.
 */
 
-NON_NULL_PARAMS PURE static long int bitmap_find_first_set(const bitmap_t *bitmap) {
+NON_NULL_PARAMS PURE static inline long int bitmap_find_first_set(const bitmap_t *bitmap) {
   return bitmap_find(bitmap, true);
 }
 
@@ -177,7 +177,7 @@ NON_NULL_PARAMS PURE static long int bitmap_find_first_set(const bitmap_t *bitma
 */
 
 
-NON_NULL_PARAMS PURE static long int bitmap_find_first_cleared(const bitmap_t *bitmap) {
+NON_NULL_PARAMS PURE static inline long int bitmap_find_first_cleared(const bitmap_t *bitmap) {
   return bitmap_find(bitmap, false);
 }
 
@@ -188,7 +188,7 @@ NON_NULL_PARAMS PURE static long int bitmap_find_first_cleared(const bitmap_t *b
   @return The index of the found bit. E_NOT_FOUND if the bit couldn't be located.
 */
 
-NON_NULL_PARAMS PURE static long int bitmap_find_last_set(const bitmap_t *bitmap) {
+NON_NULL_PARAMS PURE static inline long int bitmap_find_last_set(const bitmap_t *bitmap) {
   return bitmap_rfind(bitmap, true);
 }
 
@@ -200,7 +200,7 @@ NON_NULL_PARAMS PURE static long int bitmap_find_last_set(const bitmap_t *bitmap
 */
 
 
-NON_NULL_PARAMS PURE static long int bitmap_find_last_cleared(const bitmap_t *bitmap) {
+NON_NULL_PARAMS PURE static inline long int bitmap_find_last_cleared(const bitmap_t *bitmap) {
   return bitmap_rfind(bitmap, false);
 }
 

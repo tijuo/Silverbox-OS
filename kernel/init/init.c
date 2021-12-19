@@ -177,7 +177,7 @@ extern int read_acpi_tables(void);
 /* Various call once functions */
 
 void add_idt_entry(void (*f)(void), int entry_num, int dpl) {
-  assert(entry_num < 256);
+  kassert(entry_num < 256);
 
   idt_entry_t *new_entry = &kernel_idt[entry_num];
 
@@ -520,6 +520,7 @@ void init(const struct multiboot_info_header *info_header) {
 
   kprintf("Context switching...\n");
 
+  while(1);
   switch_context(schedule(get_current_processor()));
   stop_init("Context switch failed.");
 }

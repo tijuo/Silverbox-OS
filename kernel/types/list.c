@@ -55,7 +55,7 @@ void list_insert_at_end(list_t *list, void *item, bool at_tail) {
  */
 
 int list_remove_from_end(list_t *list, void **item, bool at_tail) {
-  assert(!!list->head == !!list->tail);
+  kassert(!!list->head == !!list->tail);
   list_node_t *node;
 
   if(is_list_empty(list))

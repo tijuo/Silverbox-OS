@@ -680,9 +680,10 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char *str,
 		case 'p':
 		case 'x':
 		case 'X':
-		  if(str[i] == 'p')
-			state.precision = 2 * sizeof(void*);
-
+		  if(str[i] == 'p') {
+		    state.length = LONG_INT;
+                    state.precision = 2 * sizeof(void *);
+                  }
 		  switch(state.length) {
 			case LONG_LONG_INT:
 			  state.arg_length = itoa(va_arg(args, unsigned long long int), buf, 16);

@@ -6,11 +6,14 @@
 
 #ifdef DEBUG
 
-#define PRINT_DEBUG(msg)      ({ kprintf("<'%s' %s: %d> %s", \
-                              __FILE__, __func__, __LINE__, (msg)); })
-#define RET_MSG(ret, msg)     ({ kprintf("<'%s' %s: line %d> Returned: %d. %s\n", \
-				              __FILE__, __func__, __LINE__, (ret), (msg)); \
-				              return ret; })
+#define PRINT_DEBUG(msg)      kprintf("<'%s' %s: %d> %s", \
+                              __FILE__, __func__, __LINE__, (msg))
+#define RET_MSG(ret, msg)     return ({\
+  __typeof__(ret) _ret=(ret);\
+  kprintf("<'%s' %s: line %d> Returned: %d. %s\n",\
+    __FILE__, __func__, __LINE__, (_ret), (msg));\
+  _ret;\
+})
 
 #define DECL_CALL_COUNTER(fname)		extern unsigned long int fname ## _counter;
 #define CALL_COUNTER(fname)			unsigned long int fname ## _counter;
