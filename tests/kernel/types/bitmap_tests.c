@@ -44,7 +44,7 @@ static MunitParameterEnum test_one_params[] = {
 
 MunitTest tests[] = {
   {
-    "/init",
+    "::init()",
     test_bitmap_init,
     test_setup_bitmap,
     test_teardown_bitmap,
@@ -52,7 +52,7 @@ MunitTest tests[] = {
     test_init_params
   },
   {
-    "/set",
+    "::set()",
     test_bitmap_set,
     test_setup_bitmap,
     test_teardown_bitmap,
@@ -60,7 +60,7 @@ MunitTest tests[] = {
     test_zero_params
   },
   {
-    "/clear",
+    "::clear()",
     test_bitmap_clear,
     test_setup_bitmap,
     test_teardown_bitmap,
@@ -68,7 +68,7 @@ MunitTest tests[] = {
     test_one_params
   },
   {
-    "/find_first_set",
+    "::find_first_set()",
     test_bitmap_find_first_set,
     test_setup_bitmap,
     test_teardown_bitmap,
@@ -76,7 +76,7 @@ MunitTest tests[] = {
     test_zero_params
   },
   {
-    "/find_last_set",
+    "::find_last_set()",
     test_bitmap_find_last_set,
     test_setup_bitmap,
     test_teardown_bitmap,
@@ -87,7 +87,7 @@ MunitTest tests[] = {
 };
 
 static const MunitSuite suite = {
-  "/bitmap",
+  "kernel/types/bitmap.c",
   tests,
   NULL,
   1,

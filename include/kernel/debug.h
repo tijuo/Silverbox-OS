@@ -42,7 +42,7 @@ void init_video(void);
 
 #define rdtsc( upper, lower ) asm __volatile__( "rdtsc\n" : "=a"( *lower ), "=d"( *upper ) )
 
-#define assert(exp)  { \
+#define kassert(exp)  { \
 	__typeof__ (exp) _exp=(exp); \
   if(_exp) { \
   } else { \
@@ -53,7 +53,7 @@ void init_video(void);
 
 #else
 
-#define assert(exp)         ({})
+#define kassert(exp)         ({})
 #define clear_screen()       ({})
 #define kprintf( ... )   ({})
 #define print_assert_msg( w, x, y, z )    ({})

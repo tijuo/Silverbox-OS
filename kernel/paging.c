@@ -42,7 +42,7 @@ NON_NULL_PARAMS int get_pmap_entry(unsigned int level, addr_t vaddr,
 {
   volatile pmap_entry_t *table = (volatile pmap_entry_t*)root_pmap;
 
-  assert(num_paging_levels > 0);
+  kassert(num_paging_levels > 0);
 
   for(unsigned int paging_level = num_paging_levels; paging_level;
 	  paging_level--)
@@ -134,7 +134,7 @@ NON_NULL_PARAMS int translate_vaddr(addr_t vaddr, paddr_t *paddr,
   volatile pmap_entry_t *entry;
   int ret_val = get_pmap_entry(0, vaddr, &entry, root_pmap);
 
-  assert(num_paging_levels > 0);
+  kassert(num_paging_levels > 0);
 
   if(ret_val == E_OK) {
 	if(IS_FLAG_SET(*entry, PAE_PRESENT)) {
@@ -230,7 +230,7 @@ NON_NULL_PARAMS int access_mem(addr_t address, size_t len, void *buffer,
 {
   size_t buffer_offset = 0;
 
-  assert(address);
+  kassert(address);
 
   while(len) {
 	paddr_t base_address;
@@ -242,10 +242,10 @@ NON_NULL_PARAMS int access_mem(addr_t address, size_t len, void *buffer,
 	  return E_FAIL;
 
 	if(read)
-	  memcpy((void*)((addr_t)buffer + buffer_offset),
+	  kmemcpy((void*)((addr_t)buffer + buffer_offset),
 			 (void*)(base_address + addr_offset), bytes);
 	else
-	  memcpy((void*)(base_address + addr_offset),
+	  kmemcpy((void*)(base_address + addr_offset),
 			 (void*)((addr_t)buffer + buffer_offset), bytes);
 
 	address += bytes;
@@ -272,7 +272,7 @@ NON_NULL_PARAMS int poke_virt(addr_t address, size_t len, void *buffer,
 							  paddr_t root_pmap)
 {
   if(root_pmap == get_root_page_map() || root_pmap == CURRENT_ROOT_PMAP) {
-	memcpy((void*)address, buffer, len);
+	kmemcpy((void*)address, buffer, len);
 	return E_OK;
   }
   else
@@ -297,7 +297,7 @@ NON_NULL_PARAMS int peek_virt(addr_t address, size_t len, void *buffer,
 							  paddr_t root_pmap)
 {
   if(root_pmap == get_root_page_map() || root_pmap == CURRENT_ROOT_PMAP) {
-	memcpy(buffer, (void*)address, len);
+	kmemcpy(buffer, (void*)address, len);
 	return E_OK;
   }
   else

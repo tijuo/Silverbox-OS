@@ -1,2 +1,5 @@
 buddy_tests
-bitmap_tests
+*.o
+mem.asm
+algo_tests
+mem_tests

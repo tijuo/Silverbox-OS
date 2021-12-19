@@ -7,7 +7,7 @@ LD		:=ld
 ASFLAGS		:=-I$(ROOT_DIR)/include -Wa,-I$(ROOT_DIR)/include,--64
 DEPEND		:=makedepend
 DD		:=dd
-CFLAGS		:=-m64 -std=c17 -pedantic -O0 -g -Wall -Wextra \
+CFLAGS		:=-m64 -std=gnu17 -O2 -Wall -Wextra \
 		-I$(ROOT_DIR)/munit -I../../include -Wshadow \
 		-Wpointer-arith -Wsign-compare -Wsystem-headers \
 		-Wstrict-prototypes -Wno-unused-parameter -Wmissing-prototypes \

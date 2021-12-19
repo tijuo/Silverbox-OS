@@ -19,7 +19,7 @@ static MunitResult test_buddy_block_order(const MunitParameter params[], void *d
 
 MunitTest tests[] = {
   {
-    "/init",
+    "::init()",
     test_buddy_init,
     test_setup_buddy,
     test_teardown_buddy,
@@ -27,7 +27,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/block_order",
+    "::block_order()",
     test_buddy_block_order,
     test_setup_buddy,
     test_teardown_buddy,
@@ -35,7 +35,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/alloc_block",
+    "::alloc_block()",
     test_buddy_alloc_block,
     test_setup_buddy,
     test_teardown_buddy,
@@ -43,7 +43,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/free_block",
+    "::free_block()",
     test_buddy_free_block,
     test_setup_buddy,
     test_teardown_buddy,
@@ -54,7 +54,7 @@ MunitTest tests[] = {
 };
 
 static const MunitSuite suite = {
-  "/buddy",
+  "kernel/buddy.c",
   tests,
   NULL,
   1,

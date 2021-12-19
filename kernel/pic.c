@@ -20,7 +20,7 @@ void sendAutoEOI(void) {
  */
 
 void sendEOI(unsigned int irq) {
-  assert(irq < 16);
+  kassert(irq < 16);
 
   if(irq >= PIC2_IRQ_START) {
     out_port8(PIC1_PORT, PIC_EOI | SLAVE_IRQ);
@@ -37,7 +37,7 @@ void sendEOI(unsigned int irq) {
  */
 
 void enableIRQ(unsigned int irq) {
-  assert(irq < 16);
+  kassert(irq < 16);
 
   // Send OCW1 (set IRQ mask)
 
@@ -57,7 +57,7 @@ void enableIRQ(unsigned int irq) {
  */
 
 void disableIRQ(unsigned int irq) {
-  assert(irq < 16);
+  kassert(irq < 16);
 
   // Send OCW1 (set IRQ mask)
 

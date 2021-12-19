@@ -30,7 +30,7 @@ static MunitResult test_vector_remove(const MunitParameter params[], void *data)
 
 MunitTest tests[] = {
   {
-    "/init",
+    "::init()",
     test_vector_init,
     test_setup_vector,
     test_teardown_vector,
@@ -38,7 +38,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/push_back",
+    "::push_back()",
     test_vector_push_back,
     test_setup_vector,
     test_teardown_vector,
@@ -46,7 +46,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/push_front",
+    "::push_front()",
     test_vector_push_front,
     test_setup_vector,
     test_teardown_vector,
@@ -54,7 +54,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/getters",
+    "::getters",
     test_vector_getters,
     NULL,
     NULL,
@@ -62,7 +62,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/get_copy",
+    "::get_copy()",
     test_vector_get_copy,
     test_setup_char_vector,
     test_teardown_vector,
@@ -70,7 +70,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/index_of",
+    "::index_of()",
     test_vector_index_of,
     test_setup_vector,
     test_teardown_vector,
@@ -78,7 +78,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/rindex_of",
+    "::rindex_of()",
     test_vector_rindex_of,
     test_setup_vector,
     test_teardown_vector,
@@ -86,7 +86,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/pop_back",
+    "::pop_back()",
     test_vector_pop_back,
     test_setup_vector,
     test_teardown_vector,
@@ -94,7 +94,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/pop_front",
+    "::pop_front()",
     test_vector_pop_front,
     test_setup_vector,
     test_teardown_vector,
@@ -102,7 +102,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/remove_item",
+    "::remove_item()",
     test_vector_remove_item,
     test_setup_vector,
     test_teardown_vector,
@@ -110,7 +110,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/rremove_item",
+    "::rremove_item()",
     test_vector_rremove_item,
     test_setup_vector,
     test_teardown_vector,
@@ -118,7 +118,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/insert",
+    "::insert()",
     test_vector_insert,
     test_setup_vector,
     test_teardown_vector,
@@ -126,7 +126,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "/remove",
+    "::remove()",
     test_vector_remove,
     test_setup_vector,
     test_teardown_vector,
@@ -137,7 +137,7 @@ MunitTest tests[] = {
 };
 
 static const MunitSuite suite = {
-  "/vector",
+  "kernel/types/vector.c",
   tests,
   NULL,
   1,

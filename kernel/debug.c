@@ -218,7 +218,7 @@ NON_NULL_PARAMS int kitoa(int value, char *str, int base) {
 
   if(negative) {
     if(value == INT_MIN) {
-      memcpy(str, "-2147483648", 11);
+      kmemcpy(str, "-2147483648", 11);
       return 11;
     }
     else
@@ -289,7 +289,7 @@ NON_NULL_PARAMS int klitoa(long int value, char *str, int base) {
 
   if(negative) {
 	if(value == LONG_MIN) {
-	  memcpy(str, "-9223372036854775808", 20);
+	  kmemcpy(str, "-9223372036854775808", 20);
 	  return 20;
 	}
 	else
@@ -448,7 +448,7 @@ NON_NULL_PARAMS void print_assert_msg(const char *exp, const char *file,
 {
   tcb_t *current_thread = get_current_thread();
 
-  kprintf("\n<'%s' %s: %d> assert(%s) failed\n", file, func, line, exp);
+  kprintf("\n<'%s' %s: %d> kassert(%s) failed\n", file, func, line, exp);
 
   if(current_thread)
     dump_regs((tcb_t*)current_thread, current_thread->kernel_stack, -1, 0);
@@ -474,7 +474,7 @@ void clear_screen(void) {
 	  VGA_CHAR_AT(vidmem, line, col)= VGA_CHAR(' ', GRAY, BLACK);
 	}
 
-	// memset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
+	// kmemset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
 
   reset_scroll();
 }
@@ -512,7 +512,7 @@ void put_char(char c, int x, int y) {
 }
 
 void reset_printf_state(struct PrintfState *state) {
-  memset(state, 0, sizeof *state);
+  kmemset(state, 0, sizeof *state);
   state->precision = -1;
 }
 
@@ -961,7 +961,7 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char *str,
 		case '%':
 		  state.percent_index = i;
 		  state.inPercent = 1;
-		  memset(buf, 0, KITOA_BUF_LEN);
+		  kmemset(buf, 0, KITOA_BUF_LEN);
 		  break;
 		case '\n':
 		  write_func('\r');

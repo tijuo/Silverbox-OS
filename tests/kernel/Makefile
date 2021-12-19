@@ -19,20 +19,35 @@ export CFLAGS	=-m64 -I$(ROOT_DIR)/tests/include -std=gnu17 \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
 		-Wcast-align -Wdangling-else -Wno-unused-parameter \
 		-Wlogical-op -Wpacked -Wno-discarded-qualifiers
+LDFLAGS		:=
 DEPDIR		:=.deps
 DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 
-all: types buddy_tests
+all: buddy_tests algo_tests mem_tests types
 	./buddy_tests
+	./mem_tests
+	./algo_tests
 
-buddy_tests: buddy_tests.c klibc.c $(ROOT_DIR)/kernel/buddy.c $(ROOT_DIR)/munit/munit.c
+buddy_tests: buddy_tests.c $(ROOT_DIR)/kernel/buddy.c buddy_klibc.c $(ROOT_DIR)/munit/munit.c
 	$(CC) $(CFLAGS) $^ -o $@
+
+algo_tests: algo_tests.c $(ROOT_DIR)/kernel/algo.c $(ROOT_DIR)/munit/munit.c algo_klibc.c
+	$(CC) $(CFLAGS) $^ -o $@
+
+mem_tests: mem_tests.c $(ROOT_DIR)/munit/munit.c $(ROOT_DIR)/kernel/mem.asm
+	cp $(ROOT_DIR)/kernel/mem.asm .
+	nasm -f elf64 mem.asm -o mem.o
+	$(CC) $(CFLAGS) mem_tests.c $(ROOT_DIR)/munit/munit.c mem.o -o $@
 
 types:
 	$(MAKE) -C types all
 
 clean:
 	rm -f buddy_tests
+	rm -f algo_tests
+	rm -f mem_tests
+	rm -f mem.asm
+	rm -f mem.o
 	$(MAKE) -C types clean
 
 %.o.c: $(DEPDIR)/%.d | $(DEPDIR)

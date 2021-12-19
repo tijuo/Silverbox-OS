@@ -147,7 +147,7 @@ NON_NULL_PARAM(1) tcb_t* create_thread(pcb_t *pcb, void *entry_addr,
 
   *restored_rsp0 = (uint64_t)stack_top;
 
-  memset(exec_state, 0, sizeof *exec_state);
+  kmemset(exec_state, 0, sizeof *exec_state);
 
   exec_state->rflags = RFLAGS_IF;
   exec_state->rip = (uint64_t)entry_addr;
