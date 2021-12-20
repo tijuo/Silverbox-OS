@@ -47,9 +47,6 @@ SECTIONS
     *(.bss*)
     *(.COMMON)
      . = ALIGN(4K);
-     free_phys_blocks = .;
-     . += 0x40000;
-
     kbss_end = .;
   }
 

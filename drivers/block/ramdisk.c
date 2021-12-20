@@ -1,4 +1,3 @@
-#include <oslib.h>
 #include <os/dev_interface.h>
 #include <drivers/ramdisk.h>
 #include <string.h>

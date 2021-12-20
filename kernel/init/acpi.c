@@ -74,7 +74,7 @@ struct IOAPIC_Header {
   uint32_t global_sys_int_base;
 };
 
-_Static_assert(sizeof(struct IOAPIC_Header) == 12, "IOAPIC_Header should be 8 bytes.");
+_Static_assert(sizeof(struct IOAPIC_Header) == 12, "IOAPIC_Header should be 12 bytes.");
 
 DISC_CODE static bool is_valid_acpi_header(paddr_t phys_address);
 DISC_CODE int read_acpi_tables(void);
@@ -170,7 +170,7 @@ int read_acpi_tables(void) {
               switch(ic_header->type) {
                 case TYPE_PROC_LAPIC: {
 
-/* 
+/*
    Each processor has a local APIC. Use this to find each processor's
    local APIC id.
 */
@@ -185,7 +185,7 @@ int read_acpi_tables(void) {
                                  proc_lapic_header->uid,
                                  proc_lapic_header->lapic_id,
                                  IS_FLAG_SET(proc_lapic_header->flags,
-                                             PROC_LAPIC_ENABLED) ? 
+                                             PROC_LAPIC_ENABLED) ?
                                               "" : IS_FLAG_SET(proc_lapic_header->flags,
                                                 PROC_LAPIC_ONLINE) ? " (offline)" :
                                               " (disabled)");
@@ -218,7 +218,7 @@ int read_acpi_tables(void) {
               madt_offset += ic_header->length;
             }
 
-            kprintf("%u processors found.\n", processors_found);
+            kprintf("%u processor%c found.\n", processors_found, processors_found != 1 ? 's' : '\0');
           }
         }
         else

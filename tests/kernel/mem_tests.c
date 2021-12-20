@@ -17,6 +17,8 @@ static MunitResult test_mem_kstrcpy(const MunitParameter params[],
     void *data);
 static MunitResult test_mem_kstrncpy(const MunitParameter params[],
     void *data);
+static MunitResult test_mem_kstrlen(const MunitParameter params[],
+    void *data);
 
 MunitTest tests[] = {
   {
@@ -28,7 +30,7 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "::kmemset",
+    "::kmemset()",
     test_mem_kmemset,
     test_setup_mem,
     test_teardown_mem,
@@ -44,8 +46,16 @@ MunitTest tests[] = {
     NULL
   },
   {
-    "::kstrncpy",
+    "::kstrncpy()",
     test_mem_kstrncpy,
+    test_setup_mem,
+    test_teardown_mem,
+    MUNIT_TEST_OPTION_NONE,
+    NULL
+  },
+  {
+    "::kstrlen()",
+    test_mem_kstrlen,
     test_setup_mem,
     test_teardown_mem,
     MUNIT_TEST_OPTION_NONE,
@@ -142,18 +152,42 @@ static MunitResult test_mem_kstrncpy(const MunitParameter params[],
   char *text2 = "How now, brown cow?";
 
   strcpy((char *)data, text1);
-  kstrncpy((char *)ARR_ITEM(data, 16, sizeof(char)), &text2[15], 3);
-  kstrncpy((char *)ARR_ITEM(data, 41, sizeof(char)), &text1[16], 3);
+  kstrncpy((char *)ARR_ITEM(data, 16, sizeof(char)), &text2[15], 3*sizeof(char));
+  kstrncpy((char *)ARR_ITEM(data, 41, sizeof(char)), &text1[16], 3*sizeof(char));
 
   assert_int(strcmp(data, "The quick brown cow jumped over the lazy fox."), ==, 0);
 
-  kstrncpy(data, &text2[8], 12);
+  kstrncpy(data, &text2[8], 12*sizeof(char));
 
   assert_int(strcmp(data, " brown cow?"), ==, 0);
 
   kstrncpy(data, text1, 0);
   assert_int(strcmp(data, " brown cow?"), ==, 0);
   assert_int(strcmp(text1, "The quick brown fox jumped over the lazy dog."), ==, 0);
+
+  char buf[10];
+
+  memset(buf, 'a', 10 * sizeof(char));
+
+  kstrncpy(buf, "testtest", 10 * sizeof(char));
+
+  assert_int(memcmp(buf, "testtest\0\0", 10 * sizeof(char)), ==, 0);
+
+  return MUNIT_OK;
+}
+
+static MunitResult test_mem_kstrlen(const MunitParameter params[],
+    void *data) {
+
+  char *text1 = "This string contains 35 characters.";
+  char *text2 = "This one has 16.";
+  char *text3 = "";
+  char *text4 = "This one has 16.\0\0Actually, it contains 43.";
+
+  assert_size(kstrlen(text1), ==, 35);
+  assert_size(kstrlen(text2), ==, 16);
+  assert_size(kstrlen(text3), ==, 0);
+  assert_size(kstrlen(text4), ==, 16);
 
   return MUNIT_OK;
 }

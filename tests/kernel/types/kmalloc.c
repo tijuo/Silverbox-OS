@@ -26,3 +26,7 @@ void kfree(void *mem) {
 void kmemcpy(void *dest, void *src, size_t size) {
   memcpy(dest, src, size);
 }
+
+void kmemset(void *base, int value, size_t len) {
+  memset(base, value, len);
+}

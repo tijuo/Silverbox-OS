@@ -1,7 +1,7 @@
 .PHONY: all kernel install lib apps drivers tests clean qemu gdb-debug bochs
 
 QEMU		:=qemu-system-x86_64
-QEMU_FLAGS	:=-boot order=cn -smp cores=2,threads=2 -m 768 -cpu kvm64,kvm
+QEMU_FLAGS	:=-boot order=cn -smp cores=2,threads=2 -m 768 -cpu kvm64,kvm -serial file:qemu_serial.log
 QEMU_DRIVE	:=os_floppy.img
 
 include Makefile.inc

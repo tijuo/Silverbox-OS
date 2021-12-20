@@ -5,11 +5,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <util.h>
+#include <types.h>
 
 typedef uint16_t bitmap_blk_t;
 typedef uint16_t bitmap_count_t;
 
-#define BUDDIES_SIZE(orders)  ((sizeof(bitmap_blk_t) << (orders+1)) - 1)
+#define BUDDIES_SIZE(orders)  ((sizeof(bitmap_blk_t) << ((orders)+1)) - 1ul)
 #define MAX_ORDERS            17
 
 struct buddy_allocator {
@@ -57,8 +58,8 @@ struct memory_block {
   allocator to manage too many block orders.
 */
 
-NON_NULL_PARAMS int buddy_init(struct buddy_allocator * restrict allocator,
-  size_t mem_size, size_t min_order_size, void * restrict mem_region);
+NON_NULL_PARAMS int buddy_init(struct buddy_allocator *allocator,
+                               size_t mem_size, size_t min_order_size, void *mem_region);
 
 /**
   Calculate the smallest block order needed to satisfy a memory request.
@@ -70,7 +71,7 @@ NON_NULL_PARAMS int buddy_init(struct buddy_allocator * restrict allocator,
 */
 
 NON_NULL_PARAMS PURE size_t buddy_block_order(const struct buddy_allocator *allocator,
-  size_t mem_size);
+    size_t mem_size);
 
 /**
   Allocate a block of memory.
@@ -85,8 +86,22 @@ NON_NULL_PARAMS PURE size_t buddy_block_order(const struct buddy_allocator *allo
   block size.
 */
 
-NON_NULL_PARAMS int buddy_alloc_block(struct buddy_allocator * restrict allocator, size_t size,
-  struct memory_block * restrict block);
+NON_NULL_PARAMS int buddy_alloc_block(struct buddy_allocator *allocator, size_t size,
+                                      struct memory_block *block);
+
+/**
+  Set a free block of memory as reserved.
+
+  @param allocator The allocator.
+  @param addr The start of the memory block. It should be a multiple of the minimum block size.
+  @param size The size of the memory block.
+  @param block The structure where the block address and block size are
+  set if sucessful.
+  @return E_OK, on success. E_FAIL, on failure (because the block isn't free).
+*/
+
+NON_NULL_PARAM(1) int buddy_reserve_block(struct buddy_allocator *allocator, const void *addr, size_t size,
+                                        struct memory_block *mem_block);
 
 /**
   Release a block of memory.
@@ -96,8 +111,8 @@ NON_NULL_PARAMS int buddy_alloc_block(struct buddy_allocator * restrict allocato
   @return E_OK, on success. E_INVALID_ARG, if the memory block is invalid.
 */
 
-NON_NULL_PARAMS int buddy_free_block(struct buddy_allocator * restrict allocator,
-  const struct memory_block * restrict block);
+NON_NULL_PARAMS int buddy_free_block(struct buddy_allocator *allocator,
+                                     const struct memory_block *block);
 
 /**
   Concatenate smaller free blocks into larger ones by joining them with their
@@ -120,7 +135,8 @@ NON_NULL_PARAMS bool buddy_coalesce_blocks(struct buddy_allocator *allocator);
 NON_NULL_PARAMS PURE size_t buddy_free_bytes(const struct buddy_allocator *allocator);
 
 NON_NULL_PARAMS PURE static inline size_t buddy_free_count(const struct buddy_allocator *allocator,
-  unsigned int order) {
+    unsigned int order)
+{
   return order >= allocator->orders ? 0 : (size_t)allocator->free_counts[order];
 }
 

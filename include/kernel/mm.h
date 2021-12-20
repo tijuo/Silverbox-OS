@@ -8,6 +8,7 @@
 #include <kernel/error.h>
 #include <types.h>
 #include <stddef.h>
+#include <kernel/buddy.h>
 
 /* FIXME: Changing any of these values may require changing
  the asm code */
@@ -80,6 +81,9 @@ void *kmalloc(size_t size);
 void *kcalloc(size_t count, size_t elem_size);
 void *krealloc(void *mem, size_t new_size);
 void kfree(void *mem);
+
+extern struct buddy_allocator phys_allocator;
+extern uint8_t free_phys_blocks[0x40000];
 
 #if 0
 

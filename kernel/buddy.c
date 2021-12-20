@@ -6,6 +6,7 @@
 #include <string.h>
 #include <kernel/pae.h>
 #include <kernel/algo.h>
+#include <kernel/memory.h>
 
 #define MIN_ORDER_SIZE(allocator)   (1u << (allocator)->log2_min_order_size)
 
@@ -19,8 +20,8 @@
  */
 NON_NULL_PARAMS PURE static int buddy_block_cmp(const void *b1, const void *b2);
 
-int buddy_init(struct buddy_allocator * restrict allocator, size_t mem_size,
-    size_t min_order_size, void * restrict mem_region)
+int buddy_init(struct buddy_allocator *allocator, size_t mem_size,
+               size_t min_order_size, void *mem_region)
 {
   allocator->log2_min_order_size = (unsigned char)__bsrq(min_order_size);
 
@@ -36,18 +37,18 @@ int buddy_init(struct buddy_allocator * restrict allocator, size_t mem_size,
 
   if(orders > MAX_ORDERS)
     RET_MSG(E_INVALID_ARG,
-           "Number of block orders must be at least 0 and no more than MAX_ORDERS");
+            "Number of block orders must be at least 0 and no more than MAX_ORDERS");
 
   allocator->orders = orders;
 
-  for(size_t i = 0, offset = 0; i < MAX_ORDERS; i++, offset += 1 << i) {
+  for(size_t i = 0, offset = 0; i < MAX_ORDERS; i++, offset += (i <= orders ? (1ul << (orders-i)) : 0)) {
     if(i < orders)
-      allocator->free_blocks[orders - i - 1] = (bitmap_blk_t *)mem_region + offset;
+      allocator->free_blocks[i] = (bitmap_blk_t *)mem_region + offset;
     else
       allocator->free_blocks[i] = NULL;
   }
 
-  memset(allocator->free_counts, 0, sizeof allocator->free_counts);
+  kmemset(allocator->free_counts, 0, sizeof allocator->free_counts);
 
   allocator->free_blocks[orders - 1][0] = 0;
   allocator->free_counts[orders - 1] = 1;
@@ -56,7 +57,7 @@ int buddy_init(struct buddy_allocator * restrict allocator, size_t mem_size,
 }
 
 size_t buddy_block_order(const struct buddy_allocator *allocator,
-    size_t mem_size)
+                         size_t mem_size)
 {
   if(mem_size <= MIN_ORDER_SIZE(allocator))
     return 0;
@@ -72,12 +73,8 @@ size_t buddy_block_order(const struct buddy_allocator *allocator,
   }
 }
 
-/// Allocate a new block of `size` bytes. Returns a tuple consisting of the address
-/// of the newly allocated block and actual size of the block on success. Returns
-/// `AllocError` on failure.
-
-int buddy_alloc_block(struct buddy_allocator * restrict allocator, size_t size,
-    struct memory_block * restrict block)
+int buddy_alloc_block(struct buddy_allocator *allocator, size_t size,
+                      struct memory_block *block)
 {
   unsigned int block_order = buddy_block_order(allocator, size);
 
@@ -111,8 +108,8 @@ int buddy_alloc_block(struct buddy_allocator * restrict allocator, size_t size,
       allocator->free_counts[order] -= 1;
 
       block->size = MIN_ORDER_SIZE(allocator) << block_order;
-      block->ptr = (void*)(allocator->free_blocks[order][allocator->free_counts[order]]
-          * block->size);
+      block->ptr = (void *)(allocator->free_blocks[order][allocator->free_counts[order]]
+                            * block->size);
 
       return E_OK;
     }
@@ -135,20 +132,68 @@ int buddy_alloc_block(struct buddy_allocator * restrict allocator, size_t size,
   RET_MSG(E_OOM, "Out of memory.");
 }
 
-int buddy_free_block(struct buddy_allocator * restrict allocator,
-    const struct memory_block * restrict block) {
+int buddy_reserve_block(struct buddy_allocator *allocator, const void *addr, size_t size,
+                        struct memory_block *mem_block)
+{
+  size_t block_order = buddy_block_order(allocator, size);
+  bitmap_blk_t block_num = (bitmap_blk_t)((uintptr_t)addr >> (allocator->log2_min_order_size + block_order));
+
+  /* Look to see if the block has been marked as free. If so, then
+     simply remove it from the free block array. Otherwise, find the
+     the smallest superblock that it belongs to and then continually split
+     it until we get the reserved block. Finally, remove the reserved block.
+  */
+
+  for(unsigned int order = block_order; order < allocator->orders; order++) {
+    for(size_t i = 0; i < allocator->free_counts[order]; i++) {
+      if(allocator->free_blocks[order][i] == (block_num >> (order - block_order))) {
+        // A free block was found. Remove it from the free block array.
+
+        for(; i + 1 < allocator->free_counts[order]; i++)
+          allocator->free_blocks[order][i] = allocator->free_blocks[order][i + 1];
+
+        allocator->free_counts[order]--;
+
+        /* If the found block was a super-block, then split the block into two
+           sub-blocks: one to which the reserved block belongs and its buddy. Mark the
+           buddy as free. Keep doing this until we're left with a sub-block
+           that's the reserved block. */
+
+        while(order-- > block_order) {
+          allocator->free_blocks[order][allocator->free_counts[order]] =
+            (block_num >> order) ^ 1u;
+          allocator->free_counts[order]++;
+        }
+
+        if(mem_block) {
+          mem_block->size = (1ul << (allocator->log2_min_order_size + block_order));
+          mem_block->ptr = (void *)(block_num * mem_block->size);
+        }
+
+        return E_OK;
+      }
+    }
+  }
+
+  // The reserved block couldn't be found (because it was already allocated or reserved)
+
+  return E_FAIL;
+}
+
+int buddy_free_block(struct buddy_allocator *allocator,
+                     const struct memory_block *block)
+{
   if(block->size
       > MIN_ORDER_SIZE(allocator) << (allocator->orders - 1)
-      || block->size < MIN_ORDER_SIZE(allocator))
-  {
+      || block->size < MIN_ORDER_SIZE(allocator)) {
     RET_MSG(E_INVALID_ARG, "Invalid block size.");
   }
 
   unsigned int block_order = buddy_block_order(allocator, block->size);
   bitmap_blk_t block_number = (bitmap_blk_t)((uintptr_t)block->ptr
-      / (uintptr_t)(1 << block_order)*MIN_ORDER_SIZE(allocator));
+                              / (uintptr_t)(1ul << block_order) * MIN_ORDER_SIZE(allocator));
 
-  if(block_number >= (1 << (allocator->orders - 1 - block_order)))
+  if(block_number >= (1u << (allocator->orders - 1 - block_order)))
     RET_MSG(E_INVALID_ARG, "Invalid block.");
 
   allocator->free_blocks[block_order][allocator->free_counts[block_order]++] =
@@ -159,14 +204,16 @@ int buddy_free_block(struct buddy_allocator * restrict allocator,
   return E_OK;
 }
 
-int buddy_block_cmp(const void *b1, const void *b2) {
-  const bitmap_blk_t *bl1 = (const bitmap_blk_t*)b1;
-  const bitmap_blk_t *bl2 = (const bitmap_blk_t*)b2;
+int buddy_block_cmp(const void *b1, const void *b2)
+{
+  const bitmap_blk_t *bl1 = (const bitmap_blk_t *)b1;
+  const bitmap_blk_t *bl2 = (const bitmap_blk_t *)b2;
 
   return *bl1 < *bl2 ? -1 : !!(*bl1 - *bl2);
 }
 
-bool buddy_coalesce_blocks(struct buddy_allocator *allocator) {
+bool buddy_coalesce_blocks(struct buddy_allocator *allocator)
+{
   bool did_coalesce = false;
 
   for(unsigned int order = 0; order < allocator->orders; order++) {
@@ -174,7 +221,7 @@ bool buddy_coalesce_blocks(struct buddy_allocator *allocator) {
     bitmap_blk_t free_blocks = allocator->free_counts[order];
 
     kqsort(allocator->free_blocks[order], (size_t)free_blocks, sizeof(bitmap_blk_t),
-        buddy_block_cmp);
+           buddy_block_cmp);
 
     for(bitmap_blk_t i = 0; i < free_blocks;) {
       bitmap_blk_t coalesced_blk;
@@ -184,8 +231,7 @@ bool buddy_coalesce_blocks(struct buddy_allocator *allocator) {
           && array[i] % 2 == 0) {
         did_coalesce = true;
         coalesced_blk = array[i] / 2;
-      }
-      else {
+      } else {
         array[i - shift] = array[i];
         i += 1;
         continue;
@@ -205,11 +251,12 @@ bool buddy_coalesce_blocks(struct buddy_allocator *allocator) {
   return did_coalesce;
 }
 
-size_t buddy_free_bytes(const struct buddy_allocator *allocator) {
+size_t buddy_free_bytes(const struct buddy_allocator *allocator)
+{
   size_t bytes = 0;
 
-  for(size_t i=0; i < allocator->orders; i++)
-    bytes += allocator->free_counts[i] * (1 << i) * MIN_ORDER_SIZE(allocator);
+  for(size_t i = 0; i < allocator->orders; i++)
+    bytes += allocator->free_counts[i] * (1ul << i) * MIN_ORDER_SIZE(allocator);
 
   return bytes;
 }

@@ -4,7 +4,7 @@ include $(ROOT_PATH)/Makefile.inc
 .PHONY:	all check clean tests install gdb-debug qemu
 
 QEMU            :=qemu-system-x86_64
-QEMU_FLAGS      :=-boot order=cn -smp cores=2,threads=2 -m 768 -cpu kvm64,kvm --enable-kvm -monitor stdio -s -S
+QEMU_FLAGS      :=-boot order=cn -smp cores=2,threads=2 -m 768 -cpu kvm64,kvm -debugcon stdio -s -S
 QEMU_DRIVE      :=$(ROOT_DIR)/os_image.img
 
 INIT_SRC	:=init/init.c init/acpi.c init/libc.c \
@@ -13,7 +13,7 @@ TYPES_SRC	:= types/vector.c types/list.c types/bitmap.c
 
 SRC	:=syscall.c debug.c mm.c process.c algo.c\
     	interrupt.c mem.c paging.c schedule.c thread.c \
-	apic.c $(INIT_SRC) $(TYPES_SRC)
+	apic.c buddy.c $(INIT_SRC) $(TYPES_SRC)
 
 ASM_SRC	=entry.asm
 OBJ	:=$(SRC:%.c=%.o) $(ASM_SRC:%.asm=%.o)
