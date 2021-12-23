@@ -27,7 +27,7 @@
 
 #define I_DPL_BITS		5
 
-#define I_PRESENT		(1 << 7)
+#define I_PRESENT		(1u << 7)
 
 #define I_DPL0           ( RING0_DPL << 21 )
 #define I_DPL1           ( RING1_DPL << 21 )

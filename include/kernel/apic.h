@@ -94,8 +94,8 @@
 #define LAPIC_TIMER_DCR	    0x3E0
 
 #define LAPIC_ONESHOT	    0
-#define LAPIC_PERIODIC	    (1 << 17)
-#define LAPIC_MASKED	    (1 << 18)
+#define LAPIC_PERIODIC	    (1u << 17)
+#define LAPIC_MASKED	    (1u << 18)
 #define LAPIC_UNMASKED	    0
 
 #define IA32_APIC_BASE_MSR 0x1Bu

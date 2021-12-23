@@ -77,6 +77,90 @@ static inline bool is_readable(addr_t addr, paddr_t root_pmap) {
   return !IS_ERROR(translate_vaddr(addr, &paddr, root_pmap));
 }
 
+#define SLAB_FREE_BUF_END   65535u
+
+typedef int (*kmem_cache_ctor)(void *, size_t);
+typedef int (*kmem_cache_dtor)(void *, size_t);
+
+struct kslab_node {
+  /**
+    Slab node list node
+
+    The next and prev point to the next and previous slab nodes in the
+    cache. Item points to the start of the slab.
+  */
+  list_node_t node;
+
+  /**
+    The offset of the first free_buf_node or small_buff_node from the slab start.
+    Only valid if status is free or partially used.
+  */
+
+  uint16_t free_head_offset;
+
+  /**
+    Reference counter for the slab. Every time a buffer is allocated,
+    the reference count is incremented by one. The count is decremented
+    by one upon freeing. When the reference count is set to zero, then
+    the entire slab can be marked as free or destroyed (if memory is needed).
+  */
+
+  uint16_t ref_count;
+  uint8_t lock;
+
+  /**
+    The base-2 logarithm of the slab size.
+  */
+
+  uint8_t log2_order;
+
+  /**
+    Slab status: free, partially used, or used
+  */
+
+  uint8_t status;
+
+  /**
+      Cache color
+
+      There are '1 + (slab_size % sizeof(buf_size)) / word_size',
+      where word_size = sizeof (uint64_t) for 64-bit machines.
+  */
+
+  uint8_t color;
+};
+
+struct free_buf_node {
+  uint16_t next_offset;
+  /**
+    Checksum
+
+    next_offset + checksum must equal zero.
+  */
+  uint16_t checksum;
+};
+
+struct kmem_cache {
+  list_t free_slabs;
+  list_t partially_used_slabs;
+  list_t used_slabs;
+
+  int obj_type;
+  size_t size;
+  size_t align;
+
+  kmem_cache_ctor constructor;
+  kmem_cache_dtor destructor;
+};
+
+NON_NULL_PARAMS PURE size_t kmem_cache_num_colors(const struct kmem_cache *mem_cache, const struct kslab_node *slab_node) {
+  return 1ul + (((1ul << slab_node->log2_order) - sizeof(struct kslab_node))
+    % (mem_cache->size) + sizeof(void *)) / mem_cache->align;
+}
+
+NON_NULL_PARAM(1) int kmem_cache_init(struct kmem_cache *mem_cache, int obj_type, size_t obj_size, size_t align,
+  kmem_cache_ctor_t ctor, kmem_cache_dtor_t dtor);
+
 void *kmalloc(size_t size);
 void *kcalloc(size_t count, size_t elem_size);
 void *krealloc(void *mem, size_t new_size);

@@ -32,8 +32,13 @@ struct memory_map {
   enum memory_map_type type;
 };
 
-struct module
-{
+struct resd_block {
+  paddr_t start;
+  size_t length;
+  uint64_t *bitmap;
+}
+
+struct module {
   paddr_t start;
   size_t length;
   uint8_t command[64];
@@ -46,113 +51,6 @@ struct module
 #define MIN_MEM_MB_REQ      64
 
 DISC_CODE addr_t alloc_page_frame(void);
-
-NON_NULL_PARAMS DISC_CODE bool is_reserved_page(uint64_t addr,
-    const struct multiboot_info_header *header);
-
-NON_NULL_PARAMS DISC_CODE int init_memory(const struct multiboot_info_header
-    *header);
-DISC_CODE static void setup_gdt(void);
-
-DISC_DATA ALIGNED(PAGE_SIZE) pmap_entry_t
-kpage_dir[PAE_PMAP_ENTRIES]; // The initial page directory used by the kernel on bootstrap
-
-DISC_CODE static int memory_map_compare(const void *m1, const void *m2);
-
-extern volatile gdt_entry_t kernel_gdt[6];
-
-const struct multiboot_info_header *mb_info_header;
-
-static int memory_map_compare(const void *m1, const void *m2)
-{
-  const struct memory_map *map1 = (const struct memory_map *)m1;
-  const struct memory_map *map2 = (const struct memory_map *)m2;
-
-  return map1->start == map2->start ? 0 : (map1->start < map2->start ? -1 : 1);
-}
-
-NON_NULL_PARAMS bool is_reserved_page(uint64_t addr,
-                                      const struct multiboot_info_header *header)
-{
-  uintptr_t kernel_start = (uintptr_t)&kphys_start;
-  unsigned long int kernel_length = (unsigned long int)ksize;
-  uint64_t addr_end;
-  addr = addr & ~(PAGE_SIZE - 1);
-  addr_end = addr + PAGE_SIZE;
-
-  const struct multiboot_tag *tags = header->tags;
-
-  if(addr < (uint64_t)EXTENDED_MEMORY) {
-    return true;
-  } else if((addr >= kernel_start && addr < kernel_start + kernel_length)
-            || (addr_end > kernel_start && addr_end <= kernel_start + kernel_length)) {
-    return true;
-  } else {
-    int in_some_region = 0;
-
-    while(tags->type != MULTIBOOT_TAG_TYPE_END) {
-      switch(tags->type) {
-        case MULTIBOOT_TAG_TYPE_MMAP: {
-            const struct multiboot_tag_mmap *mmap =
-              (const struct multiboot_tag_mmap *)tags;
-            const struct multiboot_mmap_entry *entry =
-              (const struct multiboot_mmap_entry *)mmap->entries;
-            size_t offset = offsetof(struct multiboot_tag_mmap, entries);
-
-            while(offset < mmap->size) {
-              if((addr >= entry->addr && addr < entry->addr + entry->len)
-                  || (addr_end > entry->addr
-                      && addr_end < entry->addr + entry->len)) {
-                in_some_region = 1;
-
-                switch(entry->type) {
-                  case MULTIBOOT_MEMORY_AVAILABLE:
-                    break;
-                  default:
-                    return true;
-                }
-              }
-
-              offset += mmap->entry_size;
-              entry = (const struct multiboot_mmap_entry *)((uintptr_t)entry
-                      + mmap->entry_size);
-            }
-
-            if(!in_some_region) {
-              return true;
-            }
-
-            break;
-          }
-        /*
-        case MULTIBOOT_TAG_TYPE_MODULE: {
-          const struct multiboot_tag_module *module =
-            (const struct multiboot_tag_module*)tags;
-
-          if((addr >= module->mod_start && addr < module->mod_end)
-            || (addr_end > module->mod_start && addr_end <= module->mod_end))
-          {
-          kprintf("%#lx-%#lx overlaps a module.\n", addr, addr_end);
-
-          return true;
-          }
-
-          break;
-        }
-        */
-        default:
-          break;
-        case MULTIBOOT_TAG_TYPE_END:
-          return false;
-      }
-
-      tags = (const struct multiboot_tag *)((uintptr_t)tags + tags->size + ((
-                                              tags->size % 8) == 0 ? 0 : 8 - (tags->size % 8)));
-    }
-
-    return false;
-  }
-}
 
 void setup_gdt(void)
 {
@@ -420,14 +318,35 @@ int init_memory(const struct multiboot_info_header *header)
 
   kprintf("\nTotal physical memory: %lu bytes\n", total_phys_memory);
 
+  /*
   if(IS_ERROR(buddy_init(&phys_allocator, total_phys_memory, PAE_LARGE_PAGE_SIZE, free_phys_blocks)))
     RET_MSG(E_FAIL, "Unable to initialize physical memory allocator.");
 
   addr = 0;
+*/
 
-  struct memory_block mem_block;
+  list_init(&free_slab_list);
+  // list_init(&dma_free_slab_list);
 
   for(size_t i = 0; i < map_count; i++) {
+    if(mem_map[i].type == AVAILABLE) {
+      size_t padding = ALIGN_UP(mem_map[i].start, PAGE_SIZE) - mem_map[i].start;
+
+      if(mem_map[i].length < padding + PAGE_SIZE)
+        continue;
+/*
+      if(is_list_empty(&dma_free_slab_list)) {
+        if(mem_map[i].length >= MIN_DMA_MEM)
+      }
+*/
+      struct list_node_t *node = (struct list_node_t *)(mem_map[i].start + padding);
+
+      node->item = (void *)(mem_map[i].start + mem_map.length);
+
+      if(IS_ERROR(list_insert_node_at_end(&free_slab_list, true, node)))
+        RET_MSG(E_FAIL, "Unable to add node to free list.");
+    }
+/*
     paddr_t region_end = mem_map[i].start + mem_map[i].length;
 
     if(mem_map[i].type != AVAILABLE) {
@@ -441,6 +360,7 @@ int init_memory(const struct multiboot_info_header *header)
     }
 
     addr = region_end;
+    */
   }
 
   return E_OK;
