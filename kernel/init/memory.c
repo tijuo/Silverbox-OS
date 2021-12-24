@@ -5,6 +5,8 @@
 #include <kernel/memory.h>
 #include <util.h>
 #include <kernel/algo.h>
+#include <kernel/lowlevel.h>
+#include <kernel/mm.h>
 
 _Static_assert(sizeof(size_t) == 8, "size_t is not 8 bytes.");
 _Static_assert(sizeof(long int) == 8, "long int is not 8 bytes.");
@@ -12,6 +14,7 @@ _Static_assert(sizeof(unsigned long int) == 8,
                "unsigned long int is not 8 bytes.");
 
 size_t total_phys_memory;
+extern gdt_entry_t kernel_gdt[];
 
 enum memory_map_type {
   AVAILABLE,
@@ -36,7 +39,7 @@ struct resd_block {
   paddr_t start;
   size_t length;
   uint64_t *bitmap;
-}
+};
 
 struct module {
   paddr_t start;
@@ -50,7 +53,25 @@ struct module {
 
 #define MIN_MEM_MB_REQ      64
 
+extern int kfree_buf_node_constructor(void *buf, size_t size);
+extern int kmem_cache_constructor(void *buf, size_t size);
+extern int kmem_cache_destructor(void *buf, size_t size);
+
 DISC_CODE addr_t alloc_page_frame(void);
+DISC_CODE static void setup_gdt(void);
+DISC_CODE static int memory_map_compare(const void *x1, const void *x2);
+
+int memory_map_compare(const void *x1, const void *x2) {
+  const struct memory_map *m1 = (const struct memory_map *)x1;
+  const struct memory_map *m2 = (const struct memory_map *)x2;
+
+  if(m1->start < m2->start)
+    return -1;
+  else if(m1->start > m2->start)
+    return 1;
+  else
+    return 0;
+}
 
 void setup_gdt(void)
 {
@@ -97,7 +118,7 @@ int init_memory(const struct multiboot_info_header *header)
 
   const struct multiboot_tag *tags = header->tags;
 
-  mb_info_header = header;
+  //mb_info_header = header;
 
   while(tags->type != MULTIBOOT_TAG_TYPE_END) {
     switch(tags->type) {
@@ -325,8 +346,8 @@ int init_memory(const struct multiboot_info_header *header)
   addr = 0;
 */
 
-  list_init(&free_slab_list);
-  // list_init(&dma_free_slab_list);
+  list_init(&free_frame_list);
+  // list_init(&dma_free_frame_list);
 
   for(size_t i = 0; i < map_count; i++) {
     if(mem_map[i].type == AVAILABLE) {
@@ -335,16 +356,15 @@ int init_memory(const struct multiboot_info_header *header)
       if(mem_map[i].length < padding + PAGE_SIZE)
         continue;
 /*
-      if(is_list_empty(&dma_free_slab_list)) {
+      if(is_list_empty(&dma_free_frame_list)) {
         if(mem_map[i].length >= MIN_DMA_MEM)
       }
 */
-      struct list_node_t *node = (struct list_node_t *)(mem_map[i].start + padding);
+      list_node_t *node = (list_node_t *)(mem_map[i].start + padding);
 
-      node->item = (void *)(mem_map[i].start + mem_map.length);
+      node->item.item_void_ptr = (void *)(mem_map[i].start + mem_map[i].length);
 
-      if(IS_ERROR(list_insert_node_at_end(&free_slab_list, true, node)))
-        RET_MSG(E_FAIL, "Unable to add node to free list.");
+      list_insert_node_at_end(&free_frame_list, true, node);
     }
 /*
     paddr_t region_end = mem_map[i].start + mem_map[i].length;
@@ -362,6 +382,9 @@ int init_memory(const struct multiboot_info_header *header)
     addr = region_end;
     */
   }
+
+  kmem_cache_init(&kbuf_node_mem_cache, "buf_node", sizeof(struct kfree_buf_node), 0, kfree_buf_node_constructor, NULL);
+  kmem_cache_init(&kmem_cache_mem_cache, "mem_cache", sizeof(struct kmem_cache), 0, kmem_cache_constructor, kmem_cache_destructor);
 
   return E_OK;
 }

@@ -1,8 +1,27 @@
 #include <kernel/mm.h>
 #include <kernel/buddy.h>
+#include <kernel/debug.h>
+#include <x86gprintrin.h>
+#include <kernel/memory.h>
 
-list_t free_block_list;
-//list_t dma_free_slab_list;
+#define SLAB_SIZE   PAGE_SIZE
+
+#define GET_KSLAB_NODE(node)        ((struct kslab_node *)(node))
+#define FREE_BUF_HEAD(slab_node)    ((struct kfree_buf_node *)((slab_node)->node.item.item_void_ptr))
+#define SET_FREE_BUF_HEAD(slab_node, n)  ((slab_node)->node.item.item_void_ptr = (n))
+#define BUF_BITMAP(slab_node)       (slab_node)->node.item.item_uint64_t
+
+#define MIN_OBJ_SIZE      sizeof(long int)
+#define MIN_ALIGN         sizeof(long int)
+#define COLOR_SIZE        sizeof(long int)
+
+NON_NULL_PARAMS static inline bool is_checksum_valid(const struct kfree_buf_node *node)
+{
+  return (uintptr_t)node->buffer + (uintptr_t)node->next + (uintptr_t)node->slab_node + node->checksum == 0;
+}
+
+list_t free_frame_list;
+//list_t dma_free_frame_list;
 
 struct buddy_allocator phys_allocator;
 
@@ -10,72 +29,129 @@ struct buddy_allocator phys_allocator;
     In this case, the free block arrays for the buddy allocator. */
 uint8_t free_phys_blocks[0x40000];
 
-void *kalloc_page(void) {
-  list_node_t *node = list_peek_tail(&free_slab_list);
+struct kmem_cache kbuf_node_mem_cache;
+struct kmem_cache kmem_cache_mem_cache;
+list_t kmem_cache_list;
 
-  assert((uintptr_t)node->item - (uintptr_t) >= PAGE_SIZE);
-  assert(node->item != NULL);
+/**
+  Initializes a slab.
 
-  if((uintptr_t)node->item - (uintptr_t)node <= PAGE_SIZE) {
-    if(IS_ERROR(list_remove_node_from_end(&free_slab_list, true, NULL)))
-      RET_MSG(NULL, "Unable to remove node from free list.");
+  @param start The starting address of the slab.
+  @param slab_size The size of the slab in bytes.
+*/
+
+static NON_NULL_PARAMS struct kslab_node *kslab_init(void *start, size_t slab_size);
+
+int kfree_buf_node_constructor(void *buf, size_t size);
+int kmem_cache_constructor(void *buf, size_t size);
+int kmem_cache_destructor(void *buf, size_t size);
+
+int kfree_buf_node_constructor(void *buf, size_t size)
+{
+  struct kfree_buf_node *node = (struct kfree_buf_node *)buf;
+
+  node->next = NULL;
+  node->slab_node = NULL;
+  node->buffer = NULL;
+  node->checksum = 0;
+
+  kassert(is_checksum_valid(node) == true);
+
+  return E_OK;
+}
+
+int kmem_cache_constructor(void *buf, size_t size)
+{
+  struct kmem_cache *mem_cache = (struct kmem_cache *)buf;
+
+  mem_cache->name = NULL;
+  mem_cache->size = 0;
+  list_init(&mem_cache->free_slabs);
+  list_init(&mem_cache->partially_used_slabs);
+  list_init(&mem_cache->used_slabs);
+
+  mem_cache->align = MIN_ALIGN;
+  mem_cache->constructor = kmem_cache_constructor;
+  mem_cache->destructor = kmem_cache_destructor;
+
+  return E_OK;
+}
+
+int kmem_cache_destructor(void *buf, size_t size)
+{
+  struct kmem_cache *mem_cache = (struct kmem_cache *)buf;
+  struct kslab_node *slab_node;
+  list_t *slab_lists[3] = { &mem_cache->free_slabs, &mem_cache->partially_used_slabs, &mem_cache->used_slabs };
+
+  for(size_t i=0; i < 3; i++) {
+    while(!is_list_empty(slab_lists[i])) {
+      list_dequeue(slab_lists[i], &slab_node);
+
+      if(IS_ERROR(kmem_cache_destroy_slab(mem_cache, slab_node)))
+        RET_MSG(E_FAIL, "Unable to destroy slab.");
+    }
   }
-  else {
+
+  return E_OK;
+}
+
+void *kalloc_page(void)
+{
+  list_node_t *node;
+
+  if(IS_ERROR(list_remove_node_from_end(&free_frame_list, true, &node)))
+    RET_MSG(NULL, "Unable to remove node from free list.");
+
+  kassert((uintptr_t)node->item.item_void_ptr - (uintptr_t)node >= PAGE_SIZE);
+  kassert(node->item.item_void_ptr != NULL);
+
+  if((uintptr_t)node->item.item_void_ptr - (uintptr_t)node > PAGE_SIZE) {
     list_node_t *new_node = (list_node_t *)((uintptr_t)node + PAGE_SIZE);
 
-    new_node->item = node->item;
-
-    if(IS_ERROR(list_replace_node(&free_slab_list, new_node, NULL)))
-      RET_MSG(NULL, "Unable to replace node in free list.");
+    new_node->item.item_void_ptr = node->item.item_void_ptr;
+    list_insert_node_at_end(&free_frame_list, true, new_node);
   }
 
   return node;
 }
 
-void kfree_page(void *addr) {
-  assert((uintptr_t)addr & (PAGE_SIZE - 1) == 0);
+void kfree_page(void *addr)
+{
+  kassert(((uintptr_t)addr & (PAGE_SIZE - 1)) == 0);
 
-  list_node_t *node = (void *)addr;
+  list_node_t *node = (list_node_t *)addr;
 
-  node->item = (void *)((uintptr_t)node + PAGE_SIZE);
-
-  if(IS_ERROR(list_insert_node_at_end(&free_slab_list, true, node)))
-    RET_MSG(, "Unable to insert free node in free list.");
+  node->item.item_void_ptr = (void *)((uintptr_t)node + PAGE_SIZE);
+  list_insert_node_at_end(&free_frame_list, true, node);
 }
 
-int kslab_init(void *start, size_t slab_size) {
-  struct slab_node *slab_node = (struct slab_node *)((uintptr_t)start + slab_size - sizeof (struct slab_node));
+struct kslab_node *kslab_init(void *start, size_t slab_size)
+{
+  struct kslab_node *slab_node = (struct kslab_node *)start;
 
   if(slab_size == 0)
-    RET_MSG(E_FAIL, "Slab size cannot be zero.");
-  else if(slab_size > UINT16_MAX+1)
-    RET_MSG(E_FAIL, "Slab sizes over 65536 bytes is not supported.");
+    RET_MSG(NULL, "Slab size cannot be zero.");
 
-  kmemset(slab_node, 0, sizeof *slab_node);
+  kmemset(slab_node, 0, sizeof * slab_node);
 
   slab_node->log2_order = __bsrq(slab_size);
 
-  if(__bsfq(slab_size) != node->log2_order)
-    node->log2_order++;
+  if(__bsfq(slab_size) != slab_node->log2_order)
+    slab_node->log2_order++;
 
-  slab_node->node->item = start;
-
-  return E_OK;
+  return slab_node;
 }
 
-int kmem_cache_init(struct kmem_cache *mem_cache, int obj_type, size_t obj_size, size_t align,
-  kmem_cache_ctor_t ctor, kmem_cache_dtor_t dtor)
+int kmem_cache_init(struct kmem_cache *mem_cache, const char *name, size_t obj_size, size_t align,
+                    kmem_cache_ctor_t ctor, kmem_cache_dtor_t dtor)
 {
-  if(obj_size < sizeof(uint64_t))
-    obj_size = sizeof(uint64_t);
+  if(obj_size < MIN_OBJ_SIZE)
+    obj_size = MIN_OBJ_SIZE;
 
-  if(obj_size > PAGE_SIZE)
-    RET_MSG(E_FAIL, "Memory objects larger than 4096 bytes is not supported.");
+  if(align < MIN_ALIGN)
+    align = MIN_ALIGN;
 
-  if(align < sizeof(uint64_t))
-    align = sizeof(uint64_t);
-
-  mem_cache->obj_type = obj_type;
+  mem_cache->name = name;
   mem_cache->size = obj_size;
   mem_cache->align = align;
   mem_cache->constructor = ctor;
@@ -88,51 +164,225 @@ int kmem_cache_init(struct kmem_cache *mem_cache, int obj_type, size_t obj_size,
   return E_OK;
 }
 
-int kmem_cache_init_free_slab(struct kmem_cache *mem_cache, struct slab_node *slab_node) {
-  const list_t * const lists[3] = { &mem_cache->free_slabs, &mem_cache->partially_used_slabs, &mem_cache->used_slabs };
+/* After the free slab has been initialized, memory objects are ready to be allocated.
+   Simply return an object from the free list. */
+
+int kmem_cache_init_slab(struct kmem_cache *mem_cache, struct kslab_node *slab_node)
+{
+  // Set the slab's color by incrementing an existing slab's color by one.
+
+  const list_t *slab_lists[3] = { &mem_cache->free_slabs, &mem_cache->partially_used_slabs, &mem_cache->used_slabs };
 
   for(size_t i=0; i < 3; i++) {
-    if(!list_is_empty(lists[i])) {
-      slab_node->color = (uint8_t)((((struct slab_node *)list_peek_head(lists[i])->item)->color + 1)
-        % mem_cache_num_colors(mem_cache, slab_node));
-      break;
+    if(!is_list_empty(slab_lists[i])) {
+      const struct kslab_node *cache_slab_node = GET_KSLAB_NODE(list_peek_tail(slab_lists[i]));
+
+      slab_node->color = (uint8_t)((cache_slab_node->color + 1)
+                                   % kmem_cache_num_colors(mem_cache, slab_node));
     }
   }
 
-  if(mem_cache->size < PAGE_SIZE / 8) {
-    size_t buffer_count = (((1u << slab_node->log2_order) - sizeof *slab_node - mem_cache->align * slab_node->color)
-      / (mem_cache->size + sizeof(void *));
+  slab_node->ref_count = 0;
 
-    for(size_t i=0; i < buffer_count; i++) {
-      void *buf = (void *)((uintptr_t)slab_node->node->item
-        + sizeof(uint64_t) * slab_node->color + i*(mem_cache->size + sizeof(void *)));
-      void **next = (void **)((uintptr_t)buf + mem_cache->size);
+  size_t offset = sizeof * slab_node + COLOR_SIZE * slab_node->color;
 
-      if(mem_cache->constructor)
-        mem_cache->constructor(buf, mem_cache->size);
+  for(; offset < (1ul << slab_node->log2_order); offset += mem_cache->size) {
+    if(mem_cache->constructor)
+      mem_cache->constructor((void *)((uintptr_t)slab_node + offset), mem_cache->size);
 
-      *next = i + 1 >= buffer_count ? NULL : (void *)((uintptr_t)next + sizeof *next);
-    }
+    if((1ul << slab_node->log2_order) > PAGE_SIZE || mem_cache->size > PAGE_SIZE / 8) {
+      struct kfree_buf_node *buf_node = kmem_cache_alloc(&kbuf_node_mem_cache, 0);
+
+      if(buf_node == NULL)
+        RET_MSG(E_FAIL, "Unable to allocate kfree_buf_node");
+
+      buf_node->buffer = (void *)((uintptr_t)slab_node + offset);
+      buf_node->next = FREE_BUF_HEAD(slab_node);
+      buf_node->slab_node = slab_node;
+      buf_node->checksum = -((uintptr_t)buf_node->buffer + (uintptr_t)buf_node->next + (uintptr_t)buf_node->slab_node);
+
+      SET_FREE_BUF_HEAD(slab_node, buf_node);
+    } else
+      BUF_BITMAP(slab_node) = 0;
   }
-  // TODO: implement large mem_cache objects
-  else
-    RET_MSG(E_FAIL, "Memory objects greater than or equal to 512 bytes is not supported (yet).");
+
+  list_insert_node_at_end(&mem_cache->free_slabs, true, &slab_node->node);
 
   return E_OK;
 }
 
-void *kmalloc(size_t size) {
+void *kmem_cache_alloc(struct kmem_cache *mem_cache, int flags)
+{
+  struct kslab_node *slab_node = NULL;
+  void *ret_buf;
+
+  list_t *slab_lists[2] = { &mem_cache->partially_used_slabs, &mem_cache->free_slabs };
+
+  for(size_t i=0; i < 2; i++) {
+    if(!is_list_empty(slab_lists[i])) {
+      list_node_t *list_node;
+
+      if(IS_ERROR(list_remove_node_from_end(slab_lists[i], true, &list_node)))
+        RET_MSG(NULL, "Unable to remove slab from partially used slabs list");
+
+      slab_node = GET_KSLAB_NODE(list_node);
+      break;
+    }
+  }
+
+  // todo: v This might need to be placed in another function
+
+  if(slab_node == NULL) {
+    void *new_page = kalloc_page();
+
+    if(new_page == NULL)
+      RET_MSG(NULL, "Unable to allocate new page.");
+
+    slab_node = kslab_init(new_page, PAGE_SIZE);
+    list_insert_node_at_end(&mem_cache->free_slabs, true, &slab_node->node);
+  }
+
+  size_t buf_count = ((1ul << slab_node->log2_order) - sizeof * slab_node
+                        - COLOR_SIZE * slab_node->color) / mem_cache->size;
+
+  // todo: ^ end
+
+  if(mem_cache->size <= PAGE_SIZE / 8) {
+    kassert(BUF_BITMAP(slab_node) != (1ul << buf_count) - 1);
+
+    size_t free_index = (size_t)__bsfq(~BUF_BITMAP(slab_node));
+
+    kassert(free_index < buf_count);
+
+    slab_node->ref_count++;
+    BUF_BITMAP(slab_node) |= (1ul << free_index);
+
+    ret_buf = (void *)((uintptr_t)slab_node + sizeof * slab_node
+                    + free_index * mem_cache->size + sizeof(uint64_t) * slab_node->color);
+  } else {
+    struct kfree_buf_node *buf_node = FREE_BUF_HEAD(slab_node);
+    const void *buf = buf_node->buffer;
+
+    kassert(buf_node != NULL);
+
+    if((uintptr_t)buf_node->buffer + (uintptr_t)buf_node->next + (uintptr_t)buf_node->slab_node + buf_node->checksum != 0)
+      RET_MSG(NULL, "Memory corruption detected in slab's free buffer list.");
+
+    slab_node->ref_count++;
+    SET_FREE_BUF_HEAD(slab_node, buf_node->next);
+    kmem_cache_free(&kbuf_node_mem_cache, buf_node);
+
+    ret_buf = buf;
+  }
+
+  kassert(slab_node->ref_count <= buf_count);
+
+  if(slab_node->ref_count == buf_count) {
+    if(slab_node->ref_count == 1) {
+      list_unlink_node(slab_node->ref_count == 1
+          ? &mem_cache->free_slabs
+          : &mem_cache->partially_used_slabs,
+        &slab_node->node);
+
+      list_insert_node_at_end(&mem_cache->used_slabs, true, &slab_node->node);
+    }
+  }
+
+  return ret_buf;
+}
+
+int kmem_cache_free(struct kmem_cache *mem_cache, void *buf)
+{
+  struct kslab_node *slab_node = (struct kslab_node *)((uintptr_t)buf & ~(SLAB_SIZE - 1));
+
+  if(mem_cache->size <= PAGE_SIZE / 8) {
+    size_t buf_count = ((1ul << slab_node->log2_order) - sizeof * slab_node
+                        - sizeof(uint64_t) * slab_node->color) / mem_cache->size;
+    size_t free_index = ((uintptr_t)buf - (uintptr_t)slab_node - sizeof * slab_node
+                         - sizeof(uint64_t) * slab_node->color) / mem_cache->size;
+
+    // Move a used slab to the partially used slab sublist
+
+    if(BUF_BITMAP(slab_node) == (1ul << buf_count) - 1 && slab_node->ref_count > 1) {
+      list_unlink_node(&mem_cache->used_slabs, &slab_node->node);
+      list_insert_node_at_end(&mem_cache->partially_used_slabs, true, &slab_node->node);
+    }
+
+    BUF_BITMAP(slab_node) &= ~(1ul << free_index);
+
+    #if DEBUG
+      if(slab_node->ref_count == 1)
+        kassert(BUF_BITMAP(slab_node) == 0);
+    #endif /* DEBUG */
+  } else {
+    struct kfree_buf_node *buf_node = kmem_cache_alloc(&kbuf_node_mem_cache, 0);
+
+    if(buf_node == NULL)
+      RET_MSG(E_FAIL, "Unable to allocate kfree_buf_node");
+
+    buf_node->buffer = buf;
+    buf_node->next = FREE_BUF_HEAD(slab_node);
+    buf_node->slab_node = slab_node;
+    buf_node->checksum = -((uintptr_t)buf_node->buffer + (uintptr_t)buf_node->next + (uintptr_t)buf_node->slab_node);
+
+    SET_FREE_BUF_HEAD(slab_node, buf_node);
+    kassert(is_checksum_valid(buf_node) == true);
+  }
+
+  if(--slab_node->ref_count == 0) {
+    list_unlink_node(&mem_cache->partially_used_slabs, &slab_node->node);
+    list_insert_node_at_end(&mem_cache->free_slabs, true, &slab_node->node);
+  }
+
+  return E_OK;
+}
+
+int kmem_cache_destroy_slab(struct kmem_cache *mem_cache, struct kslab_node *slab_node)
+{
+  struct kfree_buf_node *next;
+
+  if((1ul << slab_node->log2_order) > PAGE_SIZE || mem_cache->size > PAGE_SIZE / 8) {
+    for(struct kfree_buf_node *buf_node = FREE_BUF_HEAD(slab_node); buf_node; buf_node = next) {
+      if(!is_checksum_valid(buf_node))
+        RET_MSG(E_FAIL, "Memory corruption detected in slab's free buffer list.");
+
+      next = buf_node->next;
+
+      if(mem_cache->destructor)
+        mem_cache->destructor(buf_node->buffer, mem_cache->size);
+
+      kmem_cache_free(&kbuf_node_mem_cache, buf_node);
+    }
+  } else {
+    if(mem_cache->destructor) {
+      size_t offset = sizeof * slab_node + COLOR_SIZE * slab_node->color;
+
+      for(; offset < (1ul << slab_node->log2_order); offset += mem_cache->size) {
+        mem_cache->destructor((void *)((uintptr_t)slab_node + offset), mem_cache->size);
+      }
+    }
+  }
+
+  return E_OK;
+}
+
+
+void *kmalloc(size_t size)
+{
   return NULL;
 }
 
-void *kcalloc(size_t elem_size, size_t n_elems) {
+void *kcalloc(size_t elem_size, size_t n_elems)
+{
   return NULL;
 }
 
-void *krealloc(void *ptr, size_t new_size) {
+void *krealloc(void *ptr, size_t new_size)
+{
   return NULL;
 }
 
-void kfree(void *ptr) {
+void kfree(void *ptr)
+{
 
 }

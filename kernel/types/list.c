@@ -2,6 +2,7 @@
 #include <kernel/thread.h>
 #include <kernel/error.h>
 #include <kernel/debug.h>
+#include <kernel/memory.h>
 
 CONST static int list_ptr_compare(void *p1, void *p2);
 
@@ -9,46 +10,78 @@ int list_ptr_compare(void *p1, void *p2) {
   return (intptr_t)p1 - (intptr_t)p2;
 }
 
-int list_insert_at_end(list_t *list, void *item, size_t item_size, bool at_tail) {
+int list_insert_item_at_end(list_t *list, void *item, size_t item_size, bool at_tail) {
   list_node_t *node = (list_node_t *)kmalloc(sizeof(list_node_t));
 
   if(!node)
     return E_FAIL;
 
-  node->item = kmalloc(item_size);
+  node->item.item_void_ptr = kmalloc(item_size);
 
-  if(!node->item)
+  if(!node->item.item_void_ptr)
     return E_FAIL;
   else
-    memcpy(node->item, item, item_size);
+    kmemcpy(node->item.item_void_ptr, item, item_size);
 
-  return list_insert_node_at_end(list, at_tail, node);
+  list_insert_node_at_end(list, at_tail, node);
+
+  return E_OK;
 }
 
 void list_insert_node_at_end(list_t *list, bool at_tail, list_node_t *new_node) {
-  new_node->item = item;
-
   if(is_list_empty(list)) {
     list->head = new_node;
     list->tail = new_node;
     new_node->next = NULL;
     new_node->prev = NULL;
   }
-  else if(at_tail) {
-    new_node->next = NULL;
-    list->tail->next = new_node;
-    new_node->prev = list->tail;
-    list->tail = new_node;
-  }
-  else {
-    new_node->prev = NULL;
-    list->head->prev = new_node;
-    new_node->next = list->head;
-    list->head = new_node;
-  }
+  else if(at_tail)
+    list_insert_node_after(list, new_node, list->tail);
+  else
+    list_insert_node_before(list, new_node, list->head);
 }
 
-int list_remove_from_end(list_t *list, void *item, size_t item_size, bool at_tail) {
+void list_insert_node_after(list_t *list, list_node_t *node, list_node_t *target) {
+  if(target->next)
+    target->next->prev = node;
+
+  node->next = target->next;
+
+  target->next = node;
+  node->prev = target;
+
+  if(target == list->tail)
+    list->tail = node;
+}
+
+void list_insert_node_before(list_t *list, list_node_t *node, list_node_t *target) {
+  if(target->prev)
+    target->prev->next = node;
+
+  node->prev = target->prev;
+
+  target->prev = node;
+  node->next = target;
+
+  if(target == list->head)
+    list->head = node;
+}
+
+void list_unlink_node(list_t *list, list_node_t *node) {
+  if(node->next)
+    node->next->prev = node->prev;
+
+  if(node->prev)
+    node->prev->next = node->next;
+
+  if(list->head == node)
+    list->head = node->next;
+
+  if(list->tail == node)
+    list->tail = node->prev;
+}
+
+int list_remove_item_from_end(list_t *list, void *item, size_t item_size, bool at_tail) {
   list_node_t *node;
 
   int retval = list_remove_node_from_end(list, at_tail, &node);
@@ -57,7 +90,7 @@ int list_remove_from_end(list_t *list, void *item, size_t item_size, bool at_tai
     return E_FAIL;
   else {
     if(item)
-      memcpy(item, node->item, item_size);
+      kmemcpy(item, node->item.item_void_ptr, item_size);
 
     kfree(node);
 
@@ -85,11 +118,7 @@ int list_remove_node_from_end(list_t *list, bool at_tail, list_node_t **removed_
     else {
       node = list->head;
 
-      if(item)
-        *item = node->item;
-
       list->head = node->next;
-      kfree(node);
 
       if(list->head)
         list->head->prev = NULL;
@@ -106,7 +135,7 @@ int list_remove_node_from_end(list_t *list, bool at_tail, list_node_t **removed_
 
 int list_remove_item(list_t *list, void *item, int (*compare)(void *, void *)) {
   for(list_node_t *node=list->head; node; node = node->next) {
-    if(compare(node->item, item) == 0) {
+    if(compare(node->item.item_void_ptr, item) == 0) {
       if(node->prev) {
         if(node->next)
           node->prev->next = node->next->prev;
@@ -135,5 +164,5 @@ int list_remove_item(list_t *list, void *item, int (*compare)(void *, void *)) {
 }
 
 int list_remove(list_t *list, void *item) {
-  return list_remove_deep(list, item, list_ptr_compare);
+  return list_remove_item(list, item, list_ptr_compare);
 }
