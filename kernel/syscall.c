@@ -18,7 +18,7 @@ __asm__(
         "xchg tss+4, %rsp\n"
         "push tss+4\n"
         "mov %rsp, tss+4\n"
-        "add $8, tss+4\n"
+        "addq $8, tss+4\n"
 	"xchg %rbx, %rcx\n"
 	"push %rbx\n"
 	"push %r11\n"

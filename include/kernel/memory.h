@@ -9,9 +9,12 @@
 
 extern void* kmemcpy(void *restrict dest, const void *restrict src, size_t len);
 extern void* kmemset(void *buffer, int c, size_t num);
-extern size_t kstrlen(char *c);
+extern PURE size_t kstrlen(char *c);
 extern char *kstrcpy(char *dest, const char *src);
 extern char *kstrncpy(char *dest, const char *src, size_t len);
+extern PURE int kstrcmp(const char *s1, const char *s2);
+extern PURE int kstrncmp(const char *s1, const char *s2, size_t len);
+extern PURE int kmemcmp(const void *m1, const void *m2, size_t len);
 
 int clear_phys_page(paddr_t phys);
 int initialize_root_pmap(paddr_t root_pmap);

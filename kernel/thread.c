@@ -18,6 +18,8 @@ size_t num_processors;
 
 static tid_t generate_new_tid(void);
 
+struct kmem_cache tcb_mem_cache;
+
 NON_NULL_PARAMS int wakeup_thread(tcb_t *thread) {
   switch(thread->state) {
     case RUNNING:
@@ -69,6 +71,7 @@ NON_NULL_PARAMS int remove_thread_from_list(tcb_t *thread) {
  @param thread The thread to be started.
  @return E_OK on success. E_FAIL on failure. E_DONE if the thread is already started.
  */
+
 NON_NULL_PARAMS int start_thread(tcb_t *thread) {
   switch(thread->state) {
     case BLOCKED:
@@ -124,7 +127,7 @@ NON_NULL_PARAMS int block_thread(tcb_t *thread) {
  @return The TCB of the newly created thread on success. NULL, on failure.
  */
 
-NON_NULL_PARAM(1) tcb_t* create_thread(pcb_t *pcb, void *entry_addr,
+tcb_t* create_thread(pcb_t *pcb, void *entry_addr,
                                     void *stack_top)
 {
   tid_t tid = generate_new_tid();
@@ -132,7 +135,7 @@ NON_NULL_PARAM(1) tcb_t* create_thread(pcb_t *pcb, void *entry_addr,
   if(tid == INVALID_TID)
     RET_MSG(NULL, "Unable to create a new thread id.");
 
-  tcb_t *thread = kcalloc(1, sizeof(tcb_t));
+  tcb_t *thread = (tcb_t *)kmem_cache_alloc(&tcb_mem_cache, 0);
 
   if(thread == NULL)
     RET_MSG(NULL, "Unable to create a new thread");

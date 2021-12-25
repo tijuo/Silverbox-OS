@@ -35,7 +35,7 @@ int vector_init_with_capacity(vector_t *vector, size_t capacity, size_t item_siz
   vector->count = 0;
 
   if(capacity) {
-    vector->data = kmalloc(capacity * item_size);
+    vector->data = kmalloc(capacity * item_size, 0);
     return vector->data ? E_OK : E_FAIL;
   }
   else
@@ -74,7 +74,7 @@ int vector_set(vector_t * restrict vector, size_t index, const void * restrict i
 }
 
 int vector_resize(vector_t *vector, size_t new_capacity) {
-  void *new_data = krealloc(vector->data, new_capacity * vector->item_size);
+  void *new_data = krealloc(vector->data, new_capacity * vector->item_size, 0);
 
   new_capacity = new_capacity < MAX_CAPACITY ? new_capacity : MAX_CAPACITY;
 

@@ -70,8 +70,8 @@ _Static_assert(sizeof(tcb_t) == 32 || sizeof(tcb_t) == 64 || sizeof(tcb_t) == 12
 
 extern struct processor processors[MAX_PROCESSORS];
 
-NON_NULL_PARAMS tcb_t* create_thread(pcb_t *pcb, void *entryAddr,
-                                     void *stackTop);
+NON_NULL_PARAM(1) tcb_t* create_thread(pcb_t *pcb, void *entryAddr,
+                                       void *stackTop);
 
 NON_NULL_PARAMS int start_thread(tcb_t *thread);
 NON_NULL_PARAMS int block_thread(tcb_t *thread);

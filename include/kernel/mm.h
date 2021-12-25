@@ -9,6 +9,7 @@
 #include <types.h>
 #include <stddef.h>
 #include <kernel/buddy.h>
+#include <kernel/types/list.h>
 
 /* FIXME: Changing any of these values may require changing
  the asm code */
@@ -79,8 +80,8 @@ static inline bool is_readable(addr_t addr, paddr_t root_pmap) {
 
 #define SLAB_FREE_BUF_END   65535u
 
-typedef int (*kmem_cache_ctor)(void *, size_t);
-typedef int (*kmem_cache_dtor)(void *, size_t);
+typedef int (*kmem_cache_ctor_t)(void *, size_t);
+typedef int (*kmem_cache_dtor_t)(void *, size_t);
 
 struct kslab_node {
   /**
@@ -90,13 +91,6 @@ struct kslab_node {
     cache. Item points to the start of the slab.
   */
   list_node_t node;
-
-  /**
-    The offset of the first free_buf_node or small_buff_node from the slab start.
-    Only valid if status is free or partially used.
-  */
-
-  uint16_t free_head_offset;
 
   /**
     Reference counter for the slab. Every time a buffer is allocated,
@@ -115,12 +109,6 @@ struct kslab_node {
   uint8_t log2_order;
 
   /**
-    Slab status: free, partially used, or used
-  */
-
-  uint8_t status;
-
-  /**
       Cache color
 
       There are '1 + (slab_size % sizeof(buf_size)) / word_size',
@@ -130,44 +118,148 @@ struct kslab_node {
   uint8_t color;
 };
 
-struct free_buf_node {
-  uint16_t next_offset;
-  /**
-    Checksum
-
-    next_offset + checksum must equal zero.
-  */
-  uint16_t checksum;
+struct kfree_buf_node {
+  struct kfree_buf_node *next;
+  struct kslab_node *slab_node;
+  void *buffer;
+  uint64_t checksum;
 };
 
 struct kmem_cache {
+  list_node_t node;
   list_t free_slabs;
   list_t partially_used_slabs;
   list_t used_slabs;
 
-  int obj_type;
+  const char *name;
   size_t size;
   size_t align;
 
-  kmem_cache_ctor constructor;
-  kmem_cache_dtor destructor;
+  kmem_cache_ctor_t constructor;
+  kmem_cache_dtor_t destructor;
 };
 
-NON_NULL_PARAMS PURE size_t kmem_cache_num_colors(const struct kmem_cache *mem_cache, const struct kslab_node *slab_node) {
+/**
+  Allocate a single 4 KiB physical frame.
+
+  @return The address of the physical frame, on success. NULL, on failure.
+*/
+
+void *kalloc_page(void);
+
+/**
+  Releases a sigle 4 KiB physical frame.
+
+  @param addr The starting address of the physical frame.
+*/
+
+void kfree_page(void *addr);
+
+/**
+  Calculates the number of cache colors for a slab.
+
+  @param mem_cache The memory cache.
+  @param slab_node The slab node.
+  @return E_OK, on success. E_FAIL, on failure.
+*/
+
+NON_NULL_PARAMS PURE static inline size_t kmem_cache_num_colors(const struct kmem_cache *mem_cache, const struct kslab_node *slab_node) {
   return 1ul + (((1ul << slab_node->log2_order) - sizeof(struct kslab_node))
-    % (mem_cache->size) + sizeof(void *)) / mem_cache->align;
+    % (mem_cache->size)) / mem_cache->align;
 }
 
-NON_NULL_PARAM(1) int kmem_cache_init(struct kmem_cache *mem_cache, int obj_type, size_t obj_size, size_t align,
+/**
+  Initialize and add a memory cache to the list of memory caches.
+
+  @param mem_cache The memory cache.
+  @param name A label to describe the memory object.
+  @param obj_size The size of a memory object in bytes.
+  @param align The desired memory alignment of each memory object in bytes. If align
+  is less than 8, it will be set to 8.
+  @param ctor The function to be used to construct a memory object. May be NULL if no constructor
+  needs to be used.
+  @param dtor The function to be used to destroy a memory object. May be NULL if no destructor
+  needs to be used.
+  @return E_OK, on success. E_FAIL, on failure.
+*/
+
+NON_NULL_PARAM(1) int kmem_cache_add(struct kmem_cache *mem_cache, const char *name, size_t obj_size, size_t align,
+                    kmem_cache_ctor_t ctor, kmem_cache_dtor_t dtor);
+
+/**
+  Locate a memory cache by name.
+
+  @param name The label that was used to register the memory cache.
+  @return The memory cache, on success. NULL, on failure.
+*/
+
+
+NON_NULL_PARAM(1) struct kmem_cache *kmem_cache_find(const char *name);
+
+/**
+  Initializes a memory object cache.
+
+  @param mem_cache The memory cache.
+  @param name A label to describe the memory object.
+  @param obj_size The size of a memory object in bytes.
+  @param align The desired memory alignment of each memory object in bytes. If align
+  is less than 8, it will be set to 8.
+  @param ctor The function to be used to construct a memory object. May be NULL if no constructor
+  needs to be used.
+  @param dtor The function to be used to destroy a memory object. May be NULL if no destructor
+  needs to be used.
+  @return E_OK, on success. E_FAIL, on failure.
+*/
+
+NON_NULL_PARAM(1) int kmem_cache_init(struct kmem_cache *mem_cache, const char *name, size_t obj_size, size_t align,
   kmem_cache_ctor_t ctor, kmem_cache_dtor_t dtor);
 
-void *kmalloc(size_t size);
-void *kcalloc(size_t count, size_t elem_size);
-void *krealloc(void *mem, size_t new_size);
+/**
+  Constructs all memory objects in a slab and adds the slab to its cache's slab list.
+
+  @param mem_cache The memory cache.
+  @param slab_node The slab node that will have its objects constructed.
+  @return E_OK, on success. E_FAIL, on failure.
+*/
+
+int kmem_cache_init_slab(struct kmem_cache *mem_cache, struct kslab_node *slab_node);
+
+/**
+  Destroys all memory objects in a slab and unlinks the slab from its cache's slab list.
+
+  @param mem_cache The memory cache.
+  @param slab_node The slab node that will have its objects destroyed.
+  @return E_OK, on success. E_FAIL, on failure.
+*/
+
+NON_NULL_PARAMS int kmem_cache_destroy_slab(struct kmem_cache *mem_cache, struct kslab_node *slab_node);
+
+void *kmem_cache_alloc(struct kmem_cache *mem_cache, int flags);
+int kmem_cache_free(struct kmem_cache *mem_cache, void *buf);
+
+void *kmalloc(size_t size, size_t align);
+void *kcalloc(size_t count, size_t elem_size, size_t align);
+void *krealloc(void *mem, size_t new_size, size_t align);
 void kfree(void *mem);
 
 extern struct buddy_allocator phys_allocator;
 extern uint8_t free_phys_blocks[0x40000];
+extern list_t free_frame_list;
+extern struct kmem_cache kbuf_node_mem_cache;
+extern list_t kmem_cache_list;
+
+extern struct kmem_cache mem8_mem_cache;
+extern struct kmem_cache mem16_mem_cache;
+extern struct kmem_cache mem24_mem_cache;
+extern struct kmem_cache mem32_mem_cache;
+extern struct kmem_cache mem48_mem_cache;
+extern struct kmem_cache mem64_mem_cache;
+extern struct kmem_cache mem96_mem_cache;
+extern struct kmem_cache mem128_mem_cache;
+extern struct kmem_cache mem192_mem_cache;
+extern struct kmem_cache mem256_mem_cache;
+extern struct kmem_cache mem384_mem_cache;
+extern struct kmem_cache mem512_mem_cache;
 
 #if 0
 

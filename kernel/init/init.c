@@ -527,6 +527,19 @@ void init(const struct multiboot_info_header *info_header)
 
   kprintf("Context switching...\n");
 
+  const char *s = "Hello, world!";
+  char *str = kmalloc(strlen(s)+1, 0);
+
+  if(str) {
+    kstrcpy(str, s);
+
+    kprintf("%s%s\n", "The kernel says: ", str);
+  }
+  else
+    kprintf("Unable to allocate memory for string.");
+
+  kfree(str);
+
   while(1);
   switch_context(schedule(get_current_processor()));
   stop_init("Context switch failed.");

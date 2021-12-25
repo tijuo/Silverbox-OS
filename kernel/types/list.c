@@ -11,12 +11,12 @@ int list_ptr_compare(void *p1, void *p2) {
 }
 
 int list_insert_item_at_end(list_t *list, void *item, size_t item_size, bool at_tail) {
-  list_node_t *node = (list_node_t *)kmalloc(sizeof(list_node_t));
+  list_node_t *node = (list_node_t *)kmalloc(sizeof(list_node_t), 0);
 
   if(!node)
     return E_FAIL;
 
-  node->item.item_void_ptr = kmalloc(item_size);
+  node->item.item_void_ptr = kmalloc(item_size, 0);
 
   if(!node->item.item_void_ptr)
     return E_FAIL;

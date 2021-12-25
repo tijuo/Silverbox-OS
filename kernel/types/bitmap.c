@@ -22,7 +22,7 @@ int bitmap_init_at(bitmap_t *restrict bitmap, size_t elements, void *restrict me
 }
 
 int bitmap_init(bitmap_t *bitmap, size_t elements, bool set_bits) {
-  void *buffer = kmalloc(BITMAP_BYTES(elements));
+  void *buffer = kmalloc(BITMAP_BYTES(elements), 0);
 
   if(!buffer)
     RET_MSG(E_FAIL, "Unable to allocate buffer for bitmap.");

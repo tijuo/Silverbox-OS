@@ -41,7 +41,8 @@ struct resd_block {
   uint64_t *bitmap;
 };
 
-struct module {
+struct module
+{
   paddr_t start;
   size_t length;
   uint8_t command[64];
@@ -61,7 +62,8 @@ DISC_CODE addr_t alloc_page_frame(void);
 DISC_CODE static void setup_gdt(void);
 DISC_CODE static int memory_map_compare(const void *x1, const void *x2);
 
-int memory_map_compare(const void *x1, const void *x2) {
+int memory_map_compare(const void *x1, const void *x2)
+{
   const struct memory_map *m1 = (const struct memory_map *)x1;
   const struct memory_map *m2 = (const struct memory_map *)x2;
 
@@ -344,7 +346,7 @@ int init_memory(const struct multiboot_info_header *header)
     RET_MSG(E_FAIL, "Unable to initialize physical memory allocator.");
 
   addr = 0;
-*/
+  */
 
   list_init(&free_frame_list);
   // list_init(&dma_free_frame_list);
@@ -355,36 +357,49 @@ int init_memory(const struct multiboot_info_header *header)
 
       if(mem_map[i].length < padding + PAGE_SIZE)
         continue;
-/*
-      if(is_list_empty(&dma_free_frame_list)) {
-        if(mem_map[i].length >= MIN_DMA_MEM)
-      }
-*/
+      /*
+            if(is_list_empty(&dma_free_frame_list)) {
+              if(mem_map[i].length >= MIN_DMA_MEM)
+            }
+      */
       list_node_t *node = (list_node_t *)(mem_map[i].start + padding);
 
       node->item.item_void_ptr = (void *)(mem_map[i].start + mem_map[i].length);
 
       list_insert_node_at_end(&free_frame_list, true, node);
     }
-/*
-    paddr_t region_end = mem_map[i].start + mem_map[i].length;
+    /*
+        paddr_t region_end = mem_map[i].start + mem_map[i].length;
 
-    if(mem_map[i].type != AVAILABLE) {
-      if(!IS_ERROR(buddy_reserve_block(&phys_allocator, (void *)mem_map[i].start,
-                                       mem_map[i].length,
-                                       &mem_block))) {
-        if(resd_count >= MAX_RESD_REGIONS)
-          RET_MSG(E_FAIL, "Unable to add reserved region.");
-        resd_blocks[resd_count++] = mem_block;
-      }
-    }
+        if(mem_map[i].type != AVAILABLE) {
+          if(!IS_ERROR(buddy_reserve_block(&phys_allocator, (void *)mem_map[i].start,
+                                           mem_map[i].length,
+                                           &mem_block))) {
+            if(resd_count >= MAX_RESD_REGIONS)
+              RET_MSG(E_FAIL, "Unable to add reserved region.");
+            resd_blocks[resd_count++] = mem_block;
+          }
+        }
 
-    addr = region_end;
-    */
+        addr = region_end;
+        */
   }
 
-  kmem_cache_init(&kbuf_node_mem_cache, "buf_node", sizeof(struct kfree_buf_node), 0, kfree_buf_node_constructor, NULL);
-  kmem_cache_init(&kmem_cache_mem_cache, "mem_cache", sizeof(struct kmem_cache), 0, kmem_cache_constructor, kmem_cache_destructor);
+  kmem_cache_add(&kbuf_node_mem_cache, "buf_node", sizeof(struct kfree_buf_node), 0,
+                 kfree_buf_node_constructor, NULL);
+
+  struct kmem_cache *caches1[7] = { &mem8_mem_cache, &mem16_mem_cache, &mem32_mem_cache, &mem64_mem_cache,
+    &mem128_mem_cache, &mem256_mem_cache, &mem512_mem_cache };
+  struct kmem_cache *caches2[5] = { &mem24_mem_cache, &mem48_mem_cache, &mem96_mem_cache, &mem192_mem_cache,
+    &mem384_mem_cache };
+  const char *cache1_names[7] = { "mem-8", "mem-16", "mem-32", "mem-64", "mem-128", "mem-256", "mem-512" };
+  const char *cache2_names[5] = { "mem-24", "mem-48", "mem-96", "mem-192", "mem-384" };
+
+  for(size_t i=0; i < 7; i++)
+    kmem_cache_add(caches1[i], cache1_names[i], 8ul << i, 8, NULL, NULL);
+
+  for(size_t i=0; i < 5; i++)
+    kmem_cache_add(caches2[i], cache2_names[i], 24ul << i, 8, NULL, NULL);
 
   return E_OK;
 }

@@ -3,6 +3,9 @@
 [global kstrcpy]
 [global kstrncpy]
 [global kstrlen]
+[global kstrcmp]
+[global kstrncmp]
+[global kmemcmp]
 
 kmemset:
   cld
@@ -27,7 +30,7 @@ kstrcpy:
 .copy:
   lodsb
   stosb
-  cmp al, 0
+  test al, al
   jnz .copy
   mov rax, rdx
   ret
@@ -61,4 +64,62 @@ kstrlen:
   sub rsi, rdi
   dec rsi
   mov rax, rsi
+  ret
+
+kstrcmp:
+  cld
+  xor rax, rax
+
+.read_char:
+  cmp byte [rdi], 0
+  jz .continue
+
+  cmp byte [rsi], 0
+  jz .continue
+
+  cmpsb
+  je .read_char
+
+.continue:
+  mov al, [rdi-1]
+  sub al, [rsi-1]
+.end:
+  ret
+
+kstrncmp:
+  cld
+  mov rcx, rdx
+  xor rax, rax
+
+  test rcx, rcx
+  jz .end
+
+.read_char:
+  cmp byte [rdi], 0
+  jz .continue
+
+  cmp byte [rsi], 0
+  jz .continue
+
+  cmpsb
+  loope .read_char
+
+.continue:
+  mov al, [rdi-1]
+  sub al, [rsi-1]
+.end:
+  ret
+
+kmemcmp:
+  cld
+  mov rcx, rdx
+  xor rax, rax
+
+  test rcx, rcx
+  jz .end
+
+  repe cmpsb
+  mov al, [rdi-1]
+  sub al, [rsi-1]
+.end:
   ret
