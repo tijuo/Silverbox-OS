@@ -17,12 +17,6 @@ extern PURE int kstrncmp(const char *s1, const char *s2, size_t len);
 extern PURE int kmemcmp(const void *m1, const void *m2, size_t len);
 
 int clear_phys_page(paddr_t phys);
-int initialize_root_pmap(paddr_t root_pmap);
-
-NON_NULL_PARAMS int poke_virt(addr_t address, size_t len, void *buffer,
-                             paddr_t root_pmap);
-NON_NULL_PARAMS int peek_virt(addr_t address, size_t len, void *buffer,
-                             paddr_t root_pmap);
 
 /* This won't work with arrays that have been passed into functions or converted into pointers. */
 

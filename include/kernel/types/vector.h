@@ -186,7 +186,7 @@ NON_NULL_PARAMS PURE static inline size_t vector_get_item_size(const vector_t *v
 }
 
 /**
-  Append an item to the end of a vector.
+  Append a shallow copy of an item to the end of a vector.
   @param vector The vector.
   @param item The item to be added to the vector.
   @return E_OK, on success. E_FAIL, on failure

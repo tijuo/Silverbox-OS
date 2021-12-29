@@ -218,7 +218,7 @@ int read_acpi_tables(void) {
               madt_offset += ic_header->length;
             }
 
-            kprintf("%u processor%c found.\n", processors_found, processors_found != 1 ? 's' : '\0');
+            kprintf("%lu processor%c found.\n", processors_found, processors_found != 1 ? 's' : '\0');
           }
         }
         else

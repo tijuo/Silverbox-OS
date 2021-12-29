@@ -120,8 +120,6 @@ NON_NULL_PARAMS void reset_printf_state(struct PrintfState *state);
 static void print_char(int c);
 NON_NULL_PARAMS static void _kprintf(void (*write_func)(int), const char *str,
 				     va_list args);
-NON_NULL_PARAM(1) void kprintf(const char *str, ...)
-   __attribute__((format(printf, 1, 2)));
 NON_NULL_PARAM(3) void kprintf_at(unsigned long int x, unsigned long int y,
 				  const char *str, ...)
    __attribute__((format(printf, 3, 4)));
@@ -140,12 +138,6 @@ NON_NULL_PARAMS int kullitoa(unsigned long long int value, char *str, int base);
 
 void _put_char(char c, int x, int y, unsigned char attrib);
 void put_char(char c, int x, int y);
-NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const exec_state_t *state,
-			       unsigned long int int_num,
-			       unsigned long int error_code);
-NON_NULL_PARAMS void dump_state(const exec_state_t *state,
-				unsigned long int int_num,
-				unsigned long int error_code);
 static const char *DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";
 
 unsigned long int sx = 0;
@@ -451,7 +443,7 @@ NON_NULL_PARAMS void print_assert_msg(const char *exp, const char *file,
   kprintf("\n<'%s' %s: %d> kassert(%s) failed\n", file, func, line, exp);
 
   if(current_thread)
-    dump_regs((tcb_t*)current_thread, current_thread->kernel_stack, -1, 0);
+    dump_regs(current_thread->kernel_stack, -1, 0);
 
   if(bad_assert_hlt) {
 	kprintf("\nSystem halted.");
@@ -1021,15 +1013,13 @@ NON_NULL_PARAMS void dump_state(const exec_state_t *exec_state,
 
 }
 
-/** Prints useful debugging information about the current thread
- @param thread The current thread
+/** Prints useful debugging information about the current execution state
  @param exec_state The saved execution state that was pushed to the stack upon context switch
  @param int_num The interrupt vector (if applicable)
  @param error_code The error code provided by the processor (if applicable)
  */
 
-NON_NULL_PARAMS void dump_regs(const tcb_t *thread,
-			   const exec_state_t *exec_state,
+NON_NULL_PARAMS void dump_regs(const exec_state_t *exec_state,
 			   unsigned long int int_num,
 			   unsigned long int error_code)
 {
@@ -1038,10 +1028,10 @@ NON_NULL_PARAMS void dump_regs(const tcb_t *thread,
 
 #endif /* DEBUG */
 
-noreturn void abort(void);
+noreturn void kabort(void);
 
-noreturn void abort(void) {
-  kprintf("Debug Error: abort() has been called.\n");
+noreturn void kabort(void) {
+  kprintf("Debug Error: kabort() has been called.\n");
 
   while(1) {
 	disable_int();

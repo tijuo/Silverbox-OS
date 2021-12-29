@@ -1,4 +1,3 @@
-#include <kernel/io.h>
 #include <kernel/irq.h>
 #include <kernel/interrupt.h>
 #include <kernel/dma.h>
@@ -203,7 +202,7 @@ void stop_motor(int drive)
 }
 
 void kill_motor(int drive)
-{ 
+{
   switch(drive) {
     case 0:
       outByte(DIGITAL_OUT, inByte(DIGITAL_OUT) & ~DRIVE0);
@@ -234,8 +233,8 @@ int check_dsk_change(void)
   else return 0;
 }
 
-int floppy_rd_track(int drive, int cyl, int head, int sect, int secsize, 
-      int tracklen, int gap3len, int datlen) 
+int floppy_rd_track(int drive, int cyl, int head, int sect, int secsize,
+      int tracklen, int gap3len, int datlen)
 {
   outByte(DATA_FIFO, COMM_READTRACK | (0x03 << 5));
   outByte(DATA_FIFO, drive | (head << 2));
@@ -248,13 +247,13 @@ int floppy_rd_track(int drive, int cyl, int head, int sect, int secsize,
   outByte(DATA_FIFO, datlen);
 }
 
-int floppy_wr_sector(struct DMA_blk *blk, int drive, int cyl, int head, 
+int floppy_wr_sector(struct DMA_blk *blk, int drive, int cyl, int head,
       int sect, int secsize, int tracklen, int gap3len, int datlen)
 {
   start_dma(2, blk, DMA_SINGLE_MODE | DMA_AUTOINIT | DMA_WRITE_TRANS);
- 
+
   start_motor(drive);
-    
+
   outByte(DATA_FIFO, COMM_WRITESECT | (0x03 << 6));
   outByte(DATA_FIFO, drive | (head << 2));
   outByte(DATA_FIFO, cyl);
@@ -265,7 +264,7 @@ int floppy_wr_sector(struct DMA_blk *blk, int drive, int cyl, int head,
   outByte(DATA_FIFO, gap3len);
   outByte(DATA_FIFO, datlen);
   wait_floppy();
-  stop_motor(drive);  
+  stop_motor(drive);
 }
 */
 
@@ -274,7 +273,7 @@ int floppy_wr_sector(struct DMA_blk *blk, int drive, int cyl, int head,
 int floppy_rd_sector(void *buf, struct Floppy_RW_Comm *comm_param)
 {
   struct Floppy_Results results;
-  
+
   floppy_rw(buf, comm_param, &results, FLOPPY_READ);
   return results.error;
 }
@@ -282,9 +281,9 @@ int floppy_rd_sector(void *buf, struct Floppy_RW_Comm *comm_param)
 int floppy_wr_sector(void *buf, struct Floppy_RW_Comm *comm_param)
 {
   struct Floppy_Results results;
-  
+
   /* Need to check for write protect here. */
-  
+
   floppy_rw(buf, comm_param, &results, FLOPPY_WRITE);
   return results.error;
 }
@@ -318,7 +317,7 @@ int floppy_rw(void *buffer, struct Floppy_RW_Comm *comm_param,
     }
     else {
       start_dma(2, FLOPPY_BUFFER, FLOPPY_BLKSIZE, DMA_SINGLE_MODE | DMA_WRITE_TRANS);
-      error += send_fdc_data(COMM_READSECT | (0x07 << 5)); 
+      error += send_fdc_data(COMM_READSECT | (0x07 << 5));
     }
     if(error)
       continue;
@@ -331,11 +330,11 @@ int floppy_rw(void *buffer, struct Floppy_RW_Comm *comm_param,
     error += send_fdc_data(comm_param->tracklen);
     error += send_fdc_data(comm_param->gap3len);
     error += send_fdc_data(comm_param->datlen);
-    
+
     if(error)
       continue;
     wait_floppy();
-    
+
     results->st0 = get_fdc_data();
     results->st1 = get_fdc_data();
     results->st2 = get_fdc_data();
@@ -343,7 +342,7 @@ int floppy_rw(void *buffer, struct Floppy_RW_Comm *comm_param,
     results->head = get_fdc_data();
     results->sect = get_fdc_data();
     results->secnum = get_fdc_data();
-      
+
     if((results->st0 & 0xC0) == 0) {
       stop_motor(comm_param->drive);
       results->error = 0;
@@ -359,7 +358,7 @@ int floppy_rw(void *buffer, struct Floppy_RW_Comm *comm_param,
 /* Read operation failed. */
   stop_motor(comm_param->drive);
   results->error = -1;
-  return -1;  
+  return -1;
 }
 /*
 int floppy_rddel_sector(int drive, int cyl, int head, int sect, int secsize,
@@ -403,7 +402,7 @@ int floppy_format_track(int drive, int head, int secsize, int tracklen,
   outByte(DATA_FIFO, fill);
 
   wait_floppy();
-  
+
   stop_motor(drive);
 }
 */
@@ -417,7 +416,7 @@ int floppy_calibrate(int drive)
   send_fdc_data(drive);
   wait_floppy();
 
-  floppy_checkint(&st0, &cyl);  
+  floppy_checkint(&st0, &cyl);
 
   __sleep(15);
 
@@ -441,13 +440,13 @@ void read_id(int drive, int head, int mfm, int *st0, int *st1, int *st2,
     int *status_cyl, int *status_head, int *status_sect, int *status_secsize)
 {
   byte st0r, cyl;
-  
+
   send_fdc_data(COMM_READSECTORID | (0x1 << 6));
   send_fdc_data(drive | (head << 2));
   wait_floppy();
-  
+
   floppy_checkint(&st0r, &cyl);
-  
+
   *st0 = get_fdc_data();
   *st1 = get_fdc_data();
   *st2 = get_fdc_data();
@@ -464,7 +463,7 @@ int fdc_seek(int drive, int head, int cyl)
   byte st0, intcyl;
 
 //  start_motor(drive);
-  
+
   send_fdc_data(COMM_SEEK);
   send_fdc_data(drive | (head << 2));
   send_fdc_data(cyl);
@@ -524,13 +523,13 @@ void reset_fdc(void)
   enable_int();
   outByte(DIGITAL_OUT, 0);
 
-  /* Re-enable IRQ and DMA */  
+  /* Re-enable IRQ and DMA */
 
-  outByte(DIGITAL_OUT, DOR_DMA_IRQ | DOR_RESET); 
+  outByte(DIGITAL_OUT, DOR_DMA_IRQ | DOR_RESET);
 
   /* Set the CCR with the data rate */
 
-  outByte(CONFIG_CTRL, DR500KBPS);   
+  outByte(CONFIG_CTRL, DR500KBPS);
 
   printf("waiting for floppy.\n");
   wait_floppy();
@@ -540,11 +539,11 @@ void reset_fdc(void)
 
   /* ShowCMOSinfo() must run!!! */
 
-  /* If the drives are sent the CONFIGURE command fast enough, their 
+  /* If the drives are sent the CONFIGURE command fast enough, their
      interrupt status doesn't need to be sensed. */
   for(i=0; i < num_floppies; i++)
-    floppy_checkint(&st0, &cyl); 
-          
+    floppy_checkint(&st0, &cyl);
+
   imp_seek = 0;
   fifo_en = 1;
   poll_dis = 0;
@@ -553,7 +552,7 @@ void reset_fdc(void)
   printf("Sending a configure command.\n");
   send_fdc_data(COMM_CONFIGURE);
   send_fdc_data(0);
-  send_fdc_data((imp_seek << 6) | (fifo_en << 5) | (poll_dis << 4) | (fifo_thr)); 
+  send_fdc_data((imp_seek << 6) | (fifo_en << 5) | (poll_dis << 4) | (fifo_thr));
   send_fdc_data(pre_trk);
 
   /* The SPECIFY command will set the floppy step rate, head load time and head

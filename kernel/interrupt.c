@@ -17,8 +17,7 @@ void handle_irq(struct IrqInterruptFrame *interrupt_frame);
 void handle_cpu_exception(struct CpuExInterruptFrame *interrupt_frame);
 
 #define CPU_HANDLER(num) \
-NAKED noreturn void cpu_ex##num##_handler(void); \
-NAKED noreturn void cpu_ex##num##_handler(void) { \
+void cpu_ex##num##_handler(void) { \
   SAVE_STATE; \
   __asm__("pushq $0\n" \
           "pushq $" #num "\n" \
@@ -28,8 +27,7 @@ NAKED noreturn void cpu_ex##num##_handler(void) { \
 }
 
 #define CPU_ERR_HANDLER(num) \
-NAKED noreturn void cpu_ex##num##_handler(void); \
-NAKED noreturn void cpu_ex##num##_handler(void) { \
+void cpu_ex##num##_handler(void) { \
   SAVE_ERR_STATE; \
   __asm__("pushq $" #num "\n" \
           "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
@@ -38,7 +36,6 @@ NAKED noreturn void cpu_ex##num##_handler(void) { \
 }
 
 #define IRQ_HANDLER(num) \
-NAKED noreturn void irq##num##_handler(void); \
 NAKED noreturn void irq##num##_handler(void) { \
   SAVE_STATE; \
   __asm__( \

@@ -45,7 +45,7 @@ void enable_apic(void) {
     kprintf("APIC disabled\n");
   }
 
-  kprintf("APIC Base: 0x%p\n", apic_result & ~0xFFFu);
+  kprintf("APIC Base: 0x%p\n", (void *)((uintptr_t) (apic_result & ~0xFFFu)));
 /*
   // TODO: Here, actually *set up* the LAPIC
   kMapPage((addr_t)lapicPtr, (addr_t)LAPIC_BASE,

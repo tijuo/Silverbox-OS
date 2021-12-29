@@ -34,8 +34,7 @@ void list_insert_node_at_end(list_t *list, bool at_tail, list_node_t *new_node) 
     list->tail = new_node;
     new_node->next = NULL;
     new_node->prev = NULL;
-  }
-  else if(at_tail)
+  } else if(at_tail)
     list_insert_node_after(list, new_node, list->tail);
   else
     list_insert_node_before(list, new_node, list->head);
@@ -114,8 +113,7 @@ int list_remove_node_from_end(list_t *list, bool at_tail, list_node_t **removed_
         list->tail->next = NULL;
       else
         list->head = NULL;
-    }
-    else {
+    } else {
       node = list->head;
 
       list->head = node->next;
@@ -143,13 +141,11 @@ int list_remove_item(list_t *list, void *item, int (*compare)(void *, void *)) {
           node->prev->next = NULL;
           list->tail = node->prev;
         }
-      }
-      else {
+      } else {
         if(node->next) {
           node->next->prev = NULL;
           list->head = node->next;
-        }
-        else {
+        } else {
           list->head = NULL;
           list->tail = NULL;
         }

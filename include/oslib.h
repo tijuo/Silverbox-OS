@@ -8,10 +8,6 @@
 extern "C" {
 #endif
 
-char *strdup(const char *str);
-char *strndup(const char *str, size_t n);
-char *strappend(const char *str, const char *add);
-
   /*
 int fatGetAttributes( const char *path, unsigned short devNum, struct FileAttributes *attrib );
 int fatGetDirList( const char *path, unsigned short devNum, struct FileAttributes *attrib,

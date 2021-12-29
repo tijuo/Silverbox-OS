@@ -9,11 +9,13 @@ QEMU_DRIVE      :=$(ROOT_DIR)/os_image.img
 
 INIT_SRC	:=init/init.c init/acpi.c init/libc.c \
 		init/memory.c
-TYPES_SRC	:= types/vector.c types/list.c types/bitmap.c
+TYPES_SRC	:=types/vector.c types/list.c types/bitmap.c
+DRIVER_SRC	:=drivers/char/pseudo.c drivers/char/video.c \
+		drivers/block/ramdisk.c
 
-SRC	:=syscall.c debug.c mm.c process.c algo.c\
+SRC	:=syscall.c debug.c mm.c process.c algo.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
-	apic.c buddy.c $(INIT_SRC) $(TYPES_SRC)
+	apic.c buddy.c devmgr.c $(INIT_SRC) $(TYPES_SRC) $(DRIVER_SRC)
 
 ASM_SRC	=entry.asm
 OBJ	:=$(SRC:%.c=%.o) $(ASM_SRC:%.asm=%.o)

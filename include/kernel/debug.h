@@ -10,7 +10,13 @@
                               __FILE__, __func__, __LINE__, (msg))
 #define RET_MSG(ret, msg)     return ({\
   __typeof__(ret) _ret=(ret);\
-  kprintf("<'%s' %s: line %d> Returned: %d. %s\n",\
+  kprintf(_Generic(_ret, \
+    void *: "<'%s' %s: line %d> Returned: %p. %s\n", \
+    signed short int: "<'%s' %s: line %d> Returned: %hhd. %s\n", \
+    unsigned int: "<'%s' %s: line %d> Returned: %u. %s\n", \
+    unsigned long int: "<'%s' %s: line %d> Returned: %lu. %s\n", \
+    long int: "<'%s' %s: line %d> Returned: %ld. %s\n", \
+    default: "<'%s' %s: line %d> Returned: %d. %s\n"), \
     __FILE__, __func__, __LINE__, (_ret), (msg));\
   _ret;\
 })
@@ -26,12 +32,12 @@ int get_debug_char(void);
 void put_debug_char(int ch);
 
 void clear_screen(void);
-NON_NULL_PARAM(1) void kprintf(const char *str, ...);
+NON_NULL_PARAM(1) void kprintf(const char *str, ...) __attribute__((format(printf, 1, 2)));
 NON_NULL_PARAMS void print_assert_msg(const char *exp, const char *file,
                                     const char *func, int line);
 void set_bad_assert_hlt( bool value);
 void set_video_low_mem( bool value);
-NON_NULL_PARAMS void dump_regs(const tcb_t *thread, const exec_state_t *state,
+NON_NULL_PARAMS void dump_regs(const exec_state_t *state,
                                unsigned long int int_num, unsigned long int error_code);
 NON_NULL_PARAMS void dump_state(const exec_state_t *state,
                                 unsigned long int int_num, unsigned long int error_code);

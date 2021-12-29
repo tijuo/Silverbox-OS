@@ -1,12 +1,11 @@
 #include <drivers/console.h>
-#include <os/dev_interface.h>
 #include <drivers/keyboard.h>
 #include <os/ostypes/circbuffer.h>
 #include <os/spinlock.h>
 #include <drivers/video.h>
-#include <os/services.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #define NUM_CONSOLES                8
 #define KB_BUFFER_SIZE              1024
@@ -36,9 +35,6 @@ static int init_console(size_t index);
 static int print_char(struct console *console, int c);
 static int print_chars(struct console *console, char *str, size_t len);
 static void keyboard_listener(void);
-
-int handleDeviceRead(msg_t *msg);
-int handleDeviceWrite(msg_t *msg);
 
 LOCKED_RES(struct circular_buffer, kb_buffer);
 LOCKED_RES(size_t, current_console);

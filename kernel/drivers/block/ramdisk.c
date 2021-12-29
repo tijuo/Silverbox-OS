@@ -1,193 +1,177 @@
-#include <os/dev_interface.h>
 #include <drivers/ramdisk.h>
-#include <string.h>
-#include <stdlib.h>
-#include <os/device.h>
-#include <os/services.h>
-#include <os/message.h>
+#include <kernel/types/vector.h>
+#include <kernel/devmgr.h>
+#include <kernel/mm.h>
+#include <kernel/memory.h>
+#include <kernel/bits.h>
+#include <kernel/memory.h>
 
-#define MSG_TIMEOUT		3000
+#define DEV_VALID   0x80000000
 
-char buffer1[4096];
+struct ramdisk_device {
+  void *data;
+  size_t block_size;
+  size_t block_count;
+  int flags;
+};
 
-extern unsigned char floppy_array[];
+static vector_t ramdisks;
 
-#define RAMDISK_SERVER 		RAMDISK_MAJOR
-#define NUM_DEVICES		NUM_RAMDISKS
-#define SERVER_NAME		"ramdisk"
-#define DEVICE_NAME		"rd"
+static long int ramdisk_create(int id, const void *params, int flags) {
+  switch(id) {
+    case RAMDISK_ID: {
+        const struct ramdisk_create_params *create_params = (const struct ramdisk_create_params *)params;
+        struct ramdisk_device *dev = NULL;
 
-#define BLK_LEN			RAMDISK_BLKSIZE
+        if(create_params->block_count == 0 || create_params->block_size == 0
+            || (IS_FLAG_SET(flags, RAMDISK_IMAGE) && create_params->start_addr == NULL)) {
+          return DEV_FAIL;
+        }
 
-void handleDevRequests( void );
-void handle_dev_read( volatile struct Message *msg );
-void handle_dev_write( volatile struct Message *msg );
-void handle_dev_ioctl( volatile struct Message *msg );
-void handle_dev_error( volatile struct Message *msg );
+        for(size_t i=0; i < vector_get_count(&ramdisks); i++) {
+          struct ramdisk_device *d = (struct ramdisk_device *)vector_item(&ramdisks, i);
 
-/*
-tid_t video_srv = NULL_TID;
+          if(IS_FLAG_CLEAR(d->flags, DEV_VALID)) {
+            dev = d;
+            break;
+          }
+        }
 
-int printMsg( char *msg )
-{
-  if( video_srv == NULL_TID )
-    video_srv = lookupName("video", strlen("video"));
+        if(dev == NULL) {
+          dev = kcalloc(sizeof *dev, 1, 0);
 
-  return deviceWrite( video_srv, 0, 0, strlen(msg), 1, msg );
-}
-*/
+          if(dev == NULL)
+            return DEV_FAIL;
+          else {
+            if(vector_push_back(&ramdisks, dev) != DEV_OK) {
+              kfree(dev);
+              return DEV_FAIL;
+            }
 
-void handle_dev_read( volatile struct Message *msg )
-{
-  struct DeviceMsg *req = (struct DeviceMsg *)msg->data;
-  size_t num_bytes;
-  tid_t tid = msg->sender;
-  unsigned char devNum = req->deviceNum;
-  size_t offset = req->offset;
+            dev = (struct ramdisk_device *)vector_item(&ramdisks, vector_get_count(&ramdisks)-1);
+          }
+        }
 
-  num_bytes = req->count;// > sizeof kbMsgBuffer ? sizeof kbMsgBuffer : req->count;
-  num_bytes *= BLK_LEN;
+        dev->data = IS_FLAG_SET(flags, RAMDISK_IMAGE) ? create_params->start_addr : NULL;
+        dev->block_count = create_params->block_count;
+        dev->block_size = create_params->block_size;
+        dev->flags = flags;
 
-  msg->length = sizeof *req;
+        if(IS_FLAG_CLEAR(flags, RAMDISK_IMAGE)) {
+          dev->data = kcalloc(1, dev->block_count * dev->block_size, 0);
 
-  req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_SUCCESS;
+          if(dev->data == NULL)
+            return DEV_FAIL;
+        }
 
-  if( sendMsg( tid, (void *)msg, MSG_TIMEOUT ) < 0 )
-    return;
+        SET_FLAG(dev->flags, DEV_VALID);
 
-  if( sendLong( tid, &ramdiskDev[devNum].data[offset*ramdiskDev[devNum].blockSize],
-         num_bytes, MSG_TIMEOUT ) < 0 )
-  {
-    return;
-  }
-}
-
-void handle_dev_write( volatile struct Message *msg )
-{
-  struct DeviceMsg *req = (struct DeviceMsg *)msg->data;
-  tid_t tid = msg->sender;
-  unsigned char devNum = req->deviceNum;
-  size_t offset = req->offset;
-
-  msg->length = sizeof *req;
-
-  req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_SUCCESS;
-
-  if( sendMsg( tid, (void *)msg, MSG_TIMEOUT ) < 0 )
-    return;
-
-  if( receiveLong( tid, &ramdiskDev[devNum].data[offset*
-     ramdiskDev[devNum].blockSize], ramdiskDev[devNum].blockSize *
-     (ramdiskDev[devNum].numBlocks - offset), MSG_TIMEOUT ) )
-  {
-    return;
-  }
-}
-
-void handle_dev_ioctl( volatile struct Message *msg )
-{
-  handle_dev_error(msg);
-}
-
-void handle_dev_error( volatile struct Message *msg )
-{
-  struct DeviceMsg *req = (struct DeviceMsg *)msg->data;
-  tid_t tid = msg->sender;
-
-  msg->length = 0;
-  req->msg_type = (req->msg_type & 0xF) | DEVICE_RESPONSE | DEVICE_ERROR;
-
-  if( sendMsg( tid, (void *)msg, MSG_TIMEOUT ) < 0 )
-    return;
-}
-
-void handleDevRequests( void )
-{
-  volatile struct Message msg;
-  volatile struct DeviceMsg *req = (volatile struct DeviceMsg *)msg.data;
-
-  if( receiveMsg(NULL_TID, (void *)&msg, -1) < 0 )
-    return;
-
-  if( msg.protocol == MSG_PROTO_DEVICE && (req->msg_type & 0x80) == DEVICE_REQUEST )
-  {
-    switch(req->msg_type)
-    {
-      case DEVICE_WRITE:
-        handle_dev_write(&msg);
-        break;
-      case DEVICE_READ:
-        handle_dev_read(&msg);
-        break;
-      case DEVICE_IOCTL:
-        handle_dev_ioctl(&msg);
-        break;
-      default:
-        handle_dev_error(&msg);
-        break;
-    }
-  }
-}
-
-int main(void)
-{
-  struct Device devInfo;
-  int status;
-
-  for( int i=0; i < NUM_RAMDISKS; i++ )
-  {
-    if( i != 0 )
-    {
-      ramdiskDev[i].data = malloc( RAMDISK_SIZE );
-
-      if( ramdiskDev[i].data == NULL )
-        return 1;
-    }
-    else
-    {
-      mapMem((void *)0x6000000, (void *)0x800000, 360, 0); // Only works in bochs!
-      ramdiskDev[0].data = (unsigned char *)0x800000;
-    }
-
-    ramdiskDev[i].blockSize = RAMDISK_BLKSIZE;
-    ramdiskDev[i].numBlocks = RAMDISK_SIZE / RAMDISK_BLKSIZE;
-    ramdiskDev[i].devNum = i;
-  }
-
-  for( int i=0; i < 5; i++ )
-  {
-    status = registerName(SERVER_NAME, strlen(SERVER_NAME));
-
-    if( status != 0 )
-      __sleep( (i*i+1) * 500 );
-    else
+        return DEV_OK;
+      }
       break;
+    default:
+      return DEV_FAIL;
   }
+}
 
-  if( status != 0 )
-    return 1;
+static long int ramdisk_read(int minor, void *buf, size_t len, long int offset, int flags) {
+  switch(minor) {
+    case RAMDISK_ID: {
+        const struct ramdisk_device *dev;
 
-  devInfo.cacheType = NO_CACHE;
-  devInfo.type = BLOCK_DEV;
-  devInfo.dataBlkLen = RAMDISK_BLKSIZE;
-  devInfo.numDevices = NUM_RAMDISKS;
-  devInfo.major = RAMDISK_MAJOR;
+        if((size_t)minor >= vector_get_count(&ramdisks))
+          return DEV_NO_EXIST;
 
-  for( int i=0; i < 5; i++ )
-  {
-    status = registerDevice(DEVICE_NAME, strlen(DEVICE_NAME), &devInfo);
+        dev = (const struct ramdisk_device *)vector_item(&ramdisks, (size_t)minor);
 
-    if( status != 0 )
-      __sleep( (i*i+1) * 500 );
-    else
-      break;
+        if(IS_FLAG_CLEAR(dev->flags, DEV_VALID))
+          return DEV_NO_EXIST;
+        else if(IS_FLAG_SET(dev->flags, DEV_NO_READ))
+          return DEV_FAIL;
+        else {
+          if((size_t)offset >= dev->block_count)
+            offset = dev->block_count - 1;
+
+          if(len >= dev->block_count)
+            len = dev->block_count - offset;
+
+          kmemcpy(buf, (void *)((uintptr_t)dev->data + offset * dev->block_size),
+                                len * dev->block_size);
+          return DEV_OK;
+        }
+      }
+    default:
+      return DEV_NO_EXIST;
   }
+}
 
-  if( status != 0 )
-    return 1;
+static long int ramdisk_write(int minor, const void *buf, size_t len, long int offset, int flags) {
+  switch(minor) {
+    case RAMDISK_ID: {
+        const struct ramdisk_device *dev;
 
-  while(1)
-    handleDevRequests();
+        if((size_t)minor >= vector_get_count(&ramdisks))
+          return DEV_NO_EXIST;
 
-  return 1;
+        dev = (const struct ramdisk_device *)vector_item(&ramdisks, (size_t)minor);
+
+        if(IS_FLAG_CLEAR(dev->flags, DEV_VALID))
+          return DEV_NO_EXIST;
+        else if(IS_FLAG_SET(dev->flags, DEV_NO_WRITE))
+          return DEV_FAIL;
+        else {
+          if((size_t)offset >= dev->block_count)
+            offset = dev->block_count - 1;
+
+          if(len >= dev->block_count)
+            len = dev->block_count - offset;
+
+          kmemcpy((void *)((uintptr_t)dev->data + offset * dev->block_size), buf,
+                           len * dev->block_size);
+          return DEV_OK;
+        }
+      }
+    default:
+      return DEV_NO_EXIST;
+  }
+}
+
+static long int ramdisk_get(int id, ...) {
+  return DEV_FAIL;
+}
+
+static long int ramdisk_set(int id, ...) {
+  return DEV_FAIL;
+}
+
+static long int ramdisk_destroy(int id) {
+  struct ramdisk_device *dev;
+
+  if((size_t)id >= vector_get_count(&ramdisks))
+    return DEV_NO_EXIST;
+
+  dev = (struct ramdisk_device *)vector_item(&ramdisks, (size_t)id);
+
+  if(IS_FLAG_CLEAR(dev->flags, DEV_VALID))
+    return DEV_NO_EXIST;
+
+  CLEAR_FLAG(dev->flags, DEV_VALID);
+
+  return DEV_OK;
+}
+
+struct driver_callbacks ramdisk_callbacks = {
+  .create = ramdisk_create,
+  .read = ramdisk_read,
+  .write = ramdisk_write,
+  .get = ramdisk_get,
+  .set = ramdisk_set,
+  .destroy = ramdisk_destroy
+};
+
+int ramdisk_init(void) {
+  vector_init(&ramdisks, sizeof(struct ramdisk_device));
+
+  return device_register(RAMDISK_NAME, RAMDISK_MAJOR, DEV_BLK | DEV_NOCACHE,
+                         PAGE_SIZE, &ramdisk_callbacks);
 }

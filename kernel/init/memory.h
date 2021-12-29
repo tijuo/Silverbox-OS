@@ -12,8 +12,6 @@
 #include <kernel/mm.h>
 #include <kernel/multiboot2.h>
 
-extern addr_t alloc_page_frame(void);
-
 extern bool is_reserved_page(uint64_t addr, const struct multiboot_info_header *header);
 
 extern int init_memory(const struct multiboot_info_header *header);

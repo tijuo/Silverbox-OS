@@ -20,6 +20,7 @@
 #include <os/io.h>
 #include "init.h"
 #include <kernel/multiboot2.h>
+#include <kernel/devmgr.h>
 
 #define KERNEL_IDT_LEN  (64 * sizeof(union idt_entry))
 
@@ -287,7 +288,7 @@ void show_mb_info(const struct multiboot_info_header *header)
 
           kprintf("Lower Memory: %lu bytes Upper Memory: %lu bytes\n",
                   meminfo->mem_lower * 1024ul, meminfo->mem_upper * 1024ul);
-          kprintf("Total Memory: %#x. %lu pages.\n", total_mem,
+          kprintf("Total Memory: %#lx. %lu pages.\n", total_mem,
                   total_mem / PAGE_SIZE);
 
           break;
@@ -347,7 +348,7 @@ void show_mb_info(const struct multiboot_info_header *header)
                 break;
             }
 
-            kprintf("Addr: %p Length: %#x Type: %s\n", (void *)entry->addr,
+            kprintf("Addr: %p Length: %#lx Type: %s\n", (void *)entry->addr,
                     entry->len, type);
 
             offset += mmap->entry_size;
@@ -432,7 +433,7 @@ void show_cpu_features(void)
     } else
       num_ids = 0;
 
-    kprintf("Unique APIC IDs per physical processor: %d\n", num_ids);
+    kprintf("Unique APIC IDs per physical processor: %lu\n", num_ids);
   }
 
   kprintf("Local APIC ID: %#x\n", additional_info.lapic_id);
@@ -461,15 +462,14 @@ void show_cpu_features(void)
 
 void init(const struct multiboot_info_header *info_header)
 {
-  /* Initialize memory */
-
   if(IS_ERROR(init_memory(info_header)))
     stop_init("Unable to initialize memory.");
 
+  if(IS_ERROR(driver_init()))
+    stop_init("Unable to initialize drivers");
+
   #ifdef DEBUG
   init_serial();
-  init_video();
-  clear_screen();
   #endif /* DEBUG */
 
   show_mb_info(info_header);
@@ -499,11 +499,11 @@ void init(const struct multiboot_info_header *info_header)
    initTimer();
    */
 
-  kprintf("\n%#x bytes of discardable code.",
+  kprintf("\n%#lx bytes of discardable code.",
           (addr_t)EXT_PTR(kddata) - (addr_t)EXT_PTR(kdcode));
-  kprintf(" %#x bytes of discardable data.\n",
+  kprintf(" %#lx bytes of discardable data.\n",
           (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kddata));
-  kprintf("Discarding %d bytes in total\n",
+  kprintf("Discarding %lu bytes in total\n",
           (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kdcode));
 
   //load_init_server(info_header);
@@ -524,21 +524,6 @@ void init(const struct multiboot_info_header *info_header)
   wrmsr(SYSCALL_STAR_MSR,
         ((uint64_t)KCODE_SEL << 32) | ((uint64_t)UCODE_SEL << 48));
   wrmsr(SYSCALL_LSTAR_MSR, (uint64_t)syscall_entry);
-
-  kprintf("Context switching...\n");
-
-  const char *s = "Hello, world!";
-  char *str = kmalloc(strlen(s)+1, 0);
-
-  if(str) {
-    kstrcpy(str, s);
-
-    kprintf("%s%s\n", "The kernel says: ", str);
-  }
-  else
-    kprintf("Unable to allocate memory for string.");
-
-  kfree(str);
 
   while(1);
   switch_context(schedule(get_current_processor()));

@@ -58,7 +58,6 @@ extern int kfree_buf_node_constructor(void *buf, size_t size);
 extern int kmem_cache_constructor(void *buf, size_t size);
 extern int kmem_cache_destructor(void *buf, size_t size);
 
-DISC_CODE addr_t alloc_page_frame(void);
 DISC_CODE static void setup_gdt(void);
 DISC_CODE static int memory_map_compare(const void *x1, const void *x2);
 

@@ -1,6 +1,5 @@
 /* The Block Cache */
 
-#include <kernel/device.h>
 #include <kernel/bcache.h>
 #include <kernel/semaphore.h>
 

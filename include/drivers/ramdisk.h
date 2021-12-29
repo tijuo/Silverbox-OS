@@ -1,20 +1,19 @@
 #ifndef RAMDISK
 #define RAMDISK
 
-#define RAMDISK_MAJOR       10
-#define NUM_RAMDISKS        5
-#define RAMDISK_SIZE        (1024 * 1440)
-#define RAMDISK_BLKSIZE     512
+#define RAMDISK_MAJOR       2
+#define RAMDISK_NAME        "ramdisk"
+#define RAMDISK_ID          0
+#define RAMDISK_IMAGE       0x40000000
 
-struct Ramdisk {
-  int devNum;
-  unsigned char *data;
-  unsigned blockSize;
-  unsigned numBlocks;
-} ramdiskDev[NUM_RAMDISKS];
+#include <stdlib.h>
 
-int readRamdisk( int device, size_t numBlocks, unsigned offset, void *buffer );
-int writeRamdisk( int device, size_t numBlocks, unsigned offset, void *buffer );
+struct ramdisk_create_params {
+  void *start_addr;
+  size_t block_count;
+  size_t block_size;
+};
 
+int ramdisk_init(void);
 
 #endif

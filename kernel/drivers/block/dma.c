@@ -1,4 +1,3 @@
-#include <kernel/kernel.h>
 #include <kernel/interrupt.h>
 #include <kernel/io.h>
 #include <kernel/dma.h>
