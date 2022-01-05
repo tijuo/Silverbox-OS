@@ -9,15 +9,6 @@
 #define NUM_DEV_MAJOR 256
 #define DEV_VALID   0x80000000u
 
-struct driver {
-  char name[16];
-  int major;
-  int flags;
-  size_t block_size;
-
-  struct driver_callbacks callbacks;
-};
-
 static struct driver driver_records[NUM_DEV_MAJOR];
 
 int device_register_char(const char *name, int major, int flags, const struct driver_callbacks *callbacks) {
@@ -65,7 +56,73 @@ int device_unregister(int major) {
   return E_OK;
 }
 
-int driver_init(void) {
+long int device_create(int major, int id, const void *params, int flags) {
+  if(major < NUM_DEV_MAJOR && IS_FLAG_SET(driver_records[major].flags, DEV_VALID)) {
+    return driver_records[major].callbacks.create(&driver_records[major], id, params, flags);
+  }
+  else
+    return DEV_NO_EXIST;
+}
+
+long int device_get(int major, int id, ...) {
+  if(major < NUM_DEV_MAJOR && IS_FLAG_SET(driver_records[major].flags, DEV_VALID)) {
+    va_list list;
+
+    va_start(list, major);
+    long int result = driver_records[major].callbacks.get(&driver_records[major], id, list);
+    va_end(list);
+
+    return result;
+  }
+  else
+    return DEV_NO_EXIST;
+}
+
+long int device_set(int major, int id, ...) {
+  if(major < NUM_DEV_MAJOR && IS_FLAG_SET(driver_records[major].flags, DEV_VALID)) {
+    va_list list;
+
+    va_start(list, major);
+    long int result = driver_records[major].callbacks.set(&driver_records[major], id, list);
+    va_end(list);
+
+    return result;
+  }
+  else
+    return DEV_NO_EXIST;
+}
+
+long int device_read(int major, int minor, void *buf, size_t len, long int offset, int flags) {
+  if(major < NUM_DEV_MAJOR && IS_FLAG_SET(driver_records[major].flags, DEV_VALID)) {
+    if(IS_FLAG_SET(driver_records[major].flags, DEV_NO_READ))
+      return DEV_PERM;
+    else
+      return driver_records[major].callbacks.read(&driver_records[major], minor, buf, len, offset, flags);
+  }
+  else
+    return DEV_NO_EXIST;
+}
+
+long int device_write(int major, int minor, const void *buf, size_t len, long int offset, int flags) {
+  if(major < NUM_DEV_MAJOR && IS_FLAG_SET(driver_records[major].flags, DEV_VALID)) {
+    if(IS_FLAG_SET(driver_records[major].flags, DEV_NO_WRITE))
+      return DEV_PERM;
+    else
+      return driver_records[major].callbacks.write(&driver_records[major], minor, buf, len, offset, flags);
+  }
+  else
+    return DEV_NO_EXIST;
+}
+
+long int device_destroy(int major, int id) {
+  if(major < NUM_DEV_MAJOR && IS_FLAG_SET(driver_records[major].flags, DEV_VALID)) {
+    return driver_records[major].callbacks.destroy(&driver_records[major], id);
+  }
+  else
+    return DEV_NO_EXIST;
+}
+
+int device_init(void) {
   pseudo_init();
   ramdisk_init();
   video_init();

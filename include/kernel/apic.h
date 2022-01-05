@@ -2,8 +2,9 @@
 #define APIC_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
-#define LAPIC_VADDR			0x100000000ul
+#define LAPIC_VADDR			0x7f8000000000ul
 
 // Memory mapped IOAPIC registers
 
@@ -47,7 +48,6 @@
 #define IOAPIC_REDTBL23      0x3E
 
 #define LAPIC_OFFSET	    0
-#define LAPIC_BASE	        0xFEE00000
 
 #define LAPIC_ID	        0x20
 #define LAPIC_VERSION	    0x30
@@ -55,6 +55,10 @@
 #define LAPIC_APR	        0x90
 #define LAPIC_PPR	        0xA0
 #define LAPIC_EOI	        0xB0
+#define LAPIC_REMOTE_READ 0xC0
+#define LAPIC_LOCAL_DEST  0xD0
+#define LAPIC_LOGICAL_DEST  0xE0
+#define LAPIC_SPURIOUS_INT  0xF0
 
 #define LAPIC_ISR0	        0x100
 #define LAPIC_ISR1          0x110
@@ -82,15 +86,20 @@
 #define LAPIC_IRR5          0x250
 #define LAPIC_IRR6          0x260
 #define LAPIC_IRR7          0x270
+#define LAPIC_ESR           0x280
 
-#define LAPIC_ERROR	        0x280
+#define LAPIC_LVT_CMCI      0x2F0
 
 #define LAPIC_ICR0	        0x300
 #define LAPIC_ICR1	        0x310
-#define LAPIC_TIMER	        0x320
-
-#define LAPIC_TIMER_IC	    0x380
-#define LAPIC_TIMER_CC	    0x390
+#define LAPIC_LVT_TIMER	    0x320
+#define LAPIC_LVT_THERMAL   0x330
+#define LAPIC_LVT_PERF      0x340
+#define LAPIC_LVT_LINT0     0x350
+#define LAPIC_LVT_LINT1     0x360
+#define LAPIC_LVT_ERROR     0x370
+#define LAPIC_INIT_COUNT	  0x380
+#define LAPIC_CURR_COUNT	  0x390
 #define LAPIC_TIMER_DCR	    0x3E0
 
 #define LAPIC_ONESHOT	    0
@@ -100,7 +109,51 @@
 
 #define IA32_APIC_BASE_MSR 0x1Bu
 
-typedef volatile uint32_t apic_register_t;
+#define LAPIC_TIMER_DIV_1   0b1011u
+#define LAPIC_TIMER_DIV_2   0b0000u
+#define LAPIC_TIMER_DIV_4   0b0001u
+#define LAPIC_TIMER_DIV_8   0b0010u
+#define LAPIC_TIMER_DIV_16  0b0011u
+#define LAPIC_TIMER_DIV_32  0b1000u
+#define LAPIC_TIMER_DIV_64  0b1001u
+#define LAPIC_TIMER_DIV_128 0b1010u
+
+#define LAPIC_DELIVERY_FIXED 0u
+#define LAPIC_DELIVERY_LOW_PRI 0b00100000000u
+#define LAPIC_DELIVERY_SMI 0b01000000000u
+#define LAPIC_DELIVERY_NMI 0b10000000000u
+#define LAPIC_DELIVERY_INIT 0b10100000000u
+#define LAPIC_DELIVERY_START 0b11000000000u
+
+#define LAPIC_DELIVERY_IDLE 0u
+#define LAPIC_DELIVERY_PENDING (1u << 12)
+
+#define LAPIC_DEST_PHYSICAL 0u
+#define LAPIC_DEST_LOGICAL  (1u << 11)
+
+#define LAPIC_LEVEL_DEASSERT 0u
+#define LAPIC_LEVEL_ASSERT  (1u << 14)
+
+#define LAPIC_TRIG_EDGE     0u
+#define LAPIC_TRIG_LEVEL    (1u << 15)
+
+#define LAPIC_DEST_NO_SHAND 0u
+#define LAPIC_DEST_SELF     0b01000000000000000000u
+#define LAPIC_DEST_ALL      0b10000000000000000000u
+#define LAPIC_DEST_ALL_EX   0b11000000000000000000u
+
+#define LAPIC_SPURIOUS_ENABLE (1u << 8)
+
+#define LAPIC_REG(x)  ((apic_reg_t *)((uintptr_t)LAPIC_VADDR + (x)))
+#define LAPIC_BP      (1ul << 8)
+#define LAPIC_ENABLE (1ul << 11)
+
+typedef volatile uint32_t apic_reg_t;
+
+void apic_send_eoi(void);
+bool apic_is_base_proc(void);
+uint32_t apic_read_esr(void);
+void *apic_get_base_addr(void);
 
 extern void *lapic_ptr;
 extern void *ioapic_ptr;

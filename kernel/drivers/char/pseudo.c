@@ -2,7 +2,7 @@
 #include <kernel/memory.h>
 #include <drivers/pseudo.h>
 
-static long int pseudo_create(int id, const void *params, int flags) {
+static long int pseudo_create(struct driver *this_obj, int id, const void *params, int flags) {
   switch(id) {
     case NULL_MINOR:
     case RAND_MINOR:
@@ -12,7 +12,7 @@ static long int pseudo_create(int id, const void *params, int flags) {
   }
 }
 
-static long int pseudo_read(int minor, void *buf, size_t bytes, long int offset, int flags) {
+static long int pseudo_read(struct driver *this_obj, int minor, void *buf, size_t bytes, long int offset, int flags) {
   switch(minor) {
     case NULL_MINOR:
       kmemset(buf, 0, bytes);
@@ -24,7 +24,7 @@ static long int pseudo_read(int minor, void *buf, size_t bytes, long int offset,
   }
 }
 
-static long int pseudo_write(int minor, const void *buf, size_t bytes, long int offset, int flags) {
+static long int pseudo_write(struct driver *this_obj, int minor, const void *buf, size_t bytes, long int offset, int flags) {
   switch(minor) {
     case NULL_MINOR:
     case RAND_MINOR:
@@ -34,7 +34,7 @@ static long int pseudo_write(int minor, const void *buf, size_t bytes, long int 
   }
 }
 
-static long int pseudo_get(int id, ...) {
+static long int pseudo_get(struct driver *this_obj, int id, va_list args) {
   switch(id) {
     case NULL_MINOR:
     case RAND_MINOR:
@@ -44,7 +44,7 @@ static long int pseudo_get(int id, ...) {
   }
 }
 
-static long int pseudo_set(int id, ...) {
+static long int pseudo_set(struct driver *this_obj, int id, va_list args) {
   switch(id) {
     case NULL_MINOR:
     case RAND_MINOR:
@@ -54,7 +54,7 @@ static long int pseudo_set(int id, ...) {
   }
 }
 
-static long int pseudo_destroy(int id) {
+static long int pseudo_destroy(struct driver *this_obj, int id) {
   switch(id) {
     case NULL_MINOR:
     case RAND_MINOR:

@@ -11,7 +11,6 @@
 struct ramdisk_create_params {
   void *start_addr;
   size_t block_count;
-  size_t block_size;
 };
 
 int ramdisk_init(void);

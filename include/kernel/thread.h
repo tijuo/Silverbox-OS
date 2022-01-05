@@ -11,7 +11,7 @@ enum thread_state {
   /// Thread has not been initialized. Fields are not in a valid state.
   INACTIVE,
 
-  /// Waiting for I/O completion, can only be woken by kernel.
+  /// Thread is blocked, waiting for I/O completion or cancellation, cannot be interrupted otherwise.
   BLOCKED,
 
   /// Thread is ready to be scheduled to a processor.

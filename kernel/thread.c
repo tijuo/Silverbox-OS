@@ -12,6 +12,7 @@ struct tss_struct tss;
 
 list_t blocked_list;
 list_t zombie_list;
+list_t wait_list;
 
 struct processor processors[MAX_PROCESSORS];
 size_t num_processors;
@@ -163,7 +164,7 @@ tcb_t* create_thread(pcb_t *pcb, void *entry_addr,
   thread->kernel_stack = stack_top;
   thread->priority = NORMAL_PRIORITY;
 
-  list_enqueue(&blocked_list, thread);
+  list_enqueue(&wait_list, thread);
 
   thread->pcb = pcb;
   thread->state = WAITING;

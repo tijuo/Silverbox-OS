@@ -227,7 +227,7 @@ static inline void invalidate_page(addr_t virt) {
   __asm__ __volatile__( "invlpg (%0)\n" :: "r"( virt ) : "memory" );
 }
 
-/*
+/**
  * Resolves a virtual address into a physical address by performing a page walk.
  *
  * @param vaddr The virtual address
@@ -240,7 +240,7 @@ static inline void invalidate_page(addr_t virt) {
 
 NON_NULL_PARAMS int translate_vaddr(addr_t vaddr, paddr_t *paddr, paddr_t root_pmap);
 
-/*
+/**
  * Returns a page map table entry.
  *
  * @param level The level of the page map entry. 0 for PTE, 1 for PDE, 2 for PDPTE, 3 for PML4E.
@@ -252,4 +252,6 @@ NON_NULL_PARAMS int translate_vaddr(addr_t vaddr, paddr_t *paddr, paddr_t root_p
  * is marked as not present or PDPTE is page-sized (and level <= 1). -4, if the PML4E is marked as not present.
  */
 NON_NULL_PARAMS int get_pmap_entry(unsigned int level, addr_t vaddr, volatile pmap_entry_t **entry, paddr_t root_pmap);
+
+int paging_map_page(addr_t virt, paddr_t phys, long int flags, paddr_t root_pmap);
 #endif /* KERNEL_PAE_H */

@@ -16,7 +16,6 @@
 #include <x86intrin.h>
 #include <limits.h>
 #include <kernel/apic.h>
-#include <kernel/pic.h>
 #include <os/io.h>
 #include "init.h"
 #include <kernel/multiboot2.h>
@@ -101,8 +100,6 @@ DISC_DATA const char *PROCESSOR_TYPE[4] = {
   "???"
 };
 
-DISC_CODE static void disable_pics(void);
-
 DISC_DATA ALIGNED(PAGE_SIZE) uint8_t kboot_stack[4 * PAGE_SIZE];
 DISC_DATA void *kboot_stack_top = kboot_stack + sizeof kboot_stack;
 
@@ -113,7 +110,8 @@ DISC_CODE static void init_interrupts(void);
 
 DISC_CODE static void stop_init(const char *);
 DISC_CODE void init(const struct multiboot_info_header *);
-//DISC_CODE static void initPIC( void ));
+DISC_CODE void ap_init(void);
+DISC_CODE static void init_pic( void );
 
 DISC_CODE void add_idt_entry(void (*f)(void), int entry_num, int dpl);
 DISC_CODE void load_idt(void);
@@ -136,49 +134,69 @@ DISC_DATA static void (*IRQ_ISRS[NUM_IRQS])(
   irq18_handler, irq19_handler, irq20_handler, irq21_handler, irq22_handler, irq23_handler
 };
 
+DISC_DATA volatile int print_lock = 0;
+DISC_DATA volatile int initializing = 1;
+
 extern int init_memory(const struct multiboot_info_header *tags);
 extern int read_acpi_tables(void);
+extern void apic_init(void);
 
-/*
- void initPIC( void )
- {
- // Send ICW1 (cascade, edge-triggered, ICW4 needed)
- outByte( (uint16_t)0x20, 0x11 );
- outByte( (uint16_t)0xA0, 0x11 );
- ioWait();
+#define PIC1_CMD   0x20
+#define PIC2_CMD   0xA0
 
- // Send ICW2 (Set interrupt vector)
- outByte( (uint16_t)0x21, IRQ(0) );
- outByte( (uint16_t)0xA1, IRQ(8) );
- ioWait();
+#define PIC1_DATA   0x21
+#define PIC2_DATA   0xA1
 
- // Send ICW3 (IRQ2 input has a slave)
- outByte( (uint16_t)0x21, 0x04 );
+#define PIC_EOI     0x60
 
- // Send ICW3 (Slave id 0x02)
- outByte( (uint16_t)0xA1, 0x02 );
- ioWait();
+void acquire_lock(volatile const int *cond);
 
- // Send ICW4 (Intel 8086 mode)
- outByte( (uint16_t)0x21, 0x01 );
- outByte( (uint16_t)0xA1, 0x01 );
- ioWait();
+void acquire_lock(volatile const int *cond) {
+  int is_in_use = 1, result;
 
- // Send OCW1 (Set mask to 0xFF)
+  while(true) {
+    while(*cond) {
+      __pause();
+    }
 
- outByte( (uint16_t)0x21, 0xFF );
- outByte( (uint16_t)0xA1, 0xFF );
- ioWait();
+    asm("lock xchg %1, %2" : "=a" (result) : "m"(*cond), "a"(is_in_use));
 
+    if(!result)
+      break;
+  }
+}
 
- kprintf("Enabling IRQ 2\n");
- enableIRQ( 2 );
- }
- */
+void init_pic( void ) {
+// Send ICW1 (cascade, edge-triggered, ICW4 needed)
+  out_port8( (uint16_t)PIC1_CMD, 0x11 );
+  out_port8( (uint16_t)PIC2_CMD, 0x11 );
+
+// Send ICW2 (Set interrupt vector)
+  out_port8( (uint16_t)PIC1_DATA, IRQ(0) );
+  out_port8( (uint16_t)PIC2_DATA, IRQ(8) );
+
+// Send ICW3 (IRQ2 input has a slave)
+  out_port8( (uint16_t)PIC1_DATA, 0x04 );
+
+// Send ICW3 (Slave id 0x02)
+  out_port8( (uint16_t)PIC2_DATA, 0x02 );
+
+// Send ICW4 (Intel 8086 mode)
+  out_port8( (uint16_t)PIC1_DATA, 0x01 );
+  out_port8( (uint16_t)PIC2_DATA, 0x01 );
+
+// Send OCW1 (Set mask to 0xFF)
+
+  out_port8( (uint16_t)PIC1_DATA, 0xFF );
+  out_port8( (uint16_t)PIC2_DATA, 0xFF );
+
+  out_port8( (uint16_t)PIC1_CMD, PIC_EOI);
+  out_port8( (uint16_t)PIC2_CMD, PIC_EOI);
+}
+
 /* Various call once functions */
 
-void add_idt_entry(void (*f)(void), int entry_num, int dpl)
-{
+void add_idt_entry(void (*f)(void), int entry_num, int dpl) {
   kassert(entry_num < 256);
 
   idt_entry_t *new_entry = &kernel_idt[entry_num];
@@ -191,8 +209,7 @@ void add_idt_entry(void (*f)(void), int entry_num, int dpl)
   new_entry->offset_upper = (uint32_t)((uintptr_t)f >> 32);
 }
 
-void load_idt(void)
-{
+void load_idt(void) {
   struct pseudo_descriptor idt_pointer = {
     .limit = KERNEL_IDT_LEN,
     .base = (uint64_t)kernel_idt
@@ -201,44 +218,32 @@ void load_idt(void)
   __asm__("lidt %0" :: "m"(idt_pointer) : "memory");
 }
 
-void disable_pics(void)
-{
-  // Send OCW1 (set IRQ mask)
-
-  out_port8(PIC1_PORT | 0x01, in_port8(PIC1_PORT | 0x01) | 0xFF);
-  out_port8(PIC2_PORT | 0x01, in_port8(PIC2_PORT | 0x01) | 0xFF);
-}
-
-void stop_init(const char *msg)
-{
+void stop_init(const char *msg) {
   disable_int();
   kprintf("Init failed: %s\nSystem halted.", msg);
 
   while(1)
-    __asm__("hlt");
+    halt();
 }
 
 /*
  void initTimer( void )
  {
- outByte( (uint16_t)TIMER_CTRL, (uint8_t)(C_SELECT0 | C_MODE3 | BIN_COUNTER | RWL_FORMAT3) );
- outByte( (uint16_t)TIMER0, (uint8_t)(( TIMER_FREQ / TIMER_QUANTA_HZ ) & 0xFF) );
- outByte( (uint16_t)TIMER0, (uint8_t)(( TIMER_FREQ / TIMER_QUANTA_HZ ) >> 8) );
+ out_port8( (uint16_t)TIMER_CTRL, (uint8_t)(C_SELECT0 | C_MODE3 | BIN_COUNTER | RWL_FORMAT3) );
+ out_port8( (uint16_t)TIMER0, (uint8_t)(( TIMER_FREQ / TIMER_QUANTA_HZ ) & 0xFF) );
+ out_port8( (uint16_t)TIMER0, (uint8_t)(( TIMER_FREQ / TIMER_QUANTA_HZ ) >> 8) );
 
  kprintf("Enabling IRQ 0\n");
  enableIRQ( 0 );
  }
  */
 
-void init_interrupts(void)
-{
+void init_interrupts(void) {
   for(size_t i = 0; i < NUM_EXCEPTIONS; i++)
     add_idt_entry(CPU_EX_ISRS[i], (int)i, 0);
 
   for(size_t i = 0; i < NUM_IRQS; i++)
     add_idt_entry(IRQ_ISRS[i], (int)IRQ(i), 0);
-
-  disable_pics();
 
   //initPIC();
   load_idt();
@@ -272,8 +277,7 @@ union AdditionalCpuidInfo {
   uint32_t value;
 };
 
-void show_mb_info(const struct multiboot_info_header *header)
-{
+void show_mb_info(const struct multiboot_info_header *header) {
   kprintf("Mulitboot2 Information:\n\n");
 
   const struct multiboot_tag *tags = header->tags;
@@ -390,8 +394,7 @@ void show_mb_info(const struct multiboot_info_header *header)
   }
 }
 
-void show_cpu_features(void)
-{
+void show_cpu_features(void) {
   union ProcessorVersion proc_version;
   union AdditionalCpuidInfo additional_info;
   uint32_t features2;
@@ -460,12 +463,11 @@ void show_cpu_features(void)
  @param info The multiboot structure passed by the bootloader.
  */
 
-void init(const struct multiboot_info_header *info_header)
-{
+void init(const struct multiboot_info_header *info_header) {
   if(IS_ERROR(init_memory(info_header)))
     stop_init("Unable to initialize memory.");
 
-  if(IS_ERROR(driver_init()))
+  if(IS_ERROR(device_init()))
     stop_init("Unable to initialize drivers");
 
   #ifdef DEBUG
@@ -492,8 +494,8 @@ void init(const struct multiboot_info_header *info_header)
       num_processors = 1;
   }
 
-  //  enable_apic();
-  //  init_apic_timer();
+  init_pic();
+  apic_init();
   /*
    kprintf("Initializing timer.\n");
    initTimer();
@@ -525,7 +527,23 @@ void init(const struct multiboot_info_header *info_header)
         ((uint64_t)KCODE_SEL << 32) | ((uint64_t)UCODE_SEL << 48));
   wrmsr(SYSCALL_LSTAR_MSR, (uint64_t)syscall_entry);
 
-  while(1);
+  initializing = 0;
+
+  while(1)
+    halt();
+
   switch_context(schedule(get_current_processor()));
   stop_init("Context switch failed.");
+}
+
+void ap_init(void) {
+  while(initializing)
+    __pause();
+
+  acquire_lock(&print_lock);
+
+  kprintf("AP %u has been initialized.\n", *LAPIC_REG(LAPIC_ID) >> 24);
+
+  print_lock = 0;
+  halt();
 }

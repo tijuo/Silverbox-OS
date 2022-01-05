@@ -17,32 +17,32 @@ void handle_irq(struct IrqInterruptFrame *interrupt_frame);
 void handle_cpu_exception(struct CpuExInterruptFrame *interrupt_frame);
 
 #define CPU_HANDLER(num) \
-void cpu_ex##num##_handler(void) { \
-  SAVE_STATE; \
-  __asm__("pushq $0\n" \
-          "pushq $" #num "\n" \
-          "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
-          "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
-          "call handle_cpu_exception\n"); \
-}
+  void cpu_ex##num##_handler(void) { \
+    SAVE_STATE; \
+    __asm__("pushq $0\n" \
+            "pushq $" #num "\n" \
+            "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
+            "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
+            "call handle_cpu_exception\n"); \
+  }
 
 #define CPU_ERR_HANDLER(num) \
-void cpu_ex##num##_handler(void) { \
-  SAVE_ERR_STATE; \
-  __asm__("pushq $" #num "\n" \
-          "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
-	  "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
-          "call handle_cpu_exception\n"); \
-}
+  void cpu_ex##num##_handler(void) { \
+    SAVE_ERR_STATE; \
+    __asm__("pushq $" #num "\n" \
+            "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
+            "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
+            "call handle_cpu_exception\n"); \
+  }
 
 #define IRQ_HANDLER(num) \
-NAKED noreturn void irq##num##_handler(void) { \
-  SAVE_STATE; \
-  __asm__( \
-  "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
-  "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
-  "call handle_irq\n"); \
-}
+  NAKED noreturn void irq##num##_handler(void) { \
+    SAVE_STATE; \
+    __asm__( \
+             "mov %rsp, %rdi\n"  /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
+             "and $0xFFFFFFFFFFFFFFF0, %rsp\n" \
+             "call handle_irq\n"); \
+  }
 
 CPU_HANDLER(0)
 CPU_HANDLER(1)
@@ -116,6 +116,7 @@ void handle_irq(struct IrqInterruptFrame *frame) {
   tcb_t *current_thread = get_current_thread();
   tcb_t *new_thread = current_thread;
 
+  kprintf("IRQ received\n");
 
   RESTORE_STATE;
 }
@@ -131,14 +132,14 @@ void handle_cpu_exception(struct CpuExInterruptFrame *interrupt_frame) {
   tcb_t *tcb = get_current_thread();
 
   if(!tcb) {
-	kprintf("NULL tcb. Unable to handle exception. System halted.\n");
-	dump_state(&interrupt_frame->state, interrupt_frame->ex_num,
-			   interrupt_frame->error_code);
+    kprintf("NULL tcb. Unable to handle exception. System halted.\n");
+    dump_state(&interrupt_frame->state, interrupt_frame->ex_num,
+               interrupt_frame->error_code);
 
-	while(1) {
-	  disable_int();
-	  halt();
-	}
+    while(1) {
+      disable_int();
+      halt();
+    }
   }
 
   RESTORE_STATE;

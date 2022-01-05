@@ -10,20 +10,19 @@
 
 struct ramdisk_device {
   void *data;
-  size_t block_size;
   size_t block_count;
   int flags;
 };
 
 static vector_t ramdisks;
 
-static long int ramdisk_create(int id, const void *params, int flags) {
+static long int ramdisk_create(struct driver *this_obj, int id, const void *params, int flags) {
   switch(id) {
     case RAMDISK_ID: {
         const struct ramdisk_create_params *create_params = (const struct ramdisk_create_params *)params;
         struct ramdisk_device *dev = NULL;
 
-        if(create_params->block_count == 0 || create_params->block_size == 0
+        if(create_params->block_count == 0
             || (IS_FLAG_SET(flags, RAMDISK_IMAGE) && create_params->start_addr == NULL)) {
           return DEV_FAIL;
         }
@@ -54,11 +53,10 @@ static long int ramdisk_create(int id, const void *params, int flags) {
 
         dev->data = IS_FLAG_SET(flags, RAMDISK_IMAGE) ? create_params->start_addr : NULL;
         dev->block_count = create_params->block_count;
-        dev->block_size = create_params->block_size;
         dev->flags = flags;
 
         if(IS_FLAG_CLEAR(flags, RAMDISK_IMAGE)) {
-          dev->data = kcalloc(1, dev->block_count * dev->block_size, 0);
+          dev->data = kcalloc(1, dev->block_count * this_obj->block_size, 0);
 
           if(dev->data == NULL)
             return DEV_FAIL;
@@ -74,7 +72,7 @@ static long int ramdisk_create(int id, const void *params, int flags) {
   }
 }
 
-static long int ramdisk_read(int minor, void *buf, size_t len, long int offset, int flags) {
+static long int ramdisk_read(struct driver *this_obj, int minor, void *buf, size_t len, long int offset, int flags) {
   switch(minor) {
     case RAMDISK_ID: {
         const struct ramdisk_device *dev;
@@ -95,8 +93,8 @@ static long int ramdisk_read(int minor, void *buf, size_t len, long int offset, 
           if(len >= dev->block_count)
             len = dev->block_count - offset;
 
-          kmemcpy(buf, (void *)((uintptr_t)dev->data + offset * dev->block_size),
-                                len * dev->block_size);
+          kmemcpy(buf, (void *)((uintptr_t)dev->data + offset * this_obj->block_size),
+                                len * this_obj->block_size);
           return DEV_OK;
         }
       }
@@ -105,7 +103,7 @@ static long int ramdisk_read(int minor, void *buf, size_t len, long int offset, 
   }
 }
 
-static long int ramdisk_write(int minor, const void *buf, size_t len, long int offset, int flags) {
+static long int ramdisk_write(struct driver *this_obj, int minor, const void *buf, size_t len, long int offset, int flags) {
   switch(minor) {
     case RAMDISK_ID: {
         const struct ramdisk_device *dev;
@@ -126,8 +124,8 @@ static long int ramdisk_write(int minor, const void *buf, size_t len, long int o
           if(len >= dev->block_count)
             len = dev->block_count - offset;
 
-          kmemcpy((void *)((uintptr_t)dev->data + offset * dev->block_size), buf,
-                           len * dev->block_size);
+          kmemcpy((void *)((uintptr_t)dev->data + offset * this_obj->block_size), buf,
+                           len * this_obj->block_size);
           return DEV_OK;
         }
       }
@@ -136,15 +134,15 @@ static long int ramdisk_write(int minor, const void *buf, size_t len, long int o
   }
 }
 
-static long int ramdisk_get(int id, ...) {
+static long int ramdisk_get(struct driver *this_obj, int id, va_list args) {
   return DEV_FAIL;
 }
 
-static long int ramdisk_set(int id, ...) {
+static long int ramdisk_set(struct driver *this_obj, int id, va_list args) {
   return DEV_FAIL;
 }
 
-static long int ramdisk_destroy(int id) {
+static long int ramdisk_destroy(struct driver *this_obj, int id) {
   struct ramdisk_device *dev;
 
   if((size_t)id >= vector_get_count(&ramdisks))

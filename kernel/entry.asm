@@ -1,6 +1,6 @@
-[BITS 32]
-
 [extern init]
+[extern ap_init]
+[extern pml4_table]
 [global boot_stack_top]
 [global start]
 [global kernel_gdt]
@@ -40,7 +40,7 @@ CPUID_EDX_SSE2			equ (1 << 26)
 
 CPUID_EDX			equ CPUID_EDX_MSR | CPUID_EDX_PAE | CPUID_EDX_APIC | CPUID_EDX_SEP | CPUID_EDX_PGE | CPUID_EDX_FXSR | CPUID_EDX_SSE | CPUID_EDX_SSE2
 
-CPUID_ECX_SSE3			equ (1 << 0)
+CPUID_ECX_SSE3			equ 1
 
 CPUID_SYSCALL			equ (1 << 11)
 CPUID_NX			equ (1 << 20)
@@ -58,10 +58,11 @@ CR4_OSXMMEXCPT			equ (1 << 10)
 CR0_PG					equ (1 << 31)
 CR0_CD					equ (1 << 30)
 CR0_NW					equ (1 << 29)
+CR0_PE					equ (1 << 0)
 
 EFER_MSR				equ 0xC0000080
 
-EFER_SCE				equ (1 << 0)
+EFER_SCE				equ 1
 EFER_LME				equ (1 << 8)
 EFER_NX					equ (1 << 11)
 
@@ -106,6 +107,127 @@ mboot_end:
 [extern max_phys_addr]
 [extern is_1gb_pages_supported]
 
+[BITS 16]
+
+ap_start:
+  cli
+  cld
+.spin_lock:
+  cmp word [0x1FF8], 0
+  je .acquire_lock
+  pause
+  jmp .spin_lock
+.acquire_lock:
+  lock bts word [0x1FF8], 0
+  jc .spin_lock
+
+  call is_a20_enabled
+  cmp ax, 1
+  je .continue
+
+; Enable A20
+
+  in al, 0x92
+  or al, 2
+  out 0x92, al
+
+  call is_a20_enabled
+  cmp ax, 1
+  je .continue
+
+; Unable to enable A20. Trigger an invalid opcode exception
+
+  ud2
+
+.continue:
+  mov ebx, $kernel_gdt
+  mov word [0x1FF2], 56
+  mov [0x1FF4], ebx
+
+  lgdt [0x1FF2]
+
+  mov ebx, $pml4_table
+  mov cr3, ebx
+
+; Enable debug extensions, PAE and global pages, FXSAVE/FXRSTOR,
+; and unmasked SIMD floating point exceptions
+
+  mov eax, cr4
+  or eax, (CR4_DE | CR4_PAE | CR4_PGE | CR4_OSFXSR | CR4_OSXMMEXCPT)
+  mov cr4, eax
+
+; Enable long mode, syscall, and execute disable
+  mov ecx, EFER_MSR
+  rdmsr
+  or  eax, (EFER_SCE | EFER_LME | EFER_NX)
+  wrmsr
+
+; Enable paging and fully enter long mode
+
+  mov eax, cr0
+  or eax, CR0_PG | CR0_PE ; Enable paging
+  and eax, ~(CR0_CD | CR0_NW) ; Enable cache
+  mov cr0, eax
+
+  mov ax, 0x10
+  mov ds, ax
+  mov es, ax
+  mov ss, ax
+  xor ax, ax
+  mov fs, ax
+  mov gs, ax
+
+  jmp dword 0x08:.enter_long_mode
+.enter_long_mode:
+[BITS 64]
+
+  xor rax, rax
+  mov ax, [0x1FFC]
+  inc ax
+  mov [0x1FFC], ax
+  mov word [0x1FF8], 0
+
+  lea rsp, [boot_stack_top]
+  shl rax, 14
+  sub rsp, rax
+  mov rbp, rsp
+  jmp ap_init
+
+[BITS 16]
+
+is_a20_enabled:
+  xor ax, ax
+  mov ds, ax
+
+  not ax
+  mov fs, ax
+
+  mov bx, 0x7DFE
+  mov dx, 0x7DFE
+
+  mov cx, [ds:bx]
+  mov dx, [fs:bx]
+
+  cmp cx, dx
+  jne .yes
+
+  not word [ds:bx]
+  mov cx, [ds:bx]
+  cmp word cx, dx
+  lahf
+  not word [ds:bx]
+  sahf
+  jne .yes
+
+  xor ax, ax
+  ret
+.yes:
+  mov ax, 1
+  ret
+ap_start_end:
+
+[BITS 32]
+
 start:
   cli
   lea esp, [boot_stack_top]
@@ -117,6 +239,22 @@ start:
   jne stop_init.bad_multiboot2
 
   push ebx
+
+; Copy AP bootstrap code to conventional memory
+
+  mov edi, [ap_bootstrap_start]
+  mov esi, ap_start
+  mov ecx, ap_start_end
+  sub ecx, esi
+
+  rep movsb
+
+  xor ax, ax
+
+; Clear ap_boot_count and ap_boot_lock variables
+
+  mov [0x1FFC], ax
+  mov [0x1FF8], ax
 
 ; Check for needed CPUID features
 
@@ -218,7 +356,7 @@ start:
 ; Enable paging and fully enter long mode
 
   mov eax, cr0
-  or eax, CR0_PG  ; Enable paging
+  or eax, CR0_PG | CR0_PE ; Enable paging
   and eax, ~(CR0_CD | CR0_NW) ; Enable cache
   mov cr0, eax
 
@@ -323,12 +461,23 @@ print_message:
   leave
   ret
 
+[section .bdata]
+
 init_error_msg: db "Error: Invalid multiboot2 magic.", 0
 old_processor_msg: db "Error: Processor must be a Pentium 4 Prescott or newer.", 0
 low_bits_msg: db "Error: Processor should support at least 1 TiB of physical memory.", 0
 long_mode_missing_msg: db "Error: Processor doesn't support 64-bit mode.", 0
 syscall_missing_msg: db "Error: Processor doesn't support SYSCALL/SYSRET instrutions.", 0
 nx_bit_missing_msg: db "Error: Processor doesn't support NX bit.", 0
+
+[global ap_bootstrap_start]
+[global ap_boot_count]
+
+ap_bootstrap_start: dd 0x1000
+ap_boot_count: dq 0x1FFC
+ap_boot_lock:  dd 0x1FF8
+
+[section .btext]
 
 [BITS 64]
 
@@ -373,26 +522,25 @@ reload_cs2:
   lea rbx, [max_phys_addr]
   mov [rbx], rdx
 
-  add rsp, 16
   mov rax, $init
   jmp rax
 
-[section .bdata]
+[section .bss]
 
 align 16
 boot_stack:
-  times 131072 db 0
+  resb 1048576
 boot_stack_top:
-
-[section .data]
 
 align 4096
 pml4_table:
-  times 512 dq 0
+  resq 512
 
 align 4096
 identity_pdpt:
-  times 512 dq 0
+  resq 512
+
+[section .data]
 
 align 4096
 identity_pdir:

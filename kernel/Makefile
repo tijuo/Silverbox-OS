@@ -38,10 +38,10 @@ check:
 	-I$(ROOT_DIR)/include
 
 install: $(BIN_GZ)
-	@if [ `losetup -a | grep $(DISK_IMG); echo $?` == "0" ]; then \
+	if [ `losetup -a | grep $(DISK_IMG); echo $?` == "0" ]; then \
 	  ~/mount_loop.sh; \
 	fi
-	@if [ `cat /etc/mtab | grep $(DISK_IMG); echo $?` == "0" ]; then \
+	if [ `cat /etc/mtab | grep $(DISK_IMG); echo $?` == "0" ]; then \
 	  cp $(BIN_GZ) $(MNT_PT)/boot; \
 	else \
 	  mount $(MNT_PT); \
