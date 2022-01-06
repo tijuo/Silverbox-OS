@@ -15,6 +15,8 @@ void apic_init_aps(void);
 void *lapic_ptr;
 void *ioapic_ptr;
 
+bool lapic_mapped;
+
 /* APIC memory must be mapped as strong uncachable(UC)
  - page 428 of IA32_SDM_Vol3A */
 
@@ -27,6 +29,7 @@ void apic_send_eoi(void) {
 void apic_init(void) {
   paging_map_page(LAPIC_VADDR, (paddr_t)lapic_ptr, PAE_RW | PAE_PCD | PAE_PWT | PAE_XD, (paddr_t)&pml4_table);
 
+  lapic_mapped = true;
   uint32_t apic_result = (uint32_t)rdmsr(IA32_APIC_BASE_MSR);
 
   kprintf("%s processor\n", IS_FLAG_SET(apic_result, LAPIC_BP) ? "Base" : "Application");

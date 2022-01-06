@@ -5,6 +5,10 @@
 [global start]
 [global kernel_gdt]
 
+AP_BOOT_COUNT equ 0x1FFC
+AP_BOOT_LOCK equ 0x1FF8
+AP_GDT_PTR equ 0x1FF2
+
 MB2_HEADER_MAGIC 	equ 0xE85250D6
 MB2_ARCH 		equ 0
 MB2_HEADER_LEN 		equ (mboot_end - mboot)
@@ -66,6 +70,8 @@ EFER_SCE				equ 1
 EFER_LME				equ (1 << 8)
 EFER_NX					equ (1 << 11)
 
+
+
 [section .header]
 
 mboot:
@@ -112,14 +118,15 @@ mboot_end:
 ap_start:
   cli
   cld
+  xor ax, ax
+  mov bx, 1
+
 .spin_lock:
-  cmp word [0x1FF8], 0
-  je .acquire_lock
+  cmpxchg word [$AP_BOOT_LOCK], bx
+  je .enable_a20
   pause
   jmp .spin_lock
-.acquire_lock:
-  lock bts word [0x1FF8], 0
-  jc .spin_lock
+.enable_a20:
 
   call is_a20_enabled
   cmp ax, 1
@@ -141,10 +148,10 @@ ap_start:
 
 .continue:
   mov ebx, $kernel_gdt
-  mov word [0x1FF2], 56
-  mov [0x1FF4], ebx
+  mov word [$AP_GDT_PTR], 56
+  mov [$AP_GDT_PTR+2], ebx
 
-  lgdt [0x1FF2]
+  lgdt [$AP_GDT_PTR]
 
   mov ebx, $pml4_table
   mov cr3, ebx
@@ -182,10 +189,10 @@ ap_start:
 [BITS 64]
 
   xor rax, rax
-  mov ax, [0x1FFC]
+  mov ax, [$AP_BOOT_COUNT]
   inc ax
-  mov [0x1FFC], ax
-  mov word [0x1FF8], 0
+  mov [$AP_BOOT_COUNT], ax
+  mov word [$AP_BOOT_LOCK], 0
 
   lea rsp, [boot_stack_top]
   shl rax, 14
@@ -253,8 +260,8 @@ start:
 
 ; Clear ap_boot_count and ap_boot_lock variables
 
-  mov [0x1FFC], ax
-  mov [0x1FF8], ax
+  mov [$AP_BOOT_LOCK], ax
+  mov [$AP_BOOT_COUNT], ax
 
 ; Check for needed CPUID features
 
@@ -474,8 +481,8 @@ nx_bit_missing_msg: db "Error: Processor doesn't support NX bit.", 0
 [global ap_boot_count]
 
 ap_bootstrap_start: dd 0x1000
-ap_boot_count: dq 0x1FFC
-ap_boot_lock:  dd 0x1FF8
+ap_boot_count: dq $AP_BOOT_COUNT
+ap_boot_lock:  dd $AP_BOOT_LOCK
 
 [section .btext]
 

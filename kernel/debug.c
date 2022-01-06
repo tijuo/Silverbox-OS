@@ -11,6 +11,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <kernel/apic.h>
+#include <kernel/sync.h>
 
 #ifdef DEBUG
 
@@ -115,6 +116,8 @@ uint32_t lower2;
 
 unsigned long int cursor_x = 0;
 unsigned long int cursor_y = 0;
+
+lock_t print_lock = 0;
 
 NON_NULL_PARAMS void reset_printf_state(struct PrintfState *state);
 
@@ -521,6 +524,8 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char *str,
   char buf[KITOA_BUF_LEN];
   size_t i;
   int chars_written = 0;
+
+  lock_acquire(&print_lock);
 
   reset_printf_state(&state);
 
@@ -946,6 +951,8 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char *str,
       }
     }
   }
+
+  lock_release(&print_lock);
 }
 
 NON_NULL_PARAMS void dump_state(const exec_state_t *exec_state,

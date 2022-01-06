@@ -157,4 +157,16 @@ void *apic_get_base_addr(void);
 
 extern void *lapic_ptr;
 extern void *ioapic_ptr;
+extern bool lapic_mapped;
+
+static inline int apic_get_id(void) {
+#ifdef TEST
+  return 0;
+#else
+  if(lapic_mapped)
+    return (int)((*LAPIC_REG(LAPIC_ID) >> 24) & 0xFFu);
+  else
+    return 0;
+#endif /* TEST */
+}
 #endif /* APIC_H */

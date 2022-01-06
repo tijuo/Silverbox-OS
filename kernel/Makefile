@@ -13,7 +13,7 @@ TYPES_SRC	:=types/vector.c types/list.c types/bitmap.c
 DRIVER_SRC	:=drivers/char/pseudo.c drivers/char/video.c \
 		drivers/block/ramdisk.c
 
-SRC	:=syscall.c debug.c mm.c process.c algo.c \
+SRC	:=syscall.c debug.c mm.c process.c algo.c sync.c \
     	interrupt.c mem.c paging.c schedule.c thread.c \
 	apic.c buddy.c devmgr.c $(INIT_SRC) $(TYPES_SRC) $(DRIVER_SRC)
 

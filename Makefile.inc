@@ -51,7 +51,7 @@ TESTDIR		:=test
 	nasm -f elf64 $< -o $@
 
 %.dmp: %
-	objdump -Dx $< > $@
+	objdump -dx $< > $@
 
 %.sym: %
 	readelf --syms $< > $@

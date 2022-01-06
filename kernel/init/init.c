@@ -20,6 +20,7 @@
 #include "init.h"
 #include <kernel/multiboot2.h>
 #include <kernel/devmgr.h>
+#include <kernel/sync.h>
 
 #define KERNEL_IDT_LEN  (64 * sizeof(union idt_entry))
 
@@ -134,8 +135,7 @@ DISC_DATA static void (*IRQ_ISRS[NUM_IRQS])(
   irq18_handler, irq19_handler, irq20_handler, irq21_handler, irq22_handler, irq23_handler
 };
 
-DISC_DATA volatile int print_lock = 0;
-DISC_DATA volatile int initializing = 1;
+DISC_DATA lock_t bp_initialized = 0;
 
 extern int init_memory(const struct multiboot_info_header *tags);
 extern int read_acpi_tables(void);
@@ -148,23 +148,6 @@ extern void apic_init(void);
 #define PIC2_DATA   0xA1
 
 #define PIC_EOI     0x60
-
-void acquire_lock(volatile const int *cond);
-
-void acquire_lock(volatile const int *cond) {
-  int is_in_use = 1, result;
-
-  while(true) {
-    while(*cond) {
-      __pause();
-    }
-
-    asm("lock xchg %1, %2" : "=a" (result) : "m"(*cond), "a"(is_in_use));
-
-    if(!result)
-      break;
-  }
-}
 
 void init_pic( void ) {
 // Send ICW1 (cascade, edge-triggered, ICW4 needed)
@@ -527,7 +510,7 @@ void init(const struct multiboot_info_header *info_header) {
         ((uint64_t)KCODE_SEL << 32) | ((uint64_t)UCODE_SEL << 48));
   wrmsr(SYSCALL_LSTAR_MSR, (uint64_t)syscall_entry);
 
-  initializing = 0;
+  bp_initialized = 1;
 
   while(1)
     halt();
@@ -537,13 +520,9 @@ void init(const struct multiboot_info_header *info_header) {
 }
 
 void ap_init(void) {
-  while(initializing)
-    __pause();
+  lock_spin(!bp_initialized);
 
-  acquire_lock(&print_lock);
+  kprintf("AP %u has been initialized.\n", apic_get_id());
 
-  kprintf("AP %u has been initialized.\n", *LAPIC_REG(LAPIC_ID) >> 24);
-
-  print_lock = 0;
   halt();
 }
