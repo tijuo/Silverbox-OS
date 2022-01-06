@@ -1,10 +1,10 @@
 struct fs_callbacks {
   int (*create)(int type);
-  int (*read)();
-  int (*write)();
+  int (*read)(void);
+  int (*write)(void);
   int (*get)(int id, ...); // list
   int (*set)(int id, ...); // rename,
-  int (*remove)();
+  int (*remove)(void);
 };
 
 // Mount a device to a name and flags
