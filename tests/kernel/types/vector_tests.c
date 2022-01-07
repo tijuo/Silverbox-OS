@@ -146,14 +146,14 @@ static const MunitSuite suite = {
 
 void *test_setup_vector(const MunitParameter params[],
     void *data) {
-  vector_t *v = (vector_t *)malloc(sizeof(vector_t));
+  vector_t *v = malloc(sizeof(vector_t));
 
   return v != NULL && vector_init(v, sizeof(int)) == E_OK ? v : NULL;
 }
 
 void *test_setup_char_vector(const MunitParameter params[],
     void *data) {
-  vector_t *v = (vector_t *)malloc(sizeof(vector_t));
+  vector_t *v = malloc(sizeof(vector_t));
 
   return v != NULL && vector_init(v, sizeof(char)) == E_OK ? v : NULL;
 }

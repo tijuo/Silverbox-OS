@@ -80,7 +80,7 @@ void setup_gdt(void)
                                      &kernel_gdt[TSS_SEL / sizeof(gdt_entry_t)];
   struct pseudo_descriptor gdt_pointer = {
     .base = (uint64_t)kernel_gdt,
-    .limit = 7 * sizeof(gdt_entry_t)
+    .limit = 7 * sizeof(gdt_entry_t) - 1
   };
 
   size_t tss_limit = sizeof tss;

@@ -23,6 +23,8 @@ static MunitResult test_bitmap_find_last_set(const MunitParameter params[], void
 #define ZERO_PARAM_VALUE    "0"
 #define ONE_PARAM_VALUE     "1"
 
+#define BIT_COUNT           1024
+
 static char *init_params[] = { ZERO_PARAM_VALUE, ONE_PARAM_VALUE, NULL };
 static char *zero_params[] = { ZERO_PARAM_VALUE, NULL };
 static char *one_params[] = { ONE_PARAM_VALUE, NULL };
@@ -97,7 +99,7 @@ static const MunitSuite suite = {
 void *test_setup_bitmap(const MunitParameter params[],
     void *data) {
 
-  bitmap_t *b = (bitmap_t *)munit_malloc(sizeof *b);
+  bitmap_t *b = munit_malloc(sizeof *b);
   bool set_bits = false;
 
   if(b == NULL)
@@ -111,7 +113,7 @@ void *test_setup_bitmap(const MunitParameter params[],
     }
   }
 
-  if(IS_ERROR(bitmap_init(b, 1024, set_bits))) {
+  if(IS_ERROR(bitmap_init(b, BIT_COUNT, set_bits))) {
     free(b);
     return NULL;
   }
@@ -193,19 +195,20 @@ MunitResult test_bitmap_clear(const MunitParameter params[],
   bitmap_clear(b, 67);
   bitmap_clear(b, 111);
   bitmap_clear(b, 222);
-  bitmap_clear(b, 1023);
+  bitmap_clear(b, BIT_COUNT-1);
 
   assert_true(bitmap_is_clear(b, 83));
   assert_true(bitmap_is_clear(b, 67));
   assert_true(bitmap_is_clear(b, 111));
   assert_true(bitmap_is_clear(b, 222));
-  assert_true(bitmap_is_clear(b, 1024));
+  assert_true(bitmap_is_clear(b, BIT_COUNT-1));
 
   assert_false(bitmap_is_clear(b, 123));
   assert_false(bitmap_is_clear(b, 234));
   assert_false(bitmap_is_clear(b, 667));
   assert_false(bitmap_is_clear(b, 900));
   assert_false(bitmap_is_clear(b, 999));
+  assert_false(bitmap_is_clear(b, BIT_COUNT));
 
   return MUNIT_OK;
 }

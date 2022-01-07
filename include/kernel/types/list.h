@@ -104,19 +104,17 @@ DECL_LIST_REMOVE_FROM_END(uint64_t);
   uint64_t: list_remove_uint64_t_from_end, \
   default: list_remove_item_from_end)((list), (item), sizeof((item)), (at_tail))
 
-/**
-  Initializes a linked list.
-
-  @param list The linked list.
-*/
+/** Initializes a linked list.
+  *
+  * @param list The linked list.
+  */
 
 NON_NULL_PARAMS static inline void list_init(list_t *list) {
   list->head = NULL;
   list->tail = NULL;
 }
 
-/**
- *  Insert a linked list node into a list at the head or tail.
+/** Insert a linked list node into a list at the head or tail.
  *
  *  @param list The list onto which to push the node. (Must not be NULL)
  *  @param at_tail true, if the node should be added at the tail of the list.
@@ -127,8 +125,7 @@ NON_NULL_PARAMS static inline void list_init(list_t *list) {
 
 NON_NULL_PARAM(1) void list_insert_node_at_end(list_t *list, bool at_tail, list_node_t *new_node);
 
-/**
- *  Remove a linked list node from either the head or tail of a list.
+/** Remove a linked list node from either the head or tail of a list.
  *
  *  @param list The list from which to remove the item.
  *  @param at_tail true, if the thread should be removed from the tail of
@@ -141,8 +138,7 @@ NON_NULL_PARAM(1) void list_insert_node_at_end(list_t *list, bool at_tail, list_
 
 NON_NULL_PARAM(1) int list_remove_node_from_end(list_t *list, bool at_tail, list_node_t **removed_node);
 
-/**
- *  Insert an item into a list at the head or tail.
+/** Insert an item into a list at the head or tail.
  *
  *  @param list The list onto which to push the item. (Must not be NULL)
  *  @param item A pointer to the item that is to be inserted.
@@ -153,8 +149,7 @@ NON_NULL_PARAM(1) int list_remove_node_from_end(list_t *list, bool at_tail, list
 
 NON_NULL_PARAM(1) int list_insert_item_at_end(list_t *l, void *item, size_t item_size, bool at_tail);
 
-/**
- *  Remove an item from either the head or tail of a list.
+/** Remove an item from either the head or tail of a list.
  *
  *  @param list The list from which to remove the item.
  *  @param item A pointer to the removed item. If NULL, the removed item
@@ -168,8 +163,7 @@ NON_NULL_PARAM(1) int list_insert_item_at_end(list_t *l, void *item, size_t item
 
 NON_NULL_PARAM(1) int list_remove_item_from_end(list_t *l, void *item, size_t item_size, bool at_tail);
 
-/**
- *  Removes the first occurrence of an item from a list.
+/** Removes the first occurrence of an item from a list.
  *
  *  @param list The list from which the thread will be removed.
  *  (Must not be null)
@@ -180,8 +174,7 @@ NON_NULL_PARAM(1) int list_remove_item_from_end(list_t *l, void *item, size_t it
 
 NON_NULL_PARAM(1) int list_remove_ptr(list_t *l, void *item);
 
-/**
- *  Removes the first occurrence of an item from a list.
+/** Removes the first occurrence of an item from a list.
  *
  *  @param list The list from which the thread will be removed.
  *  (Must not be null)
@@ -195,34 +188,39 @@ NON_NULL_PARAM(1) int list_remove_ptr(list_t *l, void *item);
 
 NON_NULL_PARAM(1) int list_remove_item(list_t *list, void *item, int (*compare)(void *, void *));
 
-/**
-  Insert a node into a list after another node.
-
-  @param list The linked list.
-  @param node The node that will be inserted into the list.
-  @param target The inserted node will be placed after this node. It is assumed that
-  target is already in the linked list.
+/** Insert a node into a list after another node.
+  *
+  * @param list The linked list.
+  * @param node The node that will be inserted into the list.
+  * @param target The inserted node will be placed after this node. It is assumed that
+  * target is already in the linked list.
 */
 
 NON_NULL_PARAMS void list_insert_node_after(list_t *list, list_node_t *node, list_node_t *target);
 
-/**
-  Insert a node into a list before another node.
-
-  @param list The linked list.
-  @param node The node that will be inserted into the list.
-  @param target The inserted node will be placed before this node. It is assumed that
-  target is already in the linked list.
-*/
+/** Insert a node into a list before another node.
+  *
+  * @param list The linked list.
+  * @param node The node that will be inserted into the list.
+  * @param target The inserted node will be placed before this node. It is assumed that
+  * target is already in the linked list.
+  */
 
 NON_NULL_PARAMS void list_insert_node_before(list_t *list, list_node_t *node, list_node_t *target);
 
-/**
-  Detach a node from a linked list.
+/** Detach a node from a linked list.
+  *
+  * @param list The linked list.
+  * @param node The node to detached. It is assumed that the node is already in the linked list.
+  */
 
-  @param list The linked list.
-  @param node The node to detached. It is assumed that the node is already in the linked list.
-*/
+/** Count the number of items in a list.
+  *
+  * @param list The linked list.
+  * @return The number of items in the list.
+  */
+
+NON_NULL_PARAMS PURE size_t list_len(const list_t *list);
 
 NON_NULL_PARAMS void list_unlink_node(list_t *list, list_node_t *node);
 
@@ -240,12 +238,11 @@ NON_NULL_PARAM(1) int list_remove(list_t *list, void *item);
 /// Pops an item from the head of the list
 #define list_pop(list, item)       list_remove_from_end(list, item, false)
 
-/**
-  Does the list contain any items?
-
-  @param list The list
-  @return true, if the list doesn't contain any items. false, otherwise.
-*/
+/** Does the list contain any items?
+  *
+  * @param list The list
+  * @return true, if the list doesn't contain any items. false, otherwise.
+  */
 
 #define is_list_empty(list)     (!(list)->head)
 

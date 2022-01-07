@@ -148,7 +148,7 @@ ap_start:
 
 .continue:
   mov ebx, $kernel_gdt
-  mov word [$AP_GDT_PTR], 56
+  mov word [$AP_GDT_PTR], 7*8-1
   mov [$AP_GDT_PTR+2], ebx
 
   lgdt [$AP_GDT_PTR]
@@ -301,7 +301,7 @@ start:
 ; Load gdt and set data segment selectors to known values
 
   push dword $kernel_gdt
-  push dword (0x30 << 16)
+  push dword (0x2F << 16)
   lgdt [esp+2]
 
   add esp, 8

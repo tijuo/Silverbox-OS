@@ -18,7 +18,8 @@ export CFLAGS	=-m64 -I$(ROOT_DIR)/tests/include -std=gnu17 \
 		-Wmisleading-indentation -Wswitch-enum -Wswitch-default \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
 		-Wcast-align -Wdangling-else -Wno-unused-parameter \
-		-Wlogical-op -Wpacked -Wno-discarded-qualifiers
+		-Wlogical-op -Wpacked -Wno-discarded-qualifiers -DTEST_MSG \
+		-DTEST
 LDFLAGS		:=
 DEPDIR		:=.deps
 DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
@@ -28,10 +29,10 @@ all: buddy_tests algo_tests mem_tests types
 	./mem_tests
 	./algo_tests
 
-buddy_tests: buddy_tests.c $(ROOT_DIR)/kernel/buddy.c buddy_klibc.c $(ROOT_DIR)/munit/munit.c
+buddy_tests: buddy_tests.c $(ROOT_DIR)/kernel/buddy.c $(ROOT_DIR)/kernel/types/list.c $(ROOT_DIR)/kernel/types/bitmap.c $(ROOT_DIR)/kernel/sync.c klibc.c $(ROOT_DIR)/munit/munit.c
 	$(CC) $(CFLAGS) $^ -o $@
 
-algo_tests: algo_tests.c $(ROOT_DIR)/kernel/algo.c $(ROOT_DIR)/munit/munit.c algo_klibc.c
+algo_tests: algo_tests.c $(ROOT_DIR)/kernel/algo.c $(ROOT_DIR)/munit/munit.c klibc.c
 	$(CC) $(CFLAGS) $^ -o $@
 
 mem_tests: mem_tests.c $(ROOT_DIR)/munit/munit.c $(ROOT_DIR)/kernel/mem.asm

@@ -11,7 +11,7 @@ int list_ptr_compare(void *p1, void *p2) {
 }
 
 int list_insert_item_at_end(list_t *list, void *item, size_t item_size, bool at_tail) {
-  list_node_t *node = (list_node_t *)kmalloc(sizeof(list_node_t), 0);
+  list_node_t *node = kmalloc(sizeof(list_node_t), 0);
 
   if(!node)
     return E_FAIL;
@@ -161,4 +161,12 @@ int list_remove_item(list_t *list, void *item, int (*compare)(void *, void *)) {
 
 int list_remove(list_t *list, void *item) {
   return list_remove_item(list, item, list_ptr_compare);
+}
+
+size_t list_len(const list_t *list) {
+  size_t c = 0;
+
+  for(list_node_t *node=list->head; node; node=node->next, c++) {}
+
+  return c;
 }

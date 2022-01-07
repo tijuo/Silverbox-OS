@@ -24,6 +24,9 @@
 
 #define KERNEL_IDT_LEN  (64 * sizeof(union idt_entry))
 
+_Static_assert(KERNEL_IDT_LEN > 0, "KERNEL_IDT_LEN must be non-zero");
+_Static_assert(KERNEL_IDT_LEN <= 65536, "KERNEL_IDT_LEN must not be greater than 65536 bytes");
+
 DISC_DATA const char *FEATURES_STR[32] = {
   "fpu",
   "vme",
@@ -112,10 +115,11 @@ DISC_CODE static void init_interrupts(void);
 DISC_CODE static void stop_init(const char *);
 DISC_CODE void init(const struct multiboot_info_header *);
 DISC_CODE void ap_init(void);
-DISC_CODE static void init_pic( void );
+DISC_CODE static void disable_pic( void );
 
 DISC_CODE void add_idt_entry(void (*f)(void), int entry_num, int dpl);
 DISC_CODE void load_idt(void);
+DISC_CODE void per_proc_init(void);
 
 DISC_DATA static void (*CPU_EX_ISRS[NUM_EXCEPTIONS])(
   void) = {
@@ -149,7 +153,8 @@ extern void apic_init(void);
 
 #define PIC_EOI     0x60
 
-void init_pic( void ) {
+void disable_pic( void ) {
+/*
 // Send ICW1 (cascade, edge-triggered, ICW4 needed)
   out_port8( (uint16_t)PIC1_CMD, 0x11 );
   out_port8( (uint16_t)PIC2_CMD, 0x11 );
@@ -167,6 +172,7 @@ void init_pic( void ) {
 // Send ICW4 (Intel 8086 mode)
   out_port8( (uint16_t)PIC1_DATA, 0x01 );
   out_port8( (uint16_t)PIC2_DATA, 0x01 );
+*/
 
 // Send OCW1 (Set mask to 0xFF)
 
@@ -194,7 +200,7 @@ void add_idt_entry(void (*f)(void), int entry_num, int dpl) {
 
 void load_idt(void) {
   struct pseudo_descriptor idt_pointer = {
-    .limit = KERNEL_IDT_LEN,
+    .limit = KERNEL_IDT_LEN-1,
     .base = (uint64_t)kernel_idt
   };
 
@@ -440,6 +446,20 @@ void show_cpu_features(void) {
 }
 #endif /* DEBUG */
 
+void per_proc_init(void) {
+  init_interrupts();
+
+    // Initialize FPU to a known state
+  __asm__("fninit\n");
+
+  // Set MSRs to enable syscall/sysret functionality
+
+  wrmsr(SYSCALL_FMASK_MSR, RFLAGS_IF | RFLAGS_DF);
+  wrmsr(SYSCALL_STAR_MSR,
+        ((uint64_t)KCODE_SEL << 32) | ((uint64_t)UCODE_SEL << 48));
+  wrmsr(SYSCALL_LSTAR_MSR, (uint64_t)syscall_entry);
+}
+
 /**
  Bootstraps the kernel.
 
@@ -449,6 +469,8 @@ void show_cpu_features(void) {
 void init(const struct multiboot_info_header *info_header) {
   if(IS_ERROR(init_memory(info_header)))
     stop_init("Unable to initialize memory.");
+
+  per_proc_init();
 
   if(IS_ERROR(device_init()))
     stop_init("Unable to initialize drivers");
@@ -463,9 +485,6 @@ void init(const struct multiboot_info_header *info_header) {
   kprintf("1 GiB pages: %s\n", is_1gb_pages_supported ? "yes" : "no");
   kprintf("Maximum physical address: %#lx\n", max_phys_addr);
 
-  kprintf("\nInitializing interrupt handling.\n");
-  init_interrupts();
-
   int retval = read_acpi_tables();
 
   if(IS_ERROR(retval))
@@ -477,7 +496,7 @@ void init(const struct multiboot_info_header *info_header) {
       num_processors = 1;
   }
 
-  init_pic();
+  disable_pic();
   apic_init();
   /*
    kprintf("Initializing timer.\n");
@@ -493,22 +512,12 @@ void init(const struct multiboot_info_header *info_header) {
 
   //load_init_server(info_header);
 
-  /* Release the pages for the code and data that will never be used again. */
+    /* Release the pages for the code and data that will never be used again. */
 
   for(addr_t addr = (addr_t)EXT_PTR(kdcode); addr < (addr_t)EXT_PTR(kbss);
       addr += PAGE_SIZE) {
     // todo: Mark these pages as free for init server
   }
-
-  // Initialize FPU to a known state
-  __asm__("fninit\n");
-
-  // Set MSRs to enable syscall/sysret functionality
-
-  wrmsr(SYSCALL_FMASK_MSR, RFLAGS_IF | RFLAGS_DF);
-  wrmsr(SYSCALL_STAR_MSR,
-        ((uint64_t)KCODE_SEL << 32) | ((uint64_t)UCODE_SEL << 48));
-  wrmsr(SYSCALL_LSTAR_MSR, (uint64_t)syscall_entry);
 
   bp_initialized = 1;
 
@@ -521,6 +530,10 @@ void init(const struct multiboot_info_header *info_header) {
 
 void ap_init(void) {
   lock_spin(!bp_initialized);
+
+    // todo: GDT needs to be set up for APs
+
+  per_proc_init();
 
   kprintf("AP %u has been initialized.\n", apic_get_id());
 

@@ -18,7 +18,7 @@ CFLAGS		:=-m64 -std=gnu17 -O2 -Wall -Wextra \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
 		-Wcast-align -Wdangling-else -Wno-unused-parameter \
 		-Wno-unused-function \
-		-Wlogical-op -Wpacked -Wno-discarded-qualifiers
+		-Wlogical-op -Wpacked -Wno-discarded-qualifiers -DTEST
 DEPDIR		:=.deps
 DEPFLAGS	=-MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
 SRC		:=kmalloc.c $(ROOT_DIR)/munit/munit.c

@@ -50,7 +50,7 @@ struct array {
 
 void *test_setup_algo(const MunitParameter params[],
     void *data) {
-  struct array *arr = (struct array *)malloc(sizeof *arr);
+  struct array *arr = malloc(sizeof *arr);
 
   if(!arr)
     return NULL;
@@ -60,7 +60,7 @@ void *test_setup_algo(const MunitParameter params[],
   if(bytes % sizeof(long int) != 0)
     bytes += sizeof(long int) - (bytes % sizeof(long int));
 
-  munit_uint8_t *buffer = (munit_uint8_t *)malloc(bytes);
+  munit_uint8_t *buffer = malloc(bytes);
 
   if(!buffer) {
     free(arr);

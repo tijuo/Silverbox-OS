@@ -6,36 +6,44 @@
 #include <stddef.h>
 #include <util.h>
 #include <types.h>
+#include <kernel/types/bitmap.h>
+#include <kernel/types/list.h>
 
 typedef uint16_t bitmap_blk_t;
 typedef uint16_t bitmap_count_t;
 
 #define BUDDIES_SIZE(orders)  ((sizeof(bitmap_blk_t) << ((orders)+1)) - 1ul)
-#define MAX_ORDERS            17
+#define MAX_ORDERS            29
+
+struct buddy_free_block_node {
+  list_node_t node;
+  unsigned long int order;
+  unsigned long int checksum;
+};
 
 struct buddy_allocator {
+  void *start_address;
   /**
-      An array of pointers each pointing to a free block array of size 2^N,
-      where N is the block order.
-  */
-  bitmap_blk_t *free_blocks[MAX_ORDERS];
+    * A bit array in which each bit indicates that a valid free block struct
+    * exists at the start of a block.
+    */
+  struct bitmap block_bitmap;
+
+  /// An array of free block lists
+
+  list_t free_block_lists[MAX_ORDERS];
 
   /// The number of block sizes, the smallest order (order 0) of size MIN_ORDER_SIZE.
-  unsigned char orders;
+  unsigned int orders;
 
   /**
-      The base 2 logarithm of the minimum order size.
-      i.e. min_order_size = 2^(log2_min_order_size)
-  */
+    * The base 2 logarithm of the minimum order size.
+    * i.e. min_order_size = 2^(log2_min_order_size)
+    */
 
-  unsigned char log2_min_order_size;
+  unsigned int log2_min_order_size;
 
-  /**
-      The array of free block counts, one count for each order indicating
-      the number of free blocks that are available in the corresponding
-      free block array.
-  */
-  bitmap_count_t free_counts[MAX_ORDERS];
+  lock_t lock;
 };
 
 struct memory_block {
@@ -44,22 +52,22 @@ struct memory_block {
 };
 
 /**
-  Initialize a buddy allocator by placing it in a particular memory of region.
+  Initialize a buddy allocator that manages a contiguous range of free memory.
 
   @param allocator The allocator.
   @param mem_size The total amount of memory the allocator will manage in bytes.
   @param min_order_size The size of the smallest block in bytes
   (it will be rounded up to the nearest power of two).
   @param mem_region A pointer to an available region of memory that is large
-  enough to store the free block arrays for each order, pointers to each
-  free block array, and free block counts for each order. The BUDDIES_SIZE()
-  macro can calculate this.
+  enough to store the block bitmap.
+  @param start_address The beginning of the region of memory that will be managed.
   @return E_OK, on success. E_INVALID_ARG, if mem_size would require the
   allocator to manage too many block orders.
 */
 
-NON_NULL_PARAMS int buddy_init(struct buddy_allocator *allocator,
-                               size_t mem_size, size_t min_order_size, void *mem_region);
+NON_NULL_PARAM(1) NON_NULL_PARAM(4) int buddy_init(struct buddy_allocator *allocator,
+                               size_t mem_size, size_t min_order_size, void *mem_region,
+                               void *start_address);
 
 /**
   Calculate the smallest block order needed to satisfy a memory request.
@@ -115,29 +123,12 @@ NON_NULL_PARAMS int buddy_free_block(struct buddy_allocator *allocator,
                                      const struct memory_block *block);
 
 /**
-  Concatenate smaller free blocks into larger ones by joining them with their
-  buddies.
-
-  @param allocator The allocator.
-  @return true, if at least one larger block was formed as a result. false,
-  if no blocks could be joined.
-*/
-
-NON_NULL_PARAMS bool buddy_coalesce_blocks(struct buddy_allocator *allocator);
-
-/**
   Returns the amount of free, unallocated memory.
 
   @param allocator The allocator.
   @return The amount of free memory in bytes.
 */
 
-NON_NULL_PARAMS PURE size_t buddy_free_bytes(const struct buddy_allocator *allocator);
-
-NON_NULL_PARAMS PURE static inline size_t buddy_free_count(const struct buddy_allocator *allocator,
-    unsigned int order)
-{
-  return order >= allocator->orders ? 0 : (size_t)allocator->free_counts[order];
-}
+NON_NULL_PARAMS size_t buddy_free_bytes(struct buddy_allocator *allocator);
 
 #endif /* KERNEL_BUDDY_H_ */

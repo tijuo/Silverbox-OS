@@ -26,7 +26,7 @@ typedef struct bitmap {
 */
 
 static inline CONST size_t bitmap_words(size_t bits) {
-  return bits / (8 * sizeof(uint64_t)) + ((bits & (8 * sizeof(uint64_t) - 1)) ? 1 : 0);
+  return bits / (8u * sizeof(uint64_t)) + ((bits & (8u * sizeof(uint64_t) - 1)) ? 1u : 0u);
 }
 
 /**
@@ -40,8 +40,8 @@ static inline CONST size_t bitmap_words(size_t bits) {
 
 #define BITMAP_BYTES(bits) (bitmap_words(bits) * sizeof(uint64_t))
 
-#define BITMAP_ELEM_OFFSET(bit) (bit / (8 * sizeof(uint64_t)))
-#define BITMAP_BIT_OFFSET(bit)  (bit & (8 * sizeof(uint64_t) - 1))
+#define BITMAP_ELEM_OFFSET(bit) (bit / (8u * sizeof(uint64_t)))
+#define BITMAP_BIT_OFFSET(bit)  (bit & (8u * sizeof(uint64_t) - 1u))
 /**
   Set the value of a bit to 1.
 
@@ -49,8 +49,9 @@ static inline CONST size_t bitmap_words(size_t bits) {
   @param bit The index of the bit.
 */
 
-NON_NULL_PARAMS static inline void bitmap_set(bitmap_t *bitmap, size_t bit) {
-  bitmap->data[BITMAP_ELEM_OFFSET(bit)] |= 1ul << BITMAP_BIT_OFFSET(bit);
+NON_NULL_PARAMS static inline void bitmap_set(bitmap_t *bitmap, unsigned long int bit) {
+  if(bit < bitmap->count)
+    bitmap->data[(size_t)BITMAP_ELEM_OFFSET(bit)] |= 1ul << BITMAP_BIT_OFFSET(bit);
 }
 
 /**
@@ -60,8 +61,9 @@ NON_NULL_PARAMS static inline void bitmap_set(bitmap_t *bitmap, size_t bit) {
   @param bit The index of the bit.
 */
 
-NON_NULL_PARAMS static inline void bitmap_clear(bitmap_t *bitmap, size_t bit) {
-  bitmap->data[BITMAP_ELEM_OFFSET(bit)] &= ~(1ul << BITMAP_BIT_OFFSET(bit));
+NON_NULL_PARAMS static inline void bitmap_clear(bitmap_t *bitmap, unsigned long int bit) {
+  if(bit < bitmap->count)
+    bitmap->data[(size_t)BITMAP_ELEM_OFFSET(bit)] &= ~(1ul << BITMAP_BIT_OFFSET(bit));
 }
 
 /**
@@ -72,8 +74,9 @@ NON_NULL_PARAMS static inline void bitmap_clear(bitmap_t *bitmap, size_t bit) {
   @param bit The index of the bit.
 */
 
-NON_NULL_PARAMS static inline void bitmap_toggle(bitmap_t *bitmap, size_t bit) {
-  bitmap->data[BITMAP_ELEM_OFFSET(bit)] ^= 1ul << BITMAP_BIT_OFFSET(bit);
+NON_NULL_PARAMS static inline void bitmap_toggle(bitmap_t *bitmap, unsigned long int bit) {
+  if(bit < bitmap->count)
+    bitmap->data[(size_t)BITMAP_ELEM_OFFSET(bit)] ^= 1ul << BITMAP_BIT_OFFSET(bit);
 }
 
 /**
@@ -84,8 +87,9 @@ NON_NULL_PARAMS static inline void bitmap_toggle(bitmap_t *bitmap, size_t bit) {
   @return true, if the value of the bit is 1. false, if it's 0.
 */
 
-NON_NULL_PARAMS PURE static inline bool bitmap_is_set(const bitmap_t *bitmap, size_t bit) {
-  return !!(bitmap->data[BITMAP_ELEM_OFFSET(bit)] & (1ul << BITMAP_BIT_OFFSET(bit)));
+NON_NULL_PARAMS PURE static inline bool bitmap_is_set(const bitmap_t *bitmap, unsigned long int bit) {
+  return bit < bitmap->count
+    && !!(bitmap->data[(size_t)BITMAP_ELEM_OFFSET(bit)] & (1ul << (size_t)BITMAP_BIT_OFFSET(bit)));
 }
 
 /**
@@ -96,8 +100,8 @@ NON_NULL_PARAMS PURE static inline bool bitmap_is_set(const bitmap_t *bitmap, si
   @return true, if the value of the bit is 0. false, if it's 1.
 */
 
-NON_NULL_PARAMS PURE static inline bool bitmap_is_clear(const bitmap_t *bitmap, size_t bit) {
-  return !(bitmap_is_set(bitmap, bit));
+NON_NULL_PARAMS PURE static inline bool bitmap_is_clear(const bitmap_t *bitmap, unsigned long int bit) {
+  return bit < bitmap->count && !(bitmap_is_set(bitmap, bit));
 }
 
 /**
