@@ -51,6 +51,7 @@ typedef s64 quad;
 
 typedef unsigned short int tid_t;
 typedef unsigned short int pid_t;
+typedef unsigned short int cap_t;
 
 typedef unsigned long int pframe_t;
 

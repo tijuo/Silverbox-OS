@@ -24,3 +24,6 @@ kernel/kernel
 bin/
 /build/
 lib/librust/target
+.vscode
+bochs_serial_output.txt
+bochsdbg_log.txt

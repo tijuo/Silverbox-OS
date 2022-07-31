@@ -19,19 +19,19 @@
 
 typedef struct SyscallArgs {
   union {
-	struct {
-	  uint8_t syscall_num;
-	  uint8_t byte1;
+    struct {
+      uint8_t syscall_num;
+      uint8_t byte1;
 
-	  union {
-		uint16_t word;
-		struct {
-		  uint8_t byte2;
-		  uint8_t byte3;
-		};
-	  };
-	} sub_arg;
-	uint32_t syscall_arg;
+      union {
+        uint16_t word;
+        struct {
+          uint8_t byte2;
+          uint8_t byte3;
+        };
+      };
+    } sub_arg;
+    uint32_t syscall_arg;
   };
 
   uint32_t arg1;
@@ -45,8 +45,8 @@ typedef struct SyscallArgs {
 
 union thread_targets {
   struct {
-	tid_t recipient;
-	tid_t replier;
+    tid_t recipient;
+    tid_t replier;
   };
   long int targets;
 };
@@ -56,11 +56,11 @@ noreturn void syscall_entry(void) NAKED;
 static long int handle_sys_receive(tid_t sender, long int flags);
 static long int handle_sys_send(tid_t recipient, long int subject, long int flags);
 static long int handle_sys_send_and_receive(union thread_targets targets,
-									   long int subject, long int send_flags,
-									   long int recv_flags);
+    long int subject, long int send_flags,
+    long int recv_flags);
 
 static long int handle_sys_create_thread(void *entry, paddr_t addr_space,
-									void *stack_top);
+    void *stack_top);
 static long int handle_sys_destroy_thread(tid_t tid);
 static long int handle_sys_read_thread(tid_t tid, thread_info_t *info);
 static long int handle_sys_update_thread(tid_t tid, long int, thread_info_t *info);
@@ -113,18 +113,17 @@ long int handle_sys_wait(long int mask) {
   long int ret_val = current_thread->pending_events & mask;
 
   if(!ret_val) {
-	pause_thread(current_thread);
+    pause_thread(current_thread);
 
-	tcb_t *new_thread = schedule(get_current_processor());
+    tcb_t *new_thread = schedule(get_current_processor());
 
-	if(new_thread != current_thread) {
-	  // todo: rip and user rsp need to be saved. all other registers can be clobbered
-	}
+    if(new_thread != current_thread) {
+      // todo: rip and user rsp need to be saved. all other registers can be clobbered
+    }
 
-	switch_context(new_thread);
-  }
-  else
-	current_thread->pending_events &= ~mask;
+    switch_context(new_thread);
+  } else
+    current_thread->pending_events &= ~mask;
 
   return ret_val;
 }
@@ -137,7 +136,7 @@ long int handle_sys_wait(long int mask) {
  // sub_arg.word - level
 
  int handle_sys_get_page_mappings(syscall_args_t args) {
- #define VIRT_VAR	args.arg1
+ #define VIRT_VAR args.arg1
  #define VIRT        (addr_t)VIRT_VAR
  #define COUNT       (size_t)args.arg2
  #define ADDR_SPACE_VAR args.arg3
@@ -294,13 +293,13 @@ long int handle_sys_wait(long int mask) {
  // sub_arg.word - level
 
  int handle_sys_set_page_mappings(syscall_args_t args) {
- #define VIRT_VAR		args.arg1
+ #define VIRT_VAR   args.arg1
  #define VIRT        (addr_t)VIRT_VAR
  #define COUNT       (size_t)args.arg2
  #define ADDR_SPACE_VAR args.arg3
  #define ADDR_SPACE  (uint32_t)ADDR_SPACE_VAR
  #define MAPPINGS    (struct PageMapping *)args.arg4
- #define LEVEL				(unsigned int)args.sub_arg.word
+ #define LEVEL        (unsigned int)args.sub_arg.word
 
  size_t i;
  struct PageMapping *mappings = MAPPINGS;
@@ -494,175 +493,172 @@ long int handle_sys_wait(long int mask) {
 
 long int handle_sys_create_thread(void *entry, paddr_t addr_space, void *stack_top) {
   if(1) {
-	tcb_t *new_tcb = create_thread(entry, addr_space, stack_top);
-	return new_tcb ? (int)get_tid(new_tcb) : ESYS_FAIL;
-  }
-  else
-	RET_MSG(
-		ESYS_PERM,
-		"Calling thread doesn't have permission to execute this system call.");
+    tcb_t *new_tcb = create_thread(entry, addr_space, stack_top);
+    return new_tcb ? (int)get_tid(new_tcb) : ESYS_FAIL;
+  } else
+    RET_MSG(
+      ESYS_PERM,
+      "Calling thread doesn't have permission to execute this system call.");
 }
 
 // arg1 - tid
 
 long int handle_sys_destroy_thread(tid_t tid) {
   if(1) {
-	tcb_t *tcb = get_tcb(tid);
-	return tcb && !IS_ERROR(release_thread(tcb)) ? ESYS_OK : ESYS_FAIL;
-  }
-  else
-	RET_MSG(
-		ESYS_PERM,
-		"Calling thread doesn't have permission to execute this system call.");
+    tcb_t *tcb = get_tcb(tid);
+    return tcb && !IS_ERROR(release_thread(tcb)) ? ESYS_OK : ESYS_FAIL;
+  } else
+    RET_MSG(
+      ESYS_PERM,
+      "Calling thread doesn't have permission to execute this system call.");
 }
 
 long int handle_sys_read_thread(tid_t tid, thread_info_t *info) {
   if(1) {
-	tcb_t *tcb = tid == NULL_TID ? get_current_thread() : get_tcb(tid);
+    tcb_t *tcb = tid == NULL_TID ? get_current_thread() : get_tcb(tid);
 
-	if(!tcb)
-	  return ESYS_ARG;
+    if(!tcb)
+      return ESYS_ARG;
 
-	info->status = tcb->thread_state;
+    info->status = tcb->thread_state;
 
-	if(tcb->thread_state == WAIT_FOR_SEND || tcb->thread_state == WAIT_FOR_RECV)
-	  info->wait_tid = tcb->wait_tid;
+    if(tcb->thread_state == WAIT_FOR_SEND || tcb->thread_state == WAIT_FOR_RECV)
+      info->wait_tid = tcb->wait_tid;
 
-	info->state.rax = tcb->user_exec_state.rax;
-	info->state.rbx = tcb->user_exec_state.rbx;
-	info->state.rcx = tcb->user_exec_state.rcx;
-	info->state.rdx = tcb->user_exec_state.rdx;
-	info->state.rsi = tcb->user_exec_state.rsi;
-	info->state.rdi = tcb->user_exec_state.rdi;
-	info->state.rbp = tcb->user_exec_state.rbp;
-	info->state.rsp = tcb->user_exec_state.rsp;
-	info->state.r8 = tcb->user_exec_state.r8;
-	info->state.r9 = tcb->user_exec_state.r9;
-	info->state.r10 = tcb->user_exec_state.r10;
-	info->state.r11 = tcb->user_exec_state.r11;
-	info->state.r12 = tcb->user_exec_state.r12;
-	info->state.r13 = tcb->user_exec_state.r13;
-	info->state.r14 = tcb->user_exec_state.r14;
-	info->state.r15 = tcb->user_exec_state.r15;
-	info->state.rip = tcb->user_exec_state.rip;
-	info->state.rflags = tcb->user_exec_state.rflags;
-	info->state.cs = tcb->user_exec_state.cs;
-	info->state.ds = tcb->user_exec_state.ds;
-	info->state.es = tcb->user_exec_state.es;
-	info->state.fs = tcb->user_exec_state.fs;
-	info->state.gs = tcb->user_exec_state.gs;
-	info->state.ss = tcb->user_exec_state.ss;
+    info->state.rax = tcb->user_exec_state.rax;
+    info->state.rbx = tcb->user_exec_state.rbx;
+    info->state.rcx = tcb->user_exec_state.rcx;
+    info->state.rdx = tcb->user_exec_state.rdx;
+    info->state.rsi = tcb->user_exec_state.rsi;
+    info->state.rdi = tcb->user_exec_state.rdi;
+    info->state.rbp = tcb->user_exec_state.rbp;
+    info->state.rsp = tcb->user_exec_state.rsp;
+    info->state.r8 = tcb->user_exec_state.r8;
+    info->state.r9 = tcb->user_exec_state.r9;
+    info->state.r10 = tcb->user_exec_state.r10;
+    info->state.r11 = tcb->user_exec_state.r11;
+    info->state.r12 = tcb->user_exec_state.r12;
+    info->state.r13 = tcb->user_exec_state.r13;
+    info->state.r14 = tcb->user_exec_state.r14;
+    info->state.r15 = tcb->user_exec_state.r15;
+    info->state.rip = tcb->user_exec_state.rip;
+    info->state.rflags = tcb->user_exec_state.rflags;
+    info->state.cs = tcb->user_exec_state.cs;
+    info->state.ds = tcb->user_exec_state.ds;
+    info->state.es = tcb->user_exec_state.es;
+    info->state.fs = tcb->user_exec_state.fs;
+    info->state.gs = tcb->user_exec_state.gs;
+    info->state.ss = tcb->user_exec_state.ss;
 
-	info->priority = tcb->priority;
-	info->root_pmap = tcb->root_pmap;
+    info->priority = tcb->priority;
+    info->root_pmap = tcb->root_pmap;
 
-	if(tcb->thread_state == RUNNING) {
-	  for(size_t i = 0; i < MAX_PROCESSORS; i++) {
-		if(processors[i].running_thread == tcb) {
-		  info->current_processor_id = (uint8_t)i;
-		  break;
-		}
-	  }
+    if(tcb->thread_state == RUNNING) {
+      for(size_t i = 0; i < MAX_PROCESSORS; i++) {
+        if(processors[i].running_thread == tcb) {
+          info->current_processor_id = (uint8_t)i;
+          break;
+        }
+      }
 
-	  info->tid = get_tid(tcb);
+      info->tid = get_tid(tcb);
 
-	  info->pending_events = tcb->pending_events;
-	  info->event_mask = tcb->event_mask;
+      info->pending_events = tcb->pending_events;
+      info->event_mask = tcb->event_mask;
 
-	  info->capability_table = tcb->cap_table;
-	  info->capability_table_len = tcb->cap_table_size;
-	  info->parent = tcb->parent;
+      info->cap_table = tcb->cap_table;
+      info->cap_table_entry_count = tcb->cap_table_capacity;
+      info->parent = tcb->parent;
 
-	  info->exception_handler = tcb->ex_handler;
+      info->exception_handler = tcb->ex_handler;
 
-	  info->xsave_state = tcb->xsave_state;
-	  return ESYS_OK;
-	}
-	else
-	  RET_MSG(
-		  ESYS_PERM,
-		  "Calling thread doesn't have permission to execute this system call.");
+      info->xsave_state = tcb->xsave_state;
+      return ESYS_OK;
+    } else
+      RET_MSG(
+        ESYS_PERM,
+        "Calling thread doesn't have permission to execute this system call.");
 
-	return ESYS_FAIL;
+    return ESYS_FAIL;
   }
 }
 
 long int handle_sys_update_thread(tid_t tid, long int flags, thread_info_t *info) {
   if(0)
-	RET_MSG(
-		ESYS_PERM,
-		"Calling thread doesn't have permission to execute this system call.");
+    RET_MSG(
+      ESYS_PERM,
+      "Calling thread doesn't have permission to execute this system call.");
 
   tcb_t *tcb = tid == NULL_TID ? get_current_thread() : get_tcb(tid);
 
   if(!tcb || tcb->thread_state == INACTIVE)
-	RET_MSG(ESYS_ARG, "The specified thread doesn't exist");
+    RET_MSG(ESYS_ARG, "The specified thread doesn't exist");
 
   // todo: wait for a RUNNING thread to finish before continuing
 
   if(tcb->thread_state == RUNNING)
-	RET_MSG(ESYS_FAIL, "The specified thread is currently running.");
+    RET_MSG(ESYS_FAIL, "The specified thread is currently running.");
 
   if(IS_FLAG_SET(flags, TF_STATUS)) {
 
-	switch(info->status) {
-	  case READY:
-	  case PAUSED:
-		break;
-	  default:
-		RET_MSG(ESYS_ARG, "Unable to change thread status");
-	}
+    switch(info->status) {
+      case READY:
+      case PAUSED:
+        break;
+      default:
+        RET_MSG(ESYS_ARG, "Unable to change thread status");
+    }
 
-	remove_thread_from_list(tcb);
+    remove_thread_from_list(tcb);
 
-	if(info->status == READY)
-	  start_thread(tcb);
+    if(info->status == READY)
+      start_thread(tcb);
 
-	tcb->thread_state = info->status;
+    tcb->thread_state = info->status;
   }
 
   if(IS_FLAG_SET(flags, TF_ROOT_PMAP)) {
-	tcb->root_pmap = info->root_pmap;
+    tcb->root_pmap = info->root_pmap;
 
-	initialize_root_pmap(tcb->root_pmap);
+    initialize_root_pmap(tcb->root_pmap);
   }
 
   if(IS_FLAG_SET(flags, TF_EXT_REG_STATE))
-	memcpy(&tcb->xsave_state, &info->xsave_state, sizeof tcb->xsave_state);
+    memcpy(&tcb->xsave_state, &info->xsave_state, sizeof tcb->xsave_state);
 
   if(IS_FLAG_SET(flags, TF_REG_STATE)) {
-	tcb->user_exec_state.rax = info->state.rax;
-	tcb->user_exec_state.rbx = info->state.rbx;
-	tcb->user_exec_state.rcx = info->state.rcx;
-	tcb->user_exec_state.rdx = info->state.rdx;
-	tcb->user_exec_state.rsi = info->state.rsi;
-	tcb->user_exec_state.rdi = info->state.rdi;
-	tcb->user_exec_state.r8 = info->state.r8;
-	tcb->user_exec_state.r9 = info->state.r9;
-	tcb->user_exec_state.r10 = info->state.r10;
-	tcb->user_exec_state.r11 = info->state.r11;
-	tcb->user_exec_state.r12 = info->state.r12;
-	tcb->user_exec_state.r13 = info->state.r13;
-	tcb->user_exec_state.r14 = info->state.r14;
-	tcb->user_exec_state.r15 = info->state.r15;
+    tcb->user_exec_state.rax = info->state.rax;
+    tcb->user_exec_state.rbx = info->state.rbx;
+    tcb->user_exec_state.rcx = info->state.rcx;
+    tcb->user_exec_state.rdx = info->state.rdx;
+    tcb->user_exec_state.rsi = info->state.rsi;
+    tcb->user_exec_state.rdi = info->state.rdi;
+    tcb->user_exec_state.r8 = info->state.r8;
+    tcb->user_exec_state.r9 = info->state.r9;
+    tcb->user_exec_state.r10 = info->state.r10;
+    tcb->user_exec_state.r11 = info->state.r11;
+    tcb->user_exec_state.r12 = info->state.r12;
+    tcb->user_exec_state.r13 = info->state.r13;
+    tcb->user_exec_state.r14 = info->state.r14;
+    tcb->user_exec_state.r15 = info->state.r15;
 
-	tcb->user_exec_state.rbp = info->state.rbp;
-	tcb->user_exec_state.rsp = info->state.rsp;
-	tcb->user_exec_state.rflags = info->state.rflags;
+    tcb->user_exec_state.rbp = info->state.rbp;
+    tcb->user_exec_state.rsp = info->state.rsp;
+    tcb->user_exec_state.rflags = info->state.rflags;
 
-	tcb->user_exec_state.cs = info->state.cs;
-	tcb->user_exec_state.ds = info->state.ds;
-	tcb->user_exec_state.es = info->state.es;
-	tcb->user_exec_state.fs = info->state.fs;
-	tcb->user_exec_state.gs = info->state.gs;
-	tcb->user_exec_state.ss = info->state.ss;
+    tcb->user_exec_state.cs = info->state.cs;
+    tcb->user_exec_state.ds = info->state.ds;
+    tcb->user_exec_state.es = info->state.es;
+    tcb->user_exec_state.fs = info->state.fs;
+    tcb->user_exec_state.gs = info->state.gs;
+    tcb->user_exec_state.ss = info->state.ss;
 
-	if(tcb == get_current_thread())
-	  // todo: rip and user rsp need to be saved. all other registers can be clobbered
+    if(tcb == get_current_thread())
+      // todo: rip and user rsp need to be saved. all other registers can be clobbered
 
-	  switch_context(tcb);
+      switch_context(tcb);
 
-	// Does not return
+    // Does not return
   }
 
   return ESYS_OK;
@@ -672,22 +668,22 @@ long int handle_sys_send(tid_t recipient, long int subject, long int flags) {
   tcb_t *current_thread = get_current_thread();
 
   if(IS_FLAG_SET(flags, MSG_KERNEL))
-	return ESYS_ARG;
+    return ESYS_ARG;
 
   // todo: rip and user rsp need to be saved. all other registers can be clobbered
 
   switch(send_message(current_thread, recipient, subject, flags)) {
-	case E_OK:
-	  return ESYS_OK;
-	case E_INVALID_ARG:
-	  return ESYS_ARG;
-	case E_BLOCK:
-	  return ESYS_NOTREADY;
-	case E_INTERRUPT:
-	  return ESYS_INT;
-	case E_FAIL:
-	default:
-	  return ESYS_FAIL;
+    case E_OK:
+      return ESYS_OK;
+    case E_INVALID_ARG:
+      return ESYS_ARG;
+    case E_BLOCK:
+      return ESYS_NOTREADY;
+    case E_INTERRUPT:
+      return ESYS_INT;
+    case E_FAIL:
+    default:
+      return ESYS_FAIL;
   }
 }
 
@@ -697,68 +693,67 @@ long int handle_sys_receive(tid_t sender, long int flags) {
   // todo: rip and user rsp need to be saved. all other registers can be clobbered
 
   switch(receive_message(current_thread, sender, flags)) {
-	case E_OK:
-	  return ESYS_OK;
-	case E_INVALID_ARG:
-	  return ESYS_ARG;
-	case E_BLOCK:
-	  return ESYS_NOTREADY;
-	case E_INTERRUPT:
-	  return ESYS_INT;
-	case E_FAIL:
-	default:
-	  return ESYS_FAIL;
+    case E_OK:
+      return ESYS_OK;
+    case E_INVALID_ARG:
+      return ESYS_ARG;
+    case E_BLOCK:
+      return ESYS_NOTREADY;
+    case E_INTERRUPT:
+      return ESYS_INT;
+    case E_FAIL:
+    default:
+      return ESYS_FAIL;
   }
 }
 
 long int handle_sys_send_and_receive(union thread_targets targets, long int subject,
-								long int send_flags, long int recv_flags)
-{
+                                     long int send_flags, long int recv_flags) {
   tcb_t *current_thread = get_current_thread();
 
   if(IS_FLAG_SET(send_flags, MSG_KERNEL))
-	return ESYS_ARG;
+    return ESYS_ARG;
 
   // todo: rip and user rsp need to be saved. all other registers can be clobbered
 
   switch(send_and_receive_message(current_thread, targets.recipient,
-								  targets.replier, subject, send_flags,
-								  recv_flags)) {
-	case E_OK:
-	  return ESYS_OK;
-	case E_INVALID_ARG:
-	  return ESYS_ARG;
-	case E_BLOCK:
-	  return ESYS_NOTREADY;
-	case E_INTERRUPT:
-	  return ESYS_INT;
-	case E_FAIL:
-	default:
-	  return ESYS_FAIL;
+                                  targets.replier, subject, send_flags,
+                                  recv_flags)) {
+    case E_OK:
+      return ESYS_OK;
+    case E_INVALID_ARG:
+      return ESYS_ARG;
+    case E_BLOCK:
+      return ESYS_NOTREADY;
+    case E_INTERRUPT:
+      return ESYS_INT;
+    case E_FAIL:
+    default:
+      return ESYS_FAIL;
   }
 }
 
 void syscall_entry(void) {
-__asm__(
-	"cmp $12, %rax\n"
-	"ja 2f\n"
-	"mov %rsp, tss+4\n"
-	"lea kernel_stack_top, %rsp\n"
-	"xchg %rbx, %rcx\n"
-	"push %rbx\n"
-	"push %r11\n"
-	"sub $8, %rsp\n"
-	"lea syscall_table, %rbx\n"
-	"lea (%rbx,%rax,8), %rax\n"
-	"call *%rax\n"
-	"add $8, %rsp\n"
-	"pop %r11\n"
-	"pop %rcx\n"
-	"jmp 1f\n"
-	"2:\n"
-	"movq $-4, %rax\n"
-	"1:\n"
-	"sysretq\n");
+  __asm__(
+    "cmp $12, %rax\n"
+    "ja 2f\n"
+    "mov %rsp, tss+4\n"
+    "lea kernel_stack_top, %rsp\n"
+    "xchg %rbx, %rcx\n"
+    "push %rbx\n"
+    "push %r11\n"
+    "sub $8, %rsp\n"
+    "lea syscall_table, %rbx\n"
+    "lea (%rbx,%rax,8), %rax\n"
+    "call *%rax\n"
+    "add $8, %rsp\n"
+    "pop %r11\n"
+    "pop %rcx\n"
+    "jmp 1f\n"
+    "2:\n"
+    "movq $-4, %rax\n"
+    "1:\n"
+    "sysretq\n");
 }
 
 /*
@@ -792,7 +787,7 @@ __asm__(
  "pop %ebp\n"
  "popf\n"
  "mov %ebp, %ecx\n" // ebp is the stack pointer that the user saved
- "sti\n"		// STI must be the second to last instruction
+ "sti\n"    // STI must be the second to last instruction
  // to prevent interrupts from firing while in kernel mode
  "sysexit\n"
  );

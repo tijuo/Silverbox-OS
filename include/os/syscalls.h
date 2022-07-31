@@ -163,8 +163,8 @@ typedef struct Tcb {
   uint64_t pending_events;
   uint64_t event_mask;
 
-  void *capability_table;
-  size_t capability_table_len;
+  void *cap_table;
+  size_t cap_table_entry_count;
 
   tid_t exception_handler;
   tid_t pager;

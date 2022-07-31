@@ -29,12 +29,15 @@
 /* This assumes a uniprocessor system */
 
 /* Touching the data types of this struct may break the context switcher! */
-/// Contains the necessary data for a thread
-struct ThreadControlBlock;
-typedef struct ThreadControlBlock tcb_t;
 
-struct ThreadControlBlock {
-  uint64_t root_pmap;
+struct cap_entry;
+
+/**
+  Contains the necessary data for a thread.
+*/
+
+typedef struct ThreadControlBlock {
+  uint64_t root_pmap; // The physical address of the top-level page map structure (typically PML4).
   uint8_t priority;
   uint8_t wait_for_kernel_msg :1;
   uint8_t thread_state :4;
@@ -51,24 +54,24 @@ struct ThreadControlBlock {
   tid_t children_head;
   tid_t next_sibling;
 
-  uint8_t available[6];
+  uint8_t available[12]; // unused padding to fill 64 B cache line
+  uint16_t cap_table_capacity;
 
   uint32_t event_mask;
   uint32_t pending_events;
 
-  void *cap_table;
-  size_t cap_table_size;
+  struct cap_entry *cap_table;
 
   // 64 bytes
 
 
   // 384 bytes
 
-  uint8_t available2[16];
+  uint8_t available2[16]; // unused padding to fill 64 B cache line
 
   xsave_state_t *xsave_state;
   exec_state_t user_exec_state;
-};
+} tcb_t;
 
 struct Processor {
   tcb_t *running_thread;
@@ -80,15 +83,12 @@ struct Processor {
 typedef uint8_t proc_id_t;
 extern size_t num_processors;
 
-_Static_assert(sizeof(tcb_t) == 32 || sizeof(tcb_t) == 64 || sizeof(tcb_t) == 128
-               || sizeof(tcb_t) == 256 || sizeof(tcb_t) == 512 || sizeof(tcb_t) == 1024
-               || sizeof(tcb_t) == 2048 || sizeof(tcb_t) == 4096,
-               "TCB size is not properly aligned");
+_Static_assert(IS_POWER_OF_TWO(sizeof(tcb_t)), "TCB size must be a power of 2.");
 
 extern struct Processor processors[MAX_PROCESSORS];
 
-NON_NULL_PARAMS tcb_t* create_thread(void *entryAddr, paddr_t addrSpace,
-                                     void *stackTop);
+NON_NULL_PARAMS tcb_t* create_thread(void *entry_addr, paddr_t addr_space,
+                                     void *stack_top);
 
 NON_NULL_PARAMS int start_thread(tcb_t *thread);
 NON_NULL_PARAMS int pause_thread(tcb_t *thread);
@@ -102,6 +102,8 @@ extern tcb_t *init_pager_thread;
 extern tcb_t tcb_table[MAX_THREADS];
 extern ALIGNED(PAGE_SIZE) uint8_t kernel_stack[4*PAGE_SIZE];
 extern uint8_t *kernel_stack_top;
+
+/// TODO: To be implemented.
 
 static inline CONST unsigned int get_current_processor(void) {
   return 0;
