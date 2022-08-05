@@ -479,7 +479,9 @@ long int handle_sys_create_thread(void *entry, paddr_t addr_space, void *stack_t
     paddr_t root_pmap =
         addr_space == CURRENT_ROOT_PMAP ? get_root_page_map() : addr_space;
 
-    if(cap_has_right(current_thread, token, CAP_RES_THREAD, (cap_res_t){ .tid = NULL_TID }, CAP_RIGHT_CREATE)) {
+    if(cap_has_right(current_thread, token, CAP_RES_THREAD, (cap_res_t) {
+    .tid = NULL_TID
+}, CAP_RIGHT_CREATE)) {
         tcb_t *new_tcb = create_thread(entry, addr_space, stack_top);
         return new_tcb ? (long int)get_tid(new_tcb) : ESYS_FAIL;
     } else
@@ -493,7 +495,9 @@ long int handle_sys_create_thread(void *entry, paddr_t addr_space, void *stack_t
 long int handle_sys_destroy_thread(tid_t tid, cap_token_t token) {
     tcb_t *current_thread = get_current_thread();
 
-    if(cap_has_right(current_thread, token, CAP_RES_THREAD, (cap_res_t){ .tid = tid }, CAP_RIGHT_DESTROY)) {
+    if(cap_has_right(current_thread, token, CAP_RES_THREAD, (cap_res_t) {
+    .tid = tid
+}, CAP_RIGHT_DESTROY)) {
         tcb_t *tcb = get_tcb(tid);
         return tcb && !IS_ERROR(release_thread(tcb)) ? ESYS_OK : ESYS_FAIL;
     } else
@@ -508,7 +512,9 @@ long int handle_sys_read_thread(tid_t tid, thread_info_t *info, cap_token_t toke
     if(tid == NULL_TID)
         tid = get_tid(current_thread);
 
-    if(cap_has_right(current_thread, token, CAP_RES_THREAD, (cap_res_t){ .tid = tid }, CAP_RIGHT_READ)) {
+    if(cap_has_right(current_thread, token, CAP_RES_THREAD, (cap_res_t) {
+    .tid = tid
+}, CAP_RIGHT_READ)) {
         tcb_t *tcb = get_tcb(tid);
 
         if(!tcb)
@@ -586,7 +592,9 @@ long int handle_sys_update_thread(tid_t tid, unsigned long int flags, thread_inf
     if(tid == NULL_TID)
         tid = get_tid(current_thread);
 
-    if(cap_has_right(current_thread, token, CAP_RES_THREAD, (cap_res_t){ .tid = tid }, CAP_RIGHT_WRITE)) {
+    if(cap_has_right(current_thread, token, CAP_RES_THREAD, (cap_res_t) {
+    .tid = tid
+}, CAP_RIGHT_WRITE)) {
         tcb_t *tcb = get_tcb(tid);
 
         if(!tcb || tcb->thread_state == INACTIVE)

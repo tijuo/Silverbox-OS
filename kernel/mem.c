@@ -10,36 +10,34 @@
 alignas(PAGE_SIZE) struct tss_struct tss SECTION(".tss");
 
 NON_NULL_PARAMS RETURNS_NON_NULL
-void* memset(void *ptr, int value, size_t len)
-{
-  long int dummy;
-  long int dummy2;
+void *memset(void *ptr, int value, size_t len) {
+    long int dummy;
+    long int dummy2;
 
-  __asm__ __volatile__(
-	  "cld\n"
-	  "rep stosb\n"
-	  : "=c"(dummy), "=D"(dummy2)
-	  : "a"((unsigned char)value), "c"(len), "D"(ptr)
-	  : "memory", "cc");
+    __asm__ __volatile__(
+        "cld\n"
+        "rep stosb\n"
+        : "=c"(dummy), "=D"(dummy2)
+        : "a"((unsigned char)value), "c"(len), "D"(ptr)
+        : "memory", "cc");
 
-  return ptr;
+    return ptr;
 }
 
 // XXX: Assumes that the memory regions don't overlap
 
 NON_NULL_PARAMS RETURNS_NON_NULL
-void* memcpy(void *restrict dest, const void *restrict src, size_t len)
-{
-  long int dummy;
-  long int dummy2;
-  long int dummy3;
+void *memcpy(void *restrict dest, const void *restrict src, size_t len) {
+    long int dummy;
+    long int dummy2;
+    long int dummy3;
 
-  __asm__ __volatile__(
-	  "cld\n"
-	  "rep movsb\n"
-	  : "=c"(dummy), "=D"(dummy2), "=S"(dummy3)
-	  : "c"(len), "S"(src), "D"(dest)
-	  : "memory", "cc");
+    __asm__ __volatile__(
+        "cld\n"
+        "rep movsb\n"
+        : "=c"(dummy), "=D"(dummy2), "=S"(dummy3)
+        : "c"(len), "S"(src), "D"(dest)
+        : "memory", "cc");
 
-  return dest;
+    return dest;
 }
