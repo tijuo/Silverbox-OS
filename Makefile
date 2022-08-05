@@ -6,7 +6,7 @@ QEMU_DRIVE	:=newimg.img
 
 include Makefile.inc
 
-all: kernel libs servers #apps servers drivers tests
+all: kernel lib servers #apps servers drivers tests
 
 kernel:
 	$(MAKE) -C kernel all

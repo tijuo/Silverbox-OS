@@ -10,6 +10,7 @@
 #include <kernel/lowlevel.h>
 #include <kernel/interrupt.h>
 #include <kernel/memory.h>
+#include <kernel/cap.h>
 
 #define TID_START           0u
 
@@ -176,6 +177,11 @@ NON_NULL_PARAMS tcb_t* create_thread(void *entry_addr, paddr_t addr_space,
   thread->priority = NORMAL_PRIORITY;
 
   thread->children_head = NULL_TID;
+
+  thread->cap_free_head = CAP_NULL_INDEX;
+  thread->cap_entry_head = CAP_NULL_INDEX;
+  thread->cap_table = NULL;
+  thread->cap_table_capacity = 0;
 
   kprintf("Created new thread at %#p (tid: %hhu, pmap: %#p)\n", thread, tid,
           (void*)(uintptr_t)thread->root_pmap);

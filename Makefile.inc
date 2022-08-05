@@ -11,7 +11,7 @@ export CC		:=$(TARGET)-gcc
 export LD		:=$(TARGET)-ld
 export AR		:=$(TARGET)-ar
 export ASFLAGS		=-I$(ROOT_DIR)/include \
-			-Wa,-I$(ROOT_DIR)/include,--64
+			-I$(ROOT_DIR)/include --64
 export DEPEND		:=makedepend
 export DD		:=dd
 export EN_DEBUG		:=$(if $(RELEASE),,-DDEBUG -g)

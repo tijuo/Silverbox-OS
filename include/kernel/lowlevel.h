@@ -1,6 +1,7 @@
 #ifndef KERNEL_LOWLEVEL_H
 #define KERNEL_LOWLEVEL_H
 
+#include <assert.h>
 #include <types.h>
 #include <kernel/bits.h>
 #include <os/exec_state.h>
@@ -145,7 +146,7 @@ union InterruptStackFrame {
 
 typedef union InterruptStackFrame interrupt_frame_t;
 
-_Static_assert(sizeof(interrupt_frame_t) == 40, "interrupt_frame_t should be 40 bytes");
+static_assert(sizeof(interrupt_frame_t) == 40, "interrupt_frame_t should be 40 bytes");
 
 /** Represents an entire TSS */
 
@@ -168,7 +169,7 @@ struct tss_struct {
   uint8_t tss_io_bitmap[8192];
 } PACKED;
 
-_Static_assert(sizeof(struct tss_struct) == 104+8192, "tss_struct should be 8296 bytes");
+static_assert(sizeof(struct tss_struct) == 104+8192, "tss_struct should be 8296 bytes");
 
 union GdtEntry {
   struct {
@@ -186,7 +187,7 @@ union GdtEntry {
 
 typedef union GdtEntry gdt_entry_t;
 
-_Static_assert(sizeof(gdt_entry_t) == 8, "gdt_entry_t should be 8 bytes");
+static_assert(sizeof(gdt_entry_t) == 8, "gdt_entry_t should be 8 bytes");
 
 union tss64_descriptor {
   struct {
@@ -208,7 +209,7 @@ union tss64_descriptor {
 
 typedef union tss64_descriptor tss64_entry_t;
 
-_Static_assert(sizeof(tss64_entry_t) == 16, "tss64_entry_t should be 16 bytes");
+static_assert(sizeof(tss64_entry_t) == 16, "tss64_entry_t should be 16 bytes");
 
 struct pseudo_descriptor {
   uint16_t limit;
@@ -231,7 +232,7 @@ union idt_entry {
 
 typedef union idt_entry idt_entry_t;
 
-_Static_assert(sizeof(idt_entry_t) == 16, "idt_entry_t should be 16 bytes");
+static_assert(sizeof(idt_entry_t) == 16, "idt_entry_t should be 16 bytes");
 
 extern void atomic_inc(volatile void*);
 extern void atomic_dec(volatile void*);

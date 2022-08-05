@@ -1,6 +1,7 @@
 #ifndef KERNEL_THREAD_H
 #define KERNEL_THREAD_H
 
+#include <assert.h>
 #include <types.h>
 #include <kernel/list_struct.h>
 #include <kernel/mm.h>
@@ -54,7 +55,9 @@ typedef struct ThreadControlBlock {
   tid_t children_head;
   tid_t next_sibling;
 
-  uint8_t available[12]; // unused padding to fill 64 B cache line
+  uint8_t available[8]; // unused padding to fill 64 B cache line
+  cap_index_t cap_entry_head;
+  cap_index_t cap_free_head;
   uint16_t cap_table_capacity;
 
   uint32_t event_mask;
@@ -83,7 +86,7 @@ struct Processor {
 typedef uint8_t proc_id_t;
 extern size_t num_processors;
 
-_Static_assert(IS_POWER_OF_TWO(sizeof(tcb_t)), "TCB size must be a power of 2.");
+static_assert(IS_POWER_OF_TWO(sizeof(tcb_t)), "TCB size must be a power of 2.");
 
 extern struct Processor processors[MAX_PROCESSORS];
 

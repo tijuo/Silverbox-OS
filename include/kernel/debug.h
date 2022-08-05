@@ -45,11 +45,12 @@ void init_video(void);
 
 #define rdtsc( upper, lower ) asm __volatile__( "rdtsc\n" : "=a"( *lower ), "=d"( *upper ) )
 
+#undef assert
 #define assert(exp)  { \
 	__typeof__ (exp) _exp=(exp); \
   if(_exp) { \
   } else { \
-  	BOCHS_BREAKPOINT; \
+    BOCHS_BREAKPOINT; \
     print_assert_msg( #exp, __FILE__, __func__, __LINE__ ); \
   } \
 }
