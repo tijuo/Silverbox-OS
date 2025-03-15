@@ -5,9 +5,9 @@
 #include <kernel/thread.h>
 #include <util.h>
 
-NON_NULL_PARAMS void list_insert_at_end(list_t *list, tcb_t *thread, int at_tail);
-NON_NULL_PARAMS tcb_t* list_remove_from_end(list_t *list, int at_tail);
-NON_NULL_PARAMS void list_remove(list_t *list, tcb_t *thread);
+NON_NULL_PARAMS void list_insert_at_end(list_t* list, tcb_t* thread, int at_tail);
+NON_NULL_PARAMS tcb_t* list_remove_from_end(list_t* list, int at_tail);
+NON_NULL_PARAMS void list_remove(list_t* list, tcb_t* thread);
 
 //int listEnqueue(list_t *list, tcb_t *thread);
 //tcb_t *listDequeue(list_t *list);
@@ -25,8 +25,6 @@ NON_NULL_PARAMS void list_remove(list_t *list, tcb_t *thread);
 // Pops a thread from the head of the list
 #define list_pop(list)               list_remove_from_end(list, 0)
 
-NON_NULL_PARAMS static inline bool is_list_empty(list_t *list) {
-  return list->head_tid == NULL_TID;
-}
+#define LIST_IS_EMPTY(list)   ({ typeof(list) _list = (list); _list->head_tid == NULL_TID && _list->tail_tid == NULL_TID; })
 
 #endif /* KERNEL_LIST_H */

@@ -10,18 +10,19 @@
 
 #define NUM_EXCEPTIONS    		32u
 #define NUM_IRQS        		24u
-#define is_valid_irq(irq)		({ __typeof__ (irq) _irq=(irq); (_irq < NUM_IRQS); })
+
+#define is_valid_irq(irq)		(irq < NUM_IRQS)
 
 struct CpuExInterruptFrame {
-  uint32_t ex_num;
-  uint32_t error_code;
-  uint32_t old_tss_esp0;
-  ExecutionState state;
+    uint32_t ex_num;
+    uint32_t error_code;
+    uint32_t old_tss_esp0;
+    ExecutionState state;
 };
 
 struct IrqInterruptFrame {
-  uint32_t old_tss_esp0;
-  ExecutionState state;
+    uint32_t old_tss_esp0;
+    ExecutionState state;
 };
 
 extern NAKED noreturn void cpu_ex0_handler(void);
@@ -84,6 +85,6 @@ extern NAKED noreturn void irq23_handler(void);
 
 /// The threads that are responsible for handling an IRQ
 
-extern tcb_t *irq_handlers[NUM_IRQS];
+extern tcb_t* irq_handlers[NUM_IRQS];
 
 #endif /* INTERRUPT_H */

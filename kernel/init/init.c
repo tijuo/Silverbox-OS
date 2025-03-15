@@ -25,7 +25,7 @@
 
 #define KERNEL_IDT_LEN	(64 * sizeof(struct IdtEntry))
 
-DISC_DATA const char *MB_INFO_NAMES[] = {
+DISC_DATA const char* MB_INFO_NAMES[] = {
   "MEM",
   "BOOT_DEV",
   "CMDLINE",
@@ -40,7 +40,7 @@ DISC_DATA const char *MB_INFO_NAMES[] = {
   "GFX_TAB"
 };
 
-DISC_DATA const char *FEATURES_STR[32] = {
+DISC_DATA const char* FEATURES_STR[32] = {
   "fpu",
   "vme",
   "de",
@@ -75,7 +75,7 @@ DISC_DATA const char *FEATURES_STR[32] = {
   "pbe"
 };
 
-DISC_DATA const char *FEATURES_STR2[32] = {
+DISC_DATA const char* FEATURES_STR2[32] = {
   "sse",
   "pclmulqdq",
   "dtes64",
@@ -110,7 +110,7 @@ DISC_DATA const char *FEATURES_STR2[32] = {
   "hypervisor"
 };
 
-DISC_DATA const char *PROCESSOR_TYPE[4] = {
+DISC_DATA const char* PROCESSOR_TYPE[4] = {
   "OEM Processor",
   "Intel Overdrive Processor",
   "Dual Processor",
@@ -120,11 +120,11 @@ DISC_DATA const char *PROCESSOR_TYPE[4] = {
 DISC_CODE static void disable_irq(unsigned int irq);
 
 DISC_DATA ALIGNED(PAGE_SIZE) uint8_t kboot_stack[4 * PAGE_SIZE];
-DISC_DATA void *kboot_stack_top = kboot_stack + sizeof kboot_stack;
+DISC_DATA void* kboot_stack_top = kboot_stack + sizeof kboot_stack;
 
 extern idt_entry_t kernel_idt[NUM_EXCEPTIONS + NUM_IRQS];
 
-extern uint8_t *kernel_stack_top;
+extern uint8_t* kernel_stack_top;
 
 DISC_CODE static void init_interrupts(void);
 //DISC_CODE static void initTimer( void ));
@@ -134,7 +134,7 @@ DISC_CODE void init(multiboot_info_t*);
 //DISC_CODE static void initPIC( void ));
 
 DISC_CODE void add_idt_entry(void (*f)(void), unsigned int entry_num,
-                           unsigned int dpl);
+    unsigned int dpl);
 DISC_CODE void load_idt(void);
 
 DISC_DATA static void (*CPU_EX_ISRS[NUM_EXCEPTIONS])(
@@ -155,11 +155,11 @@ DISC_DATA static void (*IRQ_ISRS[NUM_IRQS])(
       irq18_handler, irq19_handler, irq20_handler, irq21_handler, irq22_handler, irq23_handler
 };
 
-DISC_DATA multiboot_info_t *multiboot_info;
+DISC_DATA multiboot_info_t* multiboot_info;
 
-extern int init_memory(multiboot_info_t *info);
+extern int init_memory(multiboot_info_t* info);
 extern int read_acpi_tables(void);
-extern int load_servers(multiboot_info_t *info);
+extern int load_servers(multiboot_info_t* info);
 
 /*
  void initPIC( void )
@@ -197,52 +197,56 @@ extern int load_servers(multiboot_info_t *info);
  enableIRQ( 2 );
  }
  */
-/* Various call once functions */
+ /* Various call once functions */
 
-void add_idt_entry(void (*f)(void), unsigned int entry_num, unsigned int dpl) {
-  assert(entry_num < 256);
+void add_idt_entry(void (*f)(void), unsigned int entry_num, unsigned int dpl)
+{
+    kassert(entry_num < 256);
 
-  idt_entry_t *new_entry = &kernel_idt[entry_num];
+    idt_entry_t* new_entry = &kernel_idt[entry_num];
 
-  new_entry->offset_lower = (uint16_t)((uint32_t)f & 0xFFFFu);
-  new_entry->selector = KCODE_SEL;
-  new_entry->_resd = 0;
-  new_entry->gate_type = I_INT;
-  new_entry->is_storage = 0;
-  new_entry->dpl = MIN(dpl, 3u);
-  new_entry->is_present = 1;
-  new_entry->offset_upper = (uint16_t)((uint32_t)f >> 16);
+    new_entry->offset_lower = (uint16_t)((uint32_t)f & 0xFFFFu);
+    new_entry->selector = KCODE_SEL;
+    new_entry->_resd = 0;
+    new_entry->gate_type = I_INT;
+    new_entry->is_storage = 0;
+    new_entry->dpl = MIN(dpl, 3u);
+    new_entry->is_present = 1;
+    new_entry->offset_upper = (uint16_t)((uint32_t)f >> 16);
 }
 
-void load_idt(void) {
-  struct IdtPointer idt_pointer = {
-    .limit = KERNEL_IDT_LEN,
-    .base = (uint32_t)kernel_idt
-  };
+void load_idt(void)
+{
+    struct IdtPointer idt_pointer = {
+      .limit = KERNEL_IDT_LEN,
+      .base = (uint32_t)kernel_idt
+    };
 
-  __asm__("lidt %0" :: "m"(idt_pointer) : "memory");
+    __asm__("lidt %0" :: "m"(idt_pointer) : "memory");
 }
 
-void disable_irq(unsigned int irq) {
-  assert(irq < 16);
+void disable_irq(unsigned int irq)
+{
+    kassert(irq < 16);
 
-  // Send OCW1 (set IRQ mask)
+    // Send OCW1 (set IRQ mask)
 
-  if(irq < PIC2_IRQ_START)
-    out_port8( PIC1_PORT | 0x01,
-             in_port8(PIC1_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq));
-  else
-    out_port8(
-        PIC2_PORT | 0x01,
-        in_port8(PIC2_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq-PIC2_IRQ_START));
+    if(irq < PIC2_IRQ_START)
+        out_port8(PIC1_PORT | 0x01,
+            in_port8(PIC1_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq));
+    else
+        out_port8(
+            PIC2_PORT | 0x01,
+            in_port8(PIC2_PORT | 0x01) | (uint8_t)FROM_FLAG_BIT(irq - PIC2_IRQ_START));
 }
 
-void stop_init(const char *msg) {
-  disable_int();
-  kprintf("Init failed: %s\nSystem halted.", msg);
+void stop_init(const char* msg)
+{
+    disable_int();
+    kprintf("Init failed: %s\nSystem halted.", msg);
 
-  while(1)
-    __asm__("hlt");
+    while(1)
+        __asm__("hlt");
 }
 
 /*
@@ -257,18 +261,19 @@ void stop_init(const char *msg) {
  }
  */
 
-void init_interrupts(void) {
-  for(unsigned int i = 0; i < NUM_EXCEPTIONS; i++)
-    add_idt_entry(CPU_EX_ISRS[i], i, 0);
+void init_interrupts(void)
+{
+    for(unsigned int i = 0; i < NUM_EXCEPTIONS; i++)
+        add_idt_entry(CPU_EX_ISRS[i], i, 0);
 
-  for(unsigned int i = 0; i < NUM_IRQS; i++)
-    add_idt_entry(IRQ_ISRS[i], IRQ(i), 0);
+    for(unsigned int i = 0; i < NUM_IRQS; i++)
+        add_idt_entry(IRQ_ISRS[i], IRQ(i), 0);
 
-  for(int i = 0; i < 16; i++)
-    disable_irq(i);
+    for(int i = 0; i < 16; i++)
+        disable_irq(i);
 
-  //initPIC();
-  load_idt();
+    //initPIC();
+    load_idt();
 }
 
 #ifdef DEBUG
@@ -276,99 +281,100 @@ DISC_CODE static void show_cpu_features(void);
 DISC_CODE static void show_mb_info_flags(multiboot_info_t*);
 
 union ProcessorVersion {
-  struct {
-    uint32_t stepping_id :4;
-    uint32_t model :4;
-    uint32_t family_id :4;
-    uint32_t processor_type :2;
-    uint32_t _resd :2;
-    uint32_t ext_model_id :4;
-    uint32_t ext_family_id :8;
-    uint32_t _resd2 :4;
-  };
-  uint32_t value;
+    struct {
+        uint32_t stepping_id : 4;
+        uint32_t model : 4;
+        uint32_t family_id : 4;
+        uint32_t processor_type : 2;
+        uint32_t _resd : 2;
+        uint32_t ext_model_id : 4;
+        uint32_t ext_family_id : 8;
+        uint32_t _resd2 : 4;
+    };
+    uint32_t value;
 };
 
 union AdditionalCpuidInfo {
-  struct {
-    uint8_t brand_index;
-    uint8_t cflush_size;
-    uint8_t max_logical_processors;
-    uint8_t lapic_id;
-  };
-  uint32_t value;
+    struct {
+        uint8_t brand_index;
+        uint8_t cflush_size;
+        uint8_t max_logical_processors;
+        uint8_t lapic_id;
+    };
+    uint32_t value;
 };
 
-void show_mb_info_flags(multiboot_info_t *info) {
-  kprintf("Mulitboot Information Flags:\n\n");
+void show_mb_info_flags(multiboot_info_t* info)
+{
+    kprintf("Mulitboot Information Flags:\n\n");
 
-  for(size_t i = 0; i < 12; i++) {
-    if(IS_FLAG_SET(info->flags, (1u << i)))
-      kprintf("%s\n", MB_INFO_NAMES[i]);
-  }
-  kprintf("\n");
+    for(size_t i = 0; i < 12; i++) {
+        if(IS_FLAG_SET(info->flags, (1u << i)))
+            kprintf("%s\n", MB_INFO_NAMES[i]);
+    }
+    kprintf("\n");
 }
 
-void show_cpu_features(void) {
-  union ProcessorVersion proc_version;
-  union AdditionalCpuidInfo additional_info;
-  uint32_t features2;
-  uint32_t features;
+void show_cpu_features(void)
+{
+    union ProcessorVersion proc_version;
+    union AdditionalCpuidInfo additional_info;
+    uint32_t features2;
+    uint32_t features;
 
-  __cpuid(1, proc_version.value, additional_info.value, features2, features);
+    __cpuid(1, proc_version.value, additional_info.value, features2, features);
 
-  kprintf("CPUID Features:\n");
+    kprintf("CPUID Features:\n");
 
-  kprintf("%s\n", PROCESSOR_TYPE[proc_version.processor_type]);
+    kprintf("%s\n", PROCESSOR_TYPE[proc_version.processor_type]);
 
-  kprintf(
-      "Model: %d\n",
-      proc_version.model + (
-          (proc_version.family_id == 6 || proc_version.family_id == 15) ?
-              (proc_version.ext_model_id << 4) : 0));
+    kprintf(
+        "Model: %d\n",
+        proc_version.model + (
+            (proc_version.family_id == 6 || proc_version.family_id == 15) ?
+            (proc_version.ext_model_id << 4) : 0));
 
-  kprintf(
-      "Family: %d\n",
-      proc_version.family_id + (
-          proc_version.family_id == 15 ? proc_version.ext_family_id : 0));
-  kprintf("Stepping: %d\n\n", proc_version.stepping_id);
+    kprintf(
+        "Family: %d\n",
+        proc_version.family_id + (
+            proc_version.family_id == 15 ? proc_version.ext_family_id : 0));
+    kprintf("Stepping: %d\n\n", proc_version.stepping_id);
 
-  kprintf("Brand Index: %d\n", additional_info.brand_index);
+    kprintf("Brand Index: %d\n", additional_info.brand_index);
 
-  if(IS_FLAG_SET(features, 1 << 19))
-    kprintf("Cache Line Size: %d bytes\n", 8 * additional_info.cflush_size);
+    if(IS_FLAG_SET(features, 1u << 19))
+        kprintf("Cache Line Size: %d bytes\n", 8 * additional_info.cflush_size);
 
-  if(IS_FLAG_SET(features, 1 << 28)) {
-    size_t num_ids;
+    if(IS_FLAG_SET(features, 1u << 28)) {
+        size_t num_ids;
 
-    if(additional_info.max_logical_processors) {
-      uint32_t msb = _bit_scan_reverse(additional_info.max_logical_processors);
+        if(additional_info.max_logical_processors) {
+            uint32_t msb = _bit_scan_reverse(additional_info.max_logical_processors);
 
-      if(additional_info.max_logical_processors & ((1 << msb) - 1))
-        num_ids = (1 << (msb + 1));
-      else
-        num_ids = 1 << msb;
+            if(additional_info.max_logical_processors & ((1u << msb) - 1))
+                num_ids = (1u << (msb + 1));
+            else
+                num_ids = 1u << msb;
+        } else
+            num_ids = 0;
+
+        kprintf("Unique APIC IDs per physical processor: %d\n", num_ids);
     }
-    else
-      num_ids = 0;
+    kprintf("Local APIC ID: %#x\n\n", additional_info.lapic_id);
 
-    kprintf("Unique APIC IDs per physical processor: %d\n", num_ids);
-  }
-  kprintf("Local APIC ID: %#x\n\n", additional_info.lapic_id);
+    kprintf("Processor Features:");
 
-  kprintf("Processor Features:");
+    for(size_t i = 0; i < 32; i++) {
+        if(IS_FLAG_SET(features, 1u << i))
+            kprintf(" %s", FEATURES_STR[i]);
+    }
 
-  for(size_t i = 0; i < 32; i++) {
-    if(IS_FLAG_SET(features, 1 << i))
-      kprintf(" %s", FEATURES_STR[i]);
-  }
+    for(size_t i = 0; i < 32; i++) {
+        if(IS_FLAG_SET(features2, 1u << i))
+            kprintf(" %s", FEATURES_STR2[i]);
+    }
 
-  for(size_t i = 0; i < 32; i++) {
-    if(IS_FLAG_SET(features2, 1 << i))
-      kprintf(" %s", FEATURES_STR2[i]);
-  }
-
-  kprintf("\n");
+    kprintf("\n");
 }
 #endif /* DEBUG */
 
@@ -378,74 +384,74 @@ void show_cpu_features(void) {
  @param info The multiboot structure passed by the bootloader.
  */
 
-void init(multiboot_info_t *info) {
-  /* Initialize memory */
+void init(multiboot_info_t* info)
+{
+    /* Initialize memory */
 
-  if(IS_ERROR(init_memory(info)))
-    stop_init("Unable to initialize memory.");
+    if(IS_ERROR(init_memory(info)))
+        stop_init("Unable to initialize memory.");
 
-  info = (multiboot_info_t*)KPHYS_TO_VIRT((addr_t)info);
-  multiboot_info = info;
+    info = (multiboot_info_t*)KPHYS_TO_VIRT((addr_t)info);
+    multiboot_info = info;
 
 #ifdef DEBUG
-  init_serial();
-  init_video();
-  clear_screen();
+    init_serial();
+    init_video();
+    clear_screen();
 #endif /* DEBUG */
 
-  show_mb_info_flags(info);
-  show_cpu_features();
+    show_mb_info_flags(info);
+    show_cpu_features();
 
-  kprintf("Initializing interrupt handling.\n");
-  init_interrupts();
+    kprintf("Initializing interrupt handling.\n");
+    init_interrupts();
 
-  int retval = read_acpi_tables();
+    int retval = read_acpi_tables();
 
-  if(IS_ERROR(retval))
-    stop_init("Unable to read ACPI tables.");
-  else {
-    num_processors = (size_t)retval;
+    if(IS_ERROR(retval))
+        stop_init("Unable to read ACPI tables.");
+    else {
+        num_processors = (size_t)retval;
 
-    if(num_processors == 0)
-      num_processors = 1;
-  }
+        if(num_processors == 0)
+            num_processors = 1;
+    }
 
-  //  enable_apic();
-  //  init_apic_timer();
-  /*
-   kprintf("Initializing timer.\n");
-   initTimer();
-   */
+    //  enable_apic();
+    //  init_apic_timer();
+    /*
+     kprintf("Initializing timer.\n");
+     initTimer();
+     */
 
-  kprintf("\n%#x bytes of discardable code.",
-          (addr_t)EXT_PTR(kddata) - (addr_t)EXT_PTR(kdcode));
-  kprintf(" %#x bytes of discardable data.\n",
-          (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kddata));
-  kprintf("Discarding %d bytes in total\n",
-          (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kdcode));
+    kprintf("\n%#x bytes of discardable code.",
+        (addr_t)EXT_PTR(kddata) - (addr_t)EXT_PTR(kdcode));
+    kprintf(" %#x bytes of discardable data.\n",
+        (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kddata));
+    kprintf("Discarding %d bytes in total\n",
+        (addr_t)EXT_PTR(kdend) - (addr_t)EXT_PTR(kdcode));
 
-  load_servers(info);
+    load_servers(info);
 
-  /* Release the pages for the code and data that will never be used again. */
+    /* Release the pages for the code and data that will never be used again. */
 
-  for(addr_t addr = (addr_t)EXT_PTR(kdcode); addr < (addr_t)EXT_PTR(kbss);
-      addr += PAGE_SIZE)
-  {
-    // todo: Mark these pages as free for init server
-  }
+    for(addr_t addr = (addr_t)EXT_PTR(kdcode); addr < (addr_t)EXT_PTR(kbss);
+        addr += PAGE_SIZE) {
+        // todo: Mark these pages as free for init server
+    }
 
-  // Initialize FPU to a known state
-  __asm__("fninit\n"
-      "fxsave %0\n" :: "m"(init_server_thread->xsave_state));
+    // Initialize FPU to a known state
+    __asm__("fninit\n"
+        "fxsave %0\n" :: "m"(init_server_thread->xsave_state));
 
-  // Set MSRs to enable sysenter/sysexit functionality
+    // Set MSRs to enable sysenter/sysexit functionality
 
-  wrmsr(SYSENTER_CS_MSR, KCODE_SEL);
-  wrmsr(SYSENTER_ESP_MSR, (uint64_t)(uintptr_t)kernel_stack_top);
-  wrmsr(SYSENTER_EIP_MSR, (uint64_t)(uintptr_t)sysenter_entry);
+    wrmsr(SYSENTER_CS_MSR, KCODE_SEL);
+    wrmsr(SYSENTER_ESP_MSR, (uint64_t)(uintptr_t)kernel_stack_top);
+    wrmsr(SYSENTER_EIP_MSR, (uint64_t)(uintptr_t)sysenter_entry);
 
-  kprintf("Context switching...\n");
+    kprintf("Context switching...\n");
 
-  switch_context(schedule(0), 0);
-  stop_init("Error: Context switch failed.");
+    switch_context(schedule(0), 0);
+    stop_init("Error: Context switch failed.");
 }

@@ -1,12 +1,12 @@
-#include <kernel/mm.h>
-#include <kernel/debug.h>
-#include <kernel/thread.h>
-#include <kernel/schedule.h>
-#include <kernel/memory.h>
-#include <kernel/syscall.h>
-#include <kernel/message.h>
-#include <kernel/error.h>
 #include <kernel/bits.h>
+#include <kernel/debug.h>
+#include <kernel/error.h>
+#include <kernel/memory.h>
+#include <kernel/message.h>
+#include <kernel/mm.h>
+#include <kernel/schedule.h>
+#include <kernel/syscall.h>
+#include <kernel/thread.h>
 
 /** Attach a sending thread to a recipient's send queue. The sender will then enter
  the WAIT_FOR_RECV state until the recipient receives the message from
@@ -17,16 +17,17 @@
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS int attach_send_wait_queue(tcb_t *sender, tid_t recipient_tid) {
-  assert(recipient_tid != NULL_TID);
+NON_NULL_PARAMS int attach_send_wait_queue(tcb_t* sender, tid_t recipient_tid)
+{
+    kassert(recipient_tid != NULL_TID);
 
-  tcb_t *recipient = get_tcb(recipient_tid);
+    tcb_t* recipient = get_tcb(recipient_tid);
 
-  list_enqueue(&recipient->sender_wait_queue, sender);
-  sender->thread_state = WAIT_FOR_RECV;
-  sender->wait_tid = recipient_tid;
+    list_enqueue(&recipient->sender_wait_queue, sender);
+    sender->thread_state = WAIT_FOR_RECV;
+    sender->wait_tid = recipient_tid;
 
-  return E_OK;
+    return E_OK;
 }
 
 /** Attach a recipient to a sender's receive queue. The receiving thread will
@@ -39,18 +40,19 @@ NON_NULL_PARAMS int attach_send_wait_queue(tcb_t *sender, tid_t recipient_tid) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS int attach_receive_wait_queue(tcb_t *recipient, tid_t sender_tid) {
-  tcb_t *sender = get_tcb(sender_tid);
+NON_NULL_PARAMS int attach_receive_wait_queue(tcb_t* recipient, tid_t sender_tid)
+{
+    tcb_t* sender = get_tcb(sender_tid);
 
-  // If sender is NULL, then the kernel sent the message. No need to attach to a wait queue
+    // If sender is NULL, then the kernel sent the message. No need to attach to a wait queue
 
-  if(sender)
-    list_enqueue(&sender->receiver_wait_queue, recipient);
+    if(sender)
+        list_enqueue(&sender->receiver_wait_queue, recipient);
 
-  recipient->thread_state = WAIT_FOR_SEND;
-  recipient->wait_tid = sender_tid;
+    recipient->thread_state = WAIT_FOR_SEND;
+    recipient->wait_tid = sender_tid;
 
-  return E_OK;
+    return E_OK;
 }
 
 /** Remove a sender from its recipient's send queue.
@@ -59,15 +61,16 @@ NON_NULL_PARAMS int attach_receive_wait_queue(tcb_t *recipient, tid_t sender_tid
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS int detach_send_wait_queue(tcb_t *sender) {
-  tcb_t *recipient = get_tcb(sender->wait_tid);
+NON_NULL_PARAMS int detach_send_wait_queue(tcb_t* sender)
+{
+    tcb_t* recipient = get_tcb(sender->wait_tid);
 
-  sender->wait_tid = NULL_TID;
+    sender->wait_tid = NULL_TID;
 
-  if(recipient)
-    list_remove(&recipient->sender_wait_queue, sender);
+    if(recipient)
+        list_remove(&recipient->sender_wait_queue, sender);
 
-  return E_OK;
+    return E_OK;
 }
 
 /** Remove a recipient from its sender's receive queue.
@@ -76,15 +79,16 @@ NON_NULL_PARAMS int detach_send_wait_queue(tcb_t *sender) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-NON_NULL_PARAMS int detach_receive_wait_queue(tcb_t *recipient) {
-  tcb_t *sender = get_tcb(recipient->wait_tid);
+NON_NULL_PARAMS int detach_receive_wait_queue(tcb_t* recipient)
+{
+    tcb_t* sender = get_tcb(recipient->wait_tid);
 
-  recipient->wait_tid = NULL_TID;
+    recipient->wait_tid = NULL_TID;
 
-  if(sender)
-    list_remove(&sender->receiver_wait_queue, recipient);
+    if(sender)
+        list_remove(&sender->receiver_wait_queue, recipient);
 
-  return E_OK;
+    return E_OK;
 }
 
 /**
@@ -106,82 +110,75 @@ NON_NULL_PARAMS int detach_receive_wait_queue(tcb_t *recipient) {
  E_BLOCK if no recipient is ready to receive (and not blocking).
  */
 
-// XXX: What if recipient is waiting to receive a message from TID x, but
-// XXX: TID x sends an exception message to recipient? Recipient's
-// XXX: receive should return with E_INTERRUPT. And any subsequent
-// XXX: receive()s from that TID should result in E_INTERRUPT.
+ // XXX: What if recipient is waiting to receive a message from TID x, but
+ // XXX: TID x sends an exception message to recipient? Recipient's
+ // XXX: receive should return with E_INTERRUPT. And any subsequent
+ // XXX: receive()s from that TID should result in E_INTERRUPT.
 NON_NULL_PARAMS
-int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid, tid_t replier_tid,
-                           uint32_t subject, uint32_t send_flags,
-                           uint32_t recv_flags, bool send_only)
+int _send_and_receive_message(tcb_t* sender, tid_t recipient_tid, tid_t replier_tid,
+    uint32_t subject, uint32_t send_flags,
+    uint32_t recv_flags, bool send_only)
 {
-  tid_t sender_tid = get_tid(sender);
-  tcb_t *recipient;
-  int is_kernel_message = IS_FLAG_SET(send_flags, MSG_KERNEL);
+    tid_t sender_tid = get_tid(sender);
+    tcb_t* recipient;
+    int is_kernel_message = IS_FLAG_SET(send_flags, MSG_KERNEL);
 
-//  kprintf("sendMessage(): %d->%d subject %#x flags: %#x\n", sender_tid, msg->target.recipient, msg->subject, msg->flags);
+    //  kprintf("sendMessage(): %d->%d subject %#x flags: %#x\n", sender_tid, msg->target.recipient, msg->subject, msg->flags);
 
-  if(sender_tid == recipient_tid) // If sender wants to call itself, then simply set the return value
-    RET_MSG(E_INVALID_ARG, "Sender attempted to send a message to itself.");
-  else if(sender_tid == replier_tid)
-    RET_MSG(E_INVALID_ARG,
+    if(sender_tid == recipient_tid) // If sender wants to call itself, then simply set the return value
+        RET_MSG(E_INVALID_ARG, "Sender attempted to send a message to itself.");
+    else if(sender_tid == replier_tid)
+        RET_MSG(E_INVALID_ARG,
             "Sender attempted to receive a message from itself.");
-  else if(!(recipient = get_tcb(recipient_tid)))
-    RET_MSG(E_INVALID_ARG, "Invalid recipient.");
-  else if(recipient->thread_state == INACTIVE || recipient->thread_state == ZOMBIE)
-    RET_MSG(E_UNREACH, "Attempting to send message to inactive thread.");
+    else if(!(recipient = get_tcb(recipient_tid)))
+        RET_MSG(E_INVALID_ARG, "Invalid recipient.");
+    else if(recipient->thread_state == INACTIVE || recipient->thread_state == ZOMBIE)
+        RET_MSG(E_UNREACH, "Attempting to send message to inactive thread.");
 
-  // TODO: Do not allow cycles to form in wait queues.
+    // TODO: Do not allow cycles to form in wait queues.
 
-  // If the recipient is waiting for a message from this sender or any sender
+    // If the recipient is waiting for a message from this sender or any sender
 
-  if(recipient->thread_state == WAIT_FOR_SEND && (recipient->wait_tid
-      == ANY_SENDER
-                                                 || (recipient->wait_tid == sender_tid && !is_kernel_message
-                                                     && !recipient
-                                                       ->wait_for_kernel_msg)
-                                                 || (is_kernel_message && recipient
-                                                       ->wait_for_kernel_msg))) {
-    recipient->wait_for_kernel_msg = 0;
+    if(recipient->thread_state == WAIT_FOR_SEND && (recipient->wait_tid == ANY_SENDER || (recipient->wait_tid == sender_tid && !is_kernel_message && !recipient->wait_for_kernel_msg) || (is_kernel_message && recipient->wait_for_kernel_msg))) {
+        recipient->wait_for_kernel_msg = 0;
 
-    //kprintf("%d is sending message to %d subject %#x flags: %#x\n", sender_tid, msg->recipient, msg->subject, msg->flags);
+        // kprintf("%d is sending message to %d subject %#x flags: %#x\n", sender_tid, msg->recipient, msg->subject, msg->flags);
 
-    start_thread(recipient);
+        start_thread(recipient);
 
-    recipient->user_exec_state.eax = E_OK;
-    recipient->user_exec_state.ebx = sender_tid;
-    recipient->user_exec_state.esi = subject;
-    recipient->user_exec_state.edi = send_flags;
+        recipient->user_exec_state.eax = E_OK;
+        recipient->user_exec_state.ebx = sender_tid;
+        recipient->user_exec_state.esi = subject;
+        recipient->user_exec_state.edi = send_flags;
 
-    //kprintf("%d: Called %d with subject %d now waiting for response\n", getTid(sender), getTid(recipient), msg->subject);
-    if(!send_only && IS_ERROR(receive_message(sender, replier_tid, recv_flags)))
-      RET_MSG(E_FAIL, "Unable to complete call.");
+        // kprintf("%d: Called %d with subject %d now waiting for response\n", getTid(sender), getTid(recipient), msg->subject);
+        if(!send_only && IS_ERROR(receive_message(sender, replier_tid, recv_flags)))
+            RET_MSG(E_FAIL, "Unable to complete call.");
 
-    return E_OK;
-  }
-  else if(IS_FLAG_SET(send_flags, MSG_NOBLOCK)) // Recipient is not ready to receive, but we're not allowed to block, so return
-    return E_BLOCK;
-  else  // Wait until the recipient is ready to receive the message
-  {
-    //kprintf("%d: Waiting to send subj: %d to %d\n", sender_tid, msg->subject, msg->recipient);
+        return E_OK;
+    } else if(IS_FLAG_SET(send_flags, MSG_NOBLOCK)) // Recipient is not ready to receive, but we're not allowed to block, so return
+        return E_BLOCK;
+    else // Wait until the recipient is ready to receive the message
+    {
+        // kprintf("%d: Waiting to send subj: %d to %d\n", sender_tid, msg->subject, msg->recipient);
 
-    if(IS_ERROR(remove_thread_from_list(sender)))
-      RET_MSG(E_FAIL, "Unable to detach sender from run queue.");
+        if(IS_ERROR(remove_thread_from_list(sender)))
+            RET_MSG(E_FAIL, "Unable to detach sender from run queue.");
 
-    attach_send_wait_queue(sender, get_tid(recipient));
+        attach_send_wait_queue(sender, get_tid(recipient));
 
-    //kprintf("Waiting until recipient is read...\n");
+        // kprintf("Waiting until recipient is read...\n");
 
-    sender->wait_for_kernel_msg = !!is_kernel_message;
-    sender->user_exec_state.eax = E_INTERRUPT;
+        sender->wait_for_kernel_msg = !!is_kernel_message;
+        sender->user_exec_state.eax = (uint32_t)E_INTERRUPT;
 
-    // todo: Set a flag so that on receive(), it completes the sendAndReceive
-    switch_context(schedule(get_current_processor()), 1);
+        // todo: Set a flag so that on receive(), it completes the sendAndReceive
+        switch_context(schedule(get_current_processor()), 1);
 
-    // Does not return
-  }
+        // Does not return
+    }
 
-  RET_MSG(E_FAIL, "This should never happen.");
+    RET_MSG(E_FAIL, "This should never happen.");
 }
 
 /**
@@ -198,70 +195,67 @@ int _send_and_receive_message(tcb_t *sender, tid_t recipient_tid, tid_t replier_
  */
 
 NON_NULL_PARAMS
-int receive_message(tcb_t *recipient, tid_t sender_tid, uint32_t flags)
+int receive_message(tcb_t* recipient, tid_t sender_tid, uint32_t flags)
 {
-  tcb_t *sender = get_tcb(sender_tid);
-  tid_t recipient_tid = get_tid(recipient);
-  int is_kernel_message = IS_FLAG_SET(flags, MSG_KERNEL);
+    tcb_t* sender = get_tcb(sender_tid);
+    tid_t recipient_tid = get_tid(recipient);
+    int is_kernel_message = IS_FLAG_SET(flags, MSG_KERNEL);
 
-  //kprintf("%d: receiveMessage()\n", recipient_tid);
+    // kprintf("%d: receiveMessage()\n", recipient_tid);
 
-  // TODO: Do not allow cycles to form in wait queues.
+    // TODO: Do not allow cycles to form in wait queues.
 
-  if(recipient == sender)
-    RET_MSG(E_INVALID_ARG,
+    if(recipient == sender)
+        RET_MSG(E_INVALID_ARG,
             "Recipient attempted to receive message from itself.");
-  else if(sender
-      && (sender->thread_state == INACTIVE || sender->thread_state == ZOMBIE))
-    RET_MSG(E_UNREACH, "Attempting to receive message from inactive thread.");
+    else if(sender && (sender->thread_state == INACTIVE || sender->thread_state == ZOMBIE))
+        RET_MSG(E_UNREACH, "Attempting to receive message from inactive thread.");
 
-  if(!sender && !is_list_empty(&recipient->sender_wait_queue)) // receive message from anyone
-  {
-    sender = list_dequeue(&recipient->sender_wait_queue);
-    sender_tid = get_tid(sender);
-  }
+    if(!sender && !LIST_IS_EMPTY(&recipient->sender_wait_queue)) // receive message from anyone
+    {
+        sender = list_dequeue(&recipient->sender_wait_queue);
+        sender_tid = get_tid(sender);
+    }
 
-  //kprintf("receiveMessage(): %d<-%d flags: %#x\n", recipient_tid, sender_tid, msg->flags);
+    // kprintf("receiveMessage(): %d<-%d flags: %#x\n", recipient_tid, sender_tid, msg->flags);
 
-  if(sender && sender->wait_tid == recipient_tid
-     && (!is_kernel_message || (is_kernel_message && sender->wait_for_kernel_msg))) {
-    //kprintf("%d: Receiving message...\n", recipient_tid);
+    if(sender && sender->wait_tid == recipient_tid && (!is_kernel_message || (is_kernel_message && sender->wait_for_kernel_msg))) {
+        // kprintf("%d: Receiving message...\n", recipient_tid);
 
-    start_thread(sender);
+        start_thread(sender);
 
-    sender->wait_for_kernel_msg = 0;
+        sender->wait_for_kernel_msg = 0;
 
-    sender->user_exec_state.eax = E_OK;
-    recipient->user_exec_state.eax = E_OK;
-    recipient->user_exec_state.ebx = sender_tid;
-    recipient->user_exec_state.esi = sender->user_exec_state.esi; // sender flags
-    recipient->user_exec_state.edi = sender->user_exec_state.edi;
+        sender->user_exec_state.eax = E_OK;
+        recipient->user_exec_state.eax = E_OK;
+        recipient->user_exec_state.ebx = sender_tid;
+        recipient->user_exec_state.esi = sender->user_exec_state.esi; // sender flags
+        recipient->user_exec_state.edi = sender->user_exec_state.edi;
 
-    //kprintf("%d is receiving message from %d subject %#x flags: %#x\n", recipient_tid, sender_tid, msg->subject, msg->flags);
+        // kprintf("%d is receiving message from %d subject %#x flags: %#x\n", recipient_tid, sender_tid, msg->subject, msg->flags);
 
-    __asm__("fxrstor %0\n" :: "m"(sender->xsave_state));
+        __asm__("fxrstor %0\n" ::"m"(sender->xsave_state));
 
-    switch_context(recipient, 0); // don't use sysexit. do an iret instead so that args are restored
-    // Does not return
-  }
-  else if(IS_FLAG_SET(flags, MSG_NOBLOCK))
-    return E_BLOCK;
-  else // no one is waiting to send to this local port, so wait
-  {
-    //kprintf("%d: Waiting to receive from %d\n", recipient_tid, msg->sender);
+        switch_context(recipient, 0); // don't use sysexit. do an iret instead so that args are restored
+        // Does not return
+    } else if(IS_FLAG_SET(flags, MSG_NOBLOCK))
+        return E_BLOCK;
+    else // no one is waiting to send to this local port, so wait
+    {
+        // kprintf("%d: Waiting to receive from %d\n", recipient_tid, msg->sender);
 
-    if(IS_ERROR(remove_thread_from_list(recipient)))
-      RET_MSG(E_FAIL, "Unable to detach recipient from run queue.");
+        if(IS_ERROR(remove_thread_from_list(recipient)))
+            RET_MSG(E_FAIL, "Unable to detach recipient from run queue.");
 
-    attach_receive_wait_queue(recipient, sender_tid);
+        attach_receive_wait_queue(recipient, sender_tid);
 
-    recipient->wait_for_kernel_msg = !!is_kernel_message;
-    recipient->user_exec_state.eax = E_INTERRUPT;
+        recipient->wait_for_kernel_msg = !!is_kernel_message;
+        recipient->user_exec_state.eax = (uint32_t)E_INTERRUPT;
 
-    // Receive will be completed when sender does a send
+        // Receive will be completed when sender does a send
 
-    switch_context(schedule(get_current_processor()), 1);
-  }
+        switch_context(schedule(get_current_processor()), 1);
+    }
 
-  RET_MSG(E_FAIL, "This should never happen.");
+    RET_MSG(E_FAIL, "This should never happen.");
 }

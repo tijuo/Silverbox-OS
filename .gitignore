@@ -16,6 +16,8 @@
 *.vs
 *.settings
 *.rlib
+.clangd
+**/.vscode/**
 os_image.img.lock
 .deps/
 bx_enh_dbg.ini
@@ -24,3 +26,5 @@ kernel/kernel
 bin/
 /build/
 lib/librust/target
+bochs_serial_output.txt
+bochsdbg_log.txt

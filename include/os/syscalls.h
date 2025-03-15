@@ -244,13 +244,6 @@ typedef struct Tcb {
   tid_t pager;
 
   tid_t wait_tid;
-  tid_t parent;
-
-  tid_t nextSibling;
-  tid_t prevSibling;
-
-  tid_t childrenHead;
-  tid_t childrenTail;
 
   tid_t receiverWaitHead;
   tid_t receiverWaitTail;
@@ -258,7 +251,9 @@ typedef struct Tcb {
   tid_t senderWaitHead;
   tid_t senderWaitTail;
 
-  xsave_state_t xsave_state;
+  xsave_state_t *xsave_state;
+  size_t xsave_state_len;
+  uint16_t xsave_state_bits;
 
 } thread_info_t;
 
@@ -425,14 +420,14 @@ static inline int sys_get_page_mappings(unsigned int level, addr_t virt,
                                         size_t count, uint32_t addrSpace,
                                         struct PageMapping *mappings)
 {
-  return sys_get_page_mappings_base(virt, count, addrSpace, mappings, level);
+  return sys_get_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
 }
 
 static inline int sys_set_page_mappings(unsigned int level, addr_t virt,
                                         size_t count, uint32_t addrSpace,
                                         struct PageMapping *mappings)
 {
-  return sys_set_page_mappings_base(virt, count, addrSpace, mappings, level);
+  return sys_set_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
 }
 
 static inline int sys_send_and_recv(tid_t recipient, tid_t replier,

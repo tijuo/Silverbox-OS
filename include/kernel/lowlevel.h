@@ -135,32 +135,32 @@
 //#define IOMAP_LAZY_OFFSET	0xFFFF
 
 union InterruptStackFrame {
-  struct {
-    uint32_t eip;
-    uint16_t cs;
-    uint16_t _resd;
-    uint32_t eflags;
-    uint16_t ss;
-    uint16_t _resd2;
-    uint32_t esp;
-  };
+    struct {
+        uint32_t eip;
+        uint16_t cs;
+        uint16_t _resd;
+        uint32_t eflags;
+        uint16_t ss;
+        uint16_t _resd2;
+        uint32_t esp;
+    };
 
-  struct {
-    uint32_t eip;
-    uint16_t cs;
-    uint16_t _resd;
-    uint32_t eflags;
-  } same_priv;
+    struct {
+        uint32_t eip;
+        uint16_t cs;
+        uint16_t _resd;
+        uint32_t eflags;
+    } same_priv;
 
-  struct {
-    uint32_t eip;
-    uint16_t cs;
-    uint16_t _resd;
-    uint32_t eflags;
-    uint16_t ss;
-    uint16_t _resd2;
-    uint32_t esp;
-  } change_priv;
+    struct {
+        uint32_t eip;
+        uint16_t cs;
+        uint16_t _resd;
+        uint32_t eflags;
+        uint16_t ss;
+        uint16_t _resd2;
+        uint32_t esp;
+    } change_priv;
 };
 
 typedef union InterruptStackFrame interrupt_frame_t;
@@ -168,83 +168,83 @@ typedef union InterruptStackFrame interrupt_frame_t;
 /** Represents an entire TSS */
 
 struct TSS_Struct {
-  uint16_t backlink;
-  uint16_t _resd1;
-  uint32_t esp0;
-  uint16_t ss0;
-  uint16_t _resd2;
-  uint32_t esp1;
-  uint16_t ss1;
-  uint16_t _resd3;
-  uint32_t esp2;
-  uint16_t ss2;
-  uint16_t _resd4;
-  uint32_t cr3;
-  uint32_t eip;
-  uint32_t eflags;
-  uint32_t eax;
-  uint32_t ecx;
-  uint32_t edx;
-  uint32_t ebx;
-  uint32_t esp;
-  uint32_t ebp;
-  uint32_t esi;
-  uint32_t edi;
-  uint16_t es;
-  uint16_t _resd5;
-  uint16_t cs;
-  uint16_t _resd6;
-  uint16_t ss;
-  uint16_t _resd7;
-  uint16_t ds;
-  uint16_t _resd8;
-  uint16_t fs;
-  uint16_t _resd9;
-  uint16_t gs;
-  uint16_t _resd10;
-  uint16_t ldt;
-  uint16_t _resd11;
-  uint16_t trap :1;
-  uint16_t _resd12 :15;
-  uint16_t io_map_base;
-  uint8_t tss_io_bitmap[8192];
+    uint16_t backlink;
+    uint16_t _resd1;
+    uint32_t esp0;
+    uint16_t ss0;
+    uint16_t _resd2;
+    uint32_t esp1;
+    uint16_t ss1;
+    uint16_t _resd3;
+    uint32_t esp2;
+    uint16_t ss2;
+    uint16_t _resd4;
+    uint32_t cr3;
+    uint32_t eip;
+    uint32_t eflags;
+    uint32_t eax;
+    uint32_t ecx;
+    uint32_t edx;
+    uint32_t ebx;
+    uint32_t esp;
+    uint32_t ebp;
+    uint32_t esi;
+    uint32_t edi;
+    uint16_t es;
+    uint16_t _resd5;
+    uint16_t cs;
+    uint16_t _resd6;
+    uint16_t ss;
+    uint16_t _resd7;
+    uint16_t ds;
+    uint16_t _resd8;
+    uint16_t fs;
+    uint16_t _resd9;
+    uint16_t gs;
+    uint16_t _resd10;
+    uint16_t ldt;
+    uint16_t _resd11;
+    uint16_t trap : 1;
+    uint16_t _resd12 : 15;
+    uint16_t io_map_base;
+    uint8_t tss_io_bitmap[8192];
 };
 
 // 56 bytes
 
 typedef struct {
-  uint16_t gs;
-  uint16_t fs;
-  uint16_t es;
-  uint16_t ds;
-  uint32_t edi;
-  uint32_t esi;
-  uint32_t ebp;
-  uint32_t ebx;
-  uint32_t edx;
-  uint32_t ecx;
-  uint32_t eax;
-  uint32_t eip;
-  uint16_t cs;
-  uint16_t avail;
-  uint32_t eflags;
-  uint32_t user_esp;
-  uint16_t user_ss;
-  uint16_t avail2;
+    uint16_t gs;
+    uint16_t fs;
+    uint16_t es;
+    uint16_t ds;
+    uint32_t edi;
+    uint32_t esi;
+    uint32_t ebp;
+    uint32_t ebx;
+    uint32_t edx;
+    uint32_t ecx;
+    uint32_t eax;
+    uint32_t eip;
+    uint16_t cs;
+    uint16_t avail;
+    uint32_t eflags;
+    uint32_t user_esp;
+    uint16_t user_ss;
+    uint16_t avail2;
 } ExecutionState;
 
 union GdtEntry {
-  struct {
-    uint16_t limit1;
-    uint16_t base1;
-    uint8_t base2;
-    uint8_t access_flags;
-    uint8_t limit2 :4;
-    uint8_t flags2 :4;
-    uint8_t base3;
-  };
+    struct {
+        uint16_t limit1;
+        uint16_t base1;
+        uint8_t base2;
+        uint8_t access_flags;
+        uint8_t limit2 : 4;
+        uint8_t flags2 : 4;
+        uint8_t base3;
+    };
 
-  uint64_t value;
+    uint64_t value;
 };
 
 typedef union GdtEntry gdt_entry_t;
@@ -252,19 +252,19 @@ typedef union GdtEntry gdt_entry_t;
 _Static_assert(sizeof(gdt_entry_t) == 8, "GDTEntry should be 8 bytes");
 
 struct GdtPointer {
-  uint16_t limit;
-  uint32_t base;
+    uint16_t limit;
+    uint32_t base;
 } PACKED;
 
 struct IdtEntry {
-  uint16_t offset_lower;
-  uint16_t selector;
-  uint8_t _resd;
-  uint8_t gate_type :4;
-  uint8_t is_storage :1;
-  uint8_t dpl :2;
-  uint8_t is_present :1;
-  uint16_t offset_upper;
+    uint16_t offset_lower;
+    uint16_t selector;
+    uint8_t _resd;
+    uint8_t gate_type : 4;
+    uint8_t is_storage : 1;
+    uint8_t dpl : 2;
+    uint8_t is_present : 1;
+    uint16_t offset_upper;
 };
 
 typedef struct IdtEntry idt_entry_t;
@@ -272,177 +272,201 @@ typedef struct IdtEntry idt_entry_t;
 _Static_assert(sizeof(idt_entry_t) == 8, "IDTEntry should be 8 bytes");
 
 struct IdtPointer {
-  uint16_t limit;
-  uint32_t base;
+    uint16_t limit;
+    uint32_t base;
 } PACKED;
 
 extern void atomic_inc(volatile void*);
 extern void atomic_dec(volatile void*);
 extern int test_and_set(volatile void*, volatile int);
 
-static inline void set_cr0(uint32_t new_cr0) {
-  __asm__("mov %0, %%cr0" :: "r"(new_cr0));
+static inline void set_cr0(uint32_t new_cr0)
+{
+    __asm__("mov %0, %%cr0" :: "r"(new_cr0));
 }
 
-static inline void set_cr3(uint32_t new_cr3) {
-  __asm__("mov %0, %%cr3" :: "r"(new_cr3) : "memory");
+static inline void set_cr3(uint32_t new_cr3)
+{
+    __asm__("mov %0, %%cr3" :: "r"(new_cr3) : "memory");
 }
 
-static inline void set_cr4(uint32_t new_cr4) {
-  __asm__("mov %0, %%cr4" :: "r"(new_cr4));
+static inline void set_cr4(uint32_t new_cr4)
+{
+    __asm__("mov %0, %%cr4" :: "r"(new_cr4));
 }
 
-static inline void set_eflags(uint32_t newEflags) {
-  __asm__("pushl %0\n"
-          "popf\n" :: "r"(newEflags) : "cc");
+static inline void set_eflags(uint32_t newEflags)
+{
+    __asm__("pushl %0\n"
+        "popf\n" :: "r"(newEflags) : "cc");
 }
 
-static inline uint32_t get_cr0(void) {
-  uint32_t cr0;
+static inline uint32_t get_cr0(void)
+{
+    uint32_t cr0;
 
-  __asm__("mov %%cr0, %0" : "=r"(cr0));
-  return cr0;
+    __asm__("mov %%cr0, %0" : "=r"(cr0));
+    return cr0;
 }
 
-static inline uint32_t get_cr2(void) {
-  uint32_t cr2;
+static inline uint32_t get_cr2(void)
+{
+    uint32_t cr2;
 
-  __asm__("mov %%cr2, %0" : "=r"(cr2));
-  return cr2;
+    __asm__("mov %%cr2, %0" : "=r"(cr2));
+    return cr2;
 }
 
-static inline uint32_t get_cr3(void) {
-  uint32_t cr3;
+static inline uint32_t get_cr3(void)
+{
+    uint32_t cr3;
 
-  __asm__("mov %%cr3, %0" : "=r"(cr3));
-  return cr3;
+    __asm__("mov %%cr3, %0" : "=r"(cr3));
+    return cr3;
 }
 
-static inline uint32_t get_cr4(void) {
-  uint32_t cr4;
+static inline uint32_t get_cr4(void)
+{
+    uint32_t cr4;
 
-  __asm__("mov %%cr4, %0" : "=r"(cr4));
-  return cr4;
+    __asm__("mov %%cr4, %0" : "=r"(cr4));
+    return cr4;
 }
 
-static inline uint32_t get_eflags(void) {
-  uint32_t eflags;
+static inline uint32_t get_eflags(void)
+{
+    uint32_t eflags;
 
-  __asm__("pushf\n"
-          "popl %0\n" : "=r"(eflags));
+    __asm__("pushf\n"
+        "popl %0\n" : "=r"(eflags));
 
-  return eflags;
+    return eflags;
 }
 
-static inline uint16_t get_ds(void) {
-  uint16_t ds;
+static inline uint16_t get_ds(void)
+{
+    uint16_t ds;
 
-  __asm__("mov %%ds, %0" : "=r"(ds));
+    __asm__("mov %%ds, %0" : "=r"(ds));
 
-  return ds;
+    return ds;
 }
 
-static inline uint16_t get_es(void) {
-  uint16_t es;
+static inline uint16_t get_es(void)
+{
+    uint16_t es;
 
-  __asm__("mov %%es, %0" : "=r"(es));
+    __asm__("mov %%es, %0" : "=r"(es));
 
-  return es;
+    return es;
 }
 
-static inline uint16_t get_fs(void) {
-  uint16_t fs;
+static inline uint16_t get_fs(void)
+{
+    uint16_t fs;
 
-  __asm__("mov %%fs, %0" : "=r"(fs));
+    __asm__("mov %%fs, %0" : "=r"(fs));
 
-  return fs;
+    return fs;
 }
 
-static inline uint16_t get_gs(void) {
-  uint16_t gs;
+static inline uint16_t get_gs(void)
+{
+    uint16_t gs;
 
-  __asm__("mov %%gs, %0" : "=r"(gs));
+    __asm__("mov %%gs, %0" : "=r"(gs));
 
-  return gs;
+    return gs;
 }
 
-static inline uint16_t get_ss(void) {
-  uint16_t ss;
+static inline uint16_t get_ss(void)
+{
+    uint16_t ss;
 
-  __asm__("mov %%ss, %0" : "=r"(ss));
+    __asm__("mov %%ss, %0" : "=r"(ss));
 
-  return ss;
+    return ss;
 }
 
-static inline void set_cs(uint16_t cs) {
-  __asm__("push %0\n"
-          "push $1f\n"
-          "retf\n"
-          "1:\n" :: "r"(cs) : "memory");
+static inline void set_cs(uint16_t cs)
+{
+    __asm__("push %0\n"
+        "push $1f\n"
+        "retf\n"
+        "1:\n" :: "r"(cs) : "memory");
 }
 
-static inline void set_ds(uint16_t ds) {
-  __asm__("mov %0, %%ds" :: "r"(ds) : "memory");
+static inline void set_ds(uint16_t ds)
+{
+    __asm__("mov %0, %%ds" :: "r"(ds) : "memory");
 }
 
-static inline void set_es(uint16_t es) {
-  __asm__("mov %0, %%es" :: "r"(es) : "memory");
+static inline void set_es(uint16_t es)
+{
+    __asm__("mov %0, %%es" :: "r"(es) : "memory");
 }
 
-static inline void set_fs(uint16_t fs) {
-  __asm__("mov %0, %%fs" :: "r"(fs));
+static inline void set_fs(uint16_t fs)
+{
+    __asm__("mov %0, %%fs" :: "r"(fs));
 }
 
-static inline void set_gs(uint16_t gs) {
-  __asm__("mov %0, %%gs" :: "r"(gs));
+static inline void set_gs(uint16_t gs)
+{
+    __asm__("mov %0, %%gs" :: "r"(gs));
 }
 
-static inline void set_ss(uint16_t ss) {
-  __asm__("mov %0, %%ss" :: "r"(ss) : "memory");
+static inline void set_ss(uint16_t ss)
+{
+    __asm__("mov %0, %%ss" :: "r"(ss) : "memory");
 }
 
-static inline bool is_xsave_supported(void) {
-  return IS_FLAG_SET(get_cr4(), CR4_OSXSAVE);
+static inline bool is_xsave_supported(void)
+{
+    return IS_FLAG_SET(get_cr4(), CR4_OSXSAVE);
 }
 
-static inline bool is_int_enabled(void) {
-  return IS_FLAG_SET(get_eflags(), EFLAGS_IF);
+static inline bool is_int_enabled(void)
+{
+    return IS_FLAG_SET(get_eflags(), EFLAGS_IF);
 }
 
-static inline void wrmsr(uint32_t msr, uint64_t data) {
-  uint32_t eax = (uint32_t)data;
-  uint32_t edx = (uint32_t)(data >> 32);
+static inline void wrmsr(uint32_t msr, uint64_t data)
+{
+    uint32_t eax = (uint32_t)data;
+    uint32_t edx = (uint32_t)(data >> 32);
 
-  __asm__ __volatile__("wrmsr" :: "c"(msr), "a"(eax), "d"(edx));
+    __asm__ __volatile__("wrmsr" :: "c"(msr), "a"(eax), "d"(edx));
 }
 
-static inline uint64_t rdmsr(uint32_t msr) {
-  uint32_t eax;
-  uint32_t edx;
+static inline uint64_t rdmsr(uint32_t msr)
+{
+    uint32_t eax;
+    uint32_t edx;
 
-  __asm__ __volatile__("rdmsr" : "=a"(eax), "=d"(edx) : "c"(msr));
+    __asm__ __volatile__("rdmsr" : "=a"(eax), "=d"(edx) : "c"(msr));
 
-  return ((uint64_t)edx << 32) | (uint64_t)eax;
+    return ((uint64_t)edx << 32) | (uint64_t)eax;
 }
 
 extern void load_gdt(void);
 
 #define EXT_PTR(var)    (const void * const)( &var )
 
-extern const void *const kcode;
-extern const void *const kdata;
-extern const void *const kbss;
-extern const void *const kend;
-extern const void *const ktcb_start;
-extern const void *const ktcb_end;
-extern const void *const kphys_start;
-extern const void *const kvirt_start;
-extern const void *const kdcode;
-extern const void *const kddata;
-extern const void *const kdend;
+extern const void* const kcode;
+extern const void* const kdata;
+extern const void* const kbss;
+extern const void* const kend;
+extern const void* const ktcb_start;
+extern const void* const ktcb_end;
+extern const void* const kphys_start;
+extern const void* const kvirt_start;
+extern const void* const kdcode;
+extern const void* const kddata;
+extern const void* const kdend;
 extern unsigned long int ksize;
 extern unsigned long int ktcb_table_size;
-extern const void *const kvirt_low_mem_start;
+extern const void* const kvirt_low_mem_start;
 
 extern const unsigned int kcode_sel;
 extern const unsigned int kdata_sel;

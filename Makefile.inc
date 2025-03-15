@@ -15,21 +15,21 @@ export DEPEND		:=makedepend
 export DD		:=dd
 export EN_DEBUG		:=$(if $(RELEASE),,-DDEBUG -g)
 export OPT_LEVEL	:=$(if $(RELEASE),2,0)
-export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu11 \
+export CFLAGS	=-m32 -I$(ROOT_DIR)/include -std=gnu17 \
 	     	-fno-leading-underscore -ffreestanding \
 		-fno-stack-protector -fno-stack-check \
 		-fno-asynchronous-unwind-tables -march=pentium4 \
 		$(if $(RELEASE),,-DDEBUG -ggdb) \
 		-O$(OPT_LEVEL) -Wall -Wextra -Wshadow \
 		-Wpointer-arith -Wsign-compare -Wsystem-headers \
-		-Wstrict-prototypes -Wunused-function -Wmissing-prototypes \
-		-Wmissing-declarations -Wnonnull \
+		-Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations \
 		-Waddress-of-packed-member -Wno-expansion-to-defined \
 		-Werror=nonnull -Winit-self -Wnull-dereference \
 		-Wmisleading-indentation -Wswitch-enum -Wswitch-default \
 		-Wduplicated-branches -Wduplicated-cond -Wundef \
 		-Wcast-align -Wdangling-else \
-		-Wlogical-op -Wpacked -Wno-discarded-qualifiers
+		-Wlogical-op -Wpacked -Wno-discarded-qualifiers -Wbad-function-cast \
+                -Wnested-externs -fanalyzer -Wno-analyzer-va-arg-type-mismatch
 export LDFLAGS	:=$(if $(RELEASE),,-g) -static -nostdlib -z nodefaultlib
 export DISK_IMG=$(ROOT_DIR)/os_image.img
 export GDB	:=$(TARGET)-gdb

@@ -10,7 +10,7 @@
 #define NORMAL_PRIORITY         2
 
 tcb_t* schedule(proc_id_t processor_id);
-HOT void switch_stacks(ExecutionState *state);
+HOT void switch_stacks(ExecutionState* state);
 
 extern list_t run_queues[NUM_PRIORITIES];
 

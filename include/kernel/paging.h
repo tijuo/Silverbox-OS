@@ -85,17 +85,17 @@
 #define CR3_BASE_MASK           	0xFFFFF000u
 
 struct CR3_Struct {
-  union {
-    struct {
-      uint32_t _resd1 :3;
-      uint32_t pwt :1;
-      uint32_t pcd :1;
-      uint32_t _resd2 :7;
-      uint32_t base :20;
-    };
+    union {
+        struct {
+            uint32_t _resd1 : 3;
+            uint32_t pwt : 1;
+            uint32_t pcd : 1;
+            uint32_t _resd2 : 7;
+            uint32_t base : 20;
+        };
 
-    uint32_t value;
-  };
+        uint32_t value;
+    };
 };
 
 typedef struct CR3_Struct cr3_t;
@@ -107,23 +107,23 @@ _Static_assert(sizeof(cr3_t) == 4, "cr3_t should be 4 bytes");
 /// Physical addresses for 4 kB pages are limited to 32 bits.
 
 struct PageTableEntry {
-  union {
-    struct {
-      uint32_t is_present :1;
-      uint32_t is_read_write :1;
-      uint32_t is_user :1;
-      uint32_t pwt :1;
-      uint32_t pcd :1;
-      uint32_t accessed :1;
-      uint32_t dirty :1;
-      uint32_t pat :1;
-      uint32_t global :1;
-      uint32_t available :3;
-      uint32_t base :20;
-    };
+    union {
+        struct {
+            uint32_t is_present : 1;
+            uint32_t is_read_write : 1;
+            uint32_t is_user : 1;
+            uint32_t pwt : 1;
+            uint32_t pcd : 1;
+            uint32_t accessed : 1;
+            uint32_t dirty : 1;
+            uint32_t pat : 1;
+            uint32_t global : 1;
+            uint32_t available : 3;
+            uint32_t base : 20;
+        };
 
-    uint32_t value;
-  };
+        uint32_t value;
+    };
 };
 
 typedef struct PageTableEntry pte_t;
@@ -133,22 +133,22 @@ _Static_assert(sizeof(pte_t) == 4, "pte_t should be 4 bytes");
 /// Represents an x86 PDE in a page directory.
 
 struct PageDirEntry {
-  union {
-    struct {
-      uint32_t is_present :1;
-      uint32_t is_read_write :1;
-      uint32_t is_user :1;
-      uint32_t pwt :1;
-      uint32_t pcd :1;
-      uint32_t accessed :1;
-      uint32_t available2 :1;
-      uint32_t is_large_page :1;    // should be 0
-      uint32_t available :4;
-      uint32_t base :20;
-    };
+    union {
+        struct {
+            uint32_t is_present : 1;
+            uint32_t is_read_write : 1;
+            uint32_t is_user : 1;
+            uint32_t pwt : 1;
+            uint32_t pcd : 1;
+            uint32_t accessed : 1;
+            uint32_t available2 : 1;
+            uint32_t is_large_page : 1;    // should be 0
+            uint32_t available : 4;
+            uint32_t base : 20;
+        };
 
-    uint32_t value;
-  };
+        uint32_t value;
+    };
 };
 
 typedef struct PageDirEntry pde_t;
@@ -159,26 +159,26 @@ _Static_assert(sizeof(pde_t) == 4, "pde_t should be 4 bytes");
 /// Physical addresses for 4 MB pages are limited to 40 bits.
 
 struct LargePageDirEntry {
-  union {
-    struct {
-      uint32_t is_present :1;
-      uint32_t is_read_write :1;
-      uint32_t usPriv :1;
-      uint32_t pwt :1;
-      uint32_t pcd :1;
-      uint32_t accessed :1;
-      uint32_t dirty :1;
-      uint32_t is_large_page :1;   // should be 1
-      uint32_t global :1;
-      uint32_t available :3;
-      uint32_t pat :1;
-      uint32_t base_upper :8;  // bits 32-39 of 4 MB frame
-      uint32_t _resd :1;
-      uint32_t base_lower :10; // bits 22-31 of 4 MB frame
-    };
+    union {
+        struct {
+            uint32_t is_present : 1;
+            uint32_t is_read_write : 1;
+            uint32_t usPriv : 1;
+            uint32_t pwt : 1;
+            uint32_t pcd : 1;
+            uint32_t accessed : 1;
+            uint32_t dirty : 1;
+            uint32_t is_large_page : 1;   // should be 1
+            uint32_t global : 1;
+            uint32_t available : 3;
+            uint32_t pat : 1;
+            uint32_t base_upper : 8;  // bits 32-39 of 4 MB frame
+            uint32_t _resd : 1;
+            uint32_t base_lower : 10; // bits 22-31 of 4 MB frame
+        };
 
-    uint32_t value;
-  };
+        uint32_t value;
+    };
 };
 
 typedef struct LargePageDirEntry large_pde_t;
@@ -186,12 +186,12 @@ typedef struct LargePageDirEntry large_pde_t;
 _Static_assert(sizeof(large_pde_t) == 4, "large_pde_t should be 4 bytes");
 
 struct PageMapEntry {
-  union {
-    pde_t pde;
-    pte_t pte;
-    large_pde_t large_pde;
-    uint32_t value;
-  };
+    union {
+        pde_t pde;
+        pte_t pte;
+        large_pde_t large_pde;
+        uint32_t value;
+    };
 };
 
 typedef struct PageMapEntry pmap_entry_t;
@@ -200,8 +200,8 @@ _Static_assert(sizeof(pmap_entry_t) == 4, "pmap_entry_t should be 4 bytes");
 
 pmap_entry_t read_pmap_entry(uint32_t pbase, unsigned int entry);
 int write_pmap_entry(uint32_t pbase, unsigned int entry,
-                       pmap_entry_t pmap_entry);
-int map_large_frame(uint64_t phys, pmap_entry_t *pmap_entry);
+    pmap_entry_t pmap_entry);
+int map_large_frame(uint64_t phys, pmap_entry_t* pmap_entry);
 int unmap_large_frame(pmap_entry_t pmap_entry);
 int clear_phys_page(uint32_t phys);
 
@@ -212,8 +212,9 @@ int clear_phys_page(uint32_t phys);
  If only a few entries need to be flushed, use invalidatePage().
  */
 
-static inline void invalidate_tlb(void) {
-  set_cr3(get_cr3());
+static inline void invalidate_tlb(void)
+{
+    set_cr3(get_cr3());
 }
 
 /**
@@ -223,12 +224,14 @@ static inline void invalidate_tlb(void) {
  This is faster than reload_cr3() for flushing a few entries.
  */
 
-static inline void invalidate_page(addr_t virt) {
-  __asm__ __volatile__( "invlpg (%0)\n" :: "r"( virt ) : "memory" );
+static inline void invalidate_page(addr_t virt)
+{
+    __asm__ __volatile__("invlpg (%0)\n" :: "r"(virt) : "memory");
 }
 
-static inline uint32_t get_root_page_map(void) {
-  return (uint32_t)(get_cr3() & CR3_BASE_MASK);
+static inline uint32_t get_root_page_map(void)
+{
+    return (uint32_t)(get_cr3() & CR3_BASE_MASK);
 }
 
 /**
@@ -241,8 +244,9 @@ static inline uint32_t get_root_page_map(void) {
  @return The PDE that was read.
  */
 
-static inline pde_t read_pde(unsigned int entry_num, uint32_t page_dir) {
-  return read_pmap_entry(page_dir, entry_num).pde;
+static inline pde_t read_pde(unsigned int entry_num, uint32_t page_dir)
+{
+    return read_pmap_entry(page_dir, entry_num).pde;
 }
 
 /**
@@ -256,11 +260,12 @@ static inline pde_t read_pde(unsigned int entry_num, uint32_t page_dir) {
  @return E_OK on success. E_FAIL on failure.
  */
 
-static inline int write_pde(unsigned int entry_num, pde_t pde, uint32_t page_dir) {
-  pmap_entry_t pmap_entry = {
-    .pde = pde
-  };
-  return write_pmap_entry(page_dir, entry_num, pmap_entry);
+static inline int write_pde(unsigned int entry_num, pde_t pde, uint32_t page_dir)
+{
+    pmap_entry_t pmap_entry = {
+      .pde = pde
+    };
+    return write_pmap_entry(page_dir, entry_num, pmap_entry);
 }
 
 /**
@@ -271,8 +276,9 @@ static inline int write_pde(unsigned int entry_num, pde_t pde, uint32_t page_dir
  @return The PTE that was read.
  */
 
-static inline pte_t read_pte(unsigned int entry_num, uint32_t page_table) {
-  return read_pmap_entry(page_table, entry_num).pte;
+static inline pte_t read_pte(unsigned int entry_num, uint32_t page_table)
+{
+    return read_pmap_entry(page_table, entry_num).pte;
 }
 
 /**
@@ -286,28 +292,29 @@ static inline pte_t read_pte(unsigned int entry_num, uint32_t page_table) {
 
 static inline int write_pte(unsigned int entry_num, pte_t pte, uint32_t page_table)
 {
-  pmap_entry_t pmapEntry = {
-    .pte = pte
-  };
-  return write_pmap_entry(page_table, entry_num, pmapEntry);
+    pmap_entry_t pmapEntry = {
+      .pte = pte
+    };
+    return write_pmap_entry(page_table, entry_num, pmapEntry);
 }
 
-CONST static inline pframe_t get_pde_frame_number(pde_t pde) {
-  pmap_entry_t entry = {
-    .pde = pde
-  };
+CONST static inline pframe_t get_pde_frame_number(pde_t pde)
+{
+    pmap_entry_t entry = {
+      .pde = pde
+    };
 
-  return (
-      entry.pde.is_large_page ?
-          (entry.large_pde.base_lower << 10) | (entry.large_pde.base_upper << 20) :
-          entry.pde.base);
+    return (
+        entry.pde.is_large_page ?
+        (entry.large_pde.base_lower << 10) | (entry.large_pde.base_upper << 20) :
+        entry.pde.base);
 }
 
 NON_NULL_PARAMS
-static inline void set_large_pde_base(large_pde_t *large_pde, pframe_t pframe)
+static inline void set_large_pde_base(large_pde_t* large_pde, pframe_t pframe)
 {
-  large_pde->base_lower = (uint32_t)((pframe >> 10) & 0x3FFu);
-  large_pde->base_upper = (uint32_t)((pframe >> 20) & 0xFFu);
+    large_pde->base_lower = (uint32_t)((pframe >> 10) & 0x3FFu);
+    large_pde->base_upper = (uint32_t)((pframe >> 20) & 0xFFu);
 }
 
 #endif /* PAGING_H */

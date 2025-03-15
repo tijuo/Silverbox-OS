@@ -7,10 +7,10 @@
 #include <kernel/debug.h>
 
 NON_NULL_PARAMS RETURNS_NON_NULL
-void* memcpy(void *restrict dest, const void *restrict src, size_t len);
+void* memcpy(void* restrict dest, const void* restrict src, size_t len);
 
 NON_NULL_PARAMS RETURNS_NON_NULL
-void* memset(void *buffer, int c, size_t num);
+void* memset(void* buffer, int c, size_t num);
 
 /* This won't work with arrays that have been passed into functions or converted into pointers. */
 
