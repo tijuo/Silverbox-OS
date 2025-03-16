@@ -16,10 +16,10 @@ return ret;\
 } while(0)
 
 #define DECL_CALL_COUNTER(fname)		extern unsigned int fname ## _counter;
-#define CALL_COUNTER(fname)			unsigned int fname ## _counter;
-#define INC_COUNT()				__func__ _counter++
+#define CALL_COUNTER(fname)			    unsigned int fname ## _counter;
+#define INC_COUNT()				        __func__ _counter++
 
-#define BOCHS_BREAKPOINT		asm volatile("xchgw %bx, %bx\n")
+#define BOCHS_BREAKPOINT		        asm volatile("xchgw %bx, %bx\n")
 
 void init_serial(void);
 int get_debug_char(void);
@@ -45,16 +45,17 @@ void init_video(void);
 /* Note: RDTSCP should be used instead due to possible out of order execution.
  * Alternatively, CPUID or MFENCE,LFENCE can be used before RDTSC
  */
-#define rdtsc( upper, lower ) asm __volatile__( "rdtsc" : "=a"( *lower ), "=d"( *upper ) )
+#define RDTSC( upper, lower )   asm __volatile__( "rdtsc" : "=a"( *lower ), "=d"( *upper ) )
+#define START_TIME_STAMP()      RDTSC(&upper1, &lower1)
+#define STOP_TIME_STAMP()       RDTSC(&upper2, &lower2)
 
-void start_time_stamp(void);
-void stop_time_stamp(void);
 unsigned int get_time_difference(void);
 
-#define calc_time(function) (start_time_stamp(), function, stop_time_stamp(), get_time_difference())
+#define CALC_TIME(func_call) (START_TIME_STAMP(), func_call, STOP_TIME_STAMP(), get_time_difference())
 
-
-#define kassert(exp)  do {\
+// Note: If `exp` contains functions, they should not have side-effects. This is because
+// KASSERT() in release builds do nothing
+#define KASSERT(exp)  do {\
   if(!(exp)){\
     BOCHS_BREAKPOINT;\
     print_assert_msg( #exp, __FILE__, __func__, __LINE__ );\
@@ -63,31 +64,38 @@ unsigned int get_time_difference(void);
 
 #else
 
-#define kassert(exp)         ({})
-#define inc_sched_count()     ({})
-#define inc_timer_count()     ({})
-#define clear_screen()       ({})
-#define kprintf( ... )   ({})
-#define print_assert_msg( w, x, y, z )    ({})
-#define set_bad_assert_hlt( val )      ({})
-#define set_video_low_mem( val )       ({})
-#define dump_regs( t, s, i, e )     ({})
-#define dump_state( s, i, e )       ({})
-#define dump_stack( x, y )          ({})
+#define KNOP                                ({})
+#define KASSERT(exp)                        KNOP
+#define inc_sched_count()                   KNOP
+#define inc_timer_count()                   KNOP
+#define clear_screen()                      KNOP
+#define kprintf( ... )                      KNOP
+#define print_assert_msg( w, x, y, z )      KNOP
+#define set_bad_assert_hlt( val )           KNOP
+#define set_video_low_mem( val )            KNOP
+#define dump_regs( t, s, i, e )             KNOP
+#define dump_state( s, i, e )               KNOP
+#define dump_stack( x, y )                  KNOP
+#define RDTSC( upper, lower )               KNOP
+#define START_TIME_STAMP()                  KNOP
+#define STOP_TIME_STAMP()                   KNOP
 
+#define get_time_difference()               KNOP
 //#define kprintInt( num )
 //#define kprintHex( num )
-#define calc_time(func) func
+#define CALC_TIME(func)                     func
 //#define kprint3Nums( str, ... )
 //#define putChar(c, i, j)
 //#define _putChar(c, i, j, attr)
 //#define printString(str, x, y)
 //#define _printString(str, x, y, ...)
-#define init_video()                 ({})
-#define PRINT_DEBUG(msg)            ({})
-#define RET_MSG(x, y)	return (x)
+#define init_video()                        KNOP
+#define PRINT_DEBUG(msg)                    KNOP
+#define RET_MSG(x, y)	                    return (x)
 #define CALL_COUNTER(ret_type, fname, arg)	ret_type fname(arg);
 #define BOCHS_BREAKPOINT
+#define DECL_CALL_COUNTER(fname)		    
+#define INC_COUNT()				            
 #endif /* DEBUG */
 
 NON_NULL_PARAMS noreturn void print_panic_msg(const char* msg, const char* file, const char* func, int line);

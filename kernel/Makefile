@@ -17,7 +17,7 @@ CFLAGS  :=$(CFLAGS) -mpreferred-stack-boundary=4
 
 all: $(BIN_GZ) $(BIN).dmp $(BIN).sym $(BIN).bsym
 
-$(BIN): $(OBJ)
+$(BIN): $(OBJ) link.ld
 	$(LD) $(LDFLAGS) -T link.ld $(OBJ) -o $@
 
 $(BIN_GZ): $(BIN)

@@ -59,10 +59,10 @@ NON_NULL_PARAMS tcb_t* list_remove_from_end(list_t* list, int at_tail)
 
 #ifdef DEBUG
     if(!list->head_tid || !list->tail_tid)
-        kassert(list->head_tid == NULL_TID && list->tail_tid == NULL_TID);
+        KASSERT(list->head_tid == NULL_TID && list->tail_tid == NULL_TID);
 
     if(list->head_tid || list->tail_tid)
-        kassert(list->head_tid != NULL_TID && list->tail_tid != NULL_TID);
+        KASSERT(list->head_tid != NULL_TID && list->tail_tid != NULL_TID);
 #endif /* DEBUG */
 
     if(removed_tcb) {

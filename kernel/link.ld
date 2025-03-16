@@ -1,3 +1,11 @@
+PHDRS {
+    boot PT_LOAD FLAGS(7);
+    text PT_LOAD FLAGS(5);
+    rodata PT_LOAD FLAGS(4);
+    data PT_LOAD FLAGS(6);
+    tcb PT_LOAD FLAGS(6);
+}
+
 OUTPUT_FORMAT("elf32-i386")
 ENTRY(start)
 SECTIONS
@@ -7,35 +15,39 @@ SECTIONS
   kvirt_start = 0xF8100000;
 
   .boot kphys_start : AT(kphys_start) ALIGN(4K) {
-    KEEP(*(.header))
     kvirt_disc = .;
-    kdcode = .;
-    *(.dtext)
-    . = ALIGN(4);
-    kddata = .;
-    *(.ddata)
-    . = ALIGN(4K);
-    kdend = .;
-  }
+    KEEP(*(.header))
+      kdcode = .;
+      *(.dtext)
+      . = ALIGN(4);
+      kddata = .;
+      *(.ddata)
+      . = ALIGN(4);
+      *(.drodata)
+      . = ALIGN(4K);
+      kdend = .;
+  } :boot
 
   /* Note that this is the address of the bottom of the stack. */
 
   .text kvirt_start + SIZEOF(.boot) : AT(kphys_start + SIZEOF(.boot)) ALIGN(4K) {
      kcode = .;
      *(.text*)
-     . = ALIGN(4);
-     *(.rodata*)
-     . = ALIGN(4);
-     *(.debug*)
      . = ALIGN(4K);
      kcode_end = .;
-  }
+  } :text
+
+  .rodata : ALIGN(4K) {
+    *(.rodata*)
+    . = ALIGN(4);
+    *(.debug*)
+    . = ALIGN(4K);
+  } :rodata
 
   .data : ALIGN(4K) {
      kdata = .;
-
      ksize = .;
-     LONG(SIZEOF(.text) + SIZEOF(.data) + SIZEOF(.bss));
+     LONG(SIZEOF(.text) + SIZEOF(.rodata) + SIZEOF(.data) + SIZEOF(.bss));
      ktcb_table_size = .;
      LONG(SIZEOF(.tcb));
 
@@ -44,7 +56,7 @@ SECTIONS
      *(.tss)
      . = ALIGN(4K);
      kdata_end = .;
-  }
+  } :data
 
   .bss : ALIGN(4K) {
     kbss = .;
@@ -60,7 +72,7 @@ SECTIONS
     *(.tcb)
      . = ALIGN(4K);
     ktcb_end = .;
-  }
+  } :tcb
 
   kend = .;
 

@@ -112,148 +112,155 @@
 #define EV_IRQ22 	(1u << 30)
 #define EV_IRQ23 	(1u << 31)
 
+typedef struct {
+    void* send_buffer;
+    void* recv_buffer;
+    size_t send_length;
+    size_t recv_length;
+} SysMessageArgs;
+
 struct PageMapping {
-  union {
-    pframe_t phys_frame;
-    uint32_t block_num;
-  };
-  unsigned int flags;
+    union {
+        pframe_t phys_frame;
+        uint32_t block_num;
+    };
+    unsigned int flags;
 };
 
 struct LegacyXSaveState {
-  uint16_t fcw;
-  uint16_t fsw;
-  uint8_t ftw;
-  uint8_t _resd1;
-  uint16_t fop;
-  uint32_t fpuIp;
-  uint16_t fpuCs;
-  uint16_t _resd2;
-  uint32_t fpuDp;
-  uint16_t fpuDs;
-  uint16_t _resd3;
-  uint32_t mxcsr;
-  uint32_t mxcsrMask;
+    uint16_t fcw;
+    uint16_t fsw;
+    uint8_t ftw;
+    uint8_t _resd1;
+    uint16_t fop;
+    uint32_t fpuIp;
+    uint16_t fpuCs;
+    uint16_t _resd2;
+    uint32_t fpuDp;
+    uint16_t fpuDs;
+    uint16_t _resd3;
+    uint32_t mxcsr;
+    uint32_t mxcsrMask;
 
-  union {
-    uint8_t mm0[10];
-    uint8_t st0[10];
-  };
+    union {
+        uint8_t mm0[10];
+        uint8_t st0[10];
+    };
 
-  uint8_t _resd4[6];
+    uint8_t _resd4[6];
 
-  union {
-    uint8_t mm1[10];
-    uint8_t st1[10];
-  };
+    union {
+        uint8_t mm1[10];
+        uint8_t st1[10];
+    };
 
-  uint8_t _resd5[6];
+    uint8_t _resd5[6];
 
-  union {
-    uint8_t mm2[10];
-    uint8_t st2[10];
-  };
+    union {
+        uint8_t mm2[10];
+        uint8_t st2[10];
+    };
 
-  uint8_t _resd6[6];
+    uint8_t _resd6[6];
 
-  union {
-    uint8_t mm3[10];
-    uint8_t st3[10];
-  };
+    union {
+        uint8_t mm3[10];
+        uint8_t st3[10];
+    };
 
-  uint8_t _resd7[6];
+    uint8_t _resd7[6];
 
-  union {
-    uint8_t mm4[10];
-    uint8_t st4[10];
-  };
+    union {
+        uint8_t mm4[10];
+        uint8_t st4[10];
+    };
 
-  uint8_t _resd8[6];
+    uint8_t _resd8[6];
 
-  union {
-    uint8_t mm5[10];
-    uint8_t st5[10];
-  };
+    union {
+        uint8_t mm5[10];
+        uint8_t st5[10];
+    };
 
-  uint8_t _resd9[6];
+    uint8_t _resd9[6];
 
-  union {
-    uint8_t mm6[10];
-    uint8_t st6[10];
-  };
+    union {
+        uint8_t mm6[10];
+        uint8_t st6[10];
+    };
 
-  uint8_t _resd10[6];
+    uint8_t _resd10[6];
 
-  union {
-    uint8_t mm7[10];
-    uint8_t st7[10];
-  };
+    union {
+        uint8_t mm7[10];
+        uint8_t st7[10];
+    };
 
-  uint8_t _resd11[6];
+    uint8_t _resd11[6];
 
-  uint8_t xmm0[16];
-  uint8_t xmm1[16];
-  uint8_t xmm2[16];
-  uint8_t xmm3[16];
-  uint8_t xmm4[16];
-  uint8_t xmm5[16];
-  uint8_t xmm6[16];
-  uint8_t xmm7[16];
+    uint8_t xmm0[16];
+    uint8_t xmm1[16];
+    uint8_t xmm2[16];
+    uint8_t xmm3[16];
+    uint8_t xmm4[16];
+    uint8_t xmm5[16];
+    uint8_t xmm6[16];
+    uint8_t xmm7[16];
 
-  // Even though the area is reserved, the processor won't access the reserved bits in 32-bit mode
+    // Even though the area is reserved, the processor won't access the reserved bits in 32-bit mode
 
-  uint8_t _resd12[176];
-  uint8_t available[48];
+    uint8_t _resd12[176];
+    uint8_t available[48];
 
 };
 
-typedef struct Tcb {
-  struct State {
-    uint32_t eax;
-    uint32_t ebx;
-    uint32_t ecx;
-    uint32_t edx;
-    uint32_t edi;
-    uint32_t esi;
-    uint32_t ebp;
-    uint32_t esp;
-    uint32_t eip;
-    uint16_t cs;
-    uint16_t ds;
-    uint16_t es;
-    uint16_t fs;
-    uint16_t gs;
-    uint16_t ss;
-    uint32_t eflags;
-  } state;
+typedef struct {
+    struct State {
+        uint32_t eax;
+        uint32_t ebx;
+        uint32_t ecx;
+        uint32_t edx;
+        uint32_t edi;
+        uint32_t esi;
+        uint32_t ebp;
+        uint32_t esp;
+        uint32_t eip;
+        uint16_t cs;
+        uint16_t ds;
+        uint16_t es;
+        uint16_t fs;
+        uint16_t gs;
+        uint16_t ss;
+        uint32_t eflags;
+    } state;
 
-  uint32_t root_pmap;
-  uint8_t status;
-  uint8_t current_processor_id;
-  tid_t tid;
+    uint32_t root_pmap;
+    uint8_t status;
+    uint8_t current_processor_id;
+    tid_t tid;
 
-  uint8_t priority;
+    uint8_t priority;
 
-  uint32_t pending_events;
-  uint32_t event_mask;
+    uint32_t pending_events;
+    uint32_t event_mask;
 
-  void *capability_table;
-  size_t capability_table_len;
+    void* capability_table;
+    size_t capability_table_len;
 
-  tid_t exception_handler;
-  tid_t pager;
+    tid_t exception_handler;
+    tid_t pager;
 
-  tid_t wait_tid;
+    tid_t wait_tid;
 
-  tid_t receiverWaitHead;
-  tid_t receiverWaitTail;
+    tid_t receiverWaitHead;
+    tid_t receiverWaitTail;
 
-  tid_t senderWaitHead;
-  tid_t senderWaitTail;
+    tid_t senderWaitHead;
+    tid_t senderWaitTail;
 
-  xsave_state_t *xsave_state;
-  size_t xsave_state_len;
-  uint16_t xsave_state_bits;
+    xsave_state_t* xsave_state;
+    size_t xsave_state_len;
+    uint16_t xsave_state_bits;
 
 } thread_info_t;
 
@@ -333,23 +340,23 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3) { \
 
 #define SYSCALL4(syscallName, type1, arg1, type2, arg2, type3, arg3, type4, arg4) \
 static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4) { \
-	int retVal; \
-  int dummy; \
+    int retVal; \
+    int dummy; \
 	asm volatile("pushl %%ebp\n" \
-							 "pushl %%edx\n" \
-							 "pushl %%ecx\n" \
-							 "lea 1f, %%edx\n" \
-							 "movl %%esp, %%ebp\n" \
-							 "sysenter\n" \
-							 "1:\n" \
-							 "movl %%ebp, %%esp\n" \
-							 "popl %%ecx\n" \
-							 "popl %%edx\n" \
-							 "popl %%ebp\n" \
-								 : "=a"(retVal), "=d"(dummy) \
-								 : "a"(SYS_##syscallName), \
-									 "b"(arg1), "c"(arg2), "S"(arg3), "D"(arg4) \
-								 : "memory"); \
+        "pushl %%edx\n" \
+        "pushl %%ecx\n" \
+        "lea 1f, %%edx\n" \
+        "movl %%esp, %%ebp\n" \
+        "sysenter\n" \
+        "1:\n" \
+        "movl %%ebp, %%esp\n" \
+        "popl %%ecx\n" \
+        "popl %%edx\n" \
+        "popl %%ebp\n" \
+            : "=a"(retVal), "=d"(dummy) \
+            : "a"(SYS_##syscallName), \
+                "b"(arg1), "c"(arg2), "S"(arg3), "D"(arg4) \
+            : "memory"); \
 	return retVal; \
 }
 
@@ -358,28 +365,26 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 ar
 	int retVal; \
 	int dummy; \
 	asm volatile("pushl %%ebp\n" \
-							 "pushl %%edx\n" \
-							 "pushl %%ecx\n" \
-							 "lea 1f, %%edx\n" \
-							 "movl %%esp, %%ebp\n" \
-							 "sysenter\n" \
-							 "1:\n" \
-							 "movl %%ebp, %%esp\n" \
-							 "popl %%ecx\n" \
-							 "popl %%edx\n" \
-							 "popl %%ebp\n" \
-								 : "=a"(retVal), "=d"(dummy) \
-								 : "a"((((uint32_t)wArg << 16) & 0xFFFFu) | SYS_##syscallName), \
-									 "b"(arg1), "c"(arg2), "S"(arg3), "D"(arg4) \
-								 : "memory"); \
+        "pushl %%edx\n" \
+        "pushl %%ecx\n" \
+        "lea 1f, %%edx\n" \
+        "movl %%esp, %%ebp\n" \
+        "sysenter\n" \
+        "1:\n" \
+        "movl %%ebp, %%esp\n" \
+        "popl %%ecx\n" \
+        "popl %%edx\n" \
+        "popl %%ebp\n" \
+            : "=a"(retVal), "=d"(dummy) \
+            : "a"((((uint32_t)wArg << 16) & 0xFFFFu) | SYS_##syscallName), \
+                "b"(arg1), "c"(arg2), "S"(arg3), "D"(arg4) \
+            : "memory"); \
 	return retVal; \
 }
 #else
 #error "GCC 4.9 or greater is required."
 #endif /* __GNUC__ > 4 || (__GNUC__ == 4 && __GNU__MINOR__ >= 9) */
 
-#define SYS_send 								SYS_SEND
-#define SYS_recv 								SYS_RECV
 #define SYS_send_and_recv 			SYS_SEND_AND_RECV
 #define SYS_get_page_mappings 	SYS_GET_PAGE_MAPPINGS
 #define SYS_set_page_mappings 	SYS_SET_PAGE_MAPPINGS
@@ -393,109 +398,40 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 ar
 #define SYS_get_page_mappings_base	SYS_get_page_mappings
 #define SYS_set_page_mappings_base SYS_set_page_mappings
 #define SYS_create_thread_base 		SYS_create_thread
-#define SYS_recv_base 						SYS_recv
-#define SYS_send_and_recv_base 		SYS_send_and_recv
 
-SYSCALL3(send, tid_t, recipient, uint32_t, subject, unsigned int, flags)
-SYSCALL4(send_and_recv_base, tid_t, recipient, tid_t, replier, unsigned int,
-         sendFlags, unsigned int, recvFlags)
 SYSCALL4_PACKED_W1(get_page_mappings_base, addr_t, virt, size_t, count, uint32_t,
-                   addrSpace, struct PageMapping *, mappings, level)
+    addrSpace, struct PageMapping*, mappings, level)
 SYSCALL4_PACKED_W1(set_page_mappings_base, addr_t, virt, size_t, count, uint32_t,
-                   addrSpace, struct PageMapping *, mappings, level)
-SYSCALL3(create_thread_base, void *, entry, uint32_t, rootPmap, void *, stackTop)
-SYSCALL2(read_thread, tid_t, tid, thread_info_t *, info)
-SYSCALL3(update_thread, tid_t, tid, unsigned int, flags, thread_info_t *, info)
+    addrSpace, struct PageMapping*, mappings, level)
+SYSCALL3(create_thread_base, void*, entry, uint32_t, rootPmap, void*, stackTop)
+SYSCALL2(read_thread, tid_t, tid, thread_info_t*, info)
+SYSCALL3(update_thread, tid_t, tid, unsigned int, flags, thread_info_t*, info)
 SYSCALL1(destroy_thread, tid_t, tid)
 SYSCALL2(poll, int, mask, int, blocking)
 SYSCALL1(eoi, int, mask)
-
-static inline tid_t sys_create_thread(void *entry, uint32_t rootPmap,
-                                      void *stackTop)
+SYSCALL4(send_and_recv, tid_t, recipient, uint32_t, subject,
+    uint32_t, flags, SysMessageArgs*, args)
+    
+static inline tid_t sys_create_thread(void* entry, uint32_t rootPmap,
+    void* stackTop)
 {
-  return (tid_t)sys_create_thread_base(entry, rootPmap, stackTop);
+    return (tid_t)sys_create_thread_base(entry, rootPmap, stackTop);
 }
 
 static inline int sys_get_page_mappings(unsigned int level, addr_t virt,
-                                        size_t count, uint32_t addrSpace,
-                                        struct PageMapping *mappings)
+    size_t count, uint32_t addrSpace,
+    struct PageMapping* mappings)
 {
-  return sys_get_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
+    return sys_get_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
 }
 
 static inline int sys_set_page_mappings(unsigned int level, addr_t virt,
-                                        size_t count, uint32_t addrSpace,
-                                        struct PageMapping *mappings)
+    size_t count, uint32_t addrSpace,
+    struct PageMapping* mappings)
 {
-  return sys_set_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
+    return sys_set_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
 }
 
-static inline int sys_send_and_recv(tid_t recipient, tid_t replier,
-                                    uint32_t subject, unsigned int sendFlags,
-                                    unsigned int recvFlags)
-{
-  int retVal;
-  int dummy;
-  asm volatile("pushl %%ebp\n"
-      "pushl %%edx\n"
-      "pushl %%ecx\n"
-      "movl 1f, %%ecx\n"
-      "movl %%esp, %%ebp\n"
-      "sysenter\n"
-      "1:\n"
-      "movl %%ebp, %%esp\n"
-      "popl %%ecx\n"
-      "popl %%edx\n"
-      "popl %%ebp\n"
-      : "=a"(retVal), "=d"(dummy)
-      : "a"(SYS_SEND_AND_RECV),
-      "b"((uint32_t)replier << 16 | (uint32_t)recipient), "d"(subject),
-      "S"(sendFlags), "D"(recvFlags)
-      : "cc", "memory");
-  return retVal;
-}
-
-static inline int sys_reply_and_wait(tid_t recipient, uint32_t subject, unsigned int replyFlags,
-                                 unsigned int waitFlags)
-{
-  return sys_send_and_recv(recipient, NULL_TID, subject, replyFlags, waitFlags);
-}
-
-static inline int sys_recv(tid_t sender, unsigned int flags,
-                           tid_t *actualSender)
-{
-  int retVal;
-  int dummy;
-  int actual;
-
-  asm volatile("pushl %%ebp\n"
-      "pushl %%edx\n"
-      "pushl %%ecx\n"
-      "movl 1f, %%ecx\n"
-      "movl %%esp, %%ebp\n"
-      "sysenter\n"
-      "1:\n"
-      "movl %%ebp, %%esp\n"
-      "popl %%ecx\n"
-      "popl %%edx\n"
-      "popl %%ebp\n"
-      : "=a"(retVal), "=b"(actual), "=d"(dummy)
-      : "a"(SYS_RECV),
-      "b"(sender), "d"(flags)
-      : "cc", "memory");
-
-  if(actualSender)
-    *actualSender = (tid_t)actual;
-
-  return retVal;
-}
-
-static inline int sys_wait(unsigned int flags, tid_t *sender) {
-  return sys_recv(NULL_TID, flags, sender);
-}
-
-#undef SYS_send
-#undef SYS_recv
 #undef SYS_send_and_recv
 #undef SYS_get_page_mappings
 #undef SYS_set_page_mappings
@@ -506,8 +442,6 @@ static inline int sys_wait(unsigned int flags, tid_t *sender) {
 #undef SYS_get_page_mappings_base
 #undef SYS_set_page_mappings_base
 #undef SYS_create_thread_base
-#undef SYS_recv_base
-#undef SYS_send_and_recv_base
 #undef SYS_poll
 #undef SYS_eoi
 

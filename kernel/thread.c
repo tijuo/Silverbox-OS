@@ -116,7 +116,6 @@ NON_NULL_PARAMS int start_thread(tcb_t* thread)
  * @param thread The thread to be paused.
  * @return E_OK on success. E_FAIL on failure. E_DONE if thread is already paused.
  */
-
 NON_NULL_PARAMS int pause_thread(tcb_t* thread)
 {
     switch(thread->thread_state) {
@@ -146,7 +145,6 @@ NON_NULL_PARAMS int pause_thread(tcb_t* thread)
  @param stack_top The address of the top of the thread's stack.
  @return The TCB of the newly created thread. NULL on failure.
  */
-
 NON_NULL_PARAMS tcb_t* create_thread(void* entry_addr, addr_t addr_space,
     void* stack_top)
 {
@@ -195,7 +193,6 @@ NON_NULL_PARAMS tcb_t* create_thread(void* entry_addr, addr_t addr_space,
  @param thread The TCB of the thread to release.
  @return E_OK on success. E_FAIL on failure.
  */
-
 NON_NULL_PARAMS int release_thread(tcb_t* thread)
 {
     list_t* queues[2] = {
@@ -249,7 +246,6 @@ NON_NULL_PARAMS int release_thread(tcb_t* thread)
  *
  * @return A TID that is available for use. NULL_TID if no TIDs are available to be allocated.
  */
-
 tid_t get_new_tid(void)
 {
     static int last_tid = TID_START;
@@ -268,21 +264,16 @@ tid_t get_new_tid(void)
 
 NON_NULL_PARAMS void switch_context(tcb_t* thread, int do_xsave)
 {
-    kassert(thread->thread_state == RUNNING);
+    KASSERT(thread->thread_state == RUNNING);
 
     if((thread->root_pmap & CR3_BASE_MASK) != (get_cr3() & CR3_BASE_MASK))
         set_cr3(thread->root_pmap);
 
     tcb_t* current_thread = get_current_thread();
 
-    if(current_thread) {
-        if(do_xsave)
-            __asm__("fxsave  %0\n" ::"m"(current_thread->xsave_state));
+    if(current_thread && do_xsave && current_thread->xsave_state) {
+        __asm__ __volatile__("fxsave  %0\n" ::"m"(current_thread->xsave_state));
     }
-
-    __asm__("fxrstor %0\n" ::"m"(thread->xsave_state));
-
-    //  activateContinuation(thread); // doesn't return if successful
 
     // Restore user state
 
@@ -294,5 +285,10 @@ NON_NULL_PARAMS void switch_context(tcb_t* thread, int do_xsave)
     *state = thread->user_exec_state;
 
     set_cr3(init_server_thread->root_pmap);
+
+    if(do_xsave && thread->xsave_state) {
+        __asm__ __volatile__("fxrstor %0\n" ::"m"(thread->xsave_state));
+    }
+
     RESTORE_STATE;
 }

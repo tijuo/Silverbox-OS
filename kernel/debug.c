@@ -163,16 +163,6 @@ unsigned int sy = 1;
 
 #define COMBASE COM1
 
-void start_time_stamp(void)
-{
-    rdtsc(&upper1, &lower1);
-}
-
-void stop_time_stamp(void)
-{
-    rdtsc(&upper2, &lower2);
-}
-
 unsigned int get_time_difference(void)
 {
     if(upper1 == upper2)
@@ -405,7 +395,7 @@ NON_NULL_PARAMS int kllitoa(long long int value, char* str, int base)
         return -1;
 
     // Ensure base is a power of 2
-    kassert((base & -base) == base);
+    KASSERT((base & -base) == base);
 
     if(negative) {
         if(value == (long long int)LLONG_MIN) {
@@ -490,7 +480,6 @@ void init_video(void)
 }
 
 /// Sets the flag to halt the system on a failed assertion
-
 void set_bad_assert_hlt(bool value)
 {
     bad_assert_hlt = value;
@@ -578,7 +567,7 @@ NON_NULL_PARAMS void print_assert_msg(const char* exp, const char* file,
 {
     tcb_t* current_thread = get_current_thread();
 
-    kprintf("\n<'%s' %s: %d> kassert(%s) failed\n", file, func, line, exp);
+    kprintf("\n<'%s' %s: %d> KASSERT(%s) failed\n", file, func, line, exp);
 
     if(current_thread) {
         dump_regs((tcb_t*)current_thread, &current_thread->user_exec_state, 0xFFFFFFFFu, 0xFFFFFFFFu);
@@ -607,7 +596,7 @@ CALL_COUNTER(inc_sched_count)
 
     VGA_CHAR_AT(vidmem, 0, 0) = VGA_CHAR(CHAR_OF(w + 1), RED, GRAY);
 
-    kassert(current_thread != NULL);
+    KASSERT(current_thread != NULL);
 
     if(current_thread) {
         kprintf_at(2, 0, "tid: %5u cr3: %p", get_tid(current_thread),

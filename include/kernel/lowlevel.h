@@ -166,7 +166,6 @@ union InterruptStackFrame {
 typedef union InterruptStackFrame interrupt_frame_t;
 
 /** Represents an entire TSS */
-
 struct TSS_Struct {
     uint16_t backlink;
     uint16_t _resd1;

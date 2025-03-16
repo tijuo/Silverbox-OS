@@ -201,7 +201,7 @@ extern int load_servers(multiboot_info_t* info);
 
 void add_idt_entry(void (*f)(void), unsigned int entry_num, unsigned int dpl)
 {
-    kassert(entry_num < 256);
+    KASSERT(entry_num < 256);
 
     idt_entry_t* new_entry = &kernel_idt[entry_num];
 
@@ -227,7 +227,7 @@ void load_idt(void)
 
 void disable_irq(unsigned int irq)
 {
-    kassert(irq < 16);
+    KASSERT(irq < 16);
 
     // Send OCW1 (set IRQ mask)
 
@@ -383,7 +383,6 @@ void show_cpu_features(void)
 
  @param info The multiboot structure passed by the bootloader.
  */
-
 void init(multiboot_info_t* info)
 {
     /* Initialize memory */
@@ -441,8 +440,8 @@ void init(multiboot_info_t* info)
     }
 
     // Initialize FPU to a known state
-    __asm__("fninit\n"
-        "fxsave %0\n" :: "m"(init_server_thread->xsave_state));
+    __asm__("fninit\n");
+        //"fxsave %0\n" :: "m"(init_server_thread->xsave_state));
 
     // Set MSRs to enable sysenter/sysexit functionality
 

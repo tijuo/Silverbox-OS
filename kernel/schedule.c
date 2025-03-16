@@ -49,7 +49,6 @@ tcb_t* schedule(proc_id_t processor_id)
 
  @param The saved execution state of the processor.
  */
-
 NON_NULL_PARAMS void switch_stacks(ExecutionState* state)
 {
     tcb_t* old_tcb = get_current_thread();
@@ -68,10 +67,13 @@ NON_NULL_PARAMS void switch_stacks(ExecutionState* state)
 
             if(old_tcb) {
                 old_tcb->user_exec_state = *state;
-                __asm__("fxsave %0" ::"m"(old_tcb->xsave_state));
+
+                if(old_tcb->xsave_state)
+                    __asm__("fxsave %0" ::"m"(old_tcb->xsave_state));
             }
 
-            asm volatile("fxrstor %0\n" ::"m"(new_tcb->xsave_state));
+            if(new_tcb->xsave_state)
+                asm volatile("fxrstor %0\n" ::"m"(new_tcb->xsave_state));
 
             *state = new_tcb->user_exec_state;
         } else if(!new_tcb)

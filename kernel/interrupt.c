@@ -179,7 +179,7 @@ IRQ_HANDLER(23)
       if(currentThread->threadState != RUNNING) {
       newThread = schedule(getCurrentProcessor());
 
-      kassert(newThread != currentThread);
+      KASSERT(newThread != currentThread);
 
       // todo: fxsave, do context switch, copy tss io bitmap...
       }
@@ -194,12 +194,10 @@ IRQ_HANDLER(23)
 
  @param interrupt_frame Pointer to the saved interrupt frame and processor execution state.
  */
-
 void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame)
 {
     tcb_t* tcb = get_current_thread();
     //  ExecutionState *state = (ExecutionState*)(tss.esp0 + sizeof(uint32_t));
-    uint32_t msg_subject;
 
     if(!tcb) {
         kprintf("NULL tcb. Unable to handle exception. System halted.\n");
@@ -212,28 +210,27 @@ void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame)
         }
     }
 
-    __asm__("fxsave %0\n" ::"m"(tcb->xsave_state));
-
     if(interrupt_frame->ex_num == 13 && interrupt_frame->state.cs == UCODE_SEL && is_readable(interrupt_frame->state.eip, get_root_page_map()) && *(uint8_t*)interrupt_frame->state.eip == HALT_OPCODE) {
-        msg_subject = EXIT_MSG;
         struct ExitMessage message_data = {
             .status_code = (int)interrupt_frame->state.eax,
-            .who = get_tid(tcb) };
+            .who = get_tid(tcb)
+        };
 
-        __asm__(
-            "movd (%0), %%xmm0\n"
-            "movd 4(%0), %%xmm1\n"
-            "xorpd %%xmm2, %%xmm2\n"
-            "xorpd %%xmm3, %%xmm3\n"
-            "xorpd %%xmm4, %%xmm4\n"
-            "xorpd %%xmm5, %%xmm5\n"
-            "xorpd %%xmm6, %%xmm6\n"
-            "xorpd %%xmm7, %%xmm7\n" ::"r"(&message_data)
-            : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
+        SysMessageArgs message_args = {
+            .recv_buffer = NULL,
+            .recv_length = 0,
+            .send_buffer = &message_data,
+            .send_length = sizeof message_data
+        };
+
+        if(IS_ERROR(send_and_receive_message(tcb, tcb->ex_handler, EXIT_MSG, MSG_KERNEL, &message_args))) {
+            kprintf("Unable to send message to exception handler.\n");
+            kprintf("Tried to send exit message (status code: %d) to tid %hhu.\n", message_data.status_code, message_data.who);
+            dump_regs(tcb, &interrupt_frame->state, interrupt_frame->ex_num, interrupt_frame->error_code);
+            release_thread(tcb);
+        }
     } else {
-        msg_subject = EXCEPTION_MSG;
-
-        alignas(16) struct ExceptionMessage message_data = {
+        struct ExceptionMessage message_data = {
             .eax = interrupt_frame->state.eax,
             .ebx = interrupt_frame->state.ebx,
             .ecx = interrupt_frame->state.ecx,
@@ -262,35 +259,21 @@ void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame)
             .who = get_tid(tcb),
         };
 
-        // FIXME: This is causing GPFs because messageData (and probably the stack)
-        // FIXME: isn't aligned to 16 bytes
+        SysMessageArgs message_args = {
+            .recv_buffer = NULL,
+            .recv_length = 0,
+            .send_buffer = &message_data,
+            .send_length = sizeof message_data
+        };
 
-        __asm__(
-            "movapd (%0), %%xmm0\n"
-            "movapd 16(%0), %%xmm1\n"
-            "movapd 32(%0), %%xmm2\n"
-            "movapd 48(%0), %%xmm3\n"
-            "movapd 64(%0), %%xmm4\n"
-            "xorpd %%xmm5, %%xmm5\n"
-            "xorpd %%xmm6, %%xmm6\n"
-            "xorpd %%xmm7, %%xmm7\n" ::"r"(&message_data)
-            : "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
-    }
-
-    if(IS_ERROR(send_message(tcb, tcb->ex_handler, msg_subject, MSG_STD))) {
-        kprintf("Unable to send message to exception handler.\n");
-
-        if(msg_subject == EXCEPTION_MSG)
+        if(IS_ERROR(send_and_receive_message(tcb, tcb->ex_handler, EXCEPTION_MSG, MSG_KERNEL, &message_args))) {
+            kprintf("Unable to send message to exception handler.\n");
             kprintf("Tried to send exception %u message to tid %hhu.\n",
                 interrupt_frame->ex_num, interrupt_frame->error_code,
                 interrupt_frame->ex_num == 14 ? get_cr2() : 0, get_tid(tcb));
-        else
-            kprintf("Tried to send exit message (status code: %#x) to tid %hhu.\n",
-                interrupt_frame->state.eax, get_tid(tcb));
-        dump_regs(tcb, &interrupt_frame->state, interrupt_frame->ex_num,
-            interrupt_frame->error_code);
-
-        release_thread(tcb);
+            dump_regs(tcb, &interrupt_frame->state, interrupt_frame->ex_num, interrupt_frame->error_code);
+            release_thread(tcb);
+        }
     }
 
     __asm__("leave\n"

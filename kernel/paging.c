@@ -24,7 +24,6 @@ static int access_mem(addr_t address, size_t len, void* buffer, uint32_t pdir,
  @param phys Physical address frame to clear.
  @return E_OK on success. E_FAIL on failure.
  */
-
 int clear_phys_page(uint32_t phys)
 {
     pmap_entry_t old_pmap_entry;
@@ -47,7 +46,7 @@ int clear_phys_page(uint32_t phys)
 int map_large_frame(uint64_t phys, pmap_entry_t* pmap_entry)
 {
     if(phys >= MAX_PHYS_MEMORY)
-        RET_MSG(EFAIL, "Error: Physical frame is out of range.");
+        RET_MSG(E_FAIL, "Error: Physical frame is out of range.");
 
     pde_t old_pde = read_pde(PDE_INDEX(KMAP_AREA), CURRENT_ROOT_PMAP);
     pmap_entry_t mapped_pde = {
@@ -88,7 +87,6 @@ int unmap_large_frame(pmap_entry_t pmap_entry)
  @param pmap The address of the page map
  @return E_OK, on success. E_FAIL, on error.
  */
-
 int initialize_root_pmap(uint32_t pmap)
 {
     // Map kernel memory into the new address space
@@ -119,7 +117,6 @@ int initialize_root_pmap(uint32_t pmap)
  *
  * @return true if the address can be accessed. false, otherwise.
  */
-
 bool is_accessible(addr_t addr, uint32_t pdir, bool is_read)
 {
     pde_t pde = read_pde(PDE_INDEX(addr), pdir);
@@ -145,10 +142,9 @@ bool is_accessible(addr_t addr, uint32_t pdir, bool is_read)
  PDE corresponding to the virtual address hasn't been mapped
  yet.
  */
-
 pmap_entry_t read_pmap_entry(uint32_t pbase, unsigned int entry)
 {
-    kassert(entry < 1024);
+    KASSERT(entry < 1024);
 
     if(pbase == CURRENT_ROOT_PMAP)
         pbase = get_root_page_map();
@@ -182,10 +178,9 @@ pmap_entry_t read_pmap_entry(uint32_t pbase, unsigned int entry)
  PDE corresponding to the virtual address hasn't been mapped
  yet.
  */
-
 int write_pmap_entry(uint32_t pbase, unsigned int entry, pmap_entry_t buffer)
 {
-    kassert(entry < 1024);
+    KASSERT(entry < 1024);
 
     if(pbase == CURRENT_ROOT_PMAP)
         pbase = get_root_page_map();
@@ -217,7 +212,6 @@ int write_pmap_entry(uint32_t pbase, unsigned int entry, pmap_entry_t buffer)
  @param bytes The number of bytes to be written.
  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
  */
-
 NON_NULL_PARAMS int poke(uint64_t phys, void* buffer, size_t bytes)
 {
     return access_phys(phys, buffer, bytes, false);
@@ -231,7 +225,6 @@ NON_NULL_PARAMS int poke(uint64_t phys, void* buffer, size_t bytes)
  @param bytes The number of bytes to be read.
  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
  */
-
 NON_NULL_PARAMS int peek(uint64_t phys, void* buffer, size_t bytes)
 {
     return access_phys(phys, buffer, bytes, true);
@@ -249,7 +242,6 @@ NON_NULL_PARAMS int peek(uint64_t phys, void* buffer, size_t bytes)
  @return E_OK on success. E_BOUNDS if memory region is out of range.
  E_BOUNDS if memory access is out of range.
  */
-
 NON_NULL_PARAMS static int access_phys(uint64_t phys, void* buffer, size_t len,
     bool read_phys)
 {
@@ -302,14 +294,13 @@ NON_NULL_PARAMS static int access_phys(uint64_t phys, void* buffer, size_t len,
  @param read True if reading. False if writing.
  @return E_OK on success. E_FAIL on failure.
  */
-
 NON_NULL_PARAMS static int access_mem(addr_t address, size_t len, void* buffer,
     uint32_t pdir,
     bool read)
 {
     size_t buffer_offset = 0;
 
-    kassert(address);
+    KASSERT(address);
 
     while(len) {
         uint64_t base_address;
@@ -361,7 +352,6 @@ NON_NULL_PARAMS static int access_mem(addr_t address, size_t len, void* buffer,
  @param pdir The physical address of the address space.
  @return E_OK on success. E_FAIL on failure.
  */
-
 NON_NULL_PARAMS int poke_virt(addr_t address, size_t len, void* buffer,
     uint32_t pdir)
 {
@@ -385,7 +375,6 @@ NON_NULL_PARAMS int poke_virt(addr_t address, size_t len, void* buffer,
  @param pdir The physical address of the root page map.
  @return E_OK on success. E_FAIL on failure.
  */
-
 NON_NULL_PARAMS int peek_virt(addr_t address, size_t len, void* buffer,
     uint32_t pdir)
 {

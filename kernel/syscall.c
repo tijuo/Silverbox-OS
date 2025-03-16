@@ -44,9 +44,7 @@ typedef struct SyscallArgs {
 
 noreturn void sysenter_entry(void) NAKED;
 
-static int handle_sys_receive(syscall_args_t args);
-static int handle_sys_send(syscall_args_t args);
-static int handle_sys_send_and_reecive(syscall_args_t args);
+static int handle_sys_send_and_receive(syscall_args_t args);
 
 static int handle_sys_create_thread(syscall_args_t args);
 static int handle_sys_destroy_thread(syscall_args_t args);
@@ -59,9 +57,9 @@ static int handle_sys_set_page_mappings(syscall_args_t args);
 UNUSED static int (*syscall_table[])(syscall_args_t) = {
     NULL,
     NULL,
-    handle_sys_send,
-    handle_sys_receive,
-    handle_sys_send_and_reecive,
+    NULL,
+    NULL,
+    handle_sys_send_and_receive,
     handle_sys_get_page_mappings,
     handle_sys_set_page_mappings,
     handle_sys_create_thread,
@@ -606,93 +604,30 @@ int handle_sys_update_thread(syscall_args_t args)
 #undef INFO
 }
 
-// arg1 - recipient
+// syscall arg - syscall [lowest 8-bits]
+// arg1 - target recipient [lower 16-bits]
 // arg2 - subject
 // arg3 - flags
+// arg4 - SysMessageArgs
 
-int handle_sys_send(syscall_args_t args)
+int handle_sys_send_and_receive(syscall_args_t args)
 {
-#define RECIPIENT (tid_t) args.arg1
+#define TARGET (uint16_t)args.arg1
 #define SUBJECT (uint32_t)args.arg2
-#define FLAGS (unsigned int)args.arg3
-
+#define FLAGS (uint32_t)args.arg3
+#define ARGS (SysMessageArgs *)args.arg4
     tcb_t* current_thread = get_current_thread();
 
     if(IS_FLAG_SET(FLAGS, MSG_KERNEL))
         return ESYS_ARG;
-
-    current_thread->user_exec_state.user_esp = args.user_stack;
-    current_thread->user_exec_state.eip = args.return_address;
-
-    switch(send_message(current_thread, RECIPIENT, SUBJECT, FLAGS)) {
-        case E_OK:
-            return ESYS_OK;
-        case E_INVALID_ARG:
-            return ESYS_ARG;
-        case E_BLOCK:
-            return ESYS_NOTREADY;
-        case E_INTERRUPT:
-            return ESYS_INT;
-        case E_FAIL:
-        default:
-            return ESYS_FAIL;
-    }
-#undef RECIPIENT
-#undef SUBJECT
-#undef FLAGS
-}
-
-// arg1 - sender
-// arg2 - flags
-
-int handle_sys_receive(syscall_args_t args)
-{
-#define SENDER (tid_t) args.arg1
-#define FLAGS (unsigned int)args.arg2
-    tcb_t* current_thread = get_current_thread();
-
-    current_thread->user_exec_state.user_esp = args.user_stack;
-    current_thread->user_exec_state.eip = args.return_address;
-
-    switch(receive_message(current_thread, SENDER, FLAGS)) {
-        case E_OK:
-            return ESYS_OK;
-        case E_INVALID_ARG:
-            return ESYS_ARG;
-        case E_BLOCK:
-            return ESYS_NOTREADY;
-        case E_INTERRUPT:
-            return ESYS_INT;
-        case E_FAIL:
-        default:
-            return ESYS_FAIL;
-    }
-#undef SENDER
-#undef FLAGS
-}
-
-// arg1 - targets (replier [upper 16-bits] / recipient [lower 16-bits])
-// arg2 - subject
-// arg3 - send_flags
-// arg4 - recv_flags
-
-int handle_sys_send_and_reecive(syscall_args_t args)
-{
-#define TARGETS (uint32_t)args.arg1
-#define SUBJECT (uint32_t)args.arg2
-#define SEND_FLAGS (unsigned int)args.arg3
-#define RECV_FLAGS (unsigned int)args.arg4
-    tcb_t* current_thread = get_current_thread();
-
-    if(IS_FLAG_SET(args.arg3, MSG_KERNEL))
+    
+    if(ARGS == NULL)
         return ESYS_ARG;
-
+    
     current_thread->user_exec_state.user_esp = args.user_stack;
     current_thread->user_exec_state.eip = args.return_address;
 
-    switch(send_and_receive_message(current_thread, (tid_t)(TARGETS & 0xFFFFu),
-        (tid_t)(TARGETS >> 16), SUBJECT, SEND_FLAGS,
-        RECV_FLAGS)) {
+    switch(send_and_receive_message(current_thread, TARGET, SUBJECT, FLAGS, ARGS)) {
         case E_OK:
             return ESYS_OK;
         case E_INVALID_ARG:
@@ -705,10 +640,10 @@ int handle_sys_send_and_reecive(syscall_args_t args)
         default:
             return ESYS_FAIL;
     }
-#undef TARGETS
+#undef TARGET
 #undef SUBJECT
-#undef SEND_FLAGS
-#undef RECV_FLAGS
+#undef FLAGS
+#undef ARGS
 }
 
 /* XXX: Potential security vulnerability: User shouldn't be allow to set arbitrary

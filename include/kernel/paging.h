@@ -105,7 +105,6 @@ _Static_assert(sizeof(cr3_t) == 4, "cr3_t should be 4 bytes");
 
 /// Represents a 4 kB PTE in a page table.
 /// Physical addresses for 4 kB pages are limited to 32 bits.
-
 struct PageTableEntry {
     union {
         struct {
@@ -131,7 +130,6 @@ typedef struct PageTableEntry pte_t;
 _Static_assert(sizeof(pte_t) == 4, "pte_t should be 4 bytes");
 
 /// Represents an x86 PDE in a page directory.
-
 struct PageDirEntry {
     union {
         struct {
@@ -157,7 +155,6 @@ _Static_assert(sizeof(pde_t) == 4, "pde_t should be 4 bytes");
 
 /// Represents an x86 4MB PDE in a page directory.
 /// Physical addresses for 4 MB pages are limited to 40 bits.
-
 struct LargePageDirEntry {
     union {
         struct {
@@ -211,7 +208,6 @@ int clear_phys_page(uint32_t phys);
  This must be done when switching to a new address space.
  If only a few entries need to be flushed, use invalidatePage().
  */
-
 static inline void invalidate_tlb(void)
 {
     set_cr3(get_cr3());
@@ -223,7 +219,6 @@ static inline void invalidate_tlb(void)
  Instead of flushing the entire TLB, only a single page is flushed.
  This is faster than reload_cr3() for flushing a few entries.
  */
-
 static inline void invalidate_page(addr_t virt)
 {
     __asm__ __volatile__("invlpg (%0)\n" :: "r"(virt) : "memory");
@@ -243,7 +238,6 @@ static inline uint32_t get_root_page_map(void)
  page directory in register CR3.
  @return The PDE that was read.
  */
-
 static inline pde_t read_pde(unsigned int entry_num, uint32_t page_dir)
 {
     return read_pmap_entry(page_dir, entry_num).pde;
@@ -259,7 +253,6 @@ static inline pde_t read_pde(unsigned int entry_num, uint32_t page_dir)
  page directory in register CR3.
  @return E_OK on success. E_FAIL on failure.
  */
-
 static inline int write_pde(unsigned int entry_num, pde_t pde, uint32_t page_dir)
 {
     pmap_entry_t pmap_entry = {
@@ -275,7 +268,6 @@ static inline int write_pde(unsigned int entry_num, pde_t pde, uint32_t page_dir
  @param page_table The physical address of the page table.
  @return The PTE that was read.
  */
-
 static inline pte_t read_pte(unsigned int entry_num, uint32_t page_table)
 {
     return read_pmap_entry(page_table, entry_num).pte;
@@ -289,7 +281,6 @@ static inline pte_t read_pte(unsigned int entry_num, uint32_t page_table)
  @param page_table The physical address of the page table.
  @return E_OK on success. E_FAIL on failure.
  */
-
 static inline int write_pte(unsigned int entry_num, pte_t pte, uint32_t page_table)
 {
     pmap_entry_t pmapEntry = {

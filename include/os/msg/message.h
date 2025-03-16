@@ -8,11 +8,12 @@
 #define RESPONSE_ERROR      2
 
 #define ANY_SENDER          NULL_TID
+#define ANY_RECIPIENT       NULL_TID
 
 #define MSG_NOBLOCK         0x01u
-#define MSG_STD             0x00u   // XMM registers contain data (128 bytes)
+#define MSG_STD             0x00u
 #define MSG_EMPTY           0x02u   // Only subject is sent
-#define MSG_KERNEL          0x80000000u
+#define MSG_KERNEL          0x80u
 
 union MessagePayload {
     uint64_t uint64[16];

@@ -12,13 +12,28 @@
 
 #define MAX_THREADS			    65536
 
+// Thread is either uninitialized or destroyed.
 #define INACTIVE		    	0
-#define PAUSED			    	1  // Infinite blocking state
-#define ZOMBIE                  2  // Thread is waiting to be released
-#define READY			    	3  // Thread is ready to be scheduled to a processor
-#define RUNNING			    	4  // Thread is already scheduled to a processor
+
+// Thread is in an infinite blocking state.
+#define PAUSED			    	1
+
+// Thread is waiting to be released.
+#define ZOMBIE                  2 
+
+// Thread is ready to be scheduled to a processor.
+#define READY			    	3
+
+// Thread is already scheduled to a processor.
+#define RUNNING			    	4
+
+// Thread is waiting for another thread to send it a message.
 #define WAIT_FOR_SEND			5
+
+// Thread is waiting for another thread to receive its message.
 #define WAIT_FOR_RECV			6
+
+// Thread is temporarily blocked.
 #define SLEEPING				7
 
 #define MAX_PROCESSORS   		16u
@@ -111,8 +126,9 @@ static inline CONST proc_id_t get_current_processor(void)
     return 0;
 }
 
-/// @return The current thread that's running on this processor.
-
+/** Retrieve the thread executing on the current processor (the one from which this function is called). 
+ * @return The current thread that's running on this processor.
+ */
 static inline tcb_t* get_current_thread(void)
 {
     return processors[get_current_processor()].running_thread;
@@ -122,7 +138,6 @@ static inline tcb_t* get_current_thread(void)
  * Sets the current thread for this processor.
  * @param tcb The thread to set for this processor
  */
-
 static inline void set_current_thread(tcb_t* tcb)
 {
     processors[get_current_processor()].running_thread = tcb;

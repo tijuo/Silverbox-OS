@@ -84,7 +84,6 @@ extern NAKED noreturn void irq22_handler(void);
 extern NAKED noreturn void irq23_handler(void);
 
 /// The threads that are responsible for handling an IRQ
-
 extern tcb_t* irq_handlers[NUM_IRQS];
 
 #endif /* INTERRUPT_H */

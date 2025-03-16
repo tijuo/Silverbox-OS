@@ -178,7 +178,6 @@ struct InitStackArgs {
 /**
  Bootstraps the initial server and passes necessary boot data to it.
  */
-
 void bootstrap_init_server(multiboot_info_t* info)
 {
     addr_t init_server_stack = (addr_t)INIT_SERVER_STACK_TOP;
