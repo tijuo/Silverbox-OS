@@ -4,13 +4,13 @@ use rust::types::Tid;
 use rust::{device, syscalls};
 use crate::lowlevel;
 use crate::mapping;
-use crate::error::{self, ILLEGAL_MEM_ACCESS, NOT_IMPLEMENTED, OPERATION_FAILED};
-use alloc::string::String;
+use crate::error::{self, Error};
 use core::ffi::c_void;
-use crate::eprintln;
+use crate::eprintfln;
 use core::convert::TryInto;
-use rust::message::kernel::ExceptionMessagePayload;
+use rust::message::kernel::ExceptionMessage;
 use crate::mapping::AddrSpace;
+use alloc::borrow::Cow;
 
 mod new_allocator {
     use crate::address::{PAddr, PSize};
@@ -248,14 +248,14 @@ use crate::address;
 /// The main page fault handler. Receives page fault messages from the kernel and attempts to
 /// resolve the page fault by allocating memory, mapping pages, etc.
 
-pub(crate) fn handle_page_fault(request: &ExceptionMessagePayload) -> Result<(), (error::Error, Option<String>)> {
-    let is_read_access = rust::is_flag_cleared!(request.error_code, ExceptionMessagePayload::WRITE);
-    let is_kernel_access = rust::is_flag_cleared!(request.error_code, ExceptionMessagePayload::USER);
-    let is_not_present = rust::is_flag_cleared!(request.error_code, ExceptionMessagePayload::PRESENT);
+pub(crate) fn handle_page_fault(request: &ExceptionMessage) -> Result<(), (error::Error, Cow<'static, str>)> {
+    let is_read_access = rust::is_flag_cleared!(request.error_code, ExceptionMessage::WRITE);
+    let is_kernel_access = rust::is_flag_cleared!(request.error_code, ExceptionMessage::USER);
+    let is_not_present = rust::is_flag_cleared!(request.error_code, ExceptionMessage::PRESENT);
 
     let addr_space = mapping::manager::lookup_tid_mut(&Tid::try_from(request.who)
         .expect("Faulting thread should not have a NULL tid"))
-        .ok_or((error::NOT_REGISTERED, Some(String::from("Thread's address space isn't registered"))))?;
+        .ok_or((Error::NotRegistered, Cow::Borrowed("Thread's address space isn't registered")))?;
 
     let root_pmap = addr_space.root_pmap();
 
@@ -274,7 +274,7 @@ pub(crate) fn handle_page_fault(request: &ExceptionMessagePayload) -> Result<(),
                 match mapping.base_page.device.major {
                     device::mem::MAJOR => Ok(mapping.base_page.add_offset(mapping_offset).offset),
                     device::pseudo::MAJOR if mapping.base_page.device.minor == device::pseudo::ZERO_MINOR => Ok(0),
-                    _ => Err((NOT_IMPLEMENTED, Some(String::from("Reading block from device resulted in error")))),
+                    _ => Err((Error::NotImplemented, Cow::Borrowed("Reading block from device resulted in error"))),
                 }?
             };
 
@@ -286,7 +286,7 @@ pub(crate) fn handle_page_fault(request: &ExceptionMessagePayload) -> Result<(),
                 0
             };
 
-            /*eprintln!("Fault mapping {:p} -> {:#x} pmap: {:#x}",
+            /*eprintfln!("Fault mapping {:p} -> {:#x} pmap: {:#x}",
                       request.fault_address, mapped_frame, root_pmap); */
 
             return unsafe {
@@ -296,24 +296,24 @@ pub(crate) fn handle_page_fault(request: &ExceptionMessagePayload) -> Result<(),
                               flags)
             }
                 .map(|_| ())
-                .map_err(|_| (OPERATION_FAILED, None));
+                .map_err(|_| (Error::Failed, Cow::Borrowed("Operation failed.")));
         } else if is_kernel_access && request.cs != 0x10 { // Don't allow access to kernel memory
-            eprintln!("Attempted to access kernel memory.");
+            eprintfln!("Attempted to access kernel memory.");
         } else if is_read_access {     // This isn't supposed to happen
-            eprintln!("Address has been committed to memory, but a read access resulted in a page fault.");
+            eprintfln!("Address has been committed to memory, but a read access resulted in a page fault.");
         } else {
             /* TODO: Someone wrote to a read-only page. Find out whether
                                 it is allowed (COW, for example) or not and perform the
                                 relevant operation. */
             if mapping.flags & AddrSpace::READ_ONLY == AddrSpace::READ_ONLY {
-                eprintln!("Handling of read-only page faults isn't implemented yet");
+                eprintfln!("Handling of read-only page faults isn't implemented yet");
             } else {
-                //  eprintln!("No problem here...");
+                //  eprintfln!("No problem here...");
 
             }
         }
     } else {
-        eprintln!("Fault address is not mapped in address space");
+        eprintfln!("Fault address is not mapped in address space");
     }
 
     error::dump_state(&request);
@@ -330,7 +330,7 @@ pub(crate) fn handle_page_fault(request: &ExceptionMessagePayload) -> Result<(),
         ""
     };
 
-    Err((ILLEGAL_MEM_ACCESS,
-         Some(format!("Tid {} attempted to {}{} memory at address {:#x}",
+    Err((Error::IllegalMemoryAccess,
+         Cow::Owned(format!("Tid {} attempted to {}{} memory at address {:#x}",
                       request.who.try_into().unwrap_or(0u16), access, privilege, request.cr2))))
 }

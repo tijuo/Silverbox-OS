@@ -40,7 +40,7 @@ tcb_t* schedule(proc_id_t processor_id)
         return current_thread;
     else
         // todo: Have a minimum priority kernel idle thread that does nothing
-        panic("No more threads to run.");
+        PANIC("No more threads to run.");
 }
 
 /**
@@ -51,10 +51,10 @@ tcb_t* schedule(proc_id_t processor_id)
  */
 NON_NULL_PARAMS void switch_stacks(ExecutionState* state)
 {
-    tcb_t* old_tcb = get_current_thread();
+    tcb_t* old_tcb = thread_get_current();
 
     if(!old_tcb || old_tcb->thread_state != RUNNING) {
-        tcb_t* new_tcb = schedule(get_current_processor());
+        tcb_t* new_tcb = schedule(processor_get_current());
 
         if(new_tcb != old_tcb && new_tcb) // if switching to a new thread
         {
@@ -77,6 +77,6 @@ NON_NULL_PARAMS void switch_stacks(ExecutionState* state)
 
             *state = new_tcb->user_exec_state;
         } else if(!new_tcb)
-            panic("No more threads to schedule.");
+            PANIC("No more threads to schedule.");
     }
 }

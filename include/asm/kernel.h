@@ -6,7 +6,6 @@
 #define KERNEL_DPL 0x00
 #define USER_DPL 0x03
 
-#define KERNEL_TCB_START 0xF8400000
 #define KERNEL_VIRT_START 0xF8100000
 #define KERNEL_PHYS_START 0x100000
 #define KERNEL_CODE_SEL (0x08 | KERNEL_DPL)
@@ -14,8 +13,10 @@
 #define USER_CODE_SEL (0x18 | USER_DPL)
 #define USER_DATA_SEL (0x20 | USER_DPL)
 #define KERNEL_TSS_SEL (0x28 | KERNEL_DPL)
+
 #define BOOT_CODE_SEL (0x30 | KERNEL_DPL)
 #define BOOT_DATA_SEL (0x38 | KERNEL_DPL)
+
 #define KERNEL_RESD_TABLES	4	// for page tables/directory, temporary page tables 1 & 2, and physical memory mapping
 #define PAGE_SIZE		4096
 

@@ -7,7 +7,7 @@
 #define IRQ0_TID            1
 
 #define EXCEPTION_MSG           0xFFFFFFFFu
-#define EXIT_MSG		            0xFFFFFFFEu
+#define EXIT_MSG		0xFFFFFFFEu
 #define MEMORY_MSG              0xFFFFFFFDu
 
 struct ExceptionMessage

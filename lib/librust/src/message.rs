@@ -1,90 +1,37 @@
-use core::result;
-pub use crate::types::Tid;
+pub use crate::types::{Tid, CTid};
 
-pub enum MessageError {
-    UnknownSubject,
-    MalformedPayload
-}
-
-pub type Result<T> = result::Result<T, MessageError>;
-
-/// Indicates that a type can be sent/received via kernel message passing
-pub trait Transmit {
-    type Payload;
-
-    /// Retrieves the message payload from the received message
-    fn read_payload(header: &MessageHeader) -> Result<Self::Payload>;
-
-    /// Sets the message payload to be sent
-    fn write_payload(&self);
-}
-
-pub enum MessageTarget {
-    Sender(Tid),
-    Recipient(Option<Tid>),
-}
-
-pub enum PayloadSize {
-    Standard,
-    Empty
-}
-
+#[derive(Clone)]
 pub struct MessageHeader {
-    pub target: MessageTarget,
-    pub flags: u32,
+    pub target: Option<Tid>,
+    pub flags: u16,
     pub subject: u32,
 }
 
 impl MessageHeader {
-    pub const MSG_NOBLOCK: u32 = 1;
-    pub const MSG_STD: u32 = 0;
-    pub const MSG_EMPTY: u32 = 2;
-    pub const MSG_KERNEL: u32 = 0x80000000;
+    pub const MSG_NOBLOCK: u16 = 1;
+    pub const MSG_STD: u16 = 0;
+    pub const MSG_EMPTY: u16 = 2;
+    pub const MSG_KERNEL: u16 = 0x8000;
+    pub const ANY: Option<Tid> = None;
+    pub const ANY_SENDER: Option<Tid> = MessageHeader::ANY;
+    pub const ANY_RECIPIENT: Option<Tid> = MessageHeader::ANY;
 
-    pub fn new_to_recipient(recipient: &Option<Tid>, subject: u32, flags: u32) -> MessageHeader {
-        MessageHeader {
-            target: MessageTarget::Recipient(recipient.clone()),
-            subject,
-            flags
-        }
+    pub const fn new(target: Option<Tid>, subject: u32, flags: u16) -> Self {
+        Self { target, flags, subject }
     }
 
-    pub fn new_from_sender(sender: &Tid, subject: u32, flags: u32) -> MessageHeader {
-        MessageHeader {
-            target: MessageTarget::Sender(sender.clone()),
-            subject,
-            flags
-        }
+    pub const fn blank() -> Self {
+        Self { target: Self::ANY, flags: 0, subject: 0 }
     }
+}
 
-    pub fn payload_size(&self) -> PayloadSize {
-        if self.flags & Self::MSG_EMPTY == Self::MSG_EMPTY {
-            PayloadSize::Empty
-        } else {
-            PayloadSize::Standard
-        }
-    }
-
-    pub fn recipient(&self) -> Option<&Tid> {
-        if let MessageTarget::Recipient(Some(ref tid))=self.target {
-            Some(tid)
-        } else {
-            None
-        }
-    }
-
-    pub fn sender(&self) -> Option<&Tid> {
-        if let MessageTarget::Sender(ref tid)=self.target {
-            Some(tid)
-        } else {
-            None
-        }
+impl Default for MessageHeader {
+    fn default() -> Self {
+        Self::blank()       
     }
 }
 
 pub mod kernel {
-    use crate::message::MessageError;
-    use super::{Transmit, MessageHeader, Result, PayloadSize};
     use crate::types::CTid;
 
     pub const EXCEPTION: u32 = 0xFFFFFFFF;
@@ -92,9 +39,9 @@ pub mod kernel {
     pub const LOW_MEMORY: u32 = 0xFFFFFFFD;
     pub const OUT_OF_MEMORY: u32 = 0xFFFFFFFC;
 
-    #[derive(Clone, Default)]
+    #[derive(Clone, Default, Hash)]
     #[repr(C, align(16))]
-    pub struct ExceptionMessagePayload {
+    pub struct ExceptionMessage {
         pub eax: u32,
         pub ebx: u32,
         pub ecx: u32,
@@ -121,7 +68,7 @@ pub mod kernel {
         pub who: CTid,
     }
 
-    impl ExceptionMessagePayload {
+    impl ExceptionMessage {
         // Error codes
 
         pub const PRESENT: u32 = 0x01;
@@ -131,130 +78,74 @@ pub mod kernel {
         pub const FETCH: u32 = 0x10;
     }
 
-    impl Transmit for ExceptionMessagePayload {
-        type Payload = Self;
-        fn read_payload(header: &MessageHeader) -> Result<Self::Payload> {
-            match header.subject {
-                EXCEPTION => {
-                    if let PayloadSize::Empty = header.payload_size() {
-                        Err(MessageError::MalformedPayload)
-                    } else {
-                        let mut payload = ExceptionMessagePayload::default();
-
-                        unsafe {
-                            asm!(
-                            "movapd [{0}], xmm0",
-                            "movapd [{0}+16], xmm1",
-                            "movapd [{0}+32], xmm2",
-                            "movapd [{0}+48], xmm3",
-                            "movapd [{0}+64], xmm4",
-                            in (reg) &mut payload,
-                            lateout("xmm0") _,
-                            lateout("xmm1") _,
-                            lateout("xmm2") _,
-                            lateout("xmm3") _,
-                            lateout("xmm4") _,
-                            );
-                        }
-
-                        Ok(payload)
-                    }
-                },
-                _ => Err(MessageError::UnknownSubject)
-            }
+    impl From<[u8; 76]> for ExceptionMessage {
+        fn from(value: [u8; 76]) -> Self {
+            ExceptionMessage::try_from(&value[..]).unwrap()
         }
+    }
 
-        fn write_payload(&self) {
-            unsafe {
-                asm!(
-                "movapd xmm0, [{0}]",
-                "movapd xmm1, [{0}+16]",
-                "movapd xmm2, [{0}+32]",
-                "movapd xmm3, [{0}+48]",
-                "movapd xmm4, [{0}+64]",
-                "xorpd xmm5, xmm5",
-                "xorpd xmm6, xmm6",
-                "xorpd xmm7, xmm7",
-                in (reg) &self,
-                lateout("xmm0") _,
-                lateout("xmm1") _,
-                lateout("xmm2") _,
-                lateout("xmm3") _,
-                lateout("xmm4") _,
-                lateout("xmm5") _,
-                lateout("xmm6") _,
-                lateout("xmm7") _,
-                );
+    impl TryFrom<&[u8]> for ExceptionMessage {
+        type Error = ();
+
+        fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+            if value.len() < core::mem::size_of::<ExceptionMessage>() {
+                Err(())
+            } else {
+                Ok(Self {
+                    eax: u32::from_le_bytes(*value[0..4].as_array().unwrap()),
+                    ebx: u32::from_le_bytes(*value[4..8].as_array().unwrap()),
+                    ecx: u32::from_le_bytes(*value[8..12].as_array().unwrap()),
+                    edx: u32::from_le_bytes(*value[12..16].as_array().unwrap()),
+                    esi: u32::from_le_bytes(*value[16..20].as_array().unwrap()),
+                    edi: u32::from_le_bytes(*value[20..24].as_array().unwrap()),
+                    ebp: u32::from_le_bytes(*value[24..28].as_array().unwrap()),
+                    esp: u32::from_le_bytes(*value[28..32].as_array().unwrap()),
+                    cs: u16::from_le_bytes(*value[32..34].as_array().unwrap()),
+                    ds: u16::from_le_bytes(*value[34..36].as_array().unwrap()),
+                    es: u16::from_le_bytes(*value[36..38].as_array().unwrap()),
+                    fs: u16::from_le_bytes(*value[38..40].as_array().unwrap()),
+                    gs: u16::from_le_bytes(*value[40..42].as_array().unwrap()),
+                    ss: u16::from_le_bytes(*value[42..44].as_array().unwrap()),
+                    eflags: u32::from_le_bytes(*value[44..48].as_array().unwrap()),
+                    cr0: u32::from_le_bytes(*value[48..52].as_array().unwrap()),
+                    cr2: u32::from_le_bytes(*value[52..56].as_array().unwrap()),
+                    cr3: u32::from_le_bytes(*value[56..60].as_array().unwrap()),
+                    cr4: u32::from_le_bytes(*value[60..64].as_array().unwrap()),
+                    eip: u32::from_le_bytes(*value[64..68].as_array().unwrap()),
+                    error_code: u32::from_le_bytes(*value[68..72].as_array().unwrap()),
+                    fault_num: value[72],
+                    processor_id: value[73],
+                    who: CTid::from_le_bytes(*value[74..76].as_array().unwrap()),
+                })
             }
         }
     }
 
-    #[derive(Clone, Default)]
+    #[derive(Clone, Default, Hash)]
     #[repr(C, align(16))]
-    pub struct ExitMessagePayload {
+    pub struct ExitMessage {
         pub exit_code: i32,
         pub who: CTid,
     }
 
-    impl Transmit for ExitMessagePayload {
-        type Payload = Self;
-        fn read_payload(header: &MessageHeader) -> Result<Self::Payload> {
-            match header.subject {
-                EXIT => {
-                    if let PayloadSize::Empty = header.payload_size() {
-                        Err(MessageError::MalformedPayload)
-                    } else {
-                        let mut payload = ExitMessagePayload::default();
-
-                        unsafe {
-                            asm!(
-                            "movd [{0}], xmm0",
-                            "movd [{0}+4], xmm1",
-                            in (reg) &mut payload,
-                            );
-                        }
-
-                        Ok(payload)
-                    }
-                },
-                _ => Err(MessageError::UnknownSubject),
-            }
+    impl From<[u8; 6]> for ExitMessage {
+        fn from(value: [u8; 6]) -> Self {
+            Self::try_from(&value[..]).unwrap()
         }
+    }
 
-        fn write_payload(&self) {
-            unsafe {
-                asm!(
-                "movd xmm0, [{0}]",
-                "movd xmm1, [{0}+16]",
-                "xorpd xmm2, xmm2",
-                "xorpd xmm3, xmm3",
-                "xorpd xmm4, xmm4",
-                "xorpd xmm5, xmm5",
-                "xorpd xmm6, xmm6",
-                "xorpd xmm7, xmm7",
-                in (reg) &self,
-                lateout("xmm0") _,
-                lateout("xmm1") _,
-                lateout("xmm2") _,
-                lateout("xmm3") _,
-                lateout("xmm4") _,
-                lateout("xmm5") _,
-                lateout("xmm6") _,
-                lateout("xmm7") _,
-                );
+    impl TryFrom<&[u8]> for ExitMessage {
+        type Error = ();
+
+        fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+            if value.len() >= 6 {
+                Ok(Self {
+                    exit_code: i32::from_le_bytes(*value[0..4].as_array().unwrap()),
+                    who: CTid::from_le_bytes(*value[4..6].as_array().unwrap()),
+                })
+            } else {
+                Err(())
             }
         }
     }
-}
-
-#[repr(C)]
-pub union RawPayload {
-    pub uint64: [u64; 16],
-    pub int64: [i64; 16],
-    pub uint32: [u32; 32],
-    pub int32: [i32; 32],
-    pub uint16: [u16; 64],
-    pub int16: [i16; 64],
-    pub uint8: [u8; 128],
-    pub int8: [i8; 128],
 }

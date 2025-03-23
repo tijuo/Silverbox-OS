@@ -8,6 +8,8 @@
 #include <oslib.h>
 #include <stdalign.h>
 
+#define GDT_BASE(phys, virt)    ((phys) - (virt))
+
 gdt_entry_t kernel_gdt[8] = {
     // Null Descriptor (0x00)
     {
@@ -72,7 +74,11 @@ gdt_entry_t kernel_gdt[8] = {
             .flags2 = GDT_BYTE_GRAN,
             .base3 = 0
         }
-    }
+    },
+    // Boot Code Descriptor (0x30)
+    {.limit1 = 0xFFFFu, .base1 = GDT_BASE(0x100000, 0xFEC00000) & 0xFFFFu, .base2 = (GDT_BASE(0x100000, 0xFEC00000) >> 16u) & 0xFFu, .access_flags = GDT_PRESENT | GDT_CODE | GDT_NONCONF | GDT_DPL0 | GDT_NONSYS | GDT_RDWR, .limit2 = 0xFu, .flags2 = GDT_PAGE_GRAN | GDT_BIG, .base3 = GDT_BASE(0x100000, 0xFEC00000) >> 24u }, // 32-bit code, execute-only, non-conforming
+    // Boot Data Description (0x38)
+    {.limit1 = 0xFFFFu, .base1 = GDT_BASE(0x100000, 0xFEC00000) & 0xFFFFu, .base2 = (GDT_BASE(0x100000, 0xFEC00000) >> 16u) & 0xFFu, .access_flags = GDT_PRESENT | GDT_DATA | GDT_EXPUP | GDT_NONSYS | GDT_RDWR, .limit2 = 0xFu, .flags2 = GDT_PAGE_GRAN | GDT_BIG, .base3 = GDT_BASE(0x100000, 0xFEC00000) >> 24u }, // 32-bit data, read-write
 };
 
 struct IdtEntry kernel_idt[NUM_EXCEPTIONS + NUM_IRQS];
@@ -116,7 +122,7 @@ NON_NULL_PARAMS RETURNS_NON_NULL void* memset(void* ptr, int value, size_t len)
     return ptr;
 }
 
-// XXX: Assumes that the memory regions don't overlap
+// Assumes that the memory regions don't overlap
 
 NON_NULL_PARAMS RETURNS_NON_NULL void* memcpy(void* restrict dest, const void* restrict src, size_t num)
 {

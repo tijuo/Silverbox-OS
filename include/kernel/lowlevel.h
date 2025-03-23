@@ -97,29 +97,29 @@
 #define EFLAGS_VIP	(1u << 20)
 #define EFLAGS_ID	(1u << 21)
 
-#define CR0_PE          (1u << 0)
-#define CR0_MP          (1u << 1)
-#define CR0_EM          (1u << 2)
-#define CR0_WP          (1u << 16)
-#define CR0_AM          (1u << 18)
-#define CR0_NW          (1u << 29)
-#define CR0_CD          (1u << 30)
-#define CR0_PG          (1u << 31)
+#define CR0_PE          (1ul << 0)
+#define CR0_MP          (1ul << 1)
+#define CR0_EM          (1ul << 2)
+#define CR0_WP          (1ul << 16)
+#define CR0_AM          (1ul << 18)
+#define CR0_NW          (1ul << 29)
+#define CR0_CD          (1ul << 30)
+#define CR0_PG          (1ul << 31)
 
-#define CR3_PWT         (1u << 3)
-#define CR3_PCD         (1u << 4)
+#define CR3_PWT         (1ul << 3)
+#define CR3_PCD         (1ul << 4)
 
-#define CR4_DE          (1u << 3)
-#define CR4_PSE         (1u << 4)
-#define CR4_PAE         (1u << 5)
-#define CR4_MCE         (1u << 6)
-#define CR4_PGE         (1u << 7)
-#define CR4_PCE         (1u << 8)
-#define CR4_OSFXSR      (1u << 9)
-#define CR4_OSXMMEXCPT  (1u << 10)
-#define CR4_FSGSBASE    (1u << 16)
-#define CR4_PCIDE       (1u << 17)
-#define CR4_OSXSAVE     (1u << 18)
+#define CR4_DE          (1ul << 3)
+#define CR4_PSE         (1ul << 4)
+#define CR4_PAE         (1ul << 5)
+#define CR4_MCE         (1ul << 6)
+#define CR4_PGE         (1ul << 7)
+#define CR4_PCE         (1ul << 8)
+#define CR4_OSFXSR      (1ul << 9)
+#define CR4_OSXMMEXCPT  (1ul << 10)
+#define CR4_FSGSBASE    (1ul << 16)
+#define CR4_PCIDE       (1ul << 17)
+#define CR4_OSXSAVE     (1ul << 18)
 
 #define PCID_BITS   12
 #define PCID_MASK   0xFFFu
@@ -300,7 +300,7 @@ static inline void set_eflags(uint32_t newEflags)
         "popf\n" :: "r"(newEflags) : "cc");
 }
 
-static inline uint32_t get_cr0(void)
+WARN_UNUSED static inline uint32_t get_cr0(void)
 {
     uint32_t cr0;
 
@@ -308,7 +308,7 @@ static inline uint32_t get_cr0(void)
     return cr0;
 }
 
-static inline uint32_t get_cr2(void)
+WARN_UNUSED static inline uint32_t get_cr2(void)
 {
     uint32_t cr2;
 
@@ -316,7 +316,7 @@ static inline uint32_t get_cr2(void)
     return cr2;
 }
 
-static inline uint32_t get_cr3(void)
+WARN_UNUSED static inline uint32_t get_cr3(void)
 {
     uint32_t cr3;
 
@@ -324,7 +324,7 @@ static inline uint32_t get_cr3(void)
     return cr3;
 }
 
-static inline uint32_t get_cr4(void)
+WARN_UNUSED static inline uint32_t get_cr4(void)
 {
     uint32_t cr4;
 
@@ -332,7 +332,7 @@ static inline uint32_t get_cr4(void)
     return cr4;
 }
 
-static inline uint32_t get_eflags(void)
+WARN_UNUSED static inline uint32_t get_eflags(void)
 {
     uint32_t eflags;
 
@@ -342,7 +342,7 @@ static inline uint32_t get_eflags(void)
     return eflags;
 }
 
-static inline uint16_t get_ds(void)
+WARN_UNUSED static inline uint16_t get_ds(void)
 {
     uint16_t ds;
 
@@ -351,7 +351,7 @@ static inline uint16_t get_ds(void)
     return ds;
 }
 
-static inline uint16_t get_es(void)
+WARN_UNUSED static inline uint16_t get_es(void)
 {
     uint16_t es;
 
@@ -360,7 +360,7 @@ static inline uint16_t get_es(void)
     return es;
 }
 
-static inline uint16_t get_fs(void)
+WARN_UNUSED static inline uint16_t get_fs(void)
 {
     uint16_t fs;
 
@@ -369,7 +369,7 @@ static inline uint16_t get_fs(void)
     return fs;
 }
 
-static inline uint16_t get_gs(void)
+WARN_UNUSED static inline uint16_t get_gs(void)
 {
     uint16_t gs;
 
@@ -378,7 +378,7 @@ static inline uint16_t get_gs(void)
     return gs;
 }
 
-static inline uint16_t get_ss(void)
+WARN_UNUSED static inline uint16_t get_ss(void)
 {
     uint16_t ss;
 
@@ -420,12 +420,12 @@ static inline void set_ss(uint16_t ss)
     __asm__("mov %0, %%ss" :: "r"(ss) : "memory");
 }
 
-static inline bool is_xsave_supported(void)
+WARN_UNUSED static inline bool is_xsave_supported(void)
 {
     return IS_FLAG_SET(get_cr4(), CR4_OSXSAVE);
 }
 
-static inline bool is_int_enabled(void)
+WARN_UNUSED static inline bool is_int_enabled(void)
 {
     return IS_FLAG_SET(get_eflags(), EFLAGS_IF);
 }
@@ -438,7 +438,7 @@ static inline void wrmsr(uint32_t msr, uint64_t data)
     __asm__ __volatile__("wrmsr" :: "c"(msr), "a"(eax), "d"(edx));
 }
 
-static inline uint64_t rdmsr(uint32_t msr)
+WARN_UNUSED static inline uint64_t rdmsr(uint32_t msr)
 {
     uint32_t eax;
     uint32_t edx;
@@ -456,15 +456,12 @@ extern const void* const kcode;
 extern const void* const kdata;
 extern const void* const kbss;
 extern const void* const kend;
-extern const void* const ktcb_start;
-extern const void* const ktcb_end;
 extern const void* const kphys_start;
 extern const void* const kvirt_start;
 extern const void* const kdcode;
 extern const void* const kddata;
 extern const void* const kdend;
 extern unsigned long int ksize;
-extern unsigned long int ktcb_table_size;
 extern const void* const kvirt_low_mem_start;
 
 extern const unsigned int kcode_sel;
@@ -548,7 +545,6 @@ __asm__ ( \
           "2:\n" /* No privilege change (kernel->kernel switch) */\
           "mov %%esp, (%%eax)\n" \
           "1:\n" \
-          "push %%ecx\n" \
           "push %%ecx\n" \
           ::: "eax", "ecx", "edx", "memory", "cc" \
 )

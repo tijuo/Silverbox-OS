@@ -1,5 +1,17 @@
-#ifndef MBOOTHEAD
-#define MBOOTHEAD
+#ifndef MULTIBOOT_H
+#define MULTIBOOT_H
+
+#define MULTIBOOT_PAGE_ALIGN	0x01
+#define MULTIBOOT_MEMORY_INFO	0x02
+#define MULTIBOOT_VIDEO_TABLE	0x04
+#define MULTIBOOT_AOUT_KLUDGE	0x10000
+
+#define MULTIBOOT_LINEAR_GFX	0
+#define MULTIBOOT_EGA_TEXT	1
+
+#define MULTIBOOT_EGA_WIDTH	0
+#define MULTIBOOT_EGA_HEIGHT	0
+#define MULTIBOOT_EGA_DEPTH	0
 
 /* Macros.  */
 
@@ -12,6 +24,8 @@
 #else
 # define MULTIBOOT_HEADER_FLAGS		0x00010003u
 #endif
+
+#define MULTIBOOT_CHECKSUM	-(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS)
 
 /* The magic number passed by a Multiboot-compliant boot loader.  */
 #define MULTIBOOT_BOOTLOADER_MAGIC	0x2BADB002u
@@ -32,11 +46,21 @@ typedef struct multiboot_header {
     unsigned int magic;
     unsigned int flags;
     unsigned int checksum;
+
+    #if 0
+    // if flags[16] is set
     unsigned int header_addr;
     unsigned int load_addr;
     unsigned int load_end_addr;
     unsigned int bss_end_addr;
     unsigned int entry_addr;
+    #endif /* 0 */
+
+    // if flags[2] is set
+    unsigned int mode_type;
+    unsigned int width;
+    unsigned int height;
+    unsigned int depth;
 } multiboot_header_t;
 
 /* The symbol table for a.out.  */
@@ -140,4 +164,4 @@ typedef struct drive_info {
     unsigned short int drive_ports[];
 } drive_info_t;
 
-#endif
+#endif /* MULTIBOOT_H */

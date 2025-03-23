@@ -33,7 +33,7 @@ void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame);
                 "push $" #num "\n"                                                                                            \
                 "mov %esp, %ecx\n" /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
                 "and $0xFFFFFFF0, %esp\n"                                                                                     \
-                "mov %ecx, 4(%esp)\n"                                                                                         \
+                "mov %ecx, (%esp)\n"                                                                                         \
                 "call handle_cpu_exception\n");                                                                               \
     }
 
@@ -45,7 +45,7 @@ void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame);
         __asm__("push $" #num "\n"                                                                                            \
                 "mov %esp, %ecx\n" /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
                 "and $0xFFFFFFF0, %esp\n"                                                                                     \
-                "mov %ecx, 4(%esp)\n"                                                                                         \
+                "mov %ecx, (%esp)\n"                                                                                         \
                 "call handle_cpu_exception\n");                                                                               \
     }
 
@@ -57,7 +57,7 @@ void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame);
         __asm__(                                                                                                          \
             "mov %esp, %ecx\n" /* Push pointer to stack so that the stack will be aligned to 16-byte boundary upon end */ \
             "and $0xFFFFFFF0, %esp\n"                                                                                     \
-            "mov %ecx, 4(%esp)\n"                                                                                         \
+            "mov %ecx, (%esp)\n"                                                                                         \
             "call handle_irq\n");                                                                                         \
     }
 
@@ -119,6 +119,45 @@ IRQ_HANDLER(21)
 IRQ_HANDLER(22)
 IRQ_HANDLER(23)
 
+int irq_register(tcb_t *thread, unsigned int irq) {
+    if(irq < 24 && irq_handlers[irq] == NULL) {
+        irq_handlers[irq] = thread_get_current();
+
+        /*
+        if(apic_pending_irq(irq)) {
+            apic_send_eoi(irq);
+        }
+
+        apic_enable_irq(irq);
+        */
+
+        thread->event_mask |= 1u << (irq + 8);
+        thread->pending_events &= ~(1u << (irq + 8));
+
+        return E_OK;
+    } else {
+        return E_FAIL;
+    }
+}
+
+int irq_unregister(tcb_t *thread, unsigned int irq) {
+    if(irq < 24) {
+        irq_handlers[irq] = NULL;
+
+        /*
+
+        apic_disable_irq(irq);
+        */
+
+        thread->event_mask &= ~(1u << (irq + 8));
+        thread->pending_events &= ~(1u << (irq + 8));
+
+        return E_OK;
+    } else {
+        return E_FAIL;
+    }
+}
+
 /**
  Interrupt handler for IRQs.
 
@@ -128,17 +167,33 @@ IRQ_HANDLER(23)
  @param interrupt_frame Pointer to the saved interrupt frame and processor execution state.
 
  */
-
     void handle_irq(struct IrqInterruptFrame* frame)
 {
-    tcb_t* current_thread = get_current_thread();
-    tcb_t* new_thread = current_thread;
+    unsigned int irq_num = 0; //get_in_service_irq();
 
-    unsigned int int_num = 0;
+    /*
+    apic_disable_irq(irq_num);
+    apic_send_eoi(irq_num);
+    */
+
+    if(irq_handlers[irq_num] != NULL) {
+        tcb_t *handler_thread = irq_handlers[irq_num];
+        unsigned int irq_event = 1u << irq_num; //get_in_service_irq();
+
+        if(irq_event & handler_thread->event_mask) {
+            handler_thread->pending_events |= irq_event;
+        
+            if(IS_ERROR(thread_wakeup(handler_thread))) {
+
+            } else {
+                kprintfln("Unable to wake up IRQ handler.");
+            }
+        }
+    }
 
     // int irqNum = getInServiceIRQ();
 
-    int_num -= IRQ_BASE;
+    //int_num -= IRQ_BASE;
     // tcb_t *handler = irqHandlers[intNum];
 
     /*
@@ -168,7 +223,7 @@ IRQ_HANDLER(23)
 
       if(IS_ERROR(
       sendMessage(currentThread, getTid(handler), IRQ_MSG, MSG_STD))) {
-      kprintf("Unable to send irq %u message to handler.\n", intNum);
+      kprintfln("Unable to send irq %u message to handler.", intNum);
       }
       }
       else if(currentThread->threadState != RUNNING) {
@@ -196,11 +251,10 @@ IRQ_HANDLER(23)
  */
 void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame)
 {
-    tcb_t* tcb = get_current_thread();
-    //  ExecutionState *state = (ExecutionState*)(tss.esp0 + sizeof(uint32_t));
+    tcb_t* tcb = thread_get_current();
 
     if(!tcb) {
-        kprintf("NULL tcb. Unable to handle exception. System halted.\n");
+        kprintfln("NULL tcb. Unable to handle exception. System halted.\n");
         dump_state(&interrupt_frame->state, interrupt_frame->ex_num,
             interrupt_frame->error_code);
 
@@ -210,24 +264,20 @@ void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame)
         }
     }
 
-    if(interrupt_frame->ex_num == 13 && interrupt_frame->state.cs == UCODE_SEL && is_readable(interrupt_frame->state.eip, get_root_page_map()) && *(uint8_t*)interrupt_frame->state.eip == HALT_OPCODE) {
+    if(interrupt_frame->ex_num == 13 && interrupt_frame->state.cs == UCODE_SEL && is_readable(interrupt_frame->state.eip, get_root_page_map()) == 1 && *(uint8_t*)interrupt_frame->state.eip == HALT_OPCODE) {
         struct ExitMessage message_data = {
             .status_code = (int)interrupt_frame->state.eax,
             .who = get_tid(tcb)
         };
 
-        SysMessageArgs message_args = {
-            .recv_buffer = NULL,
-            .recv_length = 0,
-            .send_buffer = &message_data,
-            .send_length = sizeof message_data
-        };
-
-        if(IS_ERROR(send_and_receive_message(tcb, tcb->ex_handler, EXIT_MSG, MSG_KERNEL, &message_args))) {
-            kprintf("Unable to send message to exception handler.\n");
-            kprintf("Tried to send exit message (status code: %d) to tid %hhu.\n", message_data.status_code, message_data.who);
+        if(IS_ERROR(send_message(tcb, tcb->ex_handler, EXIT_MSG, MSG_KERNEL, &message_data, sizeof message_data))) {
+            kprintfln("Unable to send message to exception handler.");
+            kprintfln("Tried to send exit message (status code: %d) to tid %hhu.", message_data.status_code, message_data.who);
             dump_regs(tcb, &interrupt_frame->state, interrupt_frame->ex_num, interrupt_frame->error_code);
-            release_thread(tcb);
+            
+            if(IS_ERROR(thread_release(tcb))) {
+                kprintfln("Failed to release thread.");
+            }
         }
     } else {
         struct ExceptionMessage message_data = {
@@ -255,24 +305,20 @@ void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame)
             .eip = tcb->user_exec_state.eip,
             .error_code = interrupt_frame->error_code,
             .fault_num = interrupt_frame->ex_num,
-            .processor_id = get_current_processor(),
+            .processor_id = processor_get_current(),
             .who = get_tid(tcb),
         };
 
-        SysMessageArgs message_args = {
-            .recv_buffer = NULL,
-            .recv_length = 0,
-            .send_buffer = &message_data,
-            .send_length = sizeof message_data
-        };
-
-        if(IS_ERROR(send_and_receive_message(tcb, tcb->ex_handler, EXCEPTION_MSG, MSG_KERNEL, &message_args))) {
-            kprintf("Unable to send message to exception handler.\n");
-            kprintf("Tried to send exception %u message to tid %hhu.\n",
+        if(IS_ERROR(send_message(tcb, tcb->ex_handler, EXCEPTION_MSG, MSG_KERNEL, &message_data, sizeof message_data))) {
+            kprintfln("Unable to send message to exception handler.");
+            kprintfln("Tried to send exception %u message to tid %hhu.",
                 interrupt_frame->ex_num, interrupt_frame->error_code,
                 interrupt_frame->ex_num == 14 ? get_cr2() : 0, get_tid(tcb));
             dump_regs(tcb, &interrupt_frame->state, interrupt_frame->ex_num, interrupt_frame->error_code);
-            release_thread(tcb);
+
+            if(IS_ERROR(thread_release(tcb))) {
+                kprintfln("Unable to release thread.");
+            }
         }
     }
 

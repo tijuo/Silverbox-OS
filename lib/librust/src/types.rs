@@ -4,6 +4,9 @@ use crate::syscalls::c_types;
 pub type CTid = c_types::CTid;
 pub const NULL_TID: u16 = c_types::NULL_TID;
 
+pub type PAddr = u32;
+pub type Addr = u32;
+
 pub mod bit_array {
     use crate::align::Align;
     use alloc::vec::Vec;

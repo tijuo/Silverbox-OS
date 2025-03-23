@@ -3,7 +3,7 @@ include ../../Makefile.inc
 ROOT_DIR	:=../..
 
 INSTALL_DIR=sbos/servers/
-OUTPUT=target/i686-pc-unknown-elf/debug/init_server.exe
+OUTPUT=target/i686-pc-none-elf/debug/init_server.exe
 EXE_NAME=init.exe
 DMP_NAME=init.dmp
 

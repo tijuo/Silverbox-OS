@@ -3,7 +3,7 @@
 
 #ifdef __GNUC__
 #define PACKED  __attribute__((packed))
-#define ALIGNED(x) _Alignas(x)
+#define ALIGN_AS(x) _Alignas(x)
 #define HOT  __attribute__((hot))
 #define COLD __attribute__((cold))
 #define PURE __attribute__((pure))
@@ -17,9 +17,10 @@
 #define NON_NULL_PARAMS __attribute__((nonnull))
 #define NON_NULL_PARAM(x) __attribute__((nonnull (x)))
 #define RETURNS_NON_NULL __attribute__((returns_nonnull))
+#define WARN_UNUSED __attribute__((warn_unused_result))
 #else
 #define PACKED
-#define ALIGNED(x) _Alignas(x)
+#define ALIGN_AS(x) _Alignas(x)
 #define HOT
 #define COLD
 #define PURE
@@ -33,6 +34,7 @@
 #define NON_NULL_PARAMS
 #define NON_NULL_PARAM(x)
 #define RETURNS_NON_NULL
+#define WARN_UNUSED
 #endif /* __GNUC__ */
 
 #ifdef ECLIPSE_GCC

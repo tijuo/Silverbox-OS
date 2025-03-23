@@ -13,9 +13,10 @@ pub mod manager {
     use crate::error;
     use alloc::collections::btree_map::BTreeMap;
     use rust::thread;
-    use crate::error::OPERATION_FAILED;
     use crate::page::PageMapBase;
-
+    use crate::error::Error;
+    use alloc::borrow::Cow;
+    
     static mut ADDRESS_SPACES: Option<BTreeMap<PageMapBase, AddrSpace>> = None;
 
     pub fn init() {
@@ -36,7 +37,7 @@ pub mod manager {
                 }
             },
             Err(_) => {
-                error::log_error(OPERATION_FAILED, None);
+                error::log_error(Error::Failed, Cow::Borrowed("Failed to initialized the address mapper"));
                 panic!("Unable to initialize the address mapper.");
             }
         }

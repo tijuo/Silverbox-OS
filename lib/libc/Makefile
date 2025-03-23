@@ -4,7 +4,7 @@ ROOT_DIR	:=../..
 
 ARFLAGS =rs
 
-DIRS=ctype string stdlib errno stdio time
+DIRS=ctype string stdlib errno time #stdio
 
 .PHONY:	$(DIRS) all tests clean install
 

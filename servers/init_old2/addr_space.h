@@ -48,7 +48,7 @@ typedef struct Page
   unsigned int offset;
   int lastAccessed;
 
-  pframe_t physFrame  : 20;
+  pbase_t physFrame  : 20;
   int      isOnDisk   :  1;
   int      isDirty    :  1;
   int      isDiskPage :  1;

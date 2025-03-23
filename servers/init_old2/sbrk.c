@@ -59,7 +59,7 @@ void *sbrk( int increment )
     while(addr < (addr_t)heapEnd)
     {
       size_t count;
-      pframe_t frames[128];
+      pbase_t frames[128];
 
       for(count=0; count < 128 && addr + count * PAGE_SIZE < (addr_t)heapEnd; count++)
       {
@@ -73,7 +73,7 @@ void *sbrk( int increment )
           return prevHeap;
         }
 
-        frames[count] = (pframe_t)(physPage >> 12);
+        frames[count] = (pbase_t)(physPage >> 12);
       }
 
       if(count)

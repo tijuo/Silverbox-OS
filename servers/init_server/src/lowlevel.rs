@@ -1,3 +1,4 @@
+use core::ops::{Deref, DerefMut};
 use core::panic::PanicInfo;
 use core::alloc::{Layout, GlobalAlloc};
 use core::ffi::c_void;
@@ -6,6 +7,10 @@ use rust::syscalls::{self, flags, PageMapping, CPageMap, SyscallError};
 use crate::address::PAddr;
 use crate::page::{FrameSize, PhysicalFrame};
 use rust::io;
+use core::fmt::Write;
+use core::cell::UnsafeCell;
+use core::sync::atomic::AtomicBool;
+use core::sync::atomic::Ordering;
 
 static BASE_CHARS: &'static [u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
@@ -18,6 +23,82 @@ extern "C" {
     fn abort() -> !;
 }
 
+pub struct Mutex<T> {
+    locked: AtomicBool,
+    inner: UnsafeCell<MutexInner<T>>
+}
+
+pub struct MutexInner<T> {
+    data: T,
+}
+
+pub struct MutexGuard<'a, T> {
+    mutex_ref: &'a Mutex<T>
+}
+
+impl<T> Mutex<T> {
+    pub const fn new(data: T) -> Self {
+        Self {
+            locked: AtomicBool::new(false),
+            inner: UnsafeCell::new(MutexInner { data }),
+        }
+    }
+
+    pub fn lock(&self) -> MutexGuard<'_, T> {
+        while self.locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err() {}
+        MutexGuard { mutex_ref: &self }
+    }
+}
+
+impl<'a, T> Deref for MutexGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &(*self.mutex_ref.inner.get()).data }
+    }
+}
+
+impl<'a, T> DerefMut for MutexGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut (*self.mutex_ref.inner.get()).data  }
+    }
+}
+
+impl<'a, T> Drop for MutexGuard<'a, T> {
+    fn drop(&mut self) {
+        while self.mutex_ref.locked.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {}
+    }
+}
+
+unsafe impl<T> Sync for Mutex<T> {}
+
+pub struct DebugWriter;
+
+pub static DEBUG_WRITER: Mutex<DebugWriter> = Mutex::new(DebugWriter);
+
+impl Write for DebugWriter {
+    fn write_char(&mut self, c: char) -> core::fmt::Result {
+        if c.is_ascii() && c as u8 >= 32 {
+            unsafe {
+                io::write_u8(0xE9, c as u8);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for c in s.chars() {
+            self.write_char(c)?;
+        }
+
+        Ok(())
+    }
+}
+
+/*
 fn put_debug_char(c: u8) {
     unsafe {
         io::write_u8(0xE9, c);
@@ -38,39 +119,60 @@ pub fn print_debugln(msg: &str) {
     print_debug(msg);
     print_debug("\n");
 }
+*/
 
 #[macro_export]
-macro_rules! eprintln {
-    () => ($crate::eprint!("\n"));
+macro_rules! eprintfln {
+    () => ({
+        use core::fmt::Write;
+        use $crate::lowlevel::DEBUG_WRITER;
+        let mut guard = DEBUG_WRITER.lock();
+
+        _ = guard.write_char('\n');
+    });
+
+
 
     ($($arg:tt)*) => ({
-        $crate::lowlevel::print_debugln(format!($($arg)*).as_str());
-    })
+        use core::fmt::Write;
+        use $crate::lowlevel::DEBUG_WRITER;
+        let mut guard = DEBUG_WRITER.lock();
+
+        _ = guard.write_fmt(format_args!($($arg)*));
+        _ = guard.write_char('\n');
+    });
 }
 
 #[macro_export]
-macro_rules! eprint {
+macro_rules! eprintf {
+    () => ({});
+
     ($($arg:tt)*) => ({
-        $crate::lowlevel::print_debug(format!($($arg)*).as_str());
+        use core::fmt::Write;
+        use $crate::lowlevel::DEBUG_WRITER;
+        let mut guard = DEBUG_WRITER.lock();
+
+        _ = guard.write_fmt(format_args!($($arg)*));
     });
 }
 
 #[macro_export]
 macro_rules! println {
-    () => ($crate::eprintln!());
+    () => ($crate::eprintfln!());
 
     ($($arg:tt)*) => ({
-        eprintln!($($arg)*);
+        $crate::eprintfln!($($arg)*);
     })
 }
 
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ({
-        $crate::eprint!($($arg)*);
+        $crate::eprintf!($($arg)*);
     });
 }
 
+/*
 fn u32_to_bytes(mut num: u32, base: u32) -> Option<([u8; 33], usize)> {
     if base < 2 || base > 36 {
         None
@@ -126,16 +228,17 @@ pub fn print_debug_u32(num: u32, base: u32) {
 pub fn print_debug_i32(num: i32, base: u32) {
     print_debug_num(i32_to_bytes(num, base));
 }
+*/
 
 pub mod phys {
     use crate::page::{FrameSize, PhysicalFrame, VirtualPage};
-    use crate::error::{self, Error};
+    use crate::error::Error;
     use crate::address::{PAddr, PSize};
     use rust::align::Align;
     use core::ffi::c_void;
     use core::{cmp, mem};
     use core::ops::{Deref, DerefMut, Index};
-    use super::{GLOBAL_ALLOCATOR};
+    use super::GLOBAL_ALLOCATOR;
     use crate::phys_alloc::{self, BlockSize};
     use core::alloc::{GlobalAlloc, Layout};
     use alloc::boxed::Box;
@@ -263,16 +366,12 @@ pub mod phys {
                                 })
                             },
                             Err(SyscallError::PartiallyMapped(pages_mapped)) => {
-                                super::print_debug("new_from_frames failed. only mapped ");
-                                super::print_debug_i32(pages_mapped as i32, 10);
-                                super::print_debug(" pages instead of ");
-                                super::print_debug_u32(frames.len() as u32, 10);
-                                super::print_debugln(".");
+                                eprintfln!("new_from_frames failed. only mapped {} pages instead of {}.", pages_mapped, frames.len());
 
                                 let mut v = base_ref.as_ptr();
 
                                 for _ in 0..pages_mapped {
-                                    let frame = super::unmap(None, v as *mut c_void)
+                                    let frame = super::unmap(None, v as *mut ())
                                         .ok()?;
 
                                     v = v.wrapping_add(frame.frame_size().bytes());
@@ -324,7 +423,7 @@ pub mod phys {
 
             (0..self.slice.len() / VirtualPage::SMALL_PAGE_SIZE).for_each(|_| {
                 let frame = unsafe {
-                    super::unmap(None, v as *mut c_void)
+                    super::unmap(None, v as *mut ())
                         .expect("Unable to unmap memory")
                 };
 
@@ -394,7 +493,7 @@ pub mod phys {
 
     pub unsafe fn fill_frame(addr: PAddr, value: u8) -> Result<(), Error> {
         PageMapArea::new_from_addr(addr)
-            .ok_or_else(|| error::OPERATION_FAILED)
+            .ok_or_else(|| Error::Failed)
             .map(|mut pmap_area| pmap_area.as_mut().fill(value) )
     }
 
@@ -499,7 +598,7 @@ pub unsafe fn map_frames(root_map: Option<CPageMap>, vaddr: *mut c_void, page_fr
                 flags: syscalls::flags::mapping::ARRAY,
             };
 
-            count += syscalls::sys_set_page_mappings(level, addr_start as *const c_void, root_map,
+            count += syscalls::set_page_mappings(level, addr_start as *mut (), root_map,
                                             &page_mappings[..c.len()])
                 .map_err(|e| if let SyscallError::PartiallyMapped(map_count)=e {
                     SyscallError::PartiallyMapped(map_count + count)
@@ -512,21 +611,21 @@ pub unsafe fn map_frames(root_map: Option<CPageMap>, vaddr: *mut c_void, page_fr
     Ok(count)
 }
 
-pub unsafe fn unmap(root_map: Option<CPageMap>, vaddr: *const c_void) -> syscalls::Result<PhysicalFrame> {
+pub unsafe fn unmap(root_map: Option<CPageMap>, vaddr: *mut ()) -> syscalls::Result<PhysicalFrame> {
     let mut mapping = [PageMapping::default()];
 
-    syscalls::sys_get_page_mappings(1, vaddr, root_map, &mut mapping)?;
+    syscalls::get_page_mappings(1, vaddr, root_map, &mut mapping)?;
 
     if is_flag_set!(mapping[0].flags, flags::mapping::PAGE_SIZED) {
         set_flag!(mapping[0].flags, flags::mapping::UNMAPPED);
 
-        syscalls::sys_set_page_mappings(1, vaddr, root_map, &mapping)
+        syscalls::set_page_mappings(1, vaddr, root_map, &mapping)
             .map(|_| PhysicalFrame::new(vaddr as usize as PAddr, FrameSize::PseLarge))
     } else {
-        syscalls::sys_get_page_mappings(0, vaddr, root_map, &mut mapping)?;
+        syscalls::get_page_mappings(0, vaddr, root_map, &mut mapping)?;
 
         set_flag!(mapping[0].flags, flags::mapping::UNMAPPED);
-        syscalls::sys_set_page_mappings(0, vaddr, root_map, &mapping)
+        syscalls::set_page_mappings(0, vaddr, root_map, &mapping)
             .map(|_| PhysicalFrame::new(vaddr as usize as PAddr, FrameSize::Small))
     }
 }
@@ -551,32 +650,27 @@ unsafe impl GlobalAlloc for InitialAllocator {
 
 #[panic_handler]
 fn handle_panic(info: &PanicInfo) -> ! {
-    print_debug("Panic occurred ");
+    eprintf!("Panic occurred");
 
     match info.location() {
         Some(l) => {
-            print_debug("in file '");
-            print_debug(l.file());
-            print_debug("' (line ");
-            print_debug_u32(l.line(), 10);
-            print_debug(", col. ");
-            print_debug_u32(l.column(), 10);
-            print_debug(")");
+            eprintf!(" in file '{}' (line {}, col. {})", l.file(), l.line(), l.column());
 
-            if info.message().is_some() {
-                print_debug(":");
+            if info.message().as_str().is_some() {
+                eprintf!(":");
             }
 
-            print_debug(" ");
+            eprintf!(" ");
         },
         None => {
+            eprintf!(": ")
         }
     }
 
     if crate::phys_alloc::is_bootstrap_ready() || crate::phys_alloc::is_allocator_ready() {
-        print_debugln(info.to_string().as_str())
+        eprintfln!("{}", info.to_string());
     } else {
-        print_debugln(info.message().and_then(|msg| msg.as_str()).unwrap_or_default());
+        eprintfln!("{}", info.message().as_str().unwrap_or_default());
     }
 
     unsafe { abort() }
@@ -586,9 +680,7 @@ fn handle_panic(info: &PanicInfo) -> ! {
 fn handle_alloc_error(layout: Layout) -> ! {
     //panic!("Unable to allocate memory of size: {}.", layout.size());
 
-    print_debug("Unable to allocate memory of size: ");
-    print_debug_u32(layout.size() as u32, 10);
-    print_debugln("");
+    eprintfln!("Unable to allocate memory of size: {}.", layout.size());
     loop {}
 }
 

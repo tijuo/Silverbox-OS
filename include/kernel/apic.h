@@ -100,4 +100,11 @@
 
 extern uint32_t lapic_ptr;
 extern uint32_t ioapic_ptr;
+
+typedef volatile unsigned long int* apic_ptr_t;
+
+#define LAPIC_REG(x) (apic_ptr_t)(LAPIC_VADDR + (x))
+
+void apic_send_eoi(void);
+
 #endif /* APIC_H */

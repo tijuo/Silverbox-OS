@@ -1,5 +1,5 @@
 use crate::address::{PAddr, PSize};
-use crate::lowlevel::{phys};
+use crate::lowlevel::phys;
 use core::{mem, cmp};
 use alloc::vec::Vec;
 use alloc::boxed::Box;
@@ -82,21 +82,21 @@ impl MultibootInfo {
 
         multiboot_info.modules = if raw_info.flags & RawMultibootInfo::MODS == RawMultibootInfo::MODS {
             let total_mods = raw_info.mods_count;
-            eprintln!("{} modules found.", total_mods);
+            eprintfln!("{} modules found.", total_mods);
 
             let mut modules: Vec<BootModule> = Vec::with_capacity(raw_info.mods_count as usize);
 
             for i in 0..raw_info.mods_count {
                 phys::try_from_phys_arr::<RawModule>(raw_info.mods_addr as PAddr, i as PSize)
                     .map_or_else(
-                        || eprintln!("Unable to read boot module. Skipping..."),
+                        || eprintfln!("Unable to read boot module. Skipping..."),
                         |raw_module| {
                             let name = read_c_str(raw_module.string as PAddr);
                             let start = raw_module.mod_start;
                             let end = raw_module.mod_end;
 
                             if let Some(ref s) = name {
-                                eprintln!("Module {}: \"{}\" addr: {:#x} size: {:#x} bytes",
+                                eprintfln!("Module {}: \"{}\" addr: {:#x} size: {:#x} bytes",
                                           i, s, start, end - start);
                             }
                             modules.push(BootModule {
@@ -110,7 +110,7 @@ impl MultibootInfo {
 
             Some(modules)
         } else {
-            eprintln!("NONE.");
+            eprintfln!("NONE.");
             None
         };
 
@@ -119,12 +119,12 @@ impl MultibootInfo {
                 .collect::<Vec<MemoryMap>>())
             .unwrap_or(vec![]);
 
-        eprint!("Reading drives...");
+        eprintf!("Reading drives...");
 
         multiboot_info.drives = if raw_info.flags & RawMultibootInfo::DRIVES == RawMultibootInfo::DRIVES {
             let mut offset= 0;
             let mut drives_vec = Vec::new();
-            eprintln!();
+            eprintfln!();
 
             while offset < raw_info.drives_length {
                 if let Some(drive) = phys::try_from_phys::<RawDrive>(raw_info.drives_addr as PAddr + offset as PSize) {
@@ -142,8 +142,8 @@ impl MultibootInfo {
                     let drive_heads = drive.heads;
                     let drive_sectors = drive.sectors;
 
-                    eprintln!("Drive: {:#x} cylinders: {} heads: {} sectors: {} mode: {}", drive_number, drive_cylinders, drive_heads, drive_sectors, drive_mode);
-                    eprint!("  Ports:");
+                    eprintfln!("Drive: {:#x} cylinders: {} heads: {} sectors: {} mode: {}", drive_number, drive_cylinders, drive_heads, drive_sectors, drive_mode);
+                    eprintf!("  Ports:");
 
                     'port_loop: loop {
                         let mut ports = [0u16; 64];
@@ -159,7 +159,7 @@ impl MultibootInfo {
                                 if p == &0 {
                                     break 'port_loop;
                                 } else {
-                                    eprint!(" {:#x}", *p);
+                                    eprintf!(" {:#x}", *p);
                                     ports_vec.push(*p);
                                 }
                             }
@@ -170,7 +170,7 @@ impl MultibootInfo {
                         }
                     }
 
-                    eprintln!();
+                    eprintfln!();
 
                     drives_vec.push(Drive {
                         number: drive.number,
@@ -181,7 +181,7 @@ impl MultibootInfo {
                             RawDrive::CHS => DriveMode::CHS,
                             RawDrive::LBA => DriveMode::LBA,
                             _ => {
-                                eprintln!("Unsupported drive mode. Skipping...");
+                                eprintfln!("Unsupported drive mode. Skipping...");
                                 continue;
                             }
                         },
@@ -193,51 +193,51 @@ impl MultibootInfo {
                     offset += drive.size + mem::size_of_val(&drive_size) as u32;
                 }
                 else {
-                    eprintln!("Unable to read drive record. Skipping...");
+                    eprintfln!("Unable to read drive record. Skipping...");
                     break;
                 }
             }
             Some(drives_vec)
         } else {
-            eprintln!("NONE.");
+            eprintfln!("NONE.");
             None
         };
 
         // TODO: RawMultibootInfo::SYMTAB, RawMultibootInfo::SHDR
 
-        eprint!("Reading config table...");
+        eprintf!("Reading config table...");
         let config_table = raw_info.config_table;
 
         multiboot_info.config_table = if raw_info.flags & RawMultibootInfo::CONFIG == RawMultibootInfo::CONFIG
             && raw_info.config_table != 0 {
-            eprintln!("{:#x}", config_table);
+            eprintfln!("{:#x}", config_table);
             Some(raw_info.config_table as PAddr)
         } else {
-            eprintln!("NONE.");
+            eprintfln!("NONE.");
             None
         };
 
-        eprint!("Reading bootloader name...");
+        eprintf!("Reading bootloader name...");
 
         multiboot_info.bootloader_name = if raw_info.flags & RawMultibootInfo::BOOTLDR == RawMultibootInfo::BOOTLDR {
             let bootloader_name = read_c_str(raw_info.boot_loader_name as PAddr);
 
             match &bootloader_name {
-                Some(s) => eprintln!("\"{}\"", s),
-                None => eprintln!("NONE."),
+                Some(s) => eprintfln!("\"{}\"", s),
+                None => eprintfln!("NONE."),
             }
 
             bootloader_name
         } else {
-            eprintln!("NONE.");
+            eprintfln!("NONE.");
             None
         };
 
-        eprint!("Reading APM table...");
+        eprintf!("Reading APM table...");
 
         multiboot_info.apm_table = if raw_info.flags & RawMultibootInfo::APM_TAB == RawMultibootInfo::APM_TAB
             && raw_info.apm_table != 0 {
-            eprintln!();
+            eprintfln!();
 
             phys::try_from_phys::<ApmTable>(raw_info.apm_table as PAddr)
                 .map(|apm_table| {
@@ -251,20 +251,20 @@ impl MultibootInfo {
                     let entry_offset = apm_table.offset;
                     let flags = apm_table.flags;
 
-                    eprintln!("Version: {} cs (32-bit): {:#x} len: {:#x} cs (16-bit): {:#x} len: {:#x}",
+                    eprintfln!("Version: {} cs (32-bit): {:#x} len: {:#x} cs (16-bit): {:#x} len: {:#x}",
                               version, cseg, cseg_len, cseg_16, cseg_16_len);
-                    eprintln!("ds (16-bit): {:#x} len: {:#x} entry offset: {:#x} flags: {:#x}", dseg, dseg_len, entry_offset, flags);
+                    eprintfln!("ds (16-bit): {:#x} len: {:#x} entry offset: {:#x} flags: {:#x}", dseg, dseg_len, entry_offset, flags);
                     apm_table
                 })
         } else {
-            eprint!("NONE.");
+            eprintf!("NONE.");
             None
         };
 
-        eprint!("Reading VBE table...");
+        eprintf!("Reading VBE table...");
 
         multiboot_info.vbe_table = if raw_info.flags & RawMultibootInfo::GFX_TAB == RawMultibootInfo::GFX_TAB {
-            eprintln!("ok.");
+            eprintfln!("ok.");
             Some(Box::new(VbeTable {
                 control_info: raw_info.vbe_control_info,
                 interface_seg: raw_info.vbe_interface_seg,
@@ -274,14 +274,14 @@ impl MultibootInfo {
                 mode_info: raw_info.vbe_mode_info
             }))
         } else {
-            eprintln!("NONE.");
+            eprintfln!("NONE.");
             None
         };
 
-        eprint!("Reading framebuffer table...");
+        eprintf!("Reading framebuffer table...");
 
         multiboot_info.frame_buffer_table = if raw_info.flags & RawMultibootInfo::FB_TAB == RawMultibootInfo::FB_TAB {
-            eprintln!("ok.");
+            eprintfln!("ok.");
 
             match raw_info.framebuffer_type {
                 RawFbColorType::INDEXED => {
@@ -349,7 +349,7 @@ impl MultibootInfo {
                 _ => None,
             }
         } else {
-            eprintln!("NONE.");
+            eprintfln!("NONE.");
             None
         };
 

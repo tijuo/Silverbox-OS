@@ -70,17 +70,20 @@ struct RegisterServerRequest
 
 struct RegisterNameRequest
 {
-  char name[MAX_NAME_LEN];
+  size_t name_length;
+  char name[];
 };
 
 struct UnregisterNameRequest
 {
-  char name[MAX_NAME_LEN];
+  size_t name_length;
+  char name[];
 };
 
 struct LookupNameRequest
 {
-  char name[MAX_NAME_LEN];
+  size_t name_length;
+  char name[];
 };
 
 struct LookupNameResponse

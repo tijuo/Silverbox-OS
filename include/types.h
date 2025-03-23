@@ -50,7 +50,9 @@ extern "C" {
     typedef unsigned short int tid_t;
     typedef unsigned short int pid_t;
 
-    typedef unsigned long int pframe_t;
+    typedef unsigned long int pbase_t;
+    typedef unsigned long int paddr_t;
+    typedef signed long int spaddr_t;
 
     // 288 bytes
 
@@ -97,7 +99,9 @@ extern "C" {
 #define NULL_TID  		((tid_t)0)
 #define NULL_PID  		((pid_t)0)
 #define CURRENT_ROOT_PMAP   	~0ul
-#define INVALID_PFRAME		~0ul
+#define INVALID_PBASE		~0ul
+#define INVALID_PADDR       ~0ul
+
 #ifndef __cplusplus
     /* typedef char _Bool; */
 
@@ -105,7 +109,7 @@ extern "C" {
 
 #ifndef NULL
 #define NULL 0
-#endif
+#endif /* NULL */
 
 #ifndef UNUSED_PARAM
 #ifdef __GNUC__
@@ -117,6 +121,6 @@ extern "C" {
 
 #ifdef __cplusplus
 }
-#endif
+#endif /* __cplusplus */
 
-#endif
+#endif /* TYPES_H */

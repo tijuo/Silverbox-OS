@@ -57,7 +57,7 @@ static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys)
   if(len > 0xE00000) // Unable to handle larger sizes due to location of physMap
     return -1;
 
-  pframe_t frame = (pframe_t)(phys >> 12);
+  pbase_t frame = (pbase_t)(phys >> 12);
 
   if(sys_map(NULL, (void *)physMap, &frame, numPages, PM_READ_WRITE) != (int)numPages)
     return -1;

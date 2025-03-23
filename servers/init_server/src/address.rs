@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use core::cmp::Ordering;
-use core::ops::{Sub};
+use core::ops::Sub;
 use core::ptr;
 
 pub type VAddr = * const u8;

@@ -11,9 +11,9 @@
 
 #include <kernel/mm.h>
 
-extern addr_t alloc_page_frame(void);
+extern addr_t alloc_phys_frame(void);
 
-extern bool is_reserved_page(uint64_t addr, multiboot_info_t* info,
+extern bool is_reserved_page(paddr_t addr, multiboot_info_t* info,
     int is_large_page);
 
 extern int init_memory(multiboot_info_t* info);

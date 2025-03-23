@@ -4,6 +4,11 @@
 
 int _flushToFile(FILE *stream);
 int _writeCharToFile(FILE *stream, int c);
+int getFileAttributes( const char *path, struct FileAttributes *attrib );
+
+int getFileAttributes( const char *path, struct FileAttributes *attrib ) {
+    return -1;
+}
 
 int _writeCharToFile(FILE *stream, int c) {
   if(stream->is_device) {

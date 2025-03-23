@@ -46,8 +46,8 @@
 
 typedef struct {
     uint64_t present : 1;
-    uint64_t rwPriv : 1;
-    uint64_t usPriv : 1;
+    uint64_t is_read_write : 1;
+    uint64_t is_user : 1;
     uint64_t pwt : 1;
     uint64_t pcd : 1;
     uint64_t accessed : 1;
@@ -57,40 +57,40 @@ typedef struct {
     uint64_t available : 3;
     uint64_t base : 40;
     uint64_t _resd : 11;
-    uint64_t noExec : 1;
+    uint64_t no_exec : 1;
 } pte_t;
 
 typedef struct {
     uint64_t present : 1;
-    uint64_t rwPriv : 1;
-    uint64_t usPriv : 1;
+    uint64_t is_read_write : 1;
+    uint64_t is_user : 1;
     uint64_t pwt : 1;
     uint64_t pcd : 1;
     uint64_t accessed : 1;
     uint64_t available : 1;
-    uint64_t pageSize : 1;
+    uint64_t is_page_sized : 1;
     uint64_t available2 : 4;
     uint64_t base : 40;
     uint64_t _resd : 11;
-    uint64_t noExec : 1;
+    uint64_t no_exec : 1;
 } pde_t;
 
 typedef struct {
     uint64_t present : 1;
-    uint64_t rwPriv : 1;
-    uint64_t usPriv : 1;
+    uint64_t is_read_write : 1;
+    uint64_t is_user : 1;
     uint64_t pwt : 1;
     uint64_t pcd : 1;
     uint64_t accessed : 1;
     uint64_t available : 1;
-    uint64_t pageSize : 1;
+    uint64_t is_page_sized : 1;
     uint64_t global : 1;
     uint64_t available2 : 3;
     uint64_t pat : 1;
     uint64_t _resd : 8;
     uint64_t base : 31;
     uint64_t _resd2 : 11;
-    uint64_t noExec : 1;
+    uint64_t no_exec : 1;
 } large_pde_t;
 
 typedef struct {

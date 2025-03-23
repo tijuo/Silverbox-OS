@@ -8,101 +8,142 @@
 #include <oslib.h>
 #include <string.h>
 
-ALIGNED(PAGE_SIZE)
+ALIGN_AS(PAGE_SIZE)
 pte_t kmap_area_ptab[PTE_ENTRY_COUNT];
 
 NON_NULL_PARAMS
-static int access_phys(uint64_t phys, void* buffer, size_t len, bool read_phys);
+static int access_phys(paddr_t phys, void* buffer, size_t len, bool read_phys);
 
 NON_NULL_PARAMS
-static int access_mem(addr_t address, size_t len, void* buffer, uint32_t pdir,
+static int access_mem(addr_t address, size_t len, void* buffer, paddr_t pdir,
     bool read);
 
 /**
- Zero out a page frame.
+ Zero out a number of consecutive physical frames.
 
- @param phys Physical address frame to clear.
- @return E_OK on success. E_FAIL on failure.
+ @param virt Virtual start address of the kernel mapping area to be used.
+ @param phys Physical start address of the frames to be cleared.
+ @param count The number of 4 KiB pages.
+ @returns The total number of pages that were actually cleared.
  */
-int clear_phys_page(uint32_t phys)
+unsigned int clear_phys_frames_with_start(addr_t virt, paddr_t phys, unsigned int count)
 {
-    pmap_entry_t old_pmap_entry;
-    size_t offset = LARGE_PAGE_OFFSET(ALIGN_DOWN(phys, (uint64_t)PAGE_SIZE));
+    unsigned int total_pages = map_temp(virt, phys, count);
+    memset((void *)virt, 0, total_pages * PAGE_SIZE);
 
-    if(IS_ERROR(map_large_frame(phys, &old_pmap_entry)))
-        RET_MSG(E_FAIL, "Unable to map physical frame.");
+    if(unmap_temp(virt, total_pages) != total_pages) {
+        kprintf("Unable to unmap temporarily mapped pages.");
+    }
 
-    uint32_t* ptr = (uint32_t*)(KMAP_AREA + offset);
-
-    for(size_t i = 0; i < 1024; i++)
-        ptr[i] = 0;
-
-    if(IS_ERROR(unmap_large_frame(old_pmap_entry)))
-        RET_MSG(E_FAIL, "Unable to unmap physical frame.");
-
-    return E_OK;
+    return total_pages;
 }
 
-int map_large_frame(uint64_t phys, pmap_entry_t* pmap_entry)
+/**
+ Zero out a number of consecutive physical frames.
+
+ @param phys Physical start address of the frames to be cleared.
+ @param count The number of 4 KiB pages.
+ @returns The total number of pages that were actually cleared.
+ */
+unsigned int clear_phys_frames(paddr_t phys, unsigned int count)
 {
-    if(phys >= MAX_PHYS_MEMORY)
-        RET_MSG(E_FAIL, "Error: Physical frame is out of range.");
-
-    pde_t old_pde = read_pde(PDE_INDEX(KMAP_AREA), CURRENT_ROOT_PMAP);
-    pmap_entry_t mapped_pde = {
-        .value = 0
-    };
-
-    set_large_pde_base(&mapped_pde.large_pde, PADDR_TO_PFRAME(phys));
-    mapped_pde.large_pde.is_large_page = 1;
-    mapped_pde.large_pde.is_read_write = 1;
-    mapped_pde.large_pde.is_present = 1;
-
-    if(IS_ERROR(
-        write_pde(PDE_INDEX(KMAP_AREA), mapped_pde.pde, CURRENT_ROOT_PMAP)))
-        RET_MSG(E_FAIL, "Error: Unable to write PDE.");
-
-    invalidate_page(KMAP_AREA);
-
-    if(pmap_entry)
-        pmap_entry->pde = old_pde;
-
-    return E_OK;
+    return clear_phys_frames_with_start((addr_t)KERNEL_TEMP_START, phys, count);
 }
 
-int unmap_large_frame(pmap_entry_t pmap_entry)
-{
-    if(IS_ERROR(
-        write_pde(PDE_INDEX(KMAP_AREA), pmap_entry.pde, CURRENT_ROOT_PMAP)))
-        RET_MSG(E_FAIL, "Error: Unable to write PDE.");
+/**
+ * Temporarily map a region of physical memory into the kernel temporary mapping area within
+ * the current address space.
+ * 
+ * This assumes that the virtual memory region does not already contain mapped pages.
+ * 
+ * @param virt The starting virtual address of the mapping region. It must be
+ * within KERNEL_TEMP_START and KERNEL_TEMP_END.
+ * @param base The starting physical address.
+ * @param count The total number of pages to be mapped.
+ * @returns The actual number of pages that have been mapped (may be less than `count`).
+ */
+unsigned int map_temp(addr_t virt, paddr_t base, unsigned int count) {
+    unsigned int i;
+    addr_t addr = ALIGN_DOWN(virt, PAGE_SIZE);
+    paddr_t paddr = ALIGN_DOWN(base, PAGE_SIZE);
+    pte_t *pte = CURRENT_PTE(addr);
 
-    invalidate_page(KMAP_AREA);
-    return E_OK;
+    if(addr < KERNEL_TEMP_START) {
+        return 0;
+    }
+
+    for(i=0; i < count && addr < KERNEL_TEMP_END; i++, addr += PAGE_SIZE, paddr += PAGE_SIZE, pte++) {
+        pte->value = 0;
+        pte->base = PADDR_TO_PBASE(paddr);
+        pte->is_read_write = 1;
+        pte->is_present = 1;
+        invalidate_page(addr);
+    }
+
+    return i;
+}
+
+/**
+ * Unmap a region within the kernel temporary mapping area that had been previously
+ * mapped by `map_temp()`.
+ * 
+ * This assumes that the virtual memory region already contains mapped pages.
+ * 
+ * @param virt The starting virtual address of the mapping region. It must be
+ * within KERNEL_TEMP_START and KERNEL_TEMP_END.
+ * @param count The total number of pages to be unmapped.
+ * @returns The actual number of pages that have been unmapped (may be less than `count`).
+ */
+unsigned int unmap_temp(addr_t virt, unsigned int count) {
+    unsigned int i;
+    addr_t addr = ALIGN_DOWN(virt, PAGE_SIZE);
+    pte_t *pte = CURRENT_PTE(addr);
+
+    if(addr < KERNEL_TEMP_START) {
+        return 0;
+    }
+
+    for(i=0; i < count && addr < KERNEL_TEMP_END; i++, addr += PAGE_SIZE, pte++) {
+        pte->value = 0;
+    }
+
+    return i;
 }
 
 /**
  Set up a new page map to be used as an address space for a thread. It mainly
  inserts the kernel page mappings.
 
+ Maps memory
  @param pmap The address of the page map
- @return E_OK, on success. E_FAIL, on error.
+ @return `E_OK` - on success. `E_FAIL`, otherwise.
  */
-int initialize_root_pmap(uint32_t pmap)
+int initialize_root_pmap(paddr_t pmap)
 {
-    // Map kernel memory into the new address space
+    if(clear_phys_frames(pmap, 1) != 1) {
+        RET_MSG(E_FAIL, "Unable to clear root page map.");
+    }
 
-#ifdef DEBUG
+    addr_t vaddr = NDX_TO_VADDR(KERNEL_RECURSIVE_PDE, KERNEL_RECURSIVE_PDE, PDE_INDEX(KERNEL_VSTART));
+    addr_t vaddr_end = NDX_TO_VADDR(KERNEL_RECURSIVE_PDE, KERNEL_RECURSIVE_PDE, PDE_INDEX(KERNEL_TEMP_END));
+    size_t entry_count = (vaddr_end > vaddr ? (vaddr_end - vaddr) : (vaddr - vaddr_end)) / LARGE_PAGE_SIZE;
 
-    // map the first page table
+    pde_t pde = {
+        .base = PADDR_TO_PBASE(pmap),
+        .is_read_write = 1,
+        .is_present = 1
+    };
 
-    if(IS_ERROR(write_pde(0, read_pde(0, CURRENT_ROOT_PMAP), pmap)))
-        RET_MSG(E_FAIL, "Unable to copy kernel PDEs (write failed).");
+    // Copy the kernel PDEs
 
-#endif /* DEBUG */
+    if(IS_ERROR(poke(pmap + sizeof(pde_t) * PDE_INDEX(vaddr), (void *)vaddr, sizeof(pde_t) * entry_count))) {
+        RET_MSG(E_FAIL, "Unable to copy kernel PDEs.");
+    }
 
-    for(unsigned int entry = PDE_INDEX(KERNEL_VSTART); entry < 1024; entry++) {
-        if(IS_ERROR(write_pde(entry, read_pde(entry, CURRENT_ROOT_PMAP), pmap)))
-            RET_MSG(E_FAIL, "Unable to copy kernel PDEs (write failed).");
+    // Recursively map the page directory into itself
+
+    if(IS_ERROR(poke(pmap + sizeof(pde_t) * KERNEL_RECURSIVE_PDE, &pde, sizeof pde))) {
+        RET_MSG(E_FAIL, "Unable to copy kernel PDEs.");
     }
 
     return E_OK;
@@ -111,22 +152,38 @@ int initialize_root_pmap(uint32_t pmap)
 /**
  * Is a particular address in an address space accessible by the user?
  *
+ * Temporarily maps memory.
+ * 
  * @param addr The virtual address.
  * @param pdir The physical address of the page directory.
  * @param is_read Is the access a read?
  *
- * @return true if the address can be accessed. false, otherwise.
+ * @return 1 if the address can be accessed. 0, if it can't be accessed. `E_FAIL`, on failure
  */
-bool is_accessible(addr_t addr, uint32_t pdir, bool is_read)
+int is_accessible(addr_t addr, paddr_t pdir, bool is_read)
 {
-    pde_t pde = read_pde(PDE_INDEX(addr), pdir);
+    int ret_val;
 
-    if(pde.is_large_page)
-        return !!(pde.is_present && (is_read || pde.is_read_write));
-    else {
-        pte_t pte = read_pte(PTE_INDEX(addr), PDE_BASE(pde));
-        return !!(pte.is_present && (is_read || pte.is_read_write));
+    pde_t pde;
+
+    if(IS_ERROR(read_pde(&pde, PDE_INDEX(addr), pdir))) {
+        RET_MSG(E_FAIL, "Unable to read PDE");
     }
+
+    if(pde.is_page_sized) {
+        ret_val = (pde.is_present && (is_read || pde.is_read_write)) ? 1 : 0;
+    }
+    else {
+        pte_t pte;
+
+        if(IS_ERROR(read_pte(&pte, PTE_INDEX(addr), PBASE_TO_PADDR(get_pde_frame_number(pde))))) {
+            RET_MSG(E_FAIL, "Unable to read PTE.");
+        }
+
+        ret_val = (pte.is_present && (is_read || pte.is_read_write)) ? 1 : 0;
+    }
+
+    return ret_val;
 }
 
 /**
@@ -138,32 +195,26 @@ bool is_accessible(addr_t addr, uint32_t pdir, bool is_read)
  if the current page map is to be used.
  @param entry The page map entry to be read.
  @param buffer The memory buffer to which the entry data will be written.
- @return E_OK on success. E_FAIL on failure. E_NOT_MAPPED if the
- PDE corresponding to the virtual address hasn't been mapped
- yet.
+ @return E_OK on success. E_FAIL on failure.
  */
-pmap_entry_t read_pmap_entry(uint32_t pbase, unsigned int entry)
+int read_pmap_entry(paddr_t pbase, unsigned int entry, pmap_entry_t *buffer)
 {
     KASSERT(entry < 1024);
 
     if(pbase == CURRENT_ROOT_PMAP)
         pbase = get_root_page_map();
 
-    pte_t* pte = &kmap_area_ptab[PTE_INDEX(TEMP_PAGE)];
+    if(map_temp((addr_t)KERNEL_TEMP_START, pbase, 1) < 1) {
+        RET_MSG(E_FAIL, "Unable to map temporary page.");
+    }
 
-    pte->base = ADDR_TO_PFRAME(pbase);
-    pte->is_read_write = 1;
-    pte->is_present = 1;
+    *buffer = *((pmap_entry_t *)KERNEL_TEMP_START + entry);
 
-    invalidate_page(TEMP_PAGE);
+    if(unmap_temp((addr_t)KERNEL_TEMP_START, 1) != 1) {
+        RET_MSG(E_FAIL, "Unable to unmap temporary page.");
+    }
 
-    pmap_entry_t pmap_entry = *((pmap_entry_t*)TEMP_PAGE + entry);
-
-    pte->is_present = 0;
-
-    invalidate_page(TEMP_PAGE);
-
-    return pmap_entry;
+    return E_OK;
 }
 
 /**
@@ -178,28 +229,24 @@ pmap_entry_t read_pmap_entry(uint32_t pbase, unsigned int entry)
  PDE corresponding to the virtual address hasn't been mapped
  yet.
  */
-int write_pmap_entry(uint32_t pbase, unsigned int entry, pmap_entry_t buffer)
+int write_pmap_entry(paddr_t pbase, unsigned int entry, pmap_entry_t buffer)
 {
     KASSERT(entry < 1024);
 
-    if(pbase == CURRENT_ROOT_PMAP)
+    if(pbase == CURRENT_ROOT_PMAP) {
         pbase = get_root_page_map();
+    }
 
-    pte_t* pte = &kmap_area_ptab[PTE_INDEX(TEMP_PAGE)];
+    if(map_temp((addr_t)KERNEL_TEMP_START, pbase, 1) < 1) {
+        RET_MSG(E_FAIL, "Unable to map temporary page.");
+    }
 
-    pte->base = ADDR_TO_PFRAME(pbase);
-    pte->is_read_write = 1;
-    pte->is_present = 1;
-
-    invalidate_page(TEMP_PAGE);
-
-    pmap_entry_t* pmap_entry = ((pmap_entry_t*)TEMP_PAGE + entry);
-
+    pmap_entry_t *pmap_entry = (pmap_entry_t *)KERNEL_TEMP_START + entry;
     *pmap_entry = buffer;
 
-    pte->is_present = 0;
-
-    invalidate_page(TEMP_PAGE);
+    if(unmap_temp((addr_t)KERNEL_TEMP_START, 1) != 1) {
+        RET_MSG(E_FAIL, "Unable to unmap temporary page.");
+    }
 
     return E_OK;
 }
@@ -212,7 +259,7 @@ int write_pmap_entry(uint32_t pbase, unsigned int entry, pmap_entry_t buffer)
  @param bytes The number of bytes to be written.
  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
  */
-NON_NULL_PARAMS int poke(uint64_t phys, void* buffer, size_t bytes)
+NON_NULL_PARAMS int poke(paddr_t phys, void* buffer, size_t bytes)
 {
     return access_phys(phys, buffer, bytes, false);
 }
@@ -225,7 +272,7 @@ NON_NULL_PARAMS int poke(uint64_t phys, void* buffer, size_t bytes)
  @param bytes The number of bytes to be read.
  @return E_OK on success. E_INVALID_ARG if phys is NULL_PADDR.
  */
-NON_NULL_PARAMS int peek(uint64_t phys, void* buffer, size_t bytes)
+NON_NULL_PARAMS int peek(paddr_t phys, void* buffer, size_t bytes)
 {
     return access_phys(phys, buffer, bytes, true);
 }
@@ -233,47 +280,51 @@ NON_NULL_PARAMS int peek(uint64_t phys, void* buffer, size_t bytes)
 /**
  Reads/writes data to/from an address in physical memory.
 
- This assumes that the memory regions don't overlap.
+ Safety: Maps temporary pages. The buffer region should not overlap the kernel temporary mapping region.
 
  @param phys The starting physical address
- @param buffer The starting address of the buffer
+ @param buffer The starting address of the buffer.
  @param bytes The number of bytes to be read/written.
  @param read_phys True if operation is a read, false if it's a write
  @return E_OK on success. E_BOUNDS if memory region is out of range.
  E_BOUNDS if memory access is out of range.
  */
-NON_NULL_PARAMS static int access_phys(uint64_t phys, void* buffer, size_t len,
+NON_NULL_PARAMS static int access_phys(paddr_t phys, void* buffer, size_t len,
     bool read_phys)
 {
+    #ifdef PAE
     if(phys >= MAX_PHYS_MEMORY || phys + len >= MAX_PHYS_MEMORY)
         RET_MSG(E_FAIL, "Physical address is out of range.");
-    else if(len == 0)
+    #endif /* PAE */
+
+    if(len == 0)
         RET_MSG(E_FAIL, "Length must be non-zero.");
 
-    pmap_entry_t old_pmap_entry = {};
     size_t buffer_offset = 0;
 
     while(len) {
-        size_t phys_offset = LARGE_PAGE_OFFSET(phys);
-        size_t bytes = (len > LARGE_PAGE_SIZE - phys_offset) ? LARGE_PAGE_SIZE - phys_offset : len;
+        if(map_temp((addr_t)KERNEL_TEMP_START, phys, 1) < 1) {
+            RET_MSG(E_FAIL, "Unable to map temporary page.");
+        }
 
-        if(IS_ERROR(map_large_frame(phys, &old_pmap_entry)))
-            RET_MSG(E_FAIL, "Unable to map large page frame.");
+        size_t phys_offset = PAGE_OFFSET(phys);
+        size_t bytes = (len > PAGE_SIZE - phys_offset) ? PAGE_SIZE - phys_offset : len;
 
         if(read_phys)
             memcpy((void*)((addr_t)buffer + buffer_offset),
-                (void*)(KMAP_AREA + phys_offset), bytes);
+                (void*)(KERNEL_TEMP_START + phys_offset), bytes);
         else
-            memcpy((void*)(KMAP_AREA + phys_offset),
+            memcpy((void*)(KERNEL_TEMP_START + phys_offset),
                 (void*)((addr_t)buffer + buffer_offset), bytes);
 
         phys += bytes;
         buffer_offset += bytes;
         len -= bytes;
-    }
 
-    if(IS_ERROR(unmap_large_frame(old_pmap_entry)))
-        RET_MSG(E_FAIL, "Unable to unmap large page frame.");
+        if(unmap_temp((addr_t)KERNEL_TEMP_START, 1) < 1) {
+            RET_MSG(E_FAIL, "Unable to unmap temporary page.");
+        }
+    }
 
     return E_OK;
 }
@@ -285,7 +336,7 @@ NON_NULL_PARAMS static int access_phys(uint64_t phys, void* buffer, size_t len,
  read len bytes from address into buffer. If writing, write len bytes from
  buffer to address.
 
- This assumes that the memory regions don't overlap.
+ Safety: Maps temporary pages. The buffer region should not overlap the kernel temporary mapping region.
 
  @param address The address in the address space to perform the read/write.
  @param len The length of the block to read/write.
@@ -295,7 +346,7 @@ NON_NULL_PARAMS static int access_phys(uint64_t phys, void* buffer, size_t len,
  @return E_OK on success. E_FAIL on failure.
  */
 NON_NULL_PARAMS static int access_mem(addr_t address, size_t len, void* buffer,
-    uint32_t pdir,
+    paddr_t pdir,
     bool read)
 {
     size_t buffer_offset = 0;
@@ -303,35 +354,47 @@ NON_NULL_PARAMS static int access_mem(addr_t address, size_t len, void* buffer,
     KASSERT(address);
 
     while(len) {
-        uint64_t base_address;
-        pde_t pde = read_pde(address, pdir);
+        paddr_t base_address;
+        pde_t pde;
+
+        if(IS_ERROR(read_pde(&pde, PDE_INDEX(address), pdir))) {
+            RET_MSG(E_FAIL, "Unable to read PDE.");
+        }
+
         size_t addr_offset = address & (PAGE_SIZE - 1);
         size_t bytes = (len > PAGE_SIZE - addr_offset) ? PAGE_SIZE - addr_offset : len;
 
         if(pde.is_present) {
-            pmap_entry_t pmap_entry = {
-                .pde = pde
-            };
-
-            if(pde.is_large_page)
-                base_address = PFRAME_TO_PADDR(get_pde_frame_number(pmap_entry.pde));
-            else {
-                pte_t pte = read_pte(address, pdir);
-
-                if(pte.is_present)
-                    base_address = (uint64_t)PTE_BASE(pte);
-                else
-                    RET_MSG(E_NOT_MAPPED, "Address is not mapped");
+            if(pde.is_page_sized) {
+                base_address = PBASE_TO_PADDR(get_pde_frame_number(pde));
             }
-        } else
-            RET_MSG(E_NOT_MAPPED, "Address region is not mapped");
+            else {
+                pte_t pte;
 
-        if(read)
-            peek(base_address + addr_offset, (void*)((addr_t)buffer + buffer_offset),
-                bytes);
-        else
-            poke(base_address + addr_offset, (void*)((addr_t)buffer + buffer_offset),
-                bytes);
+                if(IS_ERROR(read_pte(&pte, PTE_INDEX(address), PBASE_TO_PADDR(pde.base)))) {
+                    RET_MSG(E_FAIL, "Unable to read PTE.");
+                }
+
+                if(pte.is_present) {
+                    base_address = (paddr_t)PTE_BASE(pte);
+                } else {
+                    RET_MSG(E_NOT_MAPPED, "Address is not mapped");
+                }
+            }
+        } else {
+            RET_MSG(E_NOT_MAPPED, "Address region is not mapped");
+        }
+
+        if(read) {
+            if(IS_ERROR(peek(base_address + addr_offset, (void*)((addr_t)buffer + buffer_offset), bytes))) {
+                RET_MSG(E_FAIL, "Unable to read from physical memory.");
+            }
+        }
+        else {
+            if(IS_ERROR(poke(base_address + addr_offset, (void*)((addr_t)buffer + buffer_offset), bytes))) {
+                RET_MSG(E_FAIL, "Unable to write to physical memory.");
+            }
+        }
 
         address += bytes;
         buffer_offset += bytes;
@@ -346,6 +409,8 @@ NON_NULL_PARAMS static int access_mem(addr_t address, size_t len, void* buffer,
 
  Equivalent to an access_mem( address, len, buffer, pdir, false ).
 
+ Safety: Maps temporary pages. The buffer region should not overlap the kernel temporary mapping region.
+
  @param address The address in the address space to perform the write.
  @param len The length of the block to write.
  @param buffer The buffer in the current address space that is used for the write.
@@ -353,7 +418,7 @@ NON_NULL_PARAMS static int access_mem(addr_t address, size_t len, void* buffer,
  @return E_OK on success. E_FAIL on failure.
  */
 NON_NULL_PARAMS int poke_virt(addr_t address, size_t len, void* buffer,
-    uint32_t pdir)
+    paddr_t pdir)
 {
     if(pdir == get_root_page_map() || pdir == CURRENT_ROOT_PMAP) {
         memcpy((void*)address, buffer, len);
@@ -369,6 +434,8 @@ NON_NULL_PARAMS int poke_virt(addr_t address, size_t len, void* buffer,
 
  Equivalent to an access_mem( address, len, buffer, pdir, true ).
 
+ Safety: Maps temporary pages. The buffer region should not overlap the kernel temporary mapping region.
+
  @param address The address in the address space to perform the read.
  @param len The length of the block to read.
  @param buffer The buffer to store the data read from address.
@@ -376,7 +443,7 @@ NON_NULL_PARAMS int poke_virt(addr_t address, size_t len, void* buffer,
  @return E_OK on success. E_FAIL on failure.
  */
 NON_NULL_PARAMS int peek_virt(addr_t address, size_t len, void* buffer,
-    uint32_t pdir)
+    paddr_t pdir)
 {
     if(pdir == get_root_page_map() || pdir == CURRENT_ROOT_PMAP) {
         memcpy(buffer, (void*)address, len);

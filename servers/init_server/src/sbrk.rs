@@ -1,13 +1,15 @@
 use core::ffi::c_void;
 use rust::align::Align;
 use crate::address::{PSize, PAddr};
+use crate::error::Error;
 use core::cmp;
 use crate::page::PhysicalFrame;
 use crate::page::VirtualPage;
 use crate::phys_alloc::{self, BlockSize};
-use crate::{error, lowlevel};
+use crate::lowlevel;
 use rust::syscalls::flags::mapping::PAGE_SIZED;
 use rust::syscalls::SyscallError;
+use core;
 
 static mut HEAP_REGION: Option<HeapRegion> = None;
 const MFAIL: * const c_void = -1isize as * const c_void;
@@ -16,12 +18,41 @@ const MAX_UNUSED_LEN: usize = 262144;
 
 type FrameArray = [PAddr; 32];
 
-extern {
+extern "C" {
     static _end: *const u8;
 }
 
 pub fn init() {
 
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum MapFramesError {
+    BadArgument,
+    Failed,
+    PartiallyMapped(usize)
+}
+
+impl core::error::Error for MapFramesError {}
+
+impl core::fmt::Display for MapFramesError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::BadArgument => f.write_str("Bad argument"),
+            Self::Failed => f.write_str("Failed"),
+            Self::PartiallyMapped(x) => f.write_fmt(format_args!("Partially mapped {} pages", *x))
+        }
+    }
+}
+
+impl From<MapFramesError> for crate::error::Error {
+    fn from(value: MapFramesError) -> Self {
+        match value {
+            MapFramesError::BadArgument => Error::BadArgument,
+            MapFramesError::Failed => Error::Failed,
+            MapFramesError::PartiallyMapped(_) => Error::Incomplete
+        }
+    }
 }
 
 struct HeapRegion {
@@ -71,7 +102,7 @@ impl HeapRegion {
         cmp::max(0, self.end - self.start)
     }
 
-    unsafe fn map_frames(&mut self, frames: &FrameArray, frame_count: usize, use_large_pages: bool) -> Result<(), error::Error> {
+    unsafe fn map_frames(&mut self, frames: &FrameArray, frame_count: usize, use_large_pages: bool) -> Result<(), MapFramesError> {
         match lowlevel::map_frames(None,
                                   self.map_end as *mut c_void,
                                   &frames[..frame_count],
@@ -89,21 +120,21 @@ impl HeapRegion {
                 let mut v = self.map_end as *const u8;
 
                 for _ in 0..pages_mapped {
-                    let frame = lowlevel::unmap(None, v as *mut c_void)
-                        .map_err(|_| error::OPERATION_FAILED)?;
+                    let frame = lowlevel::unmap(None, v as *mut ())
+                        .map_err(|_| MapFramesError::Failed)?;
 
                     v = v.wrapping_add(frame.frame_size().bytes());
                 }
 
-                Err(pages_mapped as i32)
+                Err(MapFramesError::PartiallyMapped(pages_mapped))
             },
             Err(SyscallError::InvalidArgument) => {
-                lowlevel::print_debugln("Unable to map memory in order to extend heap.");
-                Err(error::BAD_ARGUMENT)
+                eprintfln!("Unable to map memory in order to extend heap.");
+                Err(MapFramesError::BadArgument)
             }
             Err(_) => {
-                lowlevel::print_debugln("Unable to map memory in order to extend heap.");
-                Err(error::OPERATION_FAILED)
+                eprintfln!("Unable to map memory in order to extend heap.");
+                Err(MapFramesError::Failed)
             }
         }
     }

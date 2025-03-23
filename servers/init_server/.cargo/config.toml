@@ -2,7 +2,7 @@
 build-std = ["core", "alloc", "compiler_builtins"]
 
 [build]
-target = "i686-pc-unknown-elf.json"
+target = "i686-pc-none-elf.json"
 
 [profile.dev]
 debug = true

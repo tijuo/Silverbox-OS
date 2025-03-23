@@ -2,7 +2,7 @@ use num_traits::Num;
 use core::ops::{Index, Not};
 use alloc::vec::IntoIter;
 use alloc::vec::Vec;
-use crate::error;
+use crate::error::Error;
 use core::cmp::{PartialOrd, Ord, Ordering};
 
 #[derive(Copy, PartialEq, Eq, Debug, Hash)]
@@ -86,9 +86,9 @@ impl<A> MemoryRegion<A>
         self.end
     }
 
-    pub fn length(&self) -> Result<A, error::Error> {
+    pub fn length(&self) -> Result<A, Error> {
         if self.is_full_region() {
-            Err(error::LENGTH_OVERFLOW) // overflow
+            Err(Error::Overflow) // overflow
         } else if self.end == MemoryRegion::memory_end() {
             Ok(!self.start + A::one())
         } else {
@@ -378,7 +378,7 @@ impl<A> Index<usize> for RegionSet<A>
 #[cfg(test)]
 mod test {
     use super::{MemoryRegion, RegionSet};
-    use crate::address::{self, VAddr, u32_into_vaddr};
+    use crate::address::{self, VAddr};
     use crate::error;
 
     #[test]

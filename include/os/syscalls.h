@@ -5,17 +5,13 @@
 #include <oslib.h>
 #include <os/msg/message.h>
 
-#define SYS_SEND		        		2u
-#define SYS_RECV		        	  3u
-#define SYS_SEND_AND_RECV       4u
-#define SYS_GET_PAGE_MAPPINGS   5u
-#define SYS_SET_PAGE_MAPPINGS   6u
-#define SYS_CREATE_THREAD    		7u
-#define SYS_DESTROY_THREAD	    8u
-#define SYS_READ_THREAD		    	9u
-#define SYS_UPDATE_THREAD	    	10u
-#define SYS_POLL								11u
-#define SYS_EOI									12u
+#define SYS_CREATE              0u
+#define SYS_READ                1u
+#define SYS_UPDATE              2u
+#define SYS_DESTROY             3u
+#define SYS_SEND                4u
+#define SYS_SLEEP               5u
+#define SYS_RECEIVE             6u
 
 #define PM_UNMAPPED             0x01u
 #define PM_READ_ONLY            0x02u
@@ -32,6 +28,8 @@
 #define PM_AVAIL_OFFSET         12
 #define PM_OVERWRITE            0x8000u
 #define PM_ARRAY                0x4000u
+
+#define SL_INF_DURATION         0xFFFFFFFFu
 
 /*
 #define PM_PRESENT              0x01u
@@ -62,72 +60,58 @@
 #define PM_INVALIDATE           0x80000000u
  */
 
-#define PRIV_SUPER		0u
-#define PRIV_PAGER		1u
+#define PRIV_SUPER		    0u
+#define PRIV_PAGER		    1u
 
-#define ESYS_OK			0
-#define ESYS_ARG		-1
-#define ESYS_FAIL		-2
-#define ESYS_PERM		-3
+#define ESYS_OK             0
+#define ESYS_ARG		    -1
+#define ESYS_FAIL		    -2
+#define ESYS_PERM		    -3
 #define ESYS_BADCALL		-4
 #define ESYS_NOTIMPL		-5
-#define ESYS_NOTREADY         	-6
-#define ESYS_INT              	-7
+#define ESYS_NOTREADY       -6
+#define ESYS_INT            -7
+#define ESYS_PREEMPT        -8
 
-#define TF_STATUS		1u
-#define TF_PRIORITY		2u
+#define TF_STATUS		    1u
+#define TF_PRIORITY		    2u
 #define TF_REG_STATE		4u
 #define TF_ROOT_PMAP		8u
 #define TF_EXT_REG_STATE	16u
 #define TF_CAP_TABLE		32u
 #define TF_EX_HANDLER		64u
-#define TF_EVENTS		128u
+#define TF_EVENTS		    128u
 
-#define EV_STOP_CHILD	(1u << 0)
-#define EV_STOP_PARENT 	(1u << 1)
-#define EV_STOP_EH 	(1u << 2)
-#define EV_STOP_PAGER 	(1u << 3)
-#define EV_IRQ0 	(1u << 8)
-#define EV_IRQ1 	(1u << 9)
-#define EV_IRQ2 	(1u << 10)
-#define EV_IRQ3 	(1u << 11)
-#define EV_IRQ4 	(1u << 12)
-#define EV_IRQ5 	(1u << 13)
-#define EV_IRQ6 	(1u << 14)
-#define EV_IRQ7 	(1u << 15)
-#define EV_IRQ8 	(1u << 16)
-#define EV_IRQ9 	(1u << 17)
-#define EV_IRQ10 	(1u << 18)
-#define EV_IRQ11 	(1u << 19)
-#define EV_IRQ12 	(1u << 20)
-#define EV_IRQ13 	(1u << 21)
-#define EV_IRQ14 	(1u << 22)
-#define EV_IRQ15 	(1u << 23)
-#define EV_IRQ16 	(1u << 24)
-#define EV_IRQ17 	(1u << 25)
-#define EV_IRQ18 	(1u << 26)
-#define EV_IRQ19 	(1u << 27)
-#define EV_IRQ20 	(1u << 28)
-#define EV_IRQ21 	(1u << 29)
-#define EV_IRQ22 	(1u << 30)
-#define EV_IRQ23 	(1u << 31)
+#define EV_STOP_CHILD	    (1u << 0)
+#define EV_STOP_PARENT 	    (1u << 1)
+#define EV_STOP_EH 	        (1u << 2)
+#define EV_STOP_PAGER 	    (1u << 3)
+#define EV_IRQ0 	        (1u << 8)
+#define EV_IRQ1 	        (1u << 9)
+#define EV_IRQ2 	        (1u << 10)
+#define EV_IRQ3 	        (1u << 11)
+#define EV_IRQ4 	        (1u << 12)
+#define EV_IRQ5 	        (1u << 13)
+#define EV_IRQ6 	        (1u << 14)
+#define EV_IRQ7 	        (1u << 15)
+#define EV_IRQ8 	        (1u << 16)
+#define EV_IRQ9 	        (1u << 17)
+#define EV_IRQ10 	        (1u << 18)
+#define EV_IRQ11 	        (1u << 19)
+#define EV_IRQ12 	        (1u << 20)
+#define EV_IRQ13 	        (1u << 21)
+#define EV_IRQ14 	        (1u << 22)
+#define EV_IRQ15 	        (1u << 23)
+#define EV_IRQ16 	        (1u << 24)
+#define EV_IRQ17 	        (1u << 25)
+#define EV_IRQ18 	        (1u << 26)
+#define EV_IRQ19 	        (1u << 27)
+#define EV_IRQ20 	        (1u << 28)
+#define EV_IRQ21 	        (1u << 29)
+#define EV_IRQ22 	        (1u << 30)
+#define EV_IRQ23 	        (1u << 31)
 
 typedef struct {
-    void* send_buffer;
-    void* recv_buffer;
-    size_t send_length;
-    size_t recv_length;
-} SysMessageArgs;
-
-struct PageMapping {
-    union {
-        pframe_t phys_frame;
-        uint32_t block_num;
-    };
-    unsigned int flags;
-};
-
-struct LegacyXSaveState {
     uint16_t fcw;
     uint16_t fsw;
     uint8_t ftw;
@@ -212,7 +196,7 @@ struct LegacyXSaveState {
     uint8_t _resd12[176];
     uint8_t available[48];
 
-};
+} Legacy_Xsave_State;
 
 typedef struct {
     struct State {
@@ -258,11 +242,96 @@ typedef struct {
     tid_t senderWaitHead;
     tid_t senderWaitTail;
 
-    xsave_state_t* xsave_state;
+    void* xsave_state;
     size_t xsave_state_len;
-    uint16_t xsave_state_bits;
+    uint16_t xsave_rfbm;
 
 } thread_info_t;
+
+typedef struct {
+    union {
+        pbase_t phys_frame;
+        uint32_t block_num;
+    };
+    unsigned int flags;
+} PageMapping;
+
+typedef struct {
+    uint32_t mask;
+    int      blocking;
+} SysPollArgs;
+
+typedef struct {
+    uint32_t mask;
+} SysEoiArgs;
+
+typedef struct {
+    addr_t virt;
+    size_t count;
+    paddr_t addr_space;
+    PageMapping* mappings;
+    int level;
+} SysReadPageMappingsArgs;
+
+typedef struct {
+    addr_t virt;
+    size_t count;
+    paddr_t addr_space;
+    PageMapping* mappings;
+    int level;
+} SysUpdatePageMappingsArgs;
+
+typedef struct {
+    void* entry;
+    paddr_t addr_space;
+    void* stack_top;
+} SysCreateTcbArgs;
+
+typedef struct {
+    tid_t tid;
+    thread_info_t* info;
+    size_t info_length;
+} SysReadTcbArgs;
+
+typedef struct {
+    tid_t tid;
+    unsigned int flags;
+    thread_info_t* info;
+} SysUpdateTcbArgs;
+
+typedef struct {
+    tid_t tid;
+} SysDestroyTcbArgs;
+
+typedef struct {
+    unsigned int irq;   // Event interrupts can't be created.
+} SysCreateIntArgs;
+
+typedef struct {
+    unsigned int int_mask;  // Includes event interrupts.
+    int blocking;
+} SysReadIntArgs;
+
+typedef struct {
+    unsigned int int_mask;  // Includes event interrupts.
+} SysUpdateIntArgs;
+
+typedef struct {
+    unsigned int irq;    // Event interrupts can't be destroyed.
+} SysDestroyIntArgs;
+
+typedef enum {
+    SL_SECONDS,
+    SL_MILLISECONDS,
+    SL_MICROSECONDS,
+} SysSleepGranularity;
+
+typedef enum {
+    RES_PAGE_MAPPING,
+    RES_TCB,
+    RES_INT,
+    RES_CAP
+} SysResource;
 
 #ifdef __cplusplus
 extern "C" {
@@ -271,121 +340,86 @@ extern "C" {
 
 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNU__MINOR__ >= 9)
 
-#define SYSCALL1(syscallName, type1, arg1) \
-static inline int sys_##syscallName(type1 arg1) { \
-	int retVal; \
-	asm volatile("pushl %%ebp\n" \
-							 "pushl %%edx\n" \
-							 "pushl %%ecx\n" \
-							 "lea 1f, %%edx\n" \
-							 "movl %%esp, %%ebp\n" \
-							 "sysenter\n" \
-							 "1:\n" \
-							 "movl %%ebp, %%esp\n" \
-							 "popl %%ecx\n" \
-							 "popl %%edx\n" \
-							 "popl %%ebp\n" \
-									 : "=a"(retVal) \
-									 : "a"(SYS_##syscallName), \
-										 "b"(arg1) \
-									 : "memory"); \
-	return retVal; \
+#define SYSENTER_INSTR "pushl %%ebp\n" \
+"pushl %%edx\n" \
+"pushl %%ecx\n" \
+"lea 1f, %%edx\n" \
+"movl %%esp, %%ebp\n" \
+"sysenter\n" \
+"1:\n" \
+"movl %%ebp, %%esp\n" \
+"popl %%ecx\n" \
+"popl %%edx\n" \
+"popl %%ebp\n"
+
+#define SYSCALL1(syscall_name, type1, arg1) \
+static inline int sys_##syscall_name(type1 arg1) { \
+	int ret_val; \
+	asm volatile(SYSENTER_INSTR \
+        : "=a"(ret_val) \
+        : "a"(SYS_##syscall_name), "b"(arg1) \
+        : "memory"); \
+	return ret_val; \
 }
 
 // Dummy variable has to be used because input-only arguments can't be modified
 
-#define SYSCALL2(syscallName, type1, arg1, type2, arg2) \
-static inline int sys_##syscallName(type1 arg1, type2 arg2) { \
-	int retVal; \
+#define SYSCALL2(syscall_name, type1, arg1, type2, arg2) \
+static inline int sys_##syscall_name(type1 arg1, type2 arg2) { \
+	int ret_val; \
 	int dummy; \
-	asm volatile("pushl %%ebp\n" \
-							 "pushl %%edx\n" \
-							 "pushl %%ecx\n" \
-							 "lea 1f, %%edx\n" \
-							 "movl %%esp, %%ebp\n" \
-							 "sysenter\n" \
-							 "1:\n" \
-							 "movl %%ebp, %%esp\n" \
-							 "popl %%ecx\n" \
-							 "popl %%edx\n" \
-							 "popl %%ebp\n" \
-									 : "=a"(retVal), "=d"(dummy) \
-									 : "a"(SYS_##syscallName), \
-										 "b"(arg1), "c"(arg2) \
-									 : "memory"); \
-	return retVal; \
+	asm volatile(SYSENTER_INSTR \
+        : "=a"(ret_val), "=d"(dummy) \
+        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2) \
+        : "memory"); \
+	return ret_val; \
 }
 
-#define SYSCALL3(syscallName, type1, arg1, type2, arg2, type3, arg3) \
-static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3) { \
-	int retVal; \
+#define SYSCALL3(syscall_name, type1, arg1, type2, arg2, type3, arg3) \
+static inline int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3) { \
+	int ret_val; \
 	int dummy; \
-	asm volatile("pushl %%ebp\n" \
-							 "pushl %%edx\n" \
-							 "pushl %%ecx\n" \
-							 "lea 1f, %%edx\n" \
-							 "movl %%esp, %%ebp\n" \
-							 "sysenter\n" \
-							 "1:\n" \
-							 "movl %%ebp, %%esp\n" \
-							 "popl %%ecx\n" \
-							 "popl %%edx\n" \
-							 "popl %%ebp\n" \
-									: "=a"(retVal), "=d"(dummy) \
-									: "a"(SYS_##syscallName), \
-										"b"(arg1), "c"(arg2), "S"(arg3) \
-									: "memory"); \
-	return retVal; \
+	asm volatile(SYSENTER_INSTR \
+        : "=a"(ret_val), "=d"(dummy) \
+        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3) \
+		: "memory"); \
+	return ret_val; \
 }
 
-#define SYSCALL4(syscallName, type1, arg1, type2, arg2, type3, arg3, type4, arg4) \
-static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4) { \
-    int retVal; \
+#define SYSCALL4(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4) \
+static inline int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3, type4 arg4) { \
+    int ret_val; \
     int dummy; \
-	asm volatile("pushl %%ebp\n" \
-        "pushl %%edx\n" \
-        "pushl %%ecx\n" \
-        "lea 1f, %%edx\n" \
-        "movl %%esp, %%ebp\n" \
-        "sysenter\n" \
-        "1:\n" \
-        "movl %%ebp, %%esp\n" \
-        "popl %%ecx\n" \
-        "popl %%edx\n" \
-        "popl %%ebp\n" \
-            : "=a"(retVal), "=d"(dummy) \
-            : "a"(SYS_##syscallName), \
-                "b"(arg1), "c"(arg2), "S"(arg3), "D"(arg4) \
-            : "memory"); \
-	return retVal; \
+	asm volatile(SYSENTER_INSTR \
+        : "=a"(ret_val), "=d"(dummy) \
+        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3), "D"(arg4) \
+        : "memory"); \
+	return ret_val; \
 }
 
-#define SYSCALL4_PACKED_W1(syscallName, type1, arg1, type2, arg2, type3, arg3, type4, arg4, wArg) \
-static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 arg4, uint16_t wArg) { \
-	int retVal; \
+#define SYSCALL4_PACKED_W1(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4, word_arg) \
+static inline int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3, type4 arg4, type5 arg5, uint16_t word_arg) { \
+	int ret_val; \
 	int dummy; \
-	asm volatile("pushl %%ebp\n" \
-        "pushl %%edx\n" \
-        "pushl %%ecx\n" \
-        "lea 1f, %%edx\n" \
-        "movl %%esp, %%ebp\n" \
-        "sysenter\n" \
-        "1:\n" \
-        "movl %%ebp, %%esp\n" \
-        "popl %%ecx\n" \
-        "popl %%edx\n" \
-        "popl %%ebp\n" \
-            : "=a"(retVal), "=d"(dummy) \
-            : "a"((((uint32_t)wArg << 16) & 0xFFFFu) | SYS_##syscallName), \
-                "b"(arg1), "c"(arg2), "S"(arg3), "D"(arg4) \
-            : "memory"); \
-	return retVal; \
+	asm volatile(SYSENTER_INSTR, \
+        : "=a"(ret_val), "=d"(dummy) \
+        : "a"((((uint32_t)word_arg << 16) & 0xFFFFu) | SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3), "D"(arg4) \
+        : "memory"); \
+	return ret_val; \
 }
 #else
 #error "GCC 4.9 or greater is required."
 #endif /* __GNUC__ > 4 || (__GNUC__ == 4 && __GNU__MINOR__ >= 9) */
 
-#define SYS_send_and_recv 			SYS_SEND_AND_RECV
+#define SYS_send 			        SYS_SEND
+#define SYS_receive                 SYS_RECEIVE
+#define SYS_create                  SYS_CREATE
+#define SYS_read                    SYS_READ
+#define SYS_update                  SYS_UPDATE
+#define SYS_destroy                 SYS_DESTROY
+#define SYS_sleep                   SYS_SLEEP
+
+/*
 #define SYS_get_page_mappings 	SYS_GET_PAGE_MAPPINGS
 #define SYS_set_page_mappings 	SYS_SET_PAGE_MAPPINGS
 #define SYS_create_thread 			SYS_CREATE_THREAD
@@ -398,20 +432,103 @@ static inline int sys_##syscallName(type1 arg1, type2 arg2, type3 arg3, type4 ar
 #define SYS_get_page_mappings_base	SYS_get_page_mappings
 #define SYS_set_page_mappings_base SYS_set_page_mappings
 #define SYS_create_thread_base 		SYS_create_thread
+*/
+SYSCALL2(create, SysResource, res_type, void*, args)
+SYSCALL2(read, SysResource, res_type, void*, args)
+SYSCALL2(update, SysResource, res_type, void*, args)
+SYSCALL2(destroy, SysResource, res_type, void*, args)
+SYSCALL2(sleep, unsigned int, duration, SysSleepGranularity, granularity)
 
+/*
 SYSCALL4_PACKED_W1(get_page_mappings_base, addr_t, virt, size_t, count, uint32_t,
-    addrSpace, struct PageMapping*, mappings, level)
+    addrSpace, PageMapping*, mappings, level)
 SYSCALL4_PACKED_W1(set_page_mappings_base, addr_t, virt, size_t, count, uint32_t,
-    addrSpace, struct PageMapping*, mappings, level)
+    addrSpace, PageMapping*, mappings, level)
 SYSCALL3(create_thread_base, void*, entry, uint32_t, rootPmap, void*, stackTop)
 SYSCALL2(read_thread, tid_t, tid, thread_info_t*, info)
 SYSCALL3(update_thread, tid_t, tid, unsigned int, flags, thread_info_t*, info)
 SYSCALL1(destroy_thread, tid_t, tid)
 SYSCALL2(poll, int, mask, int, blocking)
 SYSCALL1(eoi, int, mask)
-SYSCALL4(send_and_recv, tid_t, recipient, uint32_t, subject,
-    uint32_t, flags, SysMessageArgs*, args)
+*/
+
+static inline int sys_send(Message* message, size_t* bytes_sent)
+{
+    int ret_val;
+    int dummy;
+    size_t num_sent;
+    uint32_t pair;
+
+    asm volatile(SYSENTER_INSTR \
+        : "=a"(ret_val), "=b"(pair), "=S"(num_sent), "=d"(dummy)
+        : "a"(SYS_SEND), "b"(((uint32_t)message->target.recipient) | ((uint32_t)message->flags) << 16), 
+        "d"((int)message->subject), "S"((int)message->buffer), "D"((int)message->buffer_length)
+        : "memory");
+
+    if(bytes_sent) {
+        *bytes_sent = num_sent;
+    }
+
+    message->target.recipient = (tid_t)(pair >> 16);
+
+    return ret_val;
+}
+
+static inline int sys_receive(Message* message, size_t* bytes_rcvd)
+{
+    int ret_val;
+    int dummy;
+    size_t num_rcvd;
+    uint32_t pair;
+    uint32_t subject;
+
+    asm volatile(SYSENTER_INSTR \
+        : "=a"(ret_val), "=b"(pair), "=c"(subject), "=d"(dummy), "=D"(num_rcvd)
+        : "a"(SYS_RECEIVE), "b"(((uint32_t)message->target.sender) | ((uint32_t)message->flags) << 16), 
+        "d"((int)message->buffer), "S"((int)message->buffer_length)
+        : "memory");
+
+    if(bytes_rcvd) {
+        *bytes_rcvd = num_rcvd;
+    }
+
+    message->flags = (uint16_t)(pair >> 16);
+    message->target.sender = (uint16_t)pair;
+    message->subject = (uint32_t)subject;
+
+    return ret_val;
+}
+
+static inline int sys_yield(void)
+{
+    return sys_sleep(0, SL_SECONDS);
+}
+
+static inline int sys_wait(void)
+{
+    return sys_sleep(SL_INF_DURATION, SL_SECONDS);
+}
+
+static inline int sys_event_poll(int mask)
+{
+    SysPollArgs args = {
+        .mask= (uint32_t)mask,
+        .blocking = 0
+    };
     
+    return sys_read(RES_INT, &args);
+}
+
+static inline int sys_event_eoi(int mask)
+{
+    SysEoiArgs args = {
+        .mask = (uint32_t)mask
+    };
+
+    return sys_update(RES_INT, &args);
+}
+
+/*
 static inline tid_t sys_create_thread(void* entry, uint32_t rootPmap,
     void* stackTop)
 {
@@ -420,14 +537,14 @@ static inline tid_t sys_create_thread(void* entry, uint32_t rootPmap,
 
 static inline int sys_get_page_mappings(unsigned int level, addr_t virt,
     size_t count, uint32_t addrSpace,
-    struct PageMapping* mappings)
+    PageMapping* mappings)
 {
     return sys_get_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
 }
 
 static inline int sys_set_page_mappings(unsigned int level, addr_t virt,
     size_t count, uint32_t addrSpace,
-    struct PageMapping* mappings)
+    PageMapping* mappings)
 {
     return sys_set_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
 }
@@ -444,7 +561,7 @@ static inline int sys_set_page_mappings(unsigned int level, addr_t virt,
 #undef SYS_create_thread_base
 #undef SYS_poll
 #undef SYS_eoi
-
+*/
 #ifdef __cplusplus
 };
 #else

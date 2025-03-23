@@ -5,6 +5,8 @@
 #include <os/vfs.h>
 #include <errno.h>
 
+extern int getFileAttributes( const char *path, struct FileAttributes *attrib );
+
 FILE* fopen(char *filename, char *mode) {
   if(!filename || !mode) {
     errno = -EINVAL;

@@ -11,10 +11,16 @@
 #include <string.h>
 #include <limits.h>
 #include <stdint.h>
+#include <kernel/lock.h>
 
 #ifdef DEBUG
 
-#define VIDMEM_START KPHYS_TO_VIRT(0xB8000u)
+extern addr_t kboot_stack_top;
+extern paddr_t kpage_dir;
+
+// TODO: This doesn't actually lock the VGA VRAM, itself
+
+#define VIDMEM_START PHYS_TO_VIRT(0xB8000u)
 
 #define KITOA_BUF_LEN 65
 
@@ -58,7 +64,7 @@ enum TextColors {
 };
 
 #define COLOR_ATTR(fg, bg) ((fg) | ((bg) << 4))
-#define VGA_CHAR(c, fg, bg) (word)((c) | COLOR_ATTR(fg, bg) << 8)
+#define VGA_CHAR(c, fg, bg) (uint16_t)((c) | COLOR_ATTR(fg, bg) << 8)
 
 #define VGA_CHAR_AT(vidmem, line, col) (vidmem)[(CHARS_PER_LINE * (line) + (col))]
 #define CHAR_OF(c) ((c) & 0xFFu)
@@ -95,7 +101,7 @@ enum PrintfParseState {
     SPECIFIER
 };
 
-struct PrintfState {
+typedef struct {
     unsigned short int is_zero_pad : 1;
     unsigned short int use_prefix : 1;
     unsigned short int is_left_justify : 1;
@@ -107,23 +113,28 @@ struct PrintfState {
     unsigned short int printf_state : 4;
     unsigned short int length : 4;
     char prefix[2];
-    size_t width;
+    unsigned int width;
     int precision;
     size_t percent_index;
     size_t arg_length;
     char* string;
-};
+} PrintfState;
 
-bool bad_assert_hlt;
-dword upper1;
-dword lower1;
-dword upper2;
-dword lower2;
+typedef struct {
+    unsigned int x;
+    unsigned int y;
+} VideoCursor;
+typedef struct {
+    unsigned int x;
+    unsigned int y;
+} SerialCursor;
 
-unsigned int cursor_x = 0;
-unsigned int cursor_y = 0;
 
-NON_NULL_PARAMS void reset_printf_state(struct PrintfState* state);
+
+LOCKED_WITH(VideoCursor, video_cursor, ((VideoCursor){.x = 0, .y = 0}))
+LOCKED_WITH(SerialCursor, serial_cursor, ((SerialCursor){.x = 0, .y = 0 }))
+
+NON_NULL_PARAMS void reset_printf_state(PrintfState* state);
 
 static void print_char(int c);
 NON_NULL_PARAMS static void _kprintf(void (*write_func)(int), const char* str,
@@ -134,7 +145,7 @@ NON_NULL_PARAM(3)
 void kprintf_at(unsigned int x, unsigned int y,
     const char* str, ...) __attribute__((format(printf, 3, 4)));
 static int scroll(int up);
-static void set_scroll(word addr);
+static void set_scroll(uint16_t addr);
 void reset_scroll(void);
 void scroll_up(void);
 int scroll_down(void);
@@ -148,30 +159,66 @@ NON_NULL_PARAMS int kullitoa(unsigned long long int value, char* str, int base);
 
 void _put_char(char c, int x, int y, unsigned char attrib);
 void put_char(char c, int x, int y);
-NON_NULL_PARAMS void dump_regs(const tcb_t* thread, const ExecutionState* state,
-    unsigned int int_num, unsigned int error_code);
-NON_NULL_PARAMS void dump_state(const ExecutionState* state,
-    unsigned int int_num, unsigned int error_code);
 void dump_stack(addr_t, addr_t);
-static const char* DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";
-
-unsigned int sx = 0;
-unsigned int sy = 1;
+const char* const DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz";
+const char* const EXCEPTION_NAMES[32] = {
+    "Divide Error",
+    "Debug Exception",
+    "NMI Interrupt",
+    "Breakpoint Exception",
+    "Overflow",
+    "BOUND Range Exceeded",
+    "Invalid Opcode",
+    "Device Not Available",
+    "Double Fault",
+    "Coprocessor Segment Overrun",
+    "Invalid TSS",
+    "Segment Not Present",
+    "Stack Fault",
+    "General Protection Exception",
+    "Page Fault",
+    "Unknown Exception",
+    "x87 FPU Floating-Point Error",
+    "Alignment Check",
+    "Machine-Check",
+    "SIMD Floating-Point Exception",
+    "Virtualization Exception",
+    "Control Protection Exception",
+    "Unknown Exception",
+    "Unknown Exception",
+    "Unknown Exception",
+    "Unknown Exception",
+    "Unknown Exception",
+    "Unknown Exception",
+    "Unknown Exception",
+    "Unknown Exception",
+    "Unknown Exception"
+};
 
 #define COM1 0x3f8
 #define COM2 0x2f8
 
 #define COMBASE COM1
 
-unsigned int get_time_difference(void)
+/* Note: RDTSCP should be used instead due to possible out of order execution.
+ * Alternatively, CPUID or MFENCE,LFENCE can be used before RDTSC
+ */
+#define RDTSC(state, out_val)   __asm__ __volatile__( "rdtsc" : "=a"( state[0] ), "=d"( state[1] ) )
+#define CALC_TIME(func_call) do {\
+    uint32_t start_state[2] = { 0, 0 };\
+    uint32_t stop_state[2] = { 0, 0 };\
+    RDTSC(start_state);\
+    func_call;\
+    RDTSC(stop_state);\
+    out_val = get_time_difference(&start_state, &stop_state);\
+} while(0)
+
+uint64_t get_time_difference(uint32_t(*start_state)[2], uint32_t(*stop_state)[2])
 {
-    if(upper1 == upper2)
-        return (unsigned)(lower2 - lower1);
-    else if(upper2 == upper1 + 1) {
-        if(lower2 < lower1)
-            return (0xFFFFFFFFu - lower1) + lower2;
-    }
-    return 0xFFFFFFFFu;
+    uint64_t* start = (uint64_t*)start_state;
+    uint64_t* stop = (uint64_t*)stop_state;
+
+    return *stop - *start;
 }
 
 /** Sets up the serial ports for printing debug messages
@@ -187,6 +234,7 @@ void init_serial(void)
     out_port8(COMBASE + 3, 3u);                            // 8-N-1
 }
 
+// Assumes serial device locked
 int get_debug_char(void)
 {
     while(!(in_port8(COMBASE + 5) & 0x01u))
@@ -194,38 +242,41 @@ int get_debug_char(void)
     return in_port8(COMBASE);
 }
 
+// Locks serial cursor
+// Assumes video cursor is locked
+// Assumes video registers are locked
 void put_debug_char(int ch)
 {
-    out_port8(0xE9, (byte)ch); // Use E9 hack to output characters
+    SPINLOCK_ACQUIRE(serial_cursor)
+    SerialCursor c = LOCK_VAL(serial_cursor);
+
+    out_port8(0xE9, (uint8_t)ch); // Use E9 hack to output characters
     while(!(in_port8(COMBASE + 5) & 0x20u))
         ;
-    out_port8(COMBASE, (byte)ch);
-    /*
-     if( ch == '\r' )
-     {
-     sx=0;
-     sy++;
-     if( sy >= SCREEN_HEIGHT )
-     scrollDown();
-     }
-     else if( ch == '\t' )
-     {
-     sx +=8;
-     }
-     else
-     {
-     putChar(ch,sx,sy);
-     sx++;
-     }
+    out_port8(COMBASE, (uint8_t)ch);
 
-     if( sx >= SCREEN_WIDTH )
-     {
-     sx=0;
-     sy++;
-     if( sy >= SCREEN_HEIGHT )
-     scrollDown();
-     }
-     */
+    if(ch == '\r') {
+        c.x = 0;
+        c.y++;
+        if(c.y >= SCREEN_HEIGHT)
+            scroll_down();
+    } else if(ch == '\t') {
+        c.x += 8;
+    } else {
+        put_char(ch, c.x, c.y);
+        c.x++;
+    }
+
+    if(c.x >= SCREEN_WIDTH) {
+        c.x = 0;
+        c.y++;
+        if(c.y >= SCREEN_HEIGHT)
+            scroll_down();
+    }
+
+
+    LOCK_SET(serial_cursor, c);
+    SPINLOCK_RELEASE(serial_cursor);
 }
 
 NON_NULL_PARAMS int kitoa(int value, char* str, int base)
@@ -475,20 +526,14 @@ NON_NULL_PARAMS int kullitoa(unsigned long long int value, char* str, int base)
 
 void init_video(void)
 {
-    bad_assert_hlt = true; // false; // true;
     out_port8(MISC_OUTPUT_WR_REG, in_port8(MISC_OUTPUT_RD_REG) | FROM_FLAG_BIT(0));
 }
 
-/// Sets the flag to halt the system on a failed assertion
-void set_bad_assert_hlt(bool value)
+// Assumes video registers are locked
+static void set_scroll(uint16_t addr)
 {
-    bad_assert_hlt = value;
-}
-
-static void set_scroll(word addr)
-{
-    byte high = (addr >> 8) & 0xFFu;
-    byte low = addr & 0xFFu;
+    uint8_t high = (addr >> 8) & 0xFFu;
+    uint8_t low = addr & 0xFFu;
 
     out_port8(CRT_CONTR_INDEX, START_ADDR_HIGH);
     out_port8(CRT_CONTR_DATA, high);
@@ -496,23 +541,25 @@ static void set_scroll(word addr)
     out_port8(CRT_CONTR_DATA, low);
 }
 
+// Assumes video registers are locked
 void reset_scroll(void)
 {
     set_scroll(0);
 }
 
+// Assumes video registers are locked
 static int scroll(int up)
 {
     int ret = 0;
-    byte high;
-    byte low;
-    word address;
+    uint8_t high;
+    uint8_t low;
+    uint16_t address;
 
     out_port8(CRT_CONTR_INDEX, START_ADDR_HIGH);
     high = in_port8(CRT_CONTR_DATA);
     out_port8(CRT_CONTR_INDEX, START_ADDR_LOW);
     low = in_port8(CRT_CONTR_DATA);
-    address = (((word)high << 8) | low);
+    address = (((uint16_t)high << 8) | low);
 
     if(up) {
         if(address == 0)
@@ -533,11 +580,13 @@ static int scroll(int up)
     return ret;
 }
 
+// Assumes video registers are locked
 void scroll_up(void)
 {
     scroll(UP_DIR);
 }
 
+// Assumes video registers are locked
 int scroll_down(void)
 {
     return scroll(DOWN_DIR);
@@ -547,34 +596,36 @@ NON_NULL_PARAM(3)
 void kprintf_at(unsigned int x, unsigned int y,
     const char* str, ...)
 {
-    unsigned int c_x = cursor_x;
-    unsigned int c_y = cursor_y;
+    SPINLOCK_ACQUIRE(video_cursor);
+    VideoCursor saved_cursor = LOCK_VAL(video_cursor);
+
     va_list args;
 
-    cursor_x = x;
-    cursor_y = y;
+    LOCK_SET(video_cursor, ((VideoCursor){.x = x, .y = y }));
+    SPINLOCK_RELEASE(video_cursor);
 
     va_start(args, str);
     _kprintf(&print_char, str, args);
     va_end(args);
 
-    cursor_x = c_x;
-    cursor_y = c_y;
+    SPINLOCK_ACQUIRE(video_cursor);
+    LOCK_SET(video_cursor, saved_cursor);
+    SPINLOCK_RELEASE(video_cursor);
 }
 
 NON_NULL_PARAMS void print_assert_msg(const char* exp, const char* file,
     const char* func, int line)
 {
-    tcb_t* current_thread = get_current_thread();
+    tcb_t* current_thread = thread_get_current();
 
-    kprintf("\n<'%s' %s: %d> KASSERT(%s) failed\n", file, func, line, exp);
+    kprintfln("\n<'%s' %s: %d> KASSERT(%s) failed", file, func, line, exp);
 
     if(current_thread) {
         dump_regs((tcb_t*)current_thread, &current_thread->user_exec_state, 0xFFFFFFFFu, 0xFFFFFFFFu);
     }
 
-    if(bad_assert_hlt) {
-        kprintf("\nSystem halted.");
+    if(BAD_ASSERT_HLT) {
+        kprintf("System halted.");
 
         disable_int();
         asm("hlt");
@@ -588,11 +639,11 @@ CALL_COUNTER(inc_sched_count)
  */
     void inc_sched_count(void)
 {
-    tcb_t* current_thread = get_current_thread();
+    tcb_t* current_thread = thread_get_current();
 
-    volatile word* vidmem = (volatile word*)(VIDMEM_START);
+    volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
 
-    word w = VGA_CHAR_AT(vidmem, 0, 0);
+    uint16_t w = VGA_CHAR_AT(vidmem, 0, 0);
 
     VGA_CHAR_AT(vidmem, 0, 0) = VGA_CHAR(CHAR_OF(w + 1), RED, GRAY);
 
@@ -609,9 +660,9 @@ CALL_COUNTER(inc_sched_count)
  */
 void inc_timer_count(void)
 {
-    volatile word* vidmem = (volatile word*)(VIDMEM_START);
+    volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
 
-    word w = VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1);
+    uint16_t w = VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1);
 
     VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1) = VGA_CHAR(CHAR_OF(w + 1), GREEN, GRAY);
 }
@@ -619,7 +670,7 @@ void inc_timer_count(void)
 /// Blanks the screen
 void clear_screen(void)
 {
-    volatile word* vidmem = (volatile word*)(VIDMEM_START);
+    volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
 
     for(int col = 0; col < SCREEN_WIDTH; col++)
         VGA_CHAR_AT(vidmem, 0, col) = VGA_CHAR(' ', BLACK, GRAY);
@@ -645,47 +696,81 @@ NON_NULL_PARAMS void do_new_line(int* x, int* y)
 
 void print_char(int c)
 {
-    volatile word* vidmem = (volatile word*)VIDMEM_START + cursor_y * SCREEN_WIDTH + cursor_x;
+    // Do nothing if char isn't an ASCII printable character.
+    if(c < 32 || c > 126)
+        return;
+
+    SPINLOCK_ACQUIRE(video_cursor);
+    VideoCursor cursor = LOCK_VAL(video_cursor);
+
+    volatile uint16_t* vidmem = (volatile uint16_t*)VIDMEM_START + cursor.y * SCREEN_WIDTH + cursor.x;
 
     *vidmem = (*vidmem & 0xFF00) | (unsigned char)c;
 
-    cursor_x++;
+    cursor.x++;
 
-    if(cursor_x >= SCREEN_WIDTH) {
-        cursor_x = 0;
-        cursor_y++;
+    if(cursor.x >= SCREEN_WIDTH) {
+        cursor.x = 0;
+        cursor.y++;
     }
+
+    LOCK_SET(video_cursor, cursor);
+
+    SPINLOCK_RELEASE(video_cursor);
 }
 
+// Assumes that VRAM is already locked.
 void _put_char(char c, int x, int y, unsigned char attrib)
 {
-    volatile word* vidmem = (volatile word*)(VIDMEM_START);
+    volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
 
     VGA_CHAR_AT(vidmem, y, x) = VGA_CHAR(c, attrib & 0x0F, (attrib >> 4) & 0x0F);
 }
 
+// Assumes that VRAM is already locked.
 void put_char(char c, int x, int y)
 {
     _put_char(c, x, y, COLOR_ATTR(GRAY, BLACK));
 }
 
-void reset_printf_state(struct PrintfState* state)
+void reset_printf_state(PrintfState* state)
 {
     memset(state, 0, sizeof * state);
     state->precision = DEFAULT_PRECISION;
 }
 
+// Locks/releases video cursor
 NON_NULL_PARAM(1)
 void kprintf(const char* str, ...)
 {
     va_list args;
 
     va_start(args, str);
+    SPINLOCK_ACQUIRE(video_cursor);
     _kprintf(&put_debug_char, str, args);
+    SPINLOCK_RELEASE(video_cursor);
     va_end(args);
 }
 
-/** A simplified stdio printf() for debugging use
+// Locks/releases video cursor
+NON_NULL_PARAM(1)
+void kprintfln(const char* str, ...)
+{
+    va_list args;
+
+    va_start(args, str);
+    SPINLOCK_ACQUIRE(video_cursor);
+    _kprintf(&put_debug_char, str, args);
+    va_end(args);
+
+    va_start(args, str);
+    _kprintf(&put_debug_char, "\n", args);
+    SPINLOCK_RELEASE(video_cursor);
+    va_end(args);
+}
+
+/** A simplified stdio printf() for debugging use.
+ * 
  @param write_func The function to be used to output characters.
  @param str The formatted string to print with format specifiers
  @param ... The arguments to the specifiers
@@ -693,7 +778,7 @@ void kprintf(const char* str, ...)
 NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char* str,
     va_list args)
 {
-    struct PrintfState state;
+    PrintfState state;
     char buf[KITOA_BUF_LEN];
     size_t i;
     int chars_written = 0;
@@ -1121,59 +1206,84 @@ NON_NULL_PARAMS void dump_state(const ExecutionState* exec_state,
     unsigned int int_num, unsigned int error_code)
 {
     if(int_num < IRQ_BASE)
-        kprintf("Exception %u", int_num);
+        kprintfln("%s (exception %lu)", EXCEPTION_NAMES[int_num], int_num);
+    else if(int_num >= IRQ_BASE && int_num < IRQ(24))
+        kprintfln("IRQ %lu", int_num - IRQ_BASE);
+    else if(int_num < 256)
+        kprintfln("Software Interrupt %lu", int_num);
     else
-        kprintf("IRQ%u", int_num - IRQ_BASE);
+        kprintfln("Invalid Interrupt %lu", int_num);
 
-    kprintf("\nEAX: 0x%lx EBX: 0x%lx ECX: 0x%lx EDX: 0x%lx EFLAGS: 0x%lx",
+    kprintfln("EAX: %#.08lx EBX: %#.08lx ECX: %#.08lx EDX: %#.08lx EFL: %#.08lx",
         exec_state->eax, exec_state->ebx, exec_state->ecx, exec_state->edx,
         exec_state->eflags);
-    kprintf(
-        "\nESI: 0x%lx EDI: 0x%lx EBP: 0x%lx ESP: 0x%lx EIP: 0x%lx\n",
+    kprintfln(
+        "ESI: %#.08lx EDI: %#.08lx EBP: %#.08lx ESP: %#.08lx EIP: %#.08lx",
         exec_state->esi,
         exec_state->edi,
         exec_state->ebp,
         exec_state->cs == UCODE_SEL ? exec_state->user_esp : (uint32_t)(exec_state + 1) - 2 * sizeof(uint32_t),
         exec_state->eip);
-    kprintf(
-        "\nCS: 0x%x DS: 0x%x ES: 0x%x FS: 0x%x GS: 0x%x SS: 0x%x\n",
+    kprintfln(
+        "CS:  %#.04x DS: %#.04x ES: %#.04x FS: %#.04x GS: %#.04x SS: %#.04x",
         exec_state->cs, exec_state->ds, exec_state->es, exec_state->fs, exec_state->gs,
         exec_state->cs == UCODE_SEL ? exec_state->user_ss : get_ss());
 
-    kprintf("CR0: 0x%lx CR2: 0x%lx CR3: 0x%lx CR4: 0x%lx", get_cr0(), get_cr2(),
+    kprintf("CR0: %#.08lx CR2: %#.08lx CR3: %#.08lx CR4: %#.08lx", get_cr0(), get_cr2(),
         get_cr3(), get_cr4());
 
     if(int_num == 8 || (int_num >= 10 && int_num <= 14) || int_num == 17 || int_num == 21) {
-        kprintf(" error code: 0x%x\n", error_code);
+        kprintfln(" error code: %#.08lx", error_code);
+    } else {
+        kprintfln("");
     }
+
+    dump_stack((addr_t)exec_state->ebp, get_cr3());
 }
 
-void dump_stack(addr_t stack_frame_ptr, addr_t addr_space)
+static bool is_stack_top(addr_t stack_frame_ptr, paddr_t addr_space)
 {
-    kprintf("\n\nStack Trace:\n<Stack Frame>: [Return-EIP] args*\n");
+    return (addr_space == (addr_t)&kpage_dir && (addr_t)stack_frame_ptr == (addr_t)&kboot_stack_top) || stack_frame_ptr == (addr_t)kernel_stack_top;
+}
+
+void dump_stack(addr_t stack_frame_ptr, paddr_t addr_space)
+{
+    kprintfln("\n\nStack Trace:\n<Stack Frame>: [Return-EIP] args*");
 
     while(stack_frame_ptr) {
-        kprintf("<0x%lx>:", stack_frame_ptr);
+        bool is_at_top = is_stack_top(stack_frame_ptr, addr_space);
 
-        if(is_readable(stack_frame_ptr + sizeof(dword), addr_space))
-            kprintf(" [0x%lx]", *(dword*)(stack_frame_ptr + sizeof(dword)));
-        else
-            kprintf(" [???]");
+        kprintf("<%#.08lx>:%s", stack_frame_ptr, is_at_top ? " TOP" : "");
 
-        for(size_t i = 2; i < 8; i++) {
-            if(is_readable((addr_t)(stack_frame_ptr + sizeof(dword) * i), addr_space))
-                kprintf(" 0x%lx", *(dword*)(stack_frame_ptr + sizeof(dword) * i));
-            else
-                break;
+        if(is_at_top) {
+            break;
         }
 
-        kprintf("\n");
-
-        if(!is_readable((addr_t) * (dword*)stack_frame_ptr, addr_space)) {
-            kprintf("<0x%lx (invalid)>:\n", *(dword*)stack_frame_ptr);
+        if(is_readable(stack_frame_ptr, addr_space) != 1) {
+            kprintfln(" unable to read frame data.");
             break;
-        } else
-            stack_frame_ptr = *(dword*)stack_frame_ptr;
+        }
+
+        for(size_t i = 1; i < 8; i++) {
+            if(is_stack_top(stack_frame_ptr + i * sizeof(uint32_t), addr_space)) {
+                break;
+            }
+
+            if(i == 1) {
+                if(is_readable(stack_frame_ptr + sizeof(uint32_t), addr_space) == 1)
+                    kprintf(" [%#.08lx]", *(uint32_t*)(stack_frame_ptr + sizeof(uint32_t)));
+                else
+                    kprintf(" [???]");
+            } else if(is_readable((addr_t)(stack_frame_ptr + sizeof(uint32_t) * i), addr_space) == 1 && (void*)(stack_frame_ptr + sizeof(uint32_t) * i) != NULL) {
+                kprintf(" %#.08lx", *(uint32_t*)(stack_frame_ptr + sizeof(uint32_t) * i));
+            } else {
+                kprintf(" ???");
+            }
+        }
+
+        kprintfln("");
+
+        stack_frame_ptr = *(uint32_t*)stack_frame_ptr;
     }
 }
 
@@ -1183,18 +1293,20 @@ void dump_stack(addr_t stack_frame_ptr, addr_t addr_space)
  @param int_num The interrupt vector (if applicable)
  @param error_code The error code provided by the processor (if applicable)
  */
-NON_NULL_PARAMS void dump_regs(const tcb_t* thread,
+NON_NULL_PARAM(2) void dump_regs(const tcb_t* thread,
     const ExecutionState* exec_state,
     unsigned int int_num, unsigned int error_code)
 {
-    kprintf("Thread: %p (TID: %u) ", thread, get_tid(thread));
+    if(thread) {
+        kprintf("Thread: %p (TID: %u) ", thread, get_tid(thread));
+    }
 
     dump_state(exec_state, int_num, error_code);
 
-    kprintf("Thread CR3: %#lx Current CR3: %#lx\n",
-        *(const uint32_t*)&thread->root_pmap, get_cr3());
-
-    dump_stack((addr_t)exec_state->ebp, (addr_t)thread->root_pmap);
+    if(thread) {
+        kprintfln("Thread CR3: %#lx Current CR3: %#lx",
+            *(const uint32_t*)&thread->root_pmap, get_cr3());
+    }
 }
 
 #endif /* DEBUG */
@@ -1205,7 +1317,7 @@ noreturn void abort(void)
 {
     addr_t stack_frame_ptr;
 
-    kprintf("Debug Error: abort() has been called.\n");
+    kprintfln("Debug Error: abort() has been called.");
     __asm__("mov %%ebp, %0\n" : "=m"(stack_frame_ptr));
     dump_stack(stack_frame_ptr, get_root_page_map());
 
@@ -1219,7 +1331,7 @@ NON_NULL_PARAMS noreturn void print_panic_msg(const char* msg, const char* file,
     int line)
 {
     addr_t stack_frame_ptr;
-    kprintf("\nKernel panic - %s(): %d (%s). %s\nSystem halted\n", func, line,
+    kprintfln("\nKernel panic - %s(): %d (%s). %s\nSystem halted.", func, line,
         file, msg);
 
     __asm__("mov %%ebp, %0\n" : "=m"(stack_frame_ptr));

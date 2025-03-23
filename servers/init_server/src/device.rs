@@ -4,7 +4,7 @@ use core::prelude::v1::*;
 use crate::lowlevel::phys;
 use core::convert::TryFrom;
 use crate::phys_alloc::{self, BlockSize};
-use crate::{eprintln, println};
+use crate::{eprintfln, println};
 
 type DeviceMajor = u16;
 type DeviceMinor = u16;
@@ -99,7 +99,7 @@ pub fn read_page(vpage: &VirtualPage) -> Result<PhysicalPage, Error> {
             }
         }
         _ =>
-            Err(error::NOT_IMPLEMENTED)
+            Err(Error::NotImplemented)
     }
 }
 
@@ -130,6 +130,6 @@ pub fn write_page(vpage: &VirtualPage, _page: &PhysicalPage) -> Result<(), Error
             }
         }
         _ =>
-            Err(error::NOT_IMPLEMENTED)
+            Err(Error::NotImplemented)
     }
 }

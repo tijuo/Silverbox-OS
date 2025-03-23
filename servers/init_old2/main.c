@@ -149,7 +149,7 @@ int initPageStack(multiboot_info_t *info, addr_t lastFreeKernelPage)
           for( ; freePage >= mmapBase && freePage < mmapBase + mmapLen; freePage += PAGE_SIZE, freePageCount++);
         else
         {
-          pframe_t freeFrame = (pframe_t)(freePage >> 12);
+          pbase_t freeFrame = (pbase_t)(freePage >> 12);
 
           if(sys_map(NULL, (void *)ptr, &freeFrame, pagesNeeded, PM_READ_WRITE) != (int)pagesNeeded)
           {
@@ -214,14 +214,14 @@ static void handleMessage(msg_t *msg)
           {
             struct AddrRegion *region = getRegion(aspace, faultAddr);
             page_t *page;
-            pframe_t frame;
+            pbase_t frame;
 
             if(!region)
               print("Unable to find fault region (?)\n");
 
             if(getMapping(aspace, faultAddr, &page) != 0)
             {
-              frame = (pframe_t)(allocPhysPage() >> 12);
+              frame = (pbase_t)(allocPhysPage() >> 12);
               setMapping(aspace, faultAddr, page);
             }
             else

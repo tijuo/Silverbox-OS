@@ -13,12 +13,12 @@ fn handle_request(msg: Message<[u8; DATA_BUF_SIZE]>) -> Result<(), (error::Error
     let raw_msg = msg.raw_message();
 
     match raw_msg.subject() {
-        _ => Err((error::NOT_IMPLEMENTED, None))
+        _ => Err((Error::NotImplemented, None))
     }
 }
 
 pub fn ramdisk_main() -> ! {
-    eprintln!("Starting ramdisk...");
+    eprintfln!("Starting ramdisk...");
     let any_sender = Tid::new(RawMessage::ANY_SENDER);
 
     {
@@ -32,9 +32,9 @@ pub fn ramdisk_main() -> ! {
             Err(code) => error::log_error(code, Some(String::from("Unable to register ramdisk name"))),
             Ok((msg, _)) => {
                 if msg.subject == RawMessage::RESPONSE_OK {
-                    eprintln!("Ramdisk name registered successfully.");
+                    eprintfln!("Ramdisk name registered successfully.");
                 } else {
-                    eprintln!("Unable to register ramdisk name.");
+                    eprintfln!("Unable to register ramdisk name.");
                 }
             },
         }
@@ -52,9 +52,9 @@ pub fn ramdisk_main() -> ! {
             Err(code) => error::log_error(code, Some(String::from("Unable to register ramdisk name"))),
             Ok((msg, _)) => {
                 if msg.subject == RawMessage::RESPONSE_OK {
-                    eprintln!("Ramdisk server registered successfully.");
+                    eprintfln!("Ramdisk server registered successfully.");
                 } else {
-                    eprintln!("Unable to register ramdisk name.");
+                    eprintfln!("Unable to register ramdisk name.");
                 }
             },
         }
@@ -69,7 +69,7 @@ pub fn ramdisk_main() -> ! {
                 }
             },
             Err(code) => {
-                eprintln!("Unable to receive message");
+                eprintfln!("Unable to receive message");
                 error::log_error(code, None);
             }
         }

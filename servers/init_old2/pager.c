@@ -29,7 +29,7 @@ int mapRegion(struct AddrSpace *addrSpace, addr_t virt, paddr_t phys, size_t pag
     return -1;
   }
 
-// pframe_t frame = (pframe_t)(phys >> 12);
+// pbase_t frame = (pbase_t)(phys >> 12);
 
   if(!findAddress(addrSpace, virt))
     print("Unable to find address that was just attached!\n");

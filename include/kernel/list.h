@@ -6,7 +6,7 @@
 #include <util.h>
 
 NON_NULL_PARAMS void list_insert_at_end(list_t* list, tcb_t* thread, int at_tail);
-NON_NULL_PARAMS tcb_t* list_remove_from_end(list_t* list, int at_tail);
+WARN_UNUSED NON_NULL_PARAMS tcb_t* list_remove_from_end(list_t* list, int at_tail);
 NON_NULL_PARAMS void list_remove(list_t* list, tcb_t* thread);
 
 //int listEnqueue(list_t *list, tcb_t *thread);

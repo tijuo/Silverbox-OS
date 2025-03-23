@@ -10,7 +10,7 @@
 #define RSDP_SIGNATURE  "RSD PTR "
 #define PARAGRAPH_LEN   16
 
-struct RSDPointer {
+typedef struct {
     char signature[8]; // should be "RSD PTR "
     uint8_t checksum;
     char oem_id[6];
@@ -20,11 +20,11 @@ struct RSDPointer {
     uint64_t xsdt_address; // physical address
     uint8_t ext_checksum;
     char _resd[3];
-};
+} PACKED RSDP;
 
-_Static_assert(sizeof(struct RSDPointer) == 36, "RSDPointer struct should be 36 bytes.");
+_Static_assert(sizeof(RSDP) == 36, "RSDP struct should be 36 bytes.");
 
-struct ACPI_DT_Header {
+typedef struct {
     char signature[4];
     uint32_t length;
     uint8_t revision;
@@ -34,28 +34,28 @@ struct ACPI_DT_Header {
     uint32_t oem_revision;
     uint32_t creator_id;
     uint32_t creator_revision;
-};
+} ACPI_DT_Header;
 
-_Static_assert(sizeof(struct ACPI_DT_Header) == 36, "ACPI_DT_Header should be 36 bytes.");
+_Static_assert(sizeof(ACPI_DT_Header) == 36, "ACPI_DT_Header should be 36 bytes.");
 
-struct MADT_Header {
-    struct ACPI_DT_Header dt_header;
+typedef struct {
+    ACPI_DT_Header dt_header;
     uint32_t lapic_address;
     uint32_t flags;
-};
+} MADT_Header;
 
-_Static_assert(sizeof(struct MADT_Header) == 44, "MADT_Header should be 44 bytes.");
+_Static_assert(sizeof(MADT_Header) == 44, "MADT_Header should be 44 bytes.");
 
-struct IC_Header {
+typedef struct {
     uint8_t type;
     uint8_t length;
-};
+} IC_Header;
 
 #define TYPE_PROC_LAPIC     0
 #define TYPE_IOAPIC         1
 
-struct ProcessorLAPIC_Header {
-    struct IC_Header header;
+struct Processor_LAPIC_Header {
+    IC_Header header;
     uint8_t uid;
     uint8_t lapic_id;
     uint32_t flags;
@@ -65,7 +65,7 @@ struct ProcessorLAPIC_Header {
 #define PROC_LAPIC_ONLINE     2
 
 struct IOAPIC_Header {
-    struct IC_Header header;
+    IC_Header header;
     uint8_t ioapic_id;
     uint8_t _resd;
     uint32_t ioapic_address;
@@ -77,15 +77,17 @@ DISC_CODE int read_acpi_tables(void);
 
 bool is_valid_acpi_header(uint64_t phys_address)
 {
-    struct ACPI_DT_Header header;
+    ACPI_DT_Header header;
     uint8_t checksum = 0;
     uint8_t buffer[128];
     size_t bytes_read = 0;
     size_t header_len;
 
+    #ifdef PAE
     if(phys_address >= MAX_PHYS_MEMORY)
         RET_MSG(false, "Physical memory is out of range.");
-
+    #endif /* PAE */
+    
     if(IS_ERROR(peek(phys_address, &header, sizeof header)))
         RET_MSG(false, "Unable to read ACPI descriptor table header.");
 
@@ -111,22 +113,22 @@ bool is_valid_acpi_header(uint64_t phys_address)
 
 int read_acpi_tables(void)
 {
-    struct RSDPointer rsdp;
+    RSDP rsdp;
     addr_t rsdp_addr = 0;
     size_t processors_found = 0;
 
     // Look for the RSDP
 
-    for(uint8_t* ptr = (uint8_t*)KPHYS_TO_VIRT(BIOS_EXT_ROM);
-        ptr < (uint8_t*)KPHYS_TO_VIRT(EXTENDED_MEMORY); ptr += PARAGRAPH_LEN) {
+    for(uint8_t* ptr = (uint8_t*)PHYS_TO_VIRT(BIOS_EXT_ROM);
+        ptr < (uint8_t*)PHYS_TO_VIRT(EXTENDED_MEMORY); ptr += PARAGRAPH_LEN) {
         if(memcmp(ptr, RSDP_SIGNATURE, sizeof rsdp.signature) == 0) {
             uint8_t checksum = 0;
 
-            for(size_t i = 0; i < offsetof(struct RSDPointer, length); i++)
+            for(size_t i = 0; i < offsetof(RSDP, length); i++)
                 checksum += ptr[i];
 
             if(checksum == 0) {
-                rsdp = *(struct RSDPointer*)ptr;
+                rsdp = *(RSDP*)ptr;
                 rsdp_addr = (addr_t)ptr;
                 break;
             }
@@ -136,21 +138,21 @@ int read_acpi_tables(void)
     if(rsdp_addr) {
         // Now go through the RSDT, looking for the MADT
 
-        kprintf("%.8s found at %#x. RSDT at %#x\n", rsdp.signature, rsdp_addr,
+        kprintfln("%.8s found at %#x. RSDT at %#x", rsdp.signature, rsdp_addr,
             rsdp.rsdt_address);
 
         if(rsdp.rsdt_address && is_valid_acpi_header((uint64_t)rsdp.rsdt_address)) {
-            struct ACPI_DT_Header rsdt;
+            ACPI_DT_Header rsdt;
 
             if(IS_ERROR(peek((uint64_t)rsdp.rsdt_address, &rsdt, sizeof rsdt))) {
-                kprintf("Unable to read RSDT\n");
+                kprintfln("Unable to read RSDT");
                 return E_FAIL;
             }
 
-            size_t total_entries = (rsdt.length - sizeof(struct ACPI_DT_Header))
+            size_t total_entries = (rsdt.length - sizeof(ACPI_DT_Header))
                 / sizeof(uint32_t);
 
-            kprintf("%.4s found at %#x\n", rsdt.signature, rsdp.rsdt_address);
+            kprintfln("%.4s found at %#x", rsdt.signature, rsdp.rsdt_address);
 
             for(size_t rsdt_index = 0; rsdt_index < total_entries; rsdt_index++) {
                 uint32_t rsdt_entry_ptr;
@@ -160,42 +162,42 @@ int read_acpi_tables(void)
                         (uint64_t)rsdp.rsdt_address + sizeof rsdt
                         + rsdt_index * sizeof(uint32_t),
                         &rsdt_entry_ptr, sizeof(uint32_t)))) {
-                    kprintf("Unable to read descriptor table.\n");
+                    kprintfln("Unable to read descriptor table.");
                     return E_FAIL;
                 }
 
                 if(is_valid_acpi_header((uint64_t)rsdt_entry_ptr)) {
-                    struct ACPI_DT_Header header;
+                    ACPI_DT_Header header;
 
                     if(IS_ERROR(peek((uint64_t)rsdt_entry_ptr, &header, sizeof header))) {
-                        kprintf("Unable to read descriptor table header.\n");
+                        kprintfln("Unable to read descriptor table header.");
                         continue;
                     }
 
-                    kprintf("%.4s found at %#x\n", header.signature, rsdt_entry_ptr);
+                    kprintfln("%.4s found at %#x", header.signature, rsdt_entry_ptr);
 
                     // If the MADT is in the RSDT, then retrieve apic data
 
                     if(memcmp(&header.signature, "APIC", 4) == 0) {
-                        struct MADT_Header madt_header;
+                        MADT_Header madt_header;
 
                         if(IS_ERROR(
                             peek((uint64_t)rsdt_entry_ptr, &madt_header, sizeof madt_header))) {
-                            kprintf("Unable to read MADT header.\n");
+                            kprintfln("Unable to read MADT header.");
                             return E_FAIL;
                         }
 
-                        kprintf("Local APIC address: %#x\n", madt_header.lapic_address);
+                        kprintfln("Local APIC address: %#x", madt_header.lapic_address);
                         lapic_ptr = madt_header.lapic_address;
 
                         for(size_t madt_offset = sizeof madt_header;
                             madt_offset < madt_header.dt_header.length;) {
-                            struct IC_Header ic_header;
+                            IC_Header ic_header;
 
                             if(IS_ERROR(
                                 peek((uint64_t)rsdt_entry_ptr + madt_offset, &ic_header,
                                     sizeof ic_header))) {
-                                kprintf("Unable to read interrupt controller header.\n");
+                                kprintfln("Unable to read interrupt controller header.");
                                 return E_FAIL;
                             }
 
@@ -204,19 +206,19 @@ int read_acpi_tables(void)
                                 {
                                     /* Each processor has a local APIC. Use this to find each processor's
                                      local APIC id. */
-                                    struct ProcessorLAPIC_Header proc_lapic_header;
+                                    struct Processor_LAPIC_Header proc_lapic_header;
 
                                     if(IS_ERROR(
                                         peek((uint64_t)rsdt_entry_ptr + madt_offset,
                                             &proc_lapic_header, sizeof proc_lapic_header))) {
-                                        kprintf("Unable to read processor local APIC header.\n");
+                                        kprintfln("Unable to read processor local APIC header.");
                                         return E_FAIL;
                                     }
 
                                     if(IS_FLAG_SET(proc_lapic_header.flags, PROC_LAPIC_ENABLED) || IS_FLAG_SET(
                                         proc_lapic_header.flags, PROC_LAPIC_ONLINE)) {
-                                        kprintf(
-                                            "Processor %d has local APIC id: %d%s\n",
+                                        kprintfln(
+                                            "Processor %d has local APIC id: %d%s",
                                             proc_lapic_header.uid,
                                             proc_lapic_header.lapic_id,
                                             IS_FLAG_SET(proc_lapic_header.flags, PROC_LAPIC_ENABLED) ?
@@ -239,34 +241,34 @@ int read_acpi_tables(void)
                                     if(IS_ERROR(
                                         peek((uint64_t)rsdt_entry_ptr + madt_offset, &ioapic_header,
                                             sizeof ioapic_header))) {
-                                        kprintf("Unable to read processor local APIC header.\n");
+                                        kprintfln("Unable to read processor local APIC header.");
                                         return E_FAIL;
                                     }
 
-                                    kprintf(
-                                        "IOAPIC id %d is at %#x. Global System Interrupt Base: %#x\n",
+                                    kprintfln(
+                                        "IOAPIC id %d is at %#x. Global System Interrupt Base: %#x",
                                         ioapic_header.ioapic_id, ioapic_header.ioapic_address,
                                         ioapic_header.global_sys_int_base);
-                                    ioapic_ptr = ioapic_header.ioapic_id;
+                                    ioapic_ptr = ioapic_header.ioapic_address;
                                     break;
                                 }
                                 default:
-                                    kprintf("APIC Entry type %d found.\n", ic_header.type);
+                                    kprintfln("APIC Entry type %d found.", ic_header.type);
                                     break;
                             }
 
                             madt_offset += ic_header.length;
                         }
 
-                        kprintf("%d processors found.\n", processors_found);
+                        kprintfln("%d processors found.", processors_found);
                     }
                 } else
-                    kprintf("Unable to read RSDT entries at %#x\n", rsdt_entry_ptr);
+                    kprintfln("Unable to read RSDT entries at %#x", rsdt_entry_ptr);
             }
         } else
-            kprintf("Unable to read RSDT\n");
+            kprintfln("Unable to read RSDT");
     } else
-        kprintf("RSDP not found\n");
+        kprintfln("RSDP not found");
 
     return processors_found;
 }

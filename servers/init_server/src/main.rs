@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 #![no_std]
 #![no_main]
-#![feature(alloc_error_handler, lang_items, asm, panic_info_message)]
-#![feature(const_ptr_offset_from, const_maybe_uninit_as_ptr, const_refs_to_cell)]
+#![feature(alloc_error_handler)]
 
 extern "C" {
     fn exit(code: i32) -> !;
@@ -10,12 +9,10 @@ extern "C" {
 
 #[no_mangle]
 pub extern "C" fn _start(multiboot_info: *mut RawMultibootInfo, first_free_page: PAddr, stack_size: usize) -> ! {
-    lowlevel::print_debug("Initializing the init server...");
-    lowlevel::print_debug("Multiboot info: 0x");
-    lowlevel::print_debug_u32(multiboot_info as usize as u32, 16);
-    lowlevel::print_debug(" First free page: 0x");
-    lowlevel::print_debug_u32(first_free_page as usize as u32, 16);
-    lowlevel::print_debugln(".");
+    eprintfln!("Initializing the init server..");
+    eprintfln!("Multiboot info: {:#x}", multiboot_info as usize);
+    eprintfln!("First free page: {:#x}", first_free_page as usize);
+    eprintfln!("Stack size: {} bytes", stack_size);
     let multiboot_box = init(multiboot_info as usize as PAddr,
                              first_free_page, stack_size);
     main(multiboot_box);
@@ -51,34 +48,33 @@ mod phys_alloc;
 //mod mutex;
 
 use address::PAddr;
-use alloc::string::String;
 use crate::multiboot::{RawMultibootInfo, MultibootInfo};
 use alloc::boxed::Box;
-use core::ffi::c_void;
-use crate::phys_alloc::{allocator, PhysPageAllocator};
+use crate::phys_alloc::PhysPageAllocator;
 use rust::types::CTid;
-use rust::message::kernel::{self, ExceptionMessagePayload, ExitMessagePayload};
-use rust::message::{MessageHeader, Transmit};
+use rust::message::kernel::{self, ExceptionMessage, ExitMessage};
+use rust::message::MessageHeader;
 use rust::syscalls;
 use rust::syscalls::PageMapping;
-use crate::page::{FrameSize, PhysicalFrame};
-use crate::phys_alloc::BlockSize::Block4k;
+use crate::page::PhysicalFrame;
+use alloc::borrow::Cow;
+use crate::error::Error;
 
 const DATA_BUF_SIZE: usize = 64;
 
 fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Option<Box<MultibootInfo>> {
-    lowlevel::print_debugln("Initializing bootstrap allocator");
+    eprintfln!("Initializing bootstrap allocator");
 
     PhysPageAllocator::init_bootstrap(first_free_page);
 
     for ptab_num in 0..=1023 {
-        let vaddr = (ptab_num * PhysicalFrame::SMALL_PAGE_SIZE * 1024) as *mut c_void;
+        let vaddr = (ptab_num * PhysicalFrame::SMALL_PAGE_SIZE * 1024) as *mut ();
         let mut page_mapping = [PageMapping {
             number: 0,
             flags: 0
         }];
 
-        syscalls::sys_get_page_mappings(1, vaddr, None, &mut page_mapping)
+        syscalls::get_page_mappings(1, vaddr, None, &mut page_mapping)
             .expect("Unable to retrieve page mapping.");
 
         if is_flag_set!(page_mapping[0].flags, syscalls::flags::mapping::UNMAPPED) {
@@ -93,7 +89,7 @@ fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Op
             page_mapping[0].flags = syscalls::flags::mapping::CLEAR;
             page_mapping[0].number = (0x4000000+ptab_num*4096) as u32 / 4096; //phys_frame.frame() as u32;
 
-            syscalls::sys_set_page_mappings(1, vaddr, None, &page_mapping)
+            syscalls::set_page_mappings(1, vaddr, None, &page_mapping)
                 .expect("Unable to set page mapping.");
         }
     }
@@ -104,44 +100,30 @@ fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Op
 
     mmap_iter.clone()
         .for_each(|mmap| {
-            lowlevel::print_debug("Mmap start: 0x");
-
-            if mmap.base_addr >= 1 << 32 {
-                lowlevel::print_debug_u32((mmap.base_addr >> 32) as u32, 16);
-            }
-            lowlevel::print_debug_u32(mmap.base_addr as u32, 16);
-            lowlevel::print_debug(" Mmap end: 0x");
-
-            if mmap.base_addr + mmap.length >= 1 << 32 {
-                lowlevel::print_debug_u32(((mmap.base_addr + mmap.length) >> 32) as u32, 16);
-            }
-
-            lowlevel::print_debug_u32((mmap.base_addr + mmap.length) as u32, 16);
-            lowlevel::print_debug(" type: ");
-            lowlevel::print_debug_u32(mmap.map_type as u32, 10);
-            lowlevel::print_debugln("");
+            eprintfln!("Mmap start: {:#x}:{:#x} type: {}", mmap.base_addr, mmap.base_addr + mmap.length, mmap.map_type);
         });
 
-    lowlevel::print_debugln("Initializing sbrk...");
+
+    eprintfln!("Initializing sbrk...");
     sbrk::init();
-    lowlevel::print_debugln("Initializing page allocator...");
+    eprintfln!("Initializing page allocator...");
 
     phys_alloc::PhysPageAllocator::init(mmap_iter);
 
-    eprintln!("Initializing mapping manager...");
+    eprintfln!("Initializing mapping manager...");
     mapping::manager::init();
 
     /*
-    eprintln!("Initializing name manager...");
+    eprintfln!("Initializing name manager...");
     name::manager::init();
 
-    eprintln!("Initializing device manager...");
+    eprintfln!("Initializing device manager...");
     device::manager::init();
 
-    eprintln!("Initializing idle thread...");
+    eprintfln!("Initializing idle thread...");
     init_threads(vec![idle_main, ramdisk::ramdisk_main]);
 
-    eprintln!("Loading modules...");
+    eprintfln!("Loading modules...");
 
      */
     let multiboot_box = unsafe {
@@ -169,26 +151,26 @@ fn load_modules(multiboot_info: &Option<Box<MultibootInfo>>) {
                     elf::loader::load_init_mappings(&module);
                 } else {
                     match elf::loader::load_module(&module) {
-                      Err(_) => eprintln!("Unable to load module @ {:#x}", module.addr),
+                      Err(_) => eprintfln!("Unable to load module @ {:#x}", module.addr),
                       _ => (),
                     };
                 }
             }
         }
     } else {
-        eprintln!("Multiboot info is missing.");
+        eprintfln!("Multiboot info is missing.");
     }
 }
 */
 
-fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<String>)> {
-    let message_sender = header.sender().expect("Message should have a sender");
+fn handle_message(header: &mut MessageHeader, recv_buffer: &mut [u8]) -> Result<(), (Error, Cow<'static, str>)> {
+    let message_sender = header.target.expect("Message should have a sender");
 
     if rust::is_flag_set!(header.flags, MessageHeader::MSG_KERNEL) {
         let result = match header.subject {
             kernel::EXCEPTION => {
-                ExceptionMessagePayload::read_payload(&header)
-                    .map_err(|_| (error::PARSE_ERROR, Some(String::from("Unable to read exception message."))))
+                ExceptionMessage::try_from(&recv_buffer[..])
+                    .map_err(|_| (Error::ParseError, Cow::Borrowed("Unable to read exception message.")))
                     .and_then(|payload| {
                         if payload.fault_num == 14 {
                             pager::handle_page_fault(&payload)
@@ -203,23 +185,23 @@ fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<Str
                              */
                         } else {
                             error::dump_state(&payload);
-                            Err((error::NOT_IMPLEMENTED, None))
+                            Err((Error::NotImplemented, Cow::Borrowed("Not implemented")))
                         }
                     })
             },
             kernel::EXIT => {
-                ExitMessagePayload::read_payload(&header)
-                    .map_err(|_| (error::PARSE_ERROR, Some(String::from("Unable to read exit message."))))
+                ExitMessage::try_from(&recv_buffer[..])
+                    .map_err(|_| (Error::ParseError, Cow::Borrowed("Unable to read exit message.")))
                     .and_then(|_payload|
                         // TODO: Notify threads that are waiting to join with the stopped thread
 
                         Ok(()))
             },
             _ => {
-                Err((error::BAD_REQUEST,
-                                  Some(format!("Kernel message with subject {} from TID {}",
+                Err((Error::BadRequest,
+                                  Cow::Owned(format!("Kernel message with subject {} from TID {}",
                                                header.subject,
-                                               CTid::from(header.sender()
+                                               CTid::from(header.target
                                                    .expect("Message is supposed to have a sender"))))))
             },
         };
@@ -234,7 +216,7 @@ fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<Str
                     .and_then(|request| {
                         let new_name = request.name_string()
                             .expect("A request with an invalid name was marked as valid.");
-                        eprintln!("Registering {}", new_name);
+                        eprintfln!("Registering {}", new_name);
                         let register_result = name::manager::register(&new_name,
                                                                       message.sender.clone());
                         let mut response = RegisterNameResponse::new_message(message.sender.clone(),
@@ -244,7 +226,7 @@ fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<Str
                         message::send(&message.sender, &mut response)
                             .map(|_| ())
                     })
-                    .map_err(|code| (error::OPERATION_FAILED, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
+                    .map_err(|code| (Error::Failed, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
             },
             init::LOOKUP_NAME => {
                 LookupNameRequest::try_from(msg)
@@ -260,7 +242,7 @@ fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<Str
                         message::send(&message.sender, &mut response)
                             .map(|_| ())
                     })
-                    .map_err(|code| (error::OPERATION_FAILED, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
+                    .map_err(|code| (Error::Failed, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
             },
             init::UNREGISTER_NAME => {
                 UnregisterNameRequest::try_from(msg)
@@ -274,7 +256,7 @@ fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<Str
                         message::send(&message.sender, &mut response)
                             .map(|_| ())
                     })
-                    .map_err(|code| (error::OPERATION_FAILED, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
+                    .map_err(|code| (Error::Failed, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
             },
             init::MAP => {
                 MapRequest::try_from(msg)
@@ -296,7 +278,7 @@ fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<Str
 
 
                     })
-                    .map_err(|code| (error::OPERATION_FAILED, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
+                    .map_err(|code| (Error::Failed, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
             },
             init::UNMAP => {
                 UnmapRequest::try_from(msg)
@@ -317,20 +299,20 @@ fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<Str
 
 
                     })
-                    .map_err(|code| (error::OPERATION_FAILED, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
+                    .map_err(|code| (Error::Failed, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
             },
 
             init::CREATE_PORT => {
-                Err((error::NOT_IMPLEMENTED, Some(format!("Request {}", msg.subject()))))
+                Err((Error::NotImplemented, Some(format!("Request {}", msg.subject()))))
             },
             init::SEND_PORT => {
-                Err((error::NOT_IMPLEMENTED, Some(format!("Request {}", msg.subject()))))
+                Err((Error::NotImplemented, Some(format!("Request {}", msg.subject()))))
             },
             init::RECEIVE_PORT => {
-                Err((error::NOT_IMPLEMENTED, Some(format!("Request {}", msg.subject()))))
+                Err((Error::NotImplemented, Some(format!("Request {}", msg.subject()))))
             },
             init::DESTROY_PORT => {
-                Err((error::NOT_IMPLEMENTED, Some(format!("Request {}", msg.subject()))))
+                Err((Error::NotImplemented, Some(format!("Request {}", msg.subject()))))
             },
             init::REGISTER_SERVER => {
                 RegisterServerRequest::try_from(msg)
@@ -344,13 +326,13 @@ fn handle_message(header: MessageHeader) -> Result<(), (error::Error, Option<Str
                         message::send(&message.sender, &mut response)
                             .map(|_| ())
                     })
-                    .map_err(|code| (error::OPERATION_FAILED, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
+                    .map_err(|code| (Error::Failed, Some(format!("Failed to respond to request {} failed due to code: {}", message.subject, code))))
             },
             init::UNREGISTER_SERVER => {
-                Err((error::NOT_IMPLEMENTED, Some(format!("Request {}", msg.subject()))))
+                Err((Error::NotImplemented, Some(format!("Request {}", msg.subject()))))
             },
              */
-            _ => Err((error::BAD_REQUEST, Some(format!("Request {:#x} sender: {} flags: {}",
+            _ => Err((Error::BadRequest, Cow::Owned(format!("Request {:#x} sender: {} flags: {}",
                                                        header.subject,
                                                        CTid::from(message_sender),
                                                        header.flags)))),
@@ -375,7 +357,7 @@ fn init_threads(thread_entries: Vec<fn() -> !>) {
         let stack_top = 0xF8000000 - (i + 1) * stack_size;
 
         let tid =
-            syscall::sys_create_thread(entry as *const fn() -> ! as *const c_void,
+            syscall::create_thread(entry as *const fn() -> ! as *const c_void,
                                        pmap as u32,
                                        stack_top as *const c_void).expect("Unable to create new thread.");
 
@@ -404,15 +386,21 @@ fn init_threads(thread_entries: Vec<fn() -> !>) {
 */
 
 fn main(_multiboot_info: Option<Box<MultibootInfo>>) {
+    let mut header = MessageHeader::blank();
+    let mut recv_buffer= [0; 1024];
+
     loop {
-        match syscalls::sys_recv(None, MessageHeader::MSG_STD)
+        match syscalls::receive(&mut header, &mut recv_buffer)
             .map_err(|e| match e {
                 syscalls::SyscallError::Interrupted => {
-                    (error::NOT_IMPLEMENTED, None)
+                    (Error::NotImplemented, Cow::Borrowed("Handling interrupted receives aren't implemented yet"))
                 },
-                _ => (error::OPERATION_FAILED, None),
+                syscalls::SyscallError::Preempted => {
+                    (Error::NotImplemented, Cow::Borrowed("Handling kernel message preemption isn't implemented yet"))
+                }
+                _ => (Error::Failed, Cow::Borrowed("Receive failed")),
             })
-            .and_then(|msg_header| handle_message(msg_header)) {
+            .and_then(|msg_len| handle_message(&mut header, &mut recv_buffer[..msg_len])) {
             Err((e, msg)) => error::log_error(e, msg),
             _ => (),
         }

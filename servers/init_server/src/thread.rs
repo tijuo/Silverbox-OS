@@ -75,14 +75,14 @@ pub fn sleep(dur: Duration) {
     let millis = dur.as_millis().clamp(0, 0xffffffff) as u32;
 
     match syscall::sleep(millis) {
-        Err(code) => eprintln!("syscall::sleep() failed with code: {}", code),
+        Err(code) => eprintfln!("syscall::sleep() failed with code: {}", code),
         _ => (),
     };
 }
 
 pub fn yield_now() {
     match syscall::sleep(0) {
-        Err(code) => eprintln!("syscall::sleep() failed with code: {}", code),
+        Err(code) => eprintfln!("syscall::sleep() failed with code: {}", code),
         _ => ()
     };
 }

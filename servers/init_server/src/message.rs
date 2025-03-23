@@ -126,7 +126,7 @@ pub mod init {
 
         fn try_from(msg: RawMessage) -> result::Result<Self, Self::Error> {
             if msg.buffer_len < mem::size_of::<RawMapRequest>() {
-                Err(error::PARSE_ERROR)
+                Err(Error::ParseError)
             } else {
                 let address_arr;
                 let device_arr;
@@ -268,7 +268,7 @@ pub mod init {
 
         fn try_from(msg: RawMessage) -> result::Result<Self, Self::Error> {
             if msg.buffer_len < mem::size_of::<RawUnmapRequest>() {
-                Err(error::PARSE_ERROR)
+                Err(Error::ParseError)
             } else {
                 let address_arr;
                 let length_arr;
@@ -299,7 +299,7 @@ pub mod init {
 
         fn try_from(raw_msg: RawUnmapRequest) -> result::Result<Self, Self::Error> {
             if raw_msg.address.is_null() {
-                result::Result::Err(error::PARSE_ERROR)
+                result::Result::Err(Error::ParseError)
             } else {
                 result::Result::Ok(UnmapRequest {
                     address: raw_msg.address as VAddr,
@@ -582,7 +582,7 @@ pub mod init {
 
         fn try_from(msg: RawMessage) -> result::Result<Self, Self::Error> {
             if msg.buffer_len < mem::size_of::<RawRegisterServerRequest>() {
-                Err(error::PARSE_ERROR)
+                Err(Error::ParseError)
             } else {
                 let server_arr;
                 let id_arr;
@@ -662,7 +662,7 @@ pub mod init {
 
         fn try_from(msg: RawMessage) -> result::Result<Self, Self::Error> {
             if msg.buffer_len < mem::size_of::<RawRegisterNameRequest>() {
-                Err(error::PARSE_ERROR)
+                Err(Error::ParseError)
             } else {
                 let name_ptr = msg.buffer as *const [u8; MAX_NAME_LEN];
                 let name_arr = unsafe { name_ptr.read() };
@@ -757,7 +757,7 @@ pub mod init {
 
         fn try_from(msg: RawMessage) -> result::Result<Self, Self::Error> {
             if msg.buffer_len < mem::size_of::<RawUnregisterNameRequest>() {
-                Err(error::PARSE_ERROR)
+                Err(Error::ParseError)
             } else {
                 let name_ptr = msg.buffer as *const [u8; MAX_NAME_LEN];
                 let name_arr = unsafe { name_ptr.read() };
@@ -835,7 +835,7 @@ pub mod init {
 
         fn try_from(msg: RawMessage) -> result::Result<Self, Self::Error> {
             if msg.buffer_len < mem::size_of::<RawLookupNameRequest>() {
-                Err(error::PARSE_ERROR)
+                Err(Error::ParseError)
             } else {
                 let name_ptr = msg.buffer as *const [u8; MAX_NAME_LEN];
                 let name_arr = unsafe { name_ptr.read() };
@@ -955,7 +955,7 @@ pub mod init {
 
         fn try_from(msg: RawMessage) -> result::Result<Self, Self::Error> {
             if msg.buffer_len < mem::size_of::<RawMapIoRequest>() {
-                Err(error::PARSE_ERROR)
+                Err(Error::ParseError)
             } else {
                 let start_ptr = (msg.buffer.wrapping_add(offset_of!(RawMapIoRequest, start))) as *const [u8; mem::size_of::<u16>()];
                 let start_arr = unsafe { start_ptr.read() };
@@ -1011,7 +1011,7 @@ pub mod init {
 
         fn try_from(msg: RawMessage) -> result::Result<Self, Self::Error> {
             if msg.buffer_len < mem::size_of::<RawUnmapIoRequest>() {
-                Err(error::PARSE_ERROR)
+                Err(Error::ParseError)
             } else {
                 let start_ptr = (msg.buffer.wrapping_add(offset_of!(RawUnmapIoRequest, start))) as *const [u8; mem::size_of::<u16>()];
                 let start_arr = unsafe { start_ptr.read() };

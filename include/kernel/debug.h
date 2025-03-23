@@ -6,18 +6,20 @@
 
 #ifdef DEBUG
 
+#define BAD_ASSERT_HLT          1
+
 #define PRINT_DEBUG(msg)      do {\
 kprintf("<'%s' %s: %d> %s", __FILE__, __func__, __LINE__, (msg));\
 } while(0)
 
 #define RET_MSG(ret, msg)     do {\
-kprintf("<'%s' %s: line %d> Returned: %d. %s\n", __FILE__, __func__, __LINE__, (ret), (msg));\
+kprintfln("<'%s' %s: line %d> Returned: %d. %s", __FILE__, __func__, __LINE__, (ret), (msg));\
 return ret;\
 } while(0)
 
 #define DECL_CALL_COUNTER(fname)		extern unsigned int fname ## _counter;
 #define CALL_COUNTER(fname)			    unsigned int fname ## _counter;
-#define INC_COUNT()				        __func__ _counter++
+#define INC_COUNT()				        __func__ ##_counter++
 
 #define BOCHS_BREAKPOINT		        asm volatile("xchgw %bx, %bx\n")
 
@@ -30,11 +32,12 @@ void inc_sched_count(void);
 void inc_timer_count(void);
 void clear_screen(void);
 NON_NULL_PARAM(1) void kprintf(const char* str, ...);
+NON_NULL_PARAM(1) void kprintfln(const char *str, ...);
+
 NON_NULL_PARAMS void print_assert_msg(const char* exp, const char* file,
     const char* func, int line);
-void set_bad_assert_hlt(bool value);
 void set_video_low_mem(bool value);
-NON_NULL_PARAMS void dump_regs(const tcb_t* thread, const ExecutionState* state,
+NON_NULL_PARAM(2) void dump_regs(const tcb_t* thread, const ExecutionState* state,
     unsigned int int_num, unsigned int error_code);
 NON_NULL_PARAMS void dump_state(const ExecutionState* state,
     unsigned int int_num, unsigned int error_code);
@@ -42,16 +45,8 @@ NON_NULL_PARAMS void dump_state(const ExecutionState* state,
 NON_NULL_PARAMS void print_string(const char*, ...);
 void init_video(void);
 
-/* Note: RDTSCP should be used instead due to possible out of order execution.
- * Alternatively, CPUID or MFENCE,LFENCE can be used before RDTSC
- */
-#define RDTSC( upper, lower )   asm __volatile__( "rdtsc" : "=a"( *lower ), "=d"( *upper ) )
-#define START_TIME_STAMP()      RDTSC(&upper1, &lower1)
-#define STOP_TIME_STAMP()       RDTSC(&upper2, &lower2)
 
-unsigned int get_time_difference(void);
-
-#define CALC_TIME(func_call) (START_TIME_STAMP(), func_call, STOP_TIME_STAMP(), get_time_difference())
+WARN_UNUSED uint64_t get_time_difference(uint32_t (*start_state)[2], uint32_t (*stop_state)[2]);
 
 // Note: If `exp` contains functions, they should not have side-effects. This is because
 // KASSERT() in release builds do nothing
@@ -70,20 +65,16 @@ unsigned int get_time_difference(void);
 #define inc_timer_count()                   KNOP
 #define clear_screen()                      KNOP
 #define kprintf( ... )                      KNOP
+#define kprintfln( ... )                    KNOP
 #define print_assert_msg( w, x, y, z )      KNOP
-#define set_bad_assert_hlt( val )           KNOP
 #define set_video_low_mem( val )            KNOP
 #define dump_regs( t, s, i, e )             KNOP
 #define dump_state( s, i, e )               KNOP
 #define dump_stack( x, y )                  KNOP
-#define RDTSC( upper, lower )               KNOP
-#define START_TIME_STAMP()                  KNOP
-#define STOP_TIME_STAMP()                   KNOP
 
 #define get_time_difference()               KNOP
 //#define kprintInt( num )
 //#define kprintHex( num )
-#define CALC_TIME(func)                     func
 //#define kprint3Nums( str, ... )
 //#define putChar(c, i, j)
 //#define _putChar(c, i, j, attr)
@@ -100,6 +91,6 @@ unsigned int get_time_difference(void);
 
 NON_NULL_PARAMS noreturn void print_panic_msg(const char* msg, const char* file, const char* func, int line);
 
-#define panic(msg)     print_panic_msg( msg, __FILE__, __func__, __LINE__ )
-
+#define PANIC(msg)     print_panic_msg( msg, __FILE__, __func__, __LINE__ )
+#define UNREACHABLE     do { PANIC("An unreachable section of code has been reached."); } while(0)
 #endif /* DEBUG_H */

@@ -86,4 +86,7 @@ extern NAKED noreturn void irq23_handler(void);
 /// The threads that are responsible for handling an IRQ
 extern tcb_t* irq_handlers[NUM_IRQS];
 
+WARN_UNUSED int irq_register(tcb_t *thread, unsigned int irq);
+WARN_UNUSED int irq_unregister(tcb_t *thread, unsigned int irq);
+
 #endif /* INTERRUPT_H */
