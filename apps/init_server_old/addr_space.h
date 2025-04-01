@@ -36,28 +36,27 @@
 
 struct AddrRegion
 {
-  struct MemRegion virtRegion;
-  struct MemRegion physRegion;
+  MemRegion virt_region;
+  MemRegion physRegion;
   int flags;
 };
 
-#include <os/bitmap.h>
-#include <os/os_types.h>
+#include <os/bitarray.h>
 
 struct AddrSpace
 {
   addr_t phys_addr;
-  SBArray memoryRegions;
-  bitmap_t bitmap[NUM_PTABLES / 8];
+  DynArray memory_regions;
+  bitarray_t bitarray[NUM_PTABLES / 8];
 };
 
 struct Executable
 {
   char *path;
 
-  struct MemRegion codeRegion;
-  struct MemRegion dataRegion;
-  struct MemRegion bssRegion;
+  MemRegion code_region;
+  MemRegion data_region;
+  MemRegion bss_region;
 };
 
 /*
@@ -65,24 +64,16 @@ struct ListNode *free_list_nodes;
 struct ListType addr_space_list;
 */
 
-//SBAssocArray addrSpaces; // phys_addr -> struct AddrSpace
+//SBAssocArray addr_spaces; // phys_addr -> struct AddrSpace
 
-void init_addr_space(struct AddrSpace *addr_space, addr_t phys_addr);
+void addr_space_init(struct AddrSpace *addr_space, addr_t phys_addr);
 void delete_addr_space(struct AddrSpace *addr_space);
-/*
-int addAddrSpace(struct AddrSpace *addrSpace);
-struct AddrSpace *lookupPhysAddr(void *phys_addr);
-struct AddrSpace *removeAddrSpace(void *phys_addr);
-*/
+
 bool get_ptable_status(struct AddrSpace *addr_space, void *virt);
 int set_ptable_status(struct AddrSpace *addr_space, void *virt, bool status);
 
-//int attach_mem_region(void *aspace_phys, struct AddrRegion *region);
-//bool region_overlaps(void *aspace_phys, struct MemRegion *region);
-//bool find_address(void *aspace_phys, void *addr);
-
 int attach_mem_region(struct AddrSpace *addr_space, struct AddrRegion *region);
-bool region_overlaps(struct AddrSpace *addr_space, struct MemRegion *region);
+bool addr_space_region_intersects(struct AddrSpace *addr_space, MemRegion *region);
 bool find_address(struct AddrSpace *addr_space, void *addr);
 
 #endif /* ADDR_SPACE_H */

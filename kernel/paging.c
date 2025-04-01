@@ -120,13 +120,8 @@ unsigned int unmap_temp(addr_t virt, unsigned int count) {
  */
 int initialize_root_pmap(paddr_t pmap)
 {
-    if(clear_phys_frames(pmap, 1) != 1) {
-        RET_MSG(E_FAIL, "Unable to clear root page map.");
-    }
-
     addr_t vaddr = NDX_TO_VADDR(KERNEL_RECURSIVE_PDE, KERNEL_RECURSIVE_PDE, PDE_INDEX(KERNEL_VSTART));
     addr_t vaddr_end = NDX_TO_VADDR(KERNEL_RECURSIVE_PDE, KERNEL_RECURSIVE_PDE, PDE_INDEX(KERNEL_TEMP_END));
-    size_t entry_count = (vaddr_end > vaddr ? (vaddr_end - vaddr) : (vaddr - vaddr_end)) / LARGE_PAGE_SIZE;
 
     pde_t pde = {
         .base = PADDR_TO_PBASE(pmap),
@@ -136,7 +131,7 @@ int initialize_root_pmap(paddr_t pmap)
 
     // Copy the kernel PDEs
 
-    if(IS_ERROR(poke(pmap + sizeof(pde_t) * PDE_INDEX(vaddr), (void *)vaddr, sizeof(pde_t) * entry_count))) {
+    if(IS_ERROR(poke(pmap + sizeof(pde_t) * PDE_INDEX(KERNEL_VSTART), (void *)vaddr, vaddr_end - vaddr))) {
         RET_MSG(E_FAIL, "Unable to copy kernel PDEs.");
     }
 

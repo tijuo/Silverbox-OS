@@ -17,4 +17,8 @@ struct sockaddr_in {
     char             sin_zero[8];  // zero this if you want to
 };
 
+typedef int blkcnt_t;
+typedef size_t blksize_t;
+typedef int __off_t;
+
 #endif /* SYS_TYPES_H */

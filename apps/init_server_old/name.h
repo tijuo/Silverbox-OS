@@ -27,7 +27,7 @@ struct NameRecord
   union _NameEntry entry;
 };
 
-SBAssocArray threadNames, deviceNames, fsNames, deviceTable, fsTable;
+SBAssocArray thread_names, device_names, fs_names, device_table, fs_table;
 
 int _registerDevice(int major, struct Device *device);
 struct Device * _unregisterDevice(unsigned char major);

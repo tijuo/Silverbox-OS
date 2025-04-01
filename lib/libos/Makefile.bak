@@ -70,11 +70,11 @@ sbrk.o: /media/cb_Silverbox-OS/include/os/region.h
 sbrk.o: /media/cb_Silverbox-OS/include/os/vfs.h
 sbrk.o: /media/cb_Silverbox-OS/include/os/file.h
 sbrk.o: /media/cb_Silverbox-OS/include/os/os_types.h
-sbrk.o: /media/cb_Silverbox-OS/include/os/ostypes/sbarray.h
+sbrk.o: /media/cb_Silverbox-OS/include/os/ostypes/dynarray.h
 sbrk.o: /media/cb_Silverbox-OS/include/os/ostypes/ostypes.h
 sbrk.o: /media/cb_Silverbox-OS/include/os/ostypes/sbstring.h
 sbrk.o: /media/cb_Silverbox-OS/include/stdlib.h
-sbrk.o: /media/cb_Silverbox-OS/include/os/ostypes/sbhash.h
+sbrk.o: /media/cb_Silverbox-OS/include/os/ostypes/hashtable.h
 sbrk.o: /media/cb_Silverbox-OS/include/errno.h
 region.o: /media/cb_Silverbox-OS/include/os/region.h
 region.o: /media/cb_Silverbox-OS/include/stddef.h
@@ -115,11 +115,11 @@ services.o: /media/cb_Silverbox-OS/include/os/region.h
 services.o: /media/cb_Silverbox-OS/include/os/vfs.h
 services.o: /media/cb_Silverbox-OS/include/os/file.h
 services.o: /media/cb_Silverbox-OS/include/os/os_types.h
-services.o: /media/cb_Silverbox-OS/include/os/ostypes/sbarray.h
+services.o: /media/cb_Silverbox-OS/include/os/ostypes/dynarray.h
 services.o: /media/cb_Silverbox-OS/include/os/ostypes/ostypes.h
 services.o: /media/cb_Silverbox-OS/include/os/ostypes/sbstring.h
 services.o: /media/cb_Silverbox-OS/include/stdlib.h
-services.o: /media/cb_Silverbox-OS/include/os/ostypes/sbhash.h
+services.o: /media/cb_Silverbox-OS/include/os/ostypes/hashtable.h
 services.o: /media/cb_Silverbox-OS/include/os/message.h
 services.o: /media/cb_Silverbox-OS/include/string.h
 services.o: /media/cb_Silverbox-OS/include/os/dev_interface.h

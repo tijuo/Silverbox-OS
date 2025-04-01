@@ -63,12 +63,12 @@ void *sbrk( int increment )
 
       for(count=0; count < 128 && addr + count * PAGE_SIZE < (addr_t)heapEnd; count++)
       {
-        addr_t physPage = allocPhysPage();
+        addr_t physPage = alloc_phys_frame();
 
         if(physPage == NULL)
         {
           while(count--)
-            freePhysPage(frames[count]);
+            free_phys_frame(frames[count]);
 
           return prevHeap;
         }
@@ -85,7 +85,7 @@ void *sbrk( int increment )
           int toUnmap = (actuallyMapped >= 0 ? count - actuallyMapped : count);
 
           for(int i=0; i < toUnmap; i++)
-            freePhysPage(frames[count-i]);
+            free_phys_frame(frames[count-i]);
 
           return prevHeap;
         }

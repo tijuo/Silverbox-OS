@@ -85,12 +85,12 @@ int flags, tid_t sender )
      return -1;
   }
 
-  region.virtRegion.start = (int)virtStart;
+  region.virt_region.start = (int)virtStart;
   region.physRegion.start = (int)physStart;
-  region.virtRegion.length = region.physRegion.length = pages * PAGE_SIZE;
+  region.virt_region.length = region.physRegion.length = pages * PAGE_SIZE;
   region.flags = REG_MAP;
 
-  if( region.virtRegion.start == 0xF0000000 )
+  if( region.virt_region.start == 0xF0000000 )
   { print("virt = 0xF0000000\n"); }
 
   if( flags & MEM_FLG_RO )
@@ -105,14 +105,14 @@ int flags, tid_t sender )
   if( (flags & MEM_FLG_ALLOC) && !(flags & MEM_FLG_COW) ) // ALLOC would imply !COW
     region.flags &= ~REG_MAP ;
 
-  if( attach_mem_region(&pool->addrSpace, &region) != 0 )
+  if( attach_mem_region(&pool->addr_space, &region) != 0 )
   {
     print("attach_mem_region() failed.");
     return -1;
   }
 
   if( !(flags & MEM_FLG_LAZY) && !(flags & MEM_FLG_ALLOC) )
-    return _mapMem(physStart, virtStart, pages, flags, &pool->addrSpace);
+    return _mapMem(physStart, virtStart, pages, flags, &pool->addr_space);
   else
     return 0;
 }

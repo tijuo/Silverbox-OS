@@ -20,17 +20,17 @@ int deviceRead(tid_t tid, struct DeviceOpRequest *request, void *buffer,
     .flags = 0,
   };
 
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
-  responseMsg.buffer = buffer;
-  responseMsg.bufferLen = request->length;
+  response_msg.buffer = buffer;
+  response_msg.bufferLen = request->length;
 
-  int ret = sys_call(&requestMsg, &responseMsg);
+  int ret = sys_call(&requestMsg, &response_msg);
 
-  if(blocksRead && ret == ESYS_OK && responseMsg.subject == RESPONSE_OK) {
+  if(blocksRead && ret == ESYS_OK && response_msg.subject == RESPONSE_OK) {
     if(blocksRead)
-      *blocksRead = responseMsg.bytesTransferred;
+      *blocksRead = response_msg.bytesTransferred;
 
     return 0;
   }
@@ -52,17 +52,17 @@ int deviceWrite(tid_t tid, struct DeviceOpRequest *request,
     .flags = 0,
   };
 
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
-  responseMsg.buffer = blocksWritten;
-  responseMsg.bufferLen = blocksWritten ? sizeof(size_t) : 0;
+  response_msg.buffer = blocksWritten;
+  response_msg.bufferLen = blocksWritten ? sizeof(size_t) : 0;
 
-  int ret = sys_call(&requestMsg, &responseMsg);
+  int ret = sys_call(&requestMsg, &response_msg);
 
-  if(ret == ESYS_OK && responseMsg.subject == RESPONSE_OK) {
+  if(ret == ESYS_OK && response_msg.subject == RESPONSE_OK) {
     if(blocksWritten)
-      *blocksWritten = responseMsg.bytesTransferred;
+      *blocksWritten = response_msg.bytesTransferred;
     return 0;
   }
 

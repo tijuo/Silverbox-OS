@@ -6,6 +6,7 @@
 #include <kernel/paging.h>
 #include <kernel/schedule.h>
 #include <kernel/thread.h>
+#include <x86intrin.h>
 
 list_t run_queues[NUM_PRIORITIES];
 
@@ -36,11 +37,14 @@ tcb_t* schedule(proc_id_t processor_id)
         }
     }
 
-    if(current_thread)
+    if(current_thread) {
         return current_thread;
-    else
+    }
+    else {
         // todo: Have a minimum priority kernel idle thread that does nothing
         PANIC("No more threads to run.");
+        return NULL;
+    }
 }
 
 /**
@@ -62,21 +66,25 @@ NON_NULL_PARAMS void switch_stacks(ExecutionState* state)
 
             // Switch to the new address space
 
-            if((get_cr3() & CR3_BASE_MASK) != (new_tcb->root_pmap & CR3_BASE_MASK))
+            if((get_cr3() & CR3_BASE_MASK) != (new_tcb->root_pmap & CR3_BASE_MASK)) {
                 set_cr3(new_tcb->root_pmap);
+            }
 
             if(old_tcb) {
                 old_tcb->user_exec_state = *state;
 
-                if(old_tcb->xsave_state)
-                    __asm__("fxsave %0" ::"m"(old_tcb->xsave_state));
+                if(old_tcb->fxsave_state) {
+                    _fxsave(old_tcb->fxsave_state);
+                }
             }
 
-            if(new_tcb->xsave_state)
-                asm volatile("fxrstor %0\n" ::"m"(new_tcb->xsave_state));
+            if(new_tcb->fxsave_state) {
+                _fxrstor(old_tcb->fxsave_state);
+            }
 
             *state = new_tcb->user_exec_state;
-        } else if(!new_tcb)
+        } else if(!new_tcb) {
             PANIC("No more threads to schedule.");
+        }
     }
 }

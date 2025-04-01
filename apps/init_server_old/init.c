@@ -149,7 +149,7 @@ static int get_boot_info( int argc, char **argv )
     args.vaddr = (void *)vAddr;
     args.paddr = (void *)addr;
     args.level = 0;
-    args.addrSpace = (void *)NULL_PADDR;
+    args.addr_space = (void *)NULL_PADDR;
     args.flags = 0;
 
     sys_update(RES_MAPPING, &args);
@@ -190,16 +190,16 @@ static int get_boot_info( int argc, char **argv )
   allocEnd = (void *)((unsigned)allocEnd + bytes_to_allocate);
   availBytes = PAGE_SIZE - ((unsigned)allocEnd & (PAGE_SIZE - 1));
 
-  initsrv_pool.addrSpace.phys_addr = page_dir;
+  initsrv_pool.addr_space.phys_addr = page_dir;
 //  initsrv_pool.execInfo = NULL;
   initsrv_pool.id = 1;
 
   initsrv_pool.ioBitmaps.phys1 = alloc_phys_page(NORMAL, page_dir);
   initsrv_pool.ioBitmaps.phys2 = alloc_phys_page(NORMAL, page_dir);
-  init_addr_space(&initsrv_pool.addrSpace, page_dir);
+  addr_space_init(&initsrv_pool.addr_space, page_dir);
 
   for(i=0; i < bytes_to_allocate; i += PTABLE_SIZE)
-    set_ptable_status(&initsrv_pool.addrSpace, (void *)(temp + i), true);
+    set_ptable_status(&initsrv_pool.addr_space, (void *)(temp + i), true);
 
   sbAssocArrayCreate(&physAspaceTable, 512); // XXX: May need to do an update operation on full
   sbAssocArrayCreate(&tidTable, 512); // XXX: May need to do an update operation on full
@@ -225,7 +225,7 @@ int loadElfFile( char *filename, char *args )
   tid_t tid;
   void *phys;
   void *tempPage;
-  void *addrSpace;
+  void *addr_space;
   struct ResourcePool *newPool;
   unsigned arg_len=8;
 
@@ -236,9 +236,9 @@ int loadElfFile( char *filename, char *args )
 
   newPool = create_resource_pool();
 
-  addrSpace = newPool->addrSpace.phys_addr;
+  addr_space = newPool->addr_space.phys_addr;
 
-  if( !isValidElfExe( &image ) )
+  if( !is_valid_elf_exe( &image ) )
   {
     print("Not a valid ELF executable.\n");
     return -1;
@@ -247,10 +247,10 @@ int loadElfFile( char *filename, char *args )
   /* Map the stack in the current address space, so the program arguments can
      be placed there. */
 
-  phys = alloc_phys_page(NORMAL, addrSpace);
+  phys = alloc_phys_page(NORMAL, addr_space);
 
-  _mapMem( phys, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addrSpace );
-  _mapMem( phys, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );
+  _mapMem( phys, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addr_space );
+  _mapMem( phys, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addr_space );
 
   if( args != NULL )
   {
@@ -262,7 +262,7 @@ int loadElfFile( char *filename, char *args )
 
   _unmapMem( (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), NULL );
 
-  tid = sys_create_thread( (addr_t)image.entry, addrSpace, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
+  tid = sys_create_thread( (addr_t)image.entry, addr_space, (void *)(STACK_TABLE + PTABLE_SIZE - arg_len), 1 );
 
   if( tid == NULL_TID )
   {
@@ -272,8 +272,8 @@ int loadElfFile( char *filename, char *args )
     return -1; // XXX: But first, free physical memory before returning
   }
 
-  attach_tid(newPool, tid); //mappingTable.map( tid, addrSpace );
-  attach_phys_aspace(newPool, addrSpace);
+  attach_tid(newPool, tid); //mappingTable.map( tid, addr_space );
+  attach_phys_aspace(newPool, addr_space);
   attach_resource_pool(newPool);
 
   tempPage = malloc(PAGE_SIZE);
@@ -296,14 +296,14 @@ int loadElfFile( char *filename, char *args )
 
     if ( pheader.type == PT_LOAD )
     {
-      unsigned memSize = pheader.memsz;
-      unsigned fileSize = pheader.filesz;
+      unsigned mem_size = pheader.memsz;
+      unsigned file_size = pheader.filesz;
 
-      for ( j = 0; memSize > 0; j++ )
+      for ( j = 0; mem_size > 0; j++ )
       {
-        phys = alloc_phys_page(NORMAL, addrSpace);
+        phys = alloc_phys_page(NORMAL, addr_space);
 
-        if ( fileSize == 0 )
+        if ( file_size == 0 )
           clearPage( phys );
         else
         {
@@ -316,17 +316,17 @@ int loadElfFile( char *filename, char *args )
           pokePage(phys, tempPage);
         }
 
-        _mapMem( phys, (void *)(pheader.vaddr + j * PAGE_SIZE), 1, /*pheader.flags & PF_W ? 0 : MEM_RO*/ 0, &newPool->addrSpace );
+        _mapMem( phys, (void *)(pheader.vaddr + j * PAGE_SIZE), 1, /*pheader.flags & PF_W ? 0 : MEM_RO*/ 0, &newPool->addr_space );
 
-        if( memSize < PAGE_SIZE )
-          memSize = 0;
+        if( mem_size < PAGE_SIZE )
+          mem_size = 0;
         else
-          memSize -= PAGE_SIZE;
+          mem_size -= PAGE_SIZE;
 
-        if( fileSize < PAGE_SIZE )
-          fileSize = 0;
+        if( file_size < PAGE_SIZE )
+          file_size = 0;
         else
-          fileSize -= PAGE_SIZE;
+          file_size -= PAGE_SIZE;
       }
     }
   }
@@ -350,7 +350,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   void *phys;
   void *tempPage;
   size_t length = module->mod_end - module->mod_start;
-  void *addrSpace, *temp;;
+  void *addr_space, *temp;;
   unsigned lastTable = 1;
   struct ResourcePool *newPool;
   unsigned arg_len=8;
@@ -362,11 +362,11 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 
   newPool = create_resource_pool();
 
-  addrSpace = newPool->addrSpace.phys_addr;
+  addr_space = newPool->addr_space.phys_addr;
 
 /* Map in a page table for the image. */
 
-  _mapMem( (void *)module->mod_start, image, (length % PAGE_SIZE == 0) ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1, 0, &initsrv_pool.addrSpace );
+  _mapMem( (void *)module->mod_start, image, (length % PAGE_SIZE == 0) ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1, 0, &initsrv_pool.addr_space );
 
 /*
   tempPage = alloc_phys_page(NORMAL, page_dir);//pageAllocator->alloc();
@@ -391,7 +391,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   }
 */
 #if 0
-  if( !isValidElfExe( image ) )
+  if( !is_valid_elf_exe( image ) )
   {
     for(i=0; i < (length % PAGE_SIZE == 0 ? (length / PAGE_SIZE) : (length / PAGE_SIZE) + 1); i++)
       __unmap((void *)((unsigned)image + i * PAGE_SIZE), NULL_PADDR);
@@ -407,10 +407,10 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   /* Map the stack in the current address space, so the program arguments can
      be placed there. */
 
-  tempPage = alloc_phys_page(NORMAL, addrSpace);
+  tempPage = alloc_phys_page(NORMAL, addr_space);
 
-  _mapMem( tempPage, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addrSpace );
-  _mapMem( tempPage, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addrSpace );
+  _mapMem( tempPage, (void *)(STACK_TABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &newPool->addr_space );
+  _mapMem( tempPage, (void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), 1, 0, &initsrv_pool.addr_space );
 
   if( args != NULL )
   {
@@ -420,14 +420,14 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
 
   memset( (void *)(TEMP_PTABLE + PTABLE_SIZE - 8), 0, 8 );
 /*
-  temp = alloc_phys_page(NORMAL, addrSpace);//pageAllocator->alloc();
+  temp = alloc_phys_page(NORMAL, addr_space);//pageAllocator->alloc();
 
   clearPage( temp );
 
   if( __map_page_table( (void *)TEMP_PTABLE, temp, 0, NULL_PADDR) < 0 )
     ;//cleanup;
 
-  phys = alloc_phys_page(NORMAL, addrSpace);
+  phys = alloc_phys_page(NORMAL, addr_space);
 
   if( __map((void *)(TEMP_PTABLE + PTABLE_SIZE - PAGE_SIZE), phys, 1, 0, NULL_PADDR ) < 1 )
     ;// cleanup;
@@ -452,7 +452,7 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   struct SyscallCreateTcbArgs createArgs;
 
   createArgs.entry = (addr_t)image->entry;
-  createArgs.addrSpace = addrSpace;
+  createArgs.addr_space = addr_space;
   createArgs.stack = (STACK_TABLE + PTABLE_SIZE - arg_len);
   createArgs.exHandler = INIT_SERVER;
 
@@ -461,12 +461,12 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   if( tid == NULL_TID )
     return -1; // XXX: But first, free physical memory before returning
 
-  attach_tid(newPool, tid); //mappingTable.map( tid, addrSpace );
-  attach_phys_aspace(newPool, addrSpace);
+  attach_tid(newPool, tid); //mappingTable.map( tid, addr_space );
+  attach_phys_aspace(newPool, addr_space);
   attach_resource_pool(newPool);
 
-//  __grant_page_table( (void *)TEMP_PTABLE, (void *)STACK_TABLE, addrSpace, 1 );
-//  set_ptable_status( addrSpace, (void *)STACK_TABLE, true );
+//  __grant_page_table( (void *)TEMP_PTABLE, (void *)STACK_TABLE, addr_space, 1 );
+//  set_ptable_status( addr_space, (void *)STACK_TABLE, true );
 
   // Program header information is loaded into memory
 
@@ -476,30 +476,30 @@ static int load_elf_exec( struct BootModule *module, struct ProgramArgs *args )
   {
     if ( pheader->type == PT_LOAD )
     {
-      unsigned memSize = pheader->memsz;
-      unsigned fileSize = pheader->filesz;
+      unsigned mem_size = pheader->memsz;
+      unsigned file_size = pheader->filesz;
 
-      for ( j = 0; memSize > 0; j++ )
+      for ( j = 0; mem_size > 0; j++ )
       {
-        if ( fileSize == 0 )
+        if ( file_size == 0 )
         {
-          phys = alloc_phys_page(NORMAL, addrSpace); //pageAllocator->alloc();
+          phys = alloc_phys_page(NORMAL, addr_space); //pageAllocator->alloc();
           clearPage( phys );
         }
         else
           phys = (void *)(pheader->offset + (unsigned)module->mod_start + j * PAGE_SIZE);
 
-        _mapMem( phys, (void *)(pheader->vaddr + j * PAGE_SIZE), 1, /*pheader->flags & PF_W ? 0 : MEM_RO*/0, &newPool->addrSpace );
+        _mapMem( phys, (void *)(pheader->vaddr + j * PAGE_SIZE), 1, /*pheader->flags & PF_W ? 0 : MEM_RO*/0, &newPool->addr_space );
 
-        if( memSize < PAGE_SIZE )
-          memSize = 0;
+        if( mem_size < PAGE_SIZE )
+          mem_size = 0;
         else
-          memSize -= PAGE_SIZE;
+          mem_size -= PAGE_SIZE;
 
-        if( fileSize < PAGE_SIZE )
-          fileSize = 0;
+        if( file_size < PAGE_SIZE )
+          file_size = 0;
         else
-          fileSize -= PAGE_SIZE;
+          file_size -= PAGE_SIZE;
       }
     }
   }
@@ -534,11 +534,11 @@ int init(multiboot_info_t *info, addr_t lastKernelFreePage)
 //  while(1)
 //    sys_wait(1000);
 
-  sbAssocArrayCreate(&deviceTable, 256);
-  sbAssocArrayCreate(&fsNames, 256);
-  sbAssocArrayCreate(&fsTable, 256);
-  sbAssocArrayCreate(&deviceNames, 256);
-  sbAssocArrayCreate(&threadNames, 256);  // XXX: May need to do an update operation on full
+  sbAssocArrayCreate(&device_table, 256);
+  sbAssocArrayCreate(&fs_names, 256);
+  sbAssocArrayCreate(&fs_table, 256);
+  sbAssocArrayCreate(&device_names, 256);
+  sbAssocArrayCreate(&thread_names, 256);  // XXX: May need to do an update operation on full
 //  sbAssocArrayCreate(&mountTable, 256);
 
   //list_init(&shmem_list, list_malloc, list_free);

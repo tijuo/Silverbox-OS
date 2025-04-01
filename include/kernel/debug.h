@@ -4,16 +4,22 @@
 #include <stdnoreturn.h>
 #include <kernel/thread.h>
 
+static inline noreturn void unreachable(void) {
+    __asm__("ud2");
+}
+
 #ifdef DEBUG
 
 #define BAD_ASSERT_HLT          1
 
-#define PRINT_DEBUG(msg)      do {\
-kprintf("<'%s' %s: %d> %s", __FILE__, __func__, __LINE__, (msg));\
+#define PRINT_DEBUG(msg, ...)      do {\
+kprintf("<'%s' %s: %d> ", __FILE__, __func__, __LINE__);\
+kprintfln(msg, ##__VA_ARGS__);\
 } while(0)
 
-#define RET_MSG(ret, msg)     do {\
-kprintfln("<'%s' %s: line %d> Returned: %d. %s", __FILE__, __func__, __LINE__, (ret), (msg));\
+#define RET_MSG(ret, msg, ...)     do {\
+kprintf("<'%s' %s: line %d> Returned: %d. ", __FILE__, __func__, __LINE__, (ret));\
+kprintfln(msg, ##__VA_ARGS__);\
 return ret;\
 } while(0)
 
@@ -81,8 +87,8 @@ WARN_UNUSED uint64_t get_time_difference(uint32_t (*start_state)[2], uint32_t (*
 //#define printString(str, x, y)
 //#define _printString(str, x, y, ...)
 #define init_video()                        KNOP
-#define PRINT_DEBUG(msg)                    KNOP
-#define RET_MSG(x, y)	                    return (x)
+#define PRINT_DEBUG(msg, ...)                    KNOP
+#define RET_MSG(x, y, ...)	                    return (x)
 #define CALL_COUNTER(ret_type, fname, arg)	ret_type fname(arg);
 #define BOCHS_BREAKPOINT
 #define DECL_CALL_COUNTER(fname)		    
@@ -92,5 +98,5 @@ WARN_UNUSED uint64_t get_time_difference(uint32_t (*start_state)[2], uint32_t (*
 NON_NULL_PARAMS noreturn void print_panic_msg(const char* msg, const char* file, const char* func, int line);
 
 #define PANIC(msg)     print_panic_msg( msg, __FILE__, __func__, __LINE__ )
-#define UNREACHABLE     do { PANIC("An unreachable section of code has been reached."); } while(0)
+#define UNREACHABLE     do { PANIC("An unreachable section of code has been reached."); unreachable(); } while(0)
 #endif /* DEBUG_H */

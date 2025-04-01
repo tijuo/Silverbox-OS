@@ -7,7 +7,7 @@
 struct ResourcePool
 {
   rspid_t id;
-  struct AddrSpace addrSpace;
+  struct AddrSpace addr_space;
 
   struct IOPermBitmaps
   {
@@ -16,7 +16,7 @@ struct ResourcePool
   } ioBitmaps;
 
   struct Executable execInfo;
-  SBArray tids;
+  DynArray tids;
 };
 
 SBAssocArray tidTable; // tid -> struct ResourcePool *

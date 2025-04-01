@@ -7,16 +7,20 @@ SECTIONS
   .text virtual : ALIGN(4K) {
     exe_code_start = .;
     *(.text*)
-    *(.comment)
+    . = ALIGN(4K);
+  }
+
+  .rodata . : ALIGN(4K) {
     *(.rodata*)
-    *(.eh_frame)
-    *(.debug*)
+    . = ALIGN(4K);
   }
   
   .data . : ALIGN(4K) {
     exe_data_start = .;
     *(.data*)
     *(.got*)
+    *(.plt*)
+    . = ALIGN(4K);
   }
 
   .bss . : ALIGN(4K) {

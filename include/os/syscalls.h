@@ -4,6 +4,7 @@
 #include <types.h>
 #include <oslib.h>
 #include <os/msg/message.h>
+#include <stdnoreturn.h>
 
 #define SYS_CREATE              0u
 #define SYS_READ                1u
@@ -242,19 +243,32 @@ typedef struct {
     tid_t senderWaitHead;
     tid_t senderWaitTail;
 
-    void* xsave_state;
-    size_t xsave_state_len;
+    void* fxsave_state;
+    size_t fxsave_state_len;
     uint16_t xsave_rfbm;
 
 } thread_info_t;
 
+typedef enum {
+    PMT_PAGE_TABLE,
+    PMT_PAGE,
+    PMT_BLOCK,
+} PageMappingType;
+
+#ifdef PAE
+#define N_PM_LEVELS      3
+#else
+#define N_PM_LEVELS      2
+#endif /* PAE */
+
 typedef struct {
-    union {
-        pbase_t phys_frame;
-        uint32_t block_num;
-    };
+    PageMappingType type;
     unsigned int flags;
-} PageMapping;
+    union {
+        pbase_t phys_frame; // 32 bit frame number = 44 bit physical address
+        uint32_t block_num; // 31-bit
+    };
+} PageMapping[N_PM_LEVELS];
 
 typedef struct {
     uint32_t mask;
@@ -285,6 +299,7 @@ typedef struct {
     void* entry;
     paddr_t addr_space;
     void* stack_top;
+    tid_t tid;
 } SysCreateTcbArgs;
 
 typedef struct {
@@ -340,78 +355,77 @@ extern "C" {
 
 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNU__MINOR__ >= 9)
 
-#define SYSENTER_INSTR "pushl %%ebp\n" \
-"pushl %%edx\n" \
-"pushl %%ecx\n" \
-"lea 1f, %%edx\n" \
-"movl %%esp, %%ebp\n" \
-"sysenter\n" \
-"1:\n" \
-"movl %%ebp, %%esp\n" \
-"popl %%ecx\n" \
-"popl %%edx\n" \
+#define SYSENTER_INSTR "pushl %%ebp\n"\
+"lea 1f, %%edx\n"\
+"movl %%esp, %%ebp\n"\
+"sysenter\n"\
+"1:\n"\
+"movl %%ebp, %%esp\n"\
 "popl %%ebp\n"
 
-#define SYSCALL1(syscall_name, type1, arg1) \
-static inline int sys_##syscall_name(type1 arg1) { \
-	int ret_val; \
-	asm volatile(SYSENTER_INSTR \
-        : "=a"(ret_val) \
-        : "a"(SYS_##syscall_name), "b"(arg1) \
-        : "memory"); \
-	return ret_val; \
+#define SYSCALL1_PROTO(syscall_name, type1, arg1) int sys_##syscall_name(type1 arg1)
+#define SYSCALL2_PROTO(syscall_name, type1, arg1, type2, arg2) int sys_##syscall_name(type1 arg1, type2 arg2)
+#define SYSCALL3_PROTO(syscall_name, type1, arg1, type2, arg2, type3, arg3) int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3)
+
+#define SYSCALL4_PROTO(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4) int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3, type4 arg4)
+#define SYSCALL4_PACKED_W1_PROTO(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4, word_arg) int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3, type4 arg4, type5 arg5, uint16_t word_arg)
+
+#define SYSCALL1(syscall_name, type1, arg1) SYSCALL1_PROTO(syscall_name, type1, arg1) {\
+	int ret_val;\
+	asm volatile(SYSENTER_INSTR\
+        : "=a"(ret_val)\
+        : "a"(SYS_##syscall_name), "b"(arg1)\
+        : "memory", "ecx", "edx");\
+	return ret_val;\
 }
 
 // Dummy variable has to be used because input-only arguments can't be modified
 
-#define SYSCALL2(syscall_name, type1, arg1, type2, arg2) \
-static inline int sys_##syscall_name(type1 arg1, type2 arg2) { \
-	int ret_val; \
-	int dummy; \
-	asm volatile(SYSENTER_INSTR \
-        : "=a"(ret_val), "=d"(dummy) \
-        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2) \
-        : "memory"); \
-	return ret_val; \
+#define SYSCALL2(syscall_name, type1, arg1, type2, arg2) SYSCALL2_PROTO(syscall_name, type1, arg1, type2, arg2) {\
+	int ret_val;\
+	int dummy;\
+	asm volatile(SYSENTER_INSTR\
+        : "=a"(ret_val), "=d"(dummy)\
+        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2)\
+        : "memory", "ecx");\
+	return ret_val;\
 }
 
-#define SYSCALL3(syscall_name, type1, arg1, type2, arg2, type3, arg3) \
-static inline int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3) { \
-	int ret_val; \
-	int dummy; \
-	asm volatile(SYSENTER_INSTR \
-        : "=a"(ret_val), "=d"(dummy) \
-        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3) \
-		: "memory"); \
-	return ret_val; \
+#define SYSCALL3(syscall_name, type1, arg1, type2, arg2, type3, arg3) SYSCALL3_PROTO(syscall_name, type1, arg1, type2, arg2, type3, arg3) {\
+	int ret_val;\
+	int dummy;\
+	asm volatile(SYSENTER_INSTR\
+        : "=a"(ret_val), "=d"(dummy)\
+        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3)\
+		: "memory", "ecx");\
+	return ret_val;\
 }
 
-#define SYSCALL4(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4) \
-static inline int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3, type4 arg4) { \
-    int ret_val; \
-    int dummy; \
-	asm volatile(SYSENTER_INSTR \
-        : "=a"(ret_val), "=d"(dummy) \
-        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3), "D"(arg4) \
-        : "memory"); \
-	return ret_val; \
+#define SYSCALL4(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4) SYSCALL4_PROTO(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4) {\
+    int ret_val;\
+    int dummy;\
+	asm volatile(SYSENTER_INSTR\
+        : "=a"(ret_val), "=d"(dummy)\
+        : "a"(SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3), "D"(arg4)\
+        : "memory", "ecx");\
+	return ret_val;\
 }
 
-#define SYSCALL4_PACKED_W1(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4, word_arg) \
-static inline int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3, type4 arg4, type5 arg5, uint16_t word_arg) { \
-	int ret_val; \
-	int dummy; \
-	asm volatile(SYSENTER_INSTR, \
-        : "=a"(ret_val), "=d"(dummy) \
-        : "a"((((uint32_t)word_arg << 16) & 0xFFFFu) | SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3), "D"(arg4) \
-        : "memory"); \
-	return ret_val; \
+#define SYSCALL4_PACKED_W1(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4, word_arg)\
+SYSCALL4_PACKED_W1_PROTO(syscall_name, type1, arg1, type2, arg2, type3, arg3, type4, arg4, word_arg) {\
+	int ret_val;\
+	int dummy;\
+	asm volatile(SYSENTER_INSTR,\
+        : "=a"(ret_val), "=d"(dummy)\
+        : "a"((((uint32_t)word_arg << 16) & 0xFFFFu) | SYS_##syscall_name), "b"(arg1), "d"(arg2), "S"(arg3), "D"(arg4)\
+        : "memory", "ecx");\
+	return ret_val;\
 }
 #else
 #error "GCC 4.9 or greater is required."
 #endif /* __GNUC__ > 4 || (__GNUC__ == 4 && __GNU__MINOR__ >= 9) */
 
-#define SYS_send 			        SYS_SEND
+#define SYS_send 		            SYS_SEND
 #define SYS_receive                 SYS_RECEIVE
 #define SYS_create                  SYS_CREATE
 #define SYS_read                    SYS_READ
@@ -419,149 +433,20 @@ static inline int sys_##syscall_name(type1 arg1, type2 arg2, type3 arg3, type4 a
 #define SYS_destroy                 SYS_DESTROY
 #define SYS_sleep                   SYS_SLEEP
 
-/*
-#define SYS_get_page_mappings 	SYS_GET_PAGE_MAPPINGS
-#define SYS_set_page_mappings 	SYS_SET_PAGE_MAPPINGS
-#define SYS_create_thread 			SYS_CREATE_THREAD
-#define SYS_destroy_thread 			SYS_DESTROY_THREAD
-#define SYS_read_thread 				SYS_READ_THREAD
-#define SYS_update_thread 			SYS_UPDATE_THREAD
-#define SYS_poll								SYS_POLL
-#define SYS_eoi									SYS_EOI
+SYSCALL2_PROTO(create, SysResource, res_type, void*, args);
+SYSCALL2_PROTO(read, SysResource, res_type, void*, args);
+SYSCALL2_PROTO(update, SysResource, res_type, void*, args);
+SYSCALL2_PROTO(destroy, SysResource, res_type, void*, args);
+SYSCALL2_PROTO(sleep, unsigned int, duration, SysSleepGranularity, granularity);
 
-#define SYS_get_page_mappings_base	SYS_get_page_mappings
-#define SYS_set_page_mappings_base SYS_set_page_mappings
-#define SYS_create_thread_base 		SYS_create_thread
-*/
-SYSCALL2(create, SysResource, res_type, void*, args)
-SYSCALL2(read, SysResource, res_type, void*, args)
-SYSCALL2(update, SysResource, res_type, void*, args)
-SYSCALL2(destroy, SysResource, res_type, void*, args)
-SYSCALL2(sleep, unsigned int, duration, SysSleepGranularity, granularity)
+noreturn void sys_exit(int status);
+int sys_send(Message* message, size_t* bytes_sent);
+int sys_receive(Message* message, size_t* bytes_rcvd);
+int sys_yield(void);
+int sys_wait(void);
+int sys_event_poll(int mask);
+int sys_event_eoi(int mask);
 
-/*
-SYSCALL4_PACKED_W1(get_page_mappings_base, addr_t, virt, size_t, count, uint32_t,
-    addrSpace, PageMapping*, mappings, level)
-SYSCALL4_PACKED_W1(set_page_mappings_base, addr_t, virt, size_t, count, uint32_t,
-    addrSpace, PageMapping*, mappings, level)
-SYSCALL3(create_thread_base, void*, entry, uint32_t, rootPmap, void*, stackTop)
-SYSCALL2(read_thread, tid_t, tid, thread_info_t*, info)
-SYSCALL3(update_thread, tid_t, tid, unsigned int, flags, thread_info_t*, info)
-SYSCALL1(destroy_thread, tid_t, tid)
-SYSCALL2(poll, int, mask, int, blocking)
-SYSCALL1(eoi, int, mask)
-*/
-
-static inline int sys_send(Message* message, size_t* bytes_sent)
-{
-    int ret_val;
-    int dummy;
-    size_t num_sent;
-    uint32_t pair;
-
-    asm volatile(SYSENTER_INSTR \
-        : "=a"(ret_val), "=b"(pair), "=S"(num_sent), "=d"(dummy)
-        : "a"(SYS_SEND), "b"(((uint32_t)message->target.recipient) | ((uint32_t)message->flags) << 16), 
-        "d"((int)message->subject), "S"((int)message->buffer), "D"((int)message->buffer_length)
-        : "memory");
-
-    if(bytes_sent) {
-        *bytes_sent = num_sent;
-    }
-
-    message->target.recipient = (tid_t)(pair >> 16);
-
-    return ret_val;
-}
-
-static inline int sys_receive(Message* message, size_t* bytes_rcvd)
-{
-    int ret_val;
-    int dummy;
-    size_t num_rcvd;
-    uint32_t pair;
-    uint32_t subject;
-
-    asm volatile(SYSENTER_INSTR \
-        : "=a"(ret_val), "=b"(pair), "=c"(subject), "=d"(dummy), "=D"(num_rcvd)
-        : "a"(SYS_RECEIVE), "b"(((uint32_t)message->target.sender) | ((uint32_t)message->flags) << 16), 
-        "d"((int)message->buffer), "S"((int)message->buffer_length)
-        : "memory");
-
-    if(bytes_rcvd) {
-        *bytes_rcvd = num_rcvd;
-    }
-
-    message->flags = (uint16_t)(pair >> 16);
-    message->target.sender = (uint16_t)pair;
-    message->subject = (uint32_t)subject;
-
-    return ret_val;
-}
-
-static inline int sys_yield(void)
-{
-    return sys_sleep(0, SL_SECONDS);
-}
-
-static inline int sys_wait(void)
-{
-    return sys_sleep(SL_INF_DURATION, SL_SECONDS);
-}
-
-static inline int sys_event_poll(int mask)
-{
-    SysPollArgs args = {
-        .mask= (uint32_t)mask,
-        .blocking = 0
-    };
-    
-    return sys_read(RES_INT, &args);
-}
-
-static inline int sys_event_eoi(int mask)
-{
-    SysEoiArgs args = {
-        .mask = (uint32_t)mask
-    };
-
-    return sys_update(RES_INT, &args);
-}
-
-/*
-static inline tid_t sys_create_thread(void* entry, uint32_t rootPmap,
-    void* stackTop)
-{
-    return (tid_t)sys_create_thread_base(entry, rootPmap, stackTop);
-}
-
-static inline int sys_get_page_mappings(unsigned int level, addr_t virt,
-    size_t count, uint32_t addrSpace,
-    PageMapping* mappings)
-{
-    return sys_get_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
-}
-
-static inline int sys_set_page_mappings(unsigned int level, addr_t virt,
-    size_t count, uint32_t addrSpace,
-    PageMapping* mappings)
-{
-    return sys_set_page_mappings_base(virt, count, addrSpace, mappings, (uint16_t)level);
-}
-
-#undef SYS_send_and_recv
-#undef SYS_get_page_mappings
-#undef SYS_set_page_mappings
-#undef SYS_create_thread
-#undef SYS_destroy_thread
-#undef SYS_read_thread
-#undef SYS_update_thread
-#undef SYS_get_page_mappings_base
-#undef SYS_set_page_mappings_base
-#undef SYS_create_thread_base
-#undef SYS_poll
-#undef SYS_eoi
-*/
 #ifdef __cplusplus
 };
 #else

@@ -34,7 +34,7 @@ void dump_regs( struct Tcb *tcb )
   print(toHexString( tcb->state.ebp ));
 
   print( " CR3: 0x" );
-  print(toHexString( (int)tcb->addrSpace ) );
+  print(toHexString( (int)tcb->addr_space ) );
 
   print("\nEFLAGS: 0x");
   print(toHexString( tcb->state.eflags ));
@@ -60,11 +60,11 @@ int handle_exception( int args[5] )
      Then check to make sure that the accessed page was allocated to the thread. */
 
     if( pool && (errorCode & 0x5) == 0x4 &&
-         find_address(&pool->addrSpace, (void *)cr2))
+         find_address(&pool->addr_space, (void *)cr2))
     {
-      addr = alloc_phys_page(NORMAL, (void *)tcb.addrSpace);
+      addr = alloc_phys_page(NORMAL, (void *)tcb.addr_space);
 
-      _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
+      _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addr_space );
       tcb.status = TCB_STATUS_READY;
       sys_update(RES_TCB, &tcb);
       return 0;
@@ -73,9 +73,9 @@ int handle_exception( int args[5] )
              (cr2 & ~0x3FFFFF) == STACK_TABLE ) /* XXX: This can be done better. Will not work if there aren't
                                                                                        any pages in the stack page! */
     {
-      addr = alloc_phys_page(NORMAL, (void *)tcb.addrSpace);
+      addr = alloc_phys_page(NORMAL, (void *)tcb.addr_space);
 
-      _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addrSpace );
+      _mapMem( addr, (void *)(cr2 & ~0xFFF), 1, 0, &pool->addr_space );
       tcb.status = TCB_STATUS_READY;
       sys_update(RES_TCB, &tcb);
       return 0;
@@ -89,7 +89,7 @@ int handle_exception( int args[5] )
       print("Can't find address: 0x");
       print(toHexString(cr2));
       print(" in addr space 0x");
-      print(toHexString(tcb.addrSpace));
+      print(toHexString(tcb.addr_space));
 
       return -1;
     }

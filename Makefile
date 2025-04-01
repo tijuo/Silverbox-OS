@@ -1,4 +1,4 @@
-.PHONY: all kernel lib apps servers drivers tests clean
+.PHONY: all kernel libs apps servers drivers tests clean
 
 TFTP_ROOT       =$$HOME/tftp
 PXE_IMG         =/boot/limine/limine-bios-pxe.bin
@@ -14,7 +14,7 @@ all: kernel libs servers #apps servers drivers tests
 kernel:
 	$(MAKE) -C kernel all
 
-lib:
+libs:
 	$(MAKE) -C lib all
 
 apps:

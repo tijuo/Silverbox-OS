@@ -28,3 +28,4 @@ bin/
 lib/librust/target
 bochs_serial_output.txt
 bochsdbg_log.txt
+qemu.log

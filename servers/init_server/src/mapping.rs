@@ -2,7 +2,7 @@ use crate::page::{PageMapBase, VirtualPage};
 use crate::address::VAddr;
 use alloc::collections::btree_set::BTreeSet;
 use rust::align::Align;
-use rust::device::DeviceId;
+use crate::device::DeviceId;
 use crate::region::{MemoryRegion, RegionSet};
 use core::cmp::Ordering;
 pub use rust::types::Tid;

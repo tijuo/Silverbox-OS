@@ -420,7 +420,7 @@ static inline void set_ss(uint16_t ss)
     __asm__("mov %0, %%ss" :: "r"(ss) : "memory");
 }
 
-WARN_UNUSED static inline bool is_xsave_supported(void)
+WARN_UNUSED static inline bool is_fxsave_supported(void)
 {
     return IS_FLAG_SET(get_cr4(), CR4_OSXSAVE);
 }

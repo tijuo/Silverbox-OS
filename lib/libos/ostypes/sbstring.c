@@ -137,8 +137,8 @@ size_t sbStringLength(sbstring_t *str) {
   return str->length;
 }
 
-sbarray_t* sbStringSplit(sbstring_t *sbString, sbstring_t *delimiter, int limit,
-                         sbarray_t *array)
+DynArray* sbStringSplit(sbstring_t *sbString, sbstring_t *delimiter, int limit,
+                         DynArray *array)
 {
   int start = 0, end = 0;
   sbstring_t tempStr, endStr;

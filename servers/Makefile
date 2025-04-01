@@ -5,14 +5,14 @@ include ../Makefile.inc
 all: init_server
 
 init_server:
-	make -C init_server all
+	make -C init_old2 all
 
-init_server-tests:
-	make -C init_server tests
+#init_server-tests:
+#	make -C init_server tests
 
-tests: init_server-tests
+#tests: init_server-tests
 
 clean: init_server-clean
 
 init_server-clean:
-	make -C init_server clean
+	make -C init_old2 clean

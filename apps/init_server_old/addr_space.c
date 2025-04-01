@@ -1,6 +1,5 @@
 #include "addr_space.h"
 #include "phys_alloc.h"
-#include <os/os_types.h>
 #include "initsrv.h"
 
 /* There needs to be a way to lookup the address space of a thread using a TID */
@@ -8,7 +7,7 @@
 /* Initializes an address space and its tables. The physical
    address is the address of the page directory. */
 
-void init_addr_space(struct AddrSpace *addr_space, addr_t phys_addr)
+void addr_space_init(struct AddrSpace *addr_space, addr_t phys_addr)
 {
   struct AddrRegion region1 = { { 0, 0xC0000 }, { 0, 0xC0000 }, REG_RESD };
   struct AddrRegion region2 = { { 0xFF400000, 0xC00000 }, { 0, 0 }, REG_RESD };
@@ -16,9 +15,9 @@ void init_addr_space(struct AddrSpace *addr_space, addr_t phys_addr)
   if( addr_space == NULL )
     return;
 
-  createBitmap(addr_space->bitmap, NUM_PTABLES);
+  createBitmap(addr_space->bitarray, NUM_PTABLES);
   addr_space->phys_addr = phys_addr;
-  sbArrayCreate(&addr_space->memoryRegions);
+  sbArrayCreate(&addr_space->memory_regions);
 
   attach_mem_region(addr_space, &region1);
   attach_mem_region(addr_space, &region2);
@@ -41,19 +40,19 @@ void delete_addr_space(struct AddrSpace *addr_space)
   if( !addr_space )
     return;
 
-  sbArrayDelete(&addr_space->memoryRegions);
+  sbArrayDelete(&addr_space->memory_regions);
 }
 
 /* _set_ptable_status() and set_ptable_status() are used to update the
    mapping status of a page table in its address space */
 /*
-int addAddrSpace(struct AddrSpace *addrSpace)
+int addr_space_add(struct AddrSpace *addr_space)
 {
-  if( addrSpace == NULL )
+  if( addr_space == NULL )
     return -1;
 
-  if( sbAssocArrayInsert(&addrSpaces, (void *)&addrSpace->phys_addr, 
-        sizeof addrSpace->phys_addr, addrSpace, sizeof *addrSpace) != 0 )
+  if( sbAssocArrayInsert(&addr_spaces, (void *)&addr_space->phys_addr, 
+        sizeof addr_space->phys_addr, addr_space, sizeof *addr_space) != 0 )
   {
     return -1;
   }
@@ -71,7 +70,7 @@ struct AddrSpace *lookupPhysAddr(void *phys_addr)
   if( (unsigned int *)phys_addr == page_dir )
     return &pager_addr_space;
 
-  if( sbAssocArrayLookup(&addrSpaces, (void *)&phys_addr, sizeof(void *), 
+  if( sbAssocArrayLookup(&addr_spaces, (void *)&phys_addr, sizeof(void *), 
         (void **)&addr_space, NULL) < 0 )
   {
     return NULL;
@@ -80,14 +79,14 @@ struct AddrSpace *lookupPhysAddr(void *phys_addr)
     return addr_space;
 }
 
-struct AddrSpace *removeAddrSpace(void *phys_addr)
+struct AddrSpace *remove_addr_space(void *phys_addr)
 {
   struct AddrSpace *addr_space;
 
   if( phys_addr == NULL_PADDR )
     return NULL;
 
-  if( sbAssocArrayRemove(&addrSpaces, (void *)&phys_addr, sizeof(void *),
+  if( sbAssocArrayRemove(&addr_spaces, (void *)&phys_addr, sizeof(void *),
         (void **)&addr_space, NULL) < 0 )
   {
     return NULL;
@@ -103,9 +102,9 @@ int set_ptable_status(struct AddrSpace *addr_space, void *virt, bool status)
     addr_space = &initsrv_pool;
 
   if( status == true )
-    setBitmapBit(addr_space->bitmap, (unsigned)virt / PTABLE_SIZE);
+    bitarray_set(addr_space->bitarray, (unsigned)virt / PTABLE_SIZE);
   else
-    clearBitmapBit(addr_space->bitmap, (unsigned)virt / PTABLE_SIZE);
+    bitarray_clear(addr_space->bitarray, (unsigned)virt / PTABLE_SIZE);
 
   return 0;
 }
@@ -117,7 +116,7 @@ bool get_ptable_status(struct AddrSpace *addr_space, void *virt)
   if( addr_space == NULL )
     addr_space = &initsrv_pool;
 
-  return bitIsSet(addr_space->bitmap, (unsigned)virt / PTABLE_SIZE);
+  return bitarray_is_set(addr_space->bitarray, (unsigned)virt / PTABLE_SIZE);
 }
 
 /* attach_tid() associates a TID to an address space. */
@@ -204,16 +203,16 @@ int attach_mem_region(struct AddrSpace *addr_space, struct AddrRegion *region)
   if(addr_space == NULL)
     addr_space = &initsrv_pool;
 
-  for(int i=0; i < sbArrayCount(&addr_space->memoryRegions); i++)
+  for(int i=0; i < sbArrayCount(&addr_space->memory_regions); i++)
   {
-    if( sbArrayElemAt(&addr_space->memoryRegions, i, (void **)&tRegion, NULL) != 0 )
+    if( sbArrayElemAt(&addr_space->memory_regions, i, (void **)&tRegion, NULL) != 0 )
       continue;
 
-    if( reg_overlaps(&region->virtRegion, &tRegion->virtRegion) )
+    if( reg_overlaps(&region->virt_region, &tRegion->virt_region) )
       return -1;
   }
 
-  if( sbArrayPush(&addr_space->memoryRegions, region, sizeof *region) == 0 )
+  if( sbArrayPush(&addr_space->memory_regions, region, sizeof *region) == 0 )
     return 0;
   else
     return -1;
@@ -229,12 +228,12 @@ bool find_address(struct AddrSpace *addr_space, void *addr)
   if(addr_space == NULL)
     addr_space = &initsrv_pool;
 
-  for( int i=0; i < sbArrayCount(&addr_space->memoryRegions); i++ )
+  for( int i=0; i < sbArrayCount(&addr_space->memory_regions); i++ )
   {
-    if( sbArrayElemAt(&addr_space->memoryRegions, i, (void **)&addr_region, NULL) != 0 )
+    if( sbArrayElemAt(&addr_space->memory_regions, i, (void **)&addr_region, NULL) != 0 )
       return false;
 
-    if( is_in_region((unsigned int)addr, &addr_region->virtRegion) )
+    if( is_in_region((unsigned int)addr, &addr_region->virt_region) )
       return true;
   }
 
@@ -246,7 +245,7 @@ bool find_address(void *aspace_phys, void *addr)
 {
   struct AddrSpace *addr_space;
 
-  if( sbAssocArrayLookup(&addrSpaces, (void *)&aspace_phys, sizeof(void *), (void **)&addr_space,
+  if( sbAssocArrayLookup(&addr_spaces, (void *)&aspace_phys, sizeof(void *), (void **)&addr_space,
     NULL) < 0 )
   {
     return false;
@@ -258,7 +257,7 @@ bool find_address(void *aspace_phys, void *addr)
 
 /* Checks to see if there's a region that overlaps another region in an address space */
 
-bool region_overlaps(struct AddrSpace *addr_space, struct MemRegion *region)
+bool addr_space_region_intersects(struct AddrSpace *addr_space, MemRegion *region)
 {
   struct AddrRegion *addr_region;
 
@@ -268,28 +267,28 @@ bool region_overlaps(struct AddrSpace *addr_space, struct MemRegion *region)
   if( region == NULL )
     return false;
 
-  for( int i=0; i < sbArrayCount(&addr_space->memoryRegions); i++ )
+  for( int i=0; i < sbArrayCount(&addr_space->memory_regions); i++ )
   {
-    if( sbArrayElemAt(&addr_space->memoryRegions, i, (void **)&addr_region, NULL) != 0 )
+    if( sbArrayElemAt(&addr_space->memory_regions, i, (void **)&addr_region, NULL) != 0 )
       return false;
 
-    if( reg_overlaps(region, &addr_region->virtRegion) )
+    if( reg_overlaps(region, &addr_region->virt_region) )
       return true;
   }
 
   return false;
 }
 /*
-bool region_overlaps(void *aspace_phys, struct MemRegion *region)
+bool region_intersects(void *aspace_phys, MemRegion *region)
 {
   struct AddrSpace *addr_space;
 
-  if( sbAssocArrayLookup(&addrSpaces, (void *)&aspace_phys, sizeof(void *), (void **)&addr_space,
+  if( sbAssocArrayLookup(&addr_spaces, (void *)&aspace_phys, sizeof(void *), (void **)&addr_space,
     NULL) < 0 )
   {
     return false;
   }
   else
-    return _region_overlaps(addr_space, region);
+    return addr_space_region_intersects(addr_space, region);
 }
 */

@@ -8,7 +8,7 @@ struct SharedRegion
 
 struct PMemRegion
 {
-  struct MemRegion region;
+  MemRegion region;
   struct AddrSpace *addr_space;
   bool rw;
 };

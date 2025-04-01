@@ -3,12 +3,11 @@
 
 #define DEVICE_READ  		0
 #define DEVICE_WRITE 		1
-#define DEVICE_IOCTL 		2
+#define DEVICE_CREATE       2
+#define DEVICE_DESTROY      3
 
 #include <oslib.h>
 
-#define MAJOR(x)		(unsigned short int)(((x) >> 16) & 0xFFFF)
-#define MINOR(x)		(unsigned short int)((x) & 0xFFFF)
 
 #define DEVICE_REQUEST		0
 #define DEVICE_RESPONSE		128

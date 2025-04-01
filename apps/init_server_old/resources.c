@@ -68,7 +68,7 @@ int __create_resource_pool(struct ResourcePool *pool, void *phys_aspace)
     return -1;
   }
 
-  init_addr_space(&pool->addrSpace, phys_aspace);
+  addr_space_init(&pool->addr_space, phys_aspace);
   attach_phys_aspace(pool, phys_aspace);
 
 //  pool->execInfo = NULL;
@@ -76,8 +76,8 @@ int __create_resource_pool(struct ResourcePool *pool, void *phys_aspace)
   setPage(pool->ioBitmaps.phys1, 0xFF);
   setPage(pool->ioBitmaps.phys2, 0xFF);
 
-  _mapMem( (void *)pool->ioBitmaps.phys1, (void *)0xC0000, 1, 0, &pool->addrSpace );
-  _mapMem( (void *)pool->ioBitmaps.phys2, (void *)0xC1000, 1, 0, &pool->addrSpace );
+  _mapMem( (void *)pool->ioBitmaps.phys1, (void *)0xC0000, 1, 0, &pool->addr_space );
+  _mapMem( (void *)pool->ioBitmaps.phys2, (void *)0xC1000, 1, 0, &pool->addr_space );
 
   pool->id = counter++;
 
@@ -109,10 +109,10 @@ int destroy_resource_pool(struct ResourcePool *pool)
     return -1;
 
   sbArrayDelete(&pool->tids);
-  detach_phys_aspace(pool->addrSpace.phys_addr);
-  delete_addr_space(&pool->addrSpace);
+  detach_phys_aspace(pool->addr_space.phys_addr);
+  delete_addr_space(&pool->addr_space);
 
-  free_phys_page(pool->addrSpace.phys_addr);
+  free_phys_page(pool->addr_space.phys_addr);
   free_phys_page(pool->ioBitmaps.phys1);
   free_phys_page(pool->ioBitmaps.phys2);
 

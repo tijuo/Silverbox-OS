@@ -10,7 +10,9 @@
     "gcc": [
       "-ffreestanding",
       "-nostdlib",
-      "-Wl,--script=link.ld"
+      "-Wl,--script=link.ld",
+      "-g",
+      "-ggdb"
     ]
   },
 

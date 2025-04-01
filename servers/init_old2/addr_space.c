@@ -1,268 +1,210 @@
 #include "addr_space.h"
 #include "phys_mem.h"
-#include <os/os_types.h>
+#include <stdio.h>
 
-struct AddrSpace initsrvAddrSpace;
-sbhash_t addrSpaces; // phys addr/tid -> AddrSpace
-page_t *pageTable;
+AddrSpace initsrv_addr_space;
+IntHashTable addr_spaces; // phys addr/tid -> AddrSpace
+
+int tid_cmp(tid_t *x, tid_t *y) {
+    return *x == *y ? 0 : 1;
+}
 
 /* Initializes an address space and its tables. The physical
    address is the address of the page directory. */
-
-void initAddrSpace(struct AddrSpace *addrSpace, paddr_t *physAddr)
+int addr_space_init(AddrSpace* addr_space, paddr_t phys_addr)
 {
-  if(!physAddr)
-  {
-    print("Error: Page map cannot be null.\n");
-    return;
-  }
-  else if(!addrSpace)
-  {
-    print("Address space cannot be null.\n");
-    return;
-  }
+    addr_space->phys_addr = phys_addr;
+    
+    if(dyn_array_init(&addr_space->mappings, sizeof(MemoryMapping), 17, &GLOBAL_ALLOCATOR) != 0) {
+        return -1;
+    }
 
-  addrSpace->physAddr = *physAddr;
-  sbArrayCreate(&addrSpace->memoryRegions);
-  sbHashCreate(&addrSpace->addressMap, 1024);
-}
+    if(dyn_array_init(&addr_space->tids, sizeof(tid_t), 17, &GLOBAL_ALLOCATOR) != 0) {
+        dyn_array_destroy(&addr_space->mappings);
+        return -1;
+    }
 
-void destroyAddrSpace(struct AddrSpace *addrSpace)
-{
-  sbArrayDelete(&addrSpace->memoryRegions);
-  sbHashDestroy(&addrSpace->addressMap);
-}
+    addr_space->exe_fd = -1;
 
-int addAddrSpace(struct AddrSpace *addrSpace)
-{
-  char *a = malloc(19);
-
-  if(!addrSpace || !a)
-    return -1;
-
-  a[0] = '0';
-  a[1] = 'x';
-
-  itoa(addrSpace->physAddr, &a[2], 16);
-
-  return (addrSpace && sbHashInsert(&addrSpaces, a, addrSpace) == 0) ? 0 : -1;
-}
-
-struct AddrSpace *lookupPageMap(paddr_t *physAddr)
-{
-  struct AddrSpace *addrSpace;
-  char a[19] = { '0', 'x' };
-
-  if( physAddr == NULL )
-    return &initsrvAddrSpace;
-
-  itoa(*physAddr, &a[2], 16);
-
-  return sbHashLookup(&addrSpaces, a, (void **)&addrSpace) != 0 ? NULL : addrSpace;
-}
-
-int removeAddrSpace(paddr_t *physAddr)
-{
-  struct AddrSpace *addrSpace;
-
-  char a[19] = { '0', 'x' };
-  char *storedKey;
-
-  itoa(*physAddr, &a[2], 16);
-
-  if(physAddr != NULL && sbHashRemovePair(&addrSpaces, a, &storedKey, (void **)&addrSpace) == 0)
-  {
-    free(storedKey);
     return 0;
-  }
-  else
-    return -1;
 }
 
-/* attachTid() associates a TID to an address space. */
-
-int attachTid(struct AddrSpace *addrSpace, tid_t tid)
+void addr_space_destroy(AddrSpace* addr_space)
 {
-  char *a = malloc(6);
-
-  if(!addrSpace || !a)
-    return -1;
-
-  if(!addrSpace)
-    addrSpace = &initsrvAddrSpace;
-
-  itoa(tid, a, 10);
-
-  return (tid != NULL_TID && sbHashInsert(&addrSpaces, a, addrSpace) == 0) ? 0 : -1;
+    dyn_array_destroy(&addr_space->tids);
+    dyn_array_destroy(&addr_space->mappings);
 }
 
-int detachTid(tid_t tid)
+int addr_space_add(AddrSpace* addr_space)
 {
-  struct AddrSpace *addrSpace;
-  char *storedKey;
-  char a[6];
-
-  itoa(tid, a, 10);
-
-  if(sbHashRemovePair(&addrSpaces, a, &storedKey, (void **)&addrSpace) == 0)
-  {
-    free(storedKey);
-    return 0;
-  }
-  else
-    return -1;
+    return int_hash_table_insert(&addr_spaces, (int)addr_space->phys_addr, addr_space, sizeof *addr_space);
 }
 
-struct AddrSpace *lookupTid(tid_t tid)
+AddrSpace* lookup_page_map(paddr_t phys_addr)
 {
-  struct AddrSpace *addrSpace;
-  char a[6];
+    AddrSpace* addr_space;
 
-  itoa(tid, a, 10);
-
-  return (tid == NULL_TID
-         || sbHashLookup(&addrSpaces, a, (void **)&addrSpace) != 0) ? NULL : addrSpace;
+    if(phys_addr == CURRENT_ROOT_PMAP) {
+        return &initsrv_addr_space;
+    } else if(int_hash_table_lookup(&addr_spaces, (int)phys_addr, &addr_space, NULL) != 0) {
+        return addr_space;
+    } else {
+        return NULL;
+    }
 }
+
+int remove_addr_space(paddr_t phys_addr)
+{
+    return int_hash_table_remove(&addr_spaces, (int)phys_addr);
+}
+
+/* attach_tid() associates a TID with an address space. */
+int attach_tid(AddrSpace* addr_space, tid_t tid)
+{
+    if(!addr_space) {
+        addr_space = &initsrv_addr_space;
+    }
+
+    return (tid != NULL_TID && dyn_array_push(&addr_space->tids, &tid)) ? 0 : -1;
+}
+
+int detach_tid(AddrSpace *addr_space, tid_t tid)
+{
+    if(!addr_space) {
+        addr_space = &initsrv_addr_space;
+    }
+
+    int ndx = dyn_array_find(addr_space, &tid, tid_cmp);
+
+    if(ndx < 0) {
+        return -1;
+    }
+
+    return (dyn_array_remove_unstable(&addr_space->tids, ndx) == 0) ? 0 : -1;
+}
+
+/*
+AddrSpace* lookup_tid(tid_t tid)
+{
+    AddrSpace* addr_space;
+    char a[6];
+
+    itoa(tid, a, 10);
+
+    return (tid == NULL_TID
+        || int_hash_table_lookup(&addr_spaces, a, (void**)&addr_space, NULL) != 0) ? NULL : addr_space;
+}
+*/
 
 /* Virtual addresses are allocated to an address space by using
-   attachAddrRegion() */
+   attach_addr_region() */
 
-int attachAddrRegion(struct AddrSpace *addrSpace, struct AddrRegion *addrRegion)
+int attach_addr_region(AddrSpace* addr_space, MemoryMapping *mapping)
 {
-  struct AddrRegion *tRegion;
+    MemoryMapping t_map1;
+    MemoryMapping t_map2;
 
-  if(!addrSpace)
-    addrSpace = &initsrvAddrSpace;
+    if(!addr_space) {
+        addr_space = &initsrv_addr_space;
+    }
 
-  for(size_t i=0; i < sbArrayCount(&addrSpace->memoryRegions); i++)
-  {
-    if( sbArrayGet(&addrSpace->memoryRegions, i, (void **)&tRegion) != 0 )
-      continue;
+    if(dyn_array_length(&addr_space->mappings) == 0) {
+        return (dyn_array_push(&addr_space->mappings, mapping)) == 0 ? 0 : -1;
+    }
+    
+    dyn_array_get(&addr_space->mappings, 0, &t_map1);
+    dyn_array_get(&addr_space->mappings, -1, &t_map2);
 
-    if( regionDoesOverlap(&addrRegion->virtRegion, &tRegion->virtRegion) )
-      return -1;
-  }
+    if(mapping->memory_region.end <= t_map1.memory_region.start) {
+        return (dyn_array_insert(&addr_space->mappings, 0, mapping)) == 0 ? 0 : -1;
+    } else if(mapping->memory_region.start >= t_map2.memory_region.end) {
+        return (dyn_array_push(&addr_space->mappings, mapping)) == 0 ? 0 : -1;
+    } else {
+        for(size_t i = 1; i < dyn_array_length(&addr_space->mappings); i++, t_map1 = t_map2) {
+            dyn_array_get(&addr_space->mappings, i, &t_map2);
 
-  return (sbArrayPush(&addrSpace->memoryRegions, addrRegion)) == 0 ? 0 :  -1;
+            if(mapping->memory_region.start >= t_map1.memory_region.end && mapping->memory_region.end <= t_map2.memory_region.start) {
+                return (dyn_array_insert(&addr_space->mappings, i, mapping)) == 0 ? 0 : -1;
+            }
+        }
+    }
+
+    return -1;
 }
 
 /* Returns true if a virtual address is allocated in an address space.
    Returns false otherwise. */
 
-bool findAddress(struct AddrSpace *addrSpace, addr_t addr)
+bool find_address(const AddrSpace* addr_space, addr_t addr)
 {
-  return getRegion(addrSpace, addr) != NULL ? true : false;
+    return get_region(addr_space, addr) != NULL;
 }
 
-struct AddrRegion *getRegion(struct AddrSpace *addrSpace, addr_t addr)
+MemoryMapping* get_mapping(const AddrSpace* addr_space, addr_t addr)
 {
-  struct AddrRegion *addr_region;
+    MemoryMapping *mapping;
 
-  if(!addrSpace)
-    addrSpace = &initsrvAddrSpace;
-
-  for( size_t i=0; i < sbArrayCount(&addrSpace->memoryRegions); i++ )
-  {
-    if( sbArrayGet(&addrSpace->memoryRegions, i, (void **)&addr_region) != 0 )
-      break;
-    else if( regionDoesContain((unsigned int)addr, &addr_region->virtRegion) )
-      return addr_region;
-  }
-
-  return NULL;
-}
-
-/* Checks to see if there's a region that overlaps another region in an address space */
-
-bool doesOverlap(struct AddrSpace *addrSpace, struct MemRegion *region)
-{
-  struct AddrRegion *addr_region;
-
-  if( !addrSpace )
-    addrSpace = &initsrvAddrSpace;
-
-  if( region )
-  {
-    for( size_t i=0; i < sbArrayCount(&addrSpace->memoryRegions); i++ )
-    {
-      if( sbArrayGet(&addrSpace->memoryRegions, i, (void **)&addr_region) != 0 )
-        break;
-      else if( regionDoesOverlap(region, &addr_region->virtRegion) )
-        return true;
+    if(!addr_space) {
+        addr_space = &initsrv_addr_space;
     }
-  }
 
-  return false;
+    for(size_t i = 0; i < dyn_array_length(&addr_space->mappings); i++) {
+        if(dyn_array_get(&addr_space->mappings, i, &mapping) != 0) {
+            break;
+        }
+
+        if(region_contains(&mapping->memory_region, addr)) {
+            return mapping;
+        }
+    }
+
+    return NULL;
 }
 
-// Map a virtual address to a page
+// Remove a section of a mapped region from an address space
 
-int setMapping(struct AddrSpace *addrSpace, addr_t virt, page_t *page)
+// Note: This does not unmap any pages associated with the region
+
+int remove_mapping(AddrSpace* addr_space, MemRegion *region)
 {
-  char *a = malloc(10);
+    MemoryMapping *mapping;
+    MemRegion differences[2];
 
-  if(!a)
-  {
-    print("malloc() failed\n");
-    return -1;
-  }
+    if(!addr_space) {
+        addr_space = &initsrv_addr_space;
+    }
 
-  a[0] = '0';
-  a[1] = 'x';
+    for(size_t i = 0; i < dyn_array_length(&addr_space->mappings); i++) {
+        if(dyn_array_get(&addr_space->mappings, i, &mapping) != 0) {
+            break;
+        }
 
-  virt &= ~(PAGE_SIZE-1);
+        if(region_intersects(&mapping->memory_region, region)) {
+            int count = region_difference(&mapping->memory_region, region, &differences);
 
-  if(!addrSpace)
-    addrSpace = &initsrvAddrSpace;
+            if(count == 0) {    // Region to be removed is at least as large as an entire mapped region
+                dyn_array_remove(&addr_space->mappings, i);
+            } else if(count == 1) {
+                if(region_equals(&differences[0], mapping)) {       // The region to be removed is an entire `MemoryMapping`
+                    dyn_array_remove(&addr_space->mappings, i);
+                } else {                                            // Only remove a portion of the mapping
+                    mapping->file_offset += differences[0].start - mapping->memory_region.start;
+                    mapping->memory_region = differences[0];
+                }
+            } else if(count == 2) {     // The region to be removed between an existing region which would create a hole.
+                MemoryMapping new_mapping = *mapping;
 
-  itoa((int)virt, &a[2], 16);
+                new_mapping.memory_region.start = differences[1].start;
+                new_mapping.file_offset += differences[1].start - mapping->memory_region.start;
 
-  int code = sbHashInsert(&addrSpace->addressMap, a, page);
+                if(dyn_array_insert(&addr_space->mappings, i + 1, &new_mapping) != 0) {
+                    return -1;
+                }
 
-  if(code != 0)
-  {
-    print("Mapping 0x"), printHex(virt), print(" to 0x"), printHex(page), print("failed with code "), printInt(code), print("\n");
+                mapping->memory_region.end = differences[0].end;
+            }
+        }
+    }
 
-  }
-
-  return (code == 0) ? 0 : -1;
-}
-
-int getMapping(struct AddrSpace *addrSpace, addr_t virt, page_t **page)
-{
-  char a[10] = { '0', 'x' };
-
-  virt &= ~(PAGE_SIZE - 1);
-
-  if(!addrSpace)
-    addrSpace = &initsrvAddrSpace;
-
-  itoa((int)virt, &a[2], 16);
-
-  return (sbHashLookup(&addrSpace->addressMap, a, (void **)page) == 0) ? 0 : -1;
-}
-
-// Remove a mapping from a virtual address to a page
-
-int removeMapping(struct AddrSpace *addrSpace, addr_t virt)
-{
-  char *storedKey;
-  char a[10] = { '0', 'x' };
-
-  virt &= ~(PAGE_SIZE-1);
-
-  if(!addrSpace)
-    addrSpace = &initsrvAddrSpace;
-
-  itoa((int)virt, &a[2], 16);
-
-  // XXX: Must also free() the key
-
-  if(sbHashRemovePair(&addrSpace->addressMap, a, &storedKey, NULL) == 0)
-  {
-    free(storedKey);
     return 0;
-  }
-  else
-    return -1;
 }

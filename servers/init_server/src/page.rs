@@ -1,6 +1,6 @@
 use rust::align::Align;
 use crate::address::{PAddr, PSize};
-use rust::device::DeviceId;
+use crate::device::DeviceId;
 
 pub type PageMapBase = u32;
 

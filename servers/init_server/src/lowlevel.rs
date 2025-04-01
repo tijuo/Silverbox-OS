@@ -1,20 +1,17 @@
-use core::ops::{Deref, DerefMut};
-use core::panic::PanicInfo;
-use core::alloc::{Layout, GlobalAlloc};
-use core::ffi::c_void;
-use alloc::string::ToString;
-use rust::syscalls::{self, flags, PageMapping, CPageMap, SyscallError};
 use crate::address::PAddr;
+use crate::mutex::Mutex;
 use crate::page::{FrameSize, PhysicalFrame};
-use rust::io;
+use alloc::string::ToString;
+use core::alloc::{GlobalAlloc, Layout};
+use core::ffi::c_void;
 use core::fmt::Write;
-use core::cell::UnsafeCell;
-use core::sync::atomic::AtomicBool;
-use core::sync::atomic::Ordering;
+use core::panic::PanicInfo;
+use rust::io;
+use rust::syscalls::{self, flags, CPageMap, PageMapping, SyscallError};
 
 static BASE_CHARS: &'static [u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
-#[link(name="c", kind="static")]
+#[link(name = "c", kind = "static")]
 extern "C" {
     fn malloc(length: usize) -> *mut c_void;
     fn calloc(num_blocks: usize, block_size: usize) -> *mut c_void;
@@ -23,64 +20,13 @@ extern "C" {
     fn abort() -> !;
 }
 
-pub struct Mutex<T> {
-    locked: AtomicBool,
-    inner: UnsafeCell<MutexInner<T>>
-}
-
-pub struct MutexInner<T> {
-    data: T,
-}
-
-pub struct MutexGuard<'a, T> {
-    mutex_ref: &'a Mutex<T>
-}
-
-impl<T> Mutex<T> {
-    pub const fn new(data: T) -> Self {
-        Self {
-            locked: AtomicBool::new(false),
-            inner: UnsafeCell::new(MutexInner { data }),
-        }
-    }
-
-    pub fn lock(&self) -> MutexGuard<'_, T> {
-        while self.locked
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-            .is_err() {}
-        MutexGuard { mutex_ref: &self }
-    }
-}
-
-impl<'a, T> Deref for MutexGuard<'a, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &(*self.mutex_ref.inner.get()).data }
-    }
-}
-
-impl<'a, T> DerefMut for MutexGuard<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut (*self.mutex_ref.inner.get()).data  }
-    }
-}
-
-impl<'a, T> Drop for MutexGuard<'a, T> {
-    fn drop(&mut self) {
-        while self.mutex_ref.locked.compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed).is_err() {}
-    }
-}
-
-unsafe impl<T> Sync for Mutex<T> {}
-
 pub struct DebugWriter;
 
 pub static DEBUG_WRITER: Mutex<DebugWriter> = Mutex::new(DebugWriter);
 
 impl Write for DebugWriter {
     fn write_char(&mut self, c: char) -> core::fmt::Result {
-        if c.is_ascii() && c as u8 >= 32 {
+        if c.is_ascii() && (c as u8 >= 32 || c == '\n') {
             unsafe {
                 io::write_u8(0xE9, c as u8);
             }
@@ -231,164 +177,160 @@ pub fn print_debug_i32(num: i32, base: u32) {
 */
 
 pub mod phys {
-    use crate::page::{FrameSize, PhysicalFrame, VirtualPage};
-    use crate::error::Error;
-    use crate::address::{PAddr, PSize};
-    use rust::align::Align;
-    use core::ffi::c_void;
-    use core::{cmp, mem};
-    use core::ops::{Deref, DerefMut, Index};
+    use super::Mutex;
     use super::GLOBAL_ALLOCATOR;
+    use crate::address::{PAddr, PSize};
+    use crate::error::Error;
+    use crate::page::{FrameSize, PhysicalFrame, VirtualPage};
     use crate::phys_alloc::{self, BlockSize};
-    use core::alloc::{GlobalAlloc, Layout};
     use alloc::boxed::Box;
     use alloc::vec::Vec;
+    use core::alloc::{GlobalAlloc, Layout};
+    use core::ffi::c_void;
+    use core::ops::{Deref, DerefMut, Index};
+    use core::{cmp, mem};
+    use crate::mutex::MutexGuard;
+    use rust::align::Align;
     use rust::syscalls::SyscallError;
 
-    #[link(name="c", kind="static")]
+    #[link(name = "c", kind = "static")]
     extern "C" {
         fn memcpy(dest: *mut c_void, src: *const c_void, length: usize) -> *mut c_void;
-    }
-
-    #[link(name="os_init", kind="static")]
-    extern "C" {
-        fn mutex_lock(lock: *mut i32) -> i32;
-        fn mutex_unlock(lock: *mut i32) -> i32;
     }
 
     extern "C" {
         static mut PAGE_MAP_AREA: [u8; 0x400000];
     }
 
-    static mut PMAP_LOCK: i32 = 0;
-    static mut PMAP_STATUS: [bool; 1024] = [false; 1024];
+    // FIXME: Instead of using an array of bools, use the page map area to create
+    // a data structure
+    static PMAP_STATUS: Mutex<[bool; 1024]> = Mutex::new([false; 1024]);
 
-    pub struct PageMapArea {
-        slice: &'static mut [u8],
+    pub struct PageMapArea<'a> {
+        slice: &'a mut [u8],
         has_frames_mapped: bool,
     }
 
-   impl PageMapArea {
-       pub fn new(size: usize) -> Option<PageMapArea> {
-           let size = size.align(VirtualPage::SMALL_PAGE_SIZE);
-           let num_pages = size / VirtualPage::SMALL_PAGE_SIZE;
+    impl<'a> PageMapArea<'a> {
+        pub fn new(size: usize) -> Option<PageMapArea<'a>> {
+            let size = size.align(VirtualPage::SMALL_PAGE_SIZE);
+            let num_pages = size / VirtualPage::SMALL_PAGE_SIZE;
 
-           if size > BlockSize::Block4M.bytes() as usize {
-               None
-           } else {
-               let mut frames = Vec::new();
+            if size > BlockSize::Block4M.bytes() as usize {
+                None
+            } else {
+                let mut frames = Vec::new();
 
-               for i in 0..num_pages {
-                   match phys_alloc::alloc_phys(BlockSize::Block4k) {
-                       Ok(addr) => frames.push(addr.0),
-                       Err(_) => {
-                           for j in 0..i {
-                               phys_alloc::release_phys(frames[j], BlockSize::Block4k);
-                               return None;
-                           }
-                       }
-                   }
-               }
+                for i in 0..num_pages {
+                    match phys_alloc::alloc_phys(BlockSize::Block4k) {
+                        Ok(addr) => frames.push(addr.0),
+                        Err(_) => {
+                            for j in 0..i {
+                                phys_alloc::release_phys(frames[j], BlockSize::Block4k);
+                                return None;
+                            }
+                        }
+                    }
+                }
 
-               unsafe {
-                   Self::new_from_frames(&frames[..num_pages])
-                       .map(|mut pmap| {
-                           pmap.has_frames_mapped = true;
-                           pmap
-                       })
-               }
-           }
-       }
+                unsafe {
+                    Self::new_from_frames(&frames[..num_pages]).map(|mut pmap| {
+                        pmap.has_frames_mapped = true;
+                        pmap
+                    })
+                }
+            }
+        }
 
-       pub unsafe fn new_from_addr(addr: PAddr) -> Option<PageMapArea> {
-           PageMapArea::new_from_frames(&[addr])
-       }
+        pub unsafe fn new_from_addr(addr: PAddr) -> Option<PageMapArea<'a>> {
+            PageMapArea::new_from_frames(&[addr])
+        }
 
-       fn acquire_buffer(size: usize) -> Option<&'static mut [u8]> {
-           let mut buffer_option = None;
+        fn acquire_buffer(
+            guard: &mut MutexGuard<'_, [bool; 1024]>,
+            size: usize,
+        ) -> Option<&'static mut [u8]> {
+            unsafe {
+                if size <= PAGE_MAP_AREA.len() {
+                    let mut len = 0;
+                    let mut offset = 0;
 
-           unsafe {
-               if size <= PAGE_MAP_AREA.len() {
-                   while mutex_lock(&mut PMAP_LOCK) != 0 {}
+                    for i in 0..guard.len() {
+                        if !guard[i] {
+                            len += 1;
+                        } else {
+                            len = 0;
+                            offset = i + 1;
+                            continue;
+                        };
 
-                   let mut len = 0;
-                   let mut offset = 0;
+                        if len * VirtualPage::SMALL_PAGE_SIZE >= size {
+                            for x in offset..offset+len {
+                                guard[x] = true;
+                            }
+                            return Some(
+                                &mut PAGE_MAP_AREA[offset * VirtualPage::SMALL_PAGE_SIZE
+                                    ..(offset + len) * VirtualPage::SMALL_PAGE_SIZE],
+                            );
+                        }
+                    }
+                }
+            }
+            None
+        }
 
-                   for i in 0..PMAP_STATUS.len() {
-                       if !PMAP_STATUS[i] {
-                           len += 1;
-                       } else {
-                           len = 0;
-                           offset = i + 1;
-                           continue;
-                       };
+        fn release_buffer(guard: &mut MutexGuard<'_, [bool; 1024]>, buffer: &mut [u8]) {
+            unsafe {
+                let buffer_start = (buffer.as_ptr() as usize) - (PAGE_MAP_AREA.as_ptr() as usize);
+                let buffer_end = buffer_start + buffer.len();
 
-                       if len * VirtualPage::SMALL_PAGE_SIZE >= size {
-                           buffer_option = Some(&mut PAGE_MAP_AREA[offset*VirtualPage::SMALL_PAGE_SIZE..(offset+len)*VirtualPage::SMALL_PAGE_SIZE]);
-                           break;
-                       }
-                   }
+                for i in (buffer_start / VirtualPage::SMALL_PAGE_SIZE)
+                    ..(buffer_end / VirtualPage::SMALL_PAGE_SIZE)
+                {
+                    guard[i] = false;
+                }
+            }
+        }
 
-                   while mutex_unlock(&mut PMAP_LOCK) != 0 {}
-               }
-           }
-           buffer_option
-       }
-
-       fn release_buffer(buffer: &mut [u8]) {
-           unsafe {
-               while mutex_lock(&mut PMAP_LOCK) != 0 {}
-
-               let buffer_start = (buffer.as_ptr() as usize) - (PAGE_MAP_AREA.as_ptr() as usize);
-               let buffer_end = buffer_start + buffer.len();
-
-               for i in (buffer_start / VirtualPage::SMALL_PAGE_SIZE)..(buffer_end / VirtualPage::SMALL_PAGE_SIZE) {
-                   PMAP_STATUS[i] = false;
-               }
-
-               while mutex_unlock(&mut PMAP_LOCK) != 0 {}
-           }
-       }
-
-       pub unsafe fn new_from_frames(frames: &[PAddr]) -> Option<PageMapArea> {
+        pub unsafe fn new_from_frames(frames: &[PAddr]) -> Option<PageMapArea<'a>> {
             let size = frames.len() * VirtualPage::SMALL_PAGE_SIZE;
 
             if size > 0 && size <= PAGE_MAP_AREA.len() {
-                Self::acquire_buffer(size)
-                    .and_then(|base_ref| {
-                        match super::map_frames(None,
-                                                  base_ref.as_ptr() as *mut c_void,
-                                                  &frames, 0) {
-                            Ok(_) => {
-                                Some(Self {
-                                    slice: base_ref,
-                                    has_frames_mapped: false,
-                                })
-                            },
-                            Err(SyscallError::PartiallyMapped(pages_mapped)) => {
-                                eprintfln!("new_from_frames failed. only mapped {} pages instead of {}.", pages_mapped, frames.len());
+                let mut guard = PMAP_STATUS.lock();
 
-                                let mut v = base_ref.as_ptr();
+                Self::acquire_buffer(&mut guard, size).and_then(|base_ref| {
+                    match super::map_frames(None, base_ref.as_ptr() as *mut c_void, &frames, 0) {
+                        Ok(_) => Some(Self {
+                            slice: base_ref,
+                            has_frames_mapped: false,
+                        }),
+                        Err(SyscallError::PartiallyMapped(pages_mapped)) => {
+                            eprintfln!(
+                                "new_from_frames failed. only mapped {} pages instead of {}.",
+                                pages_mapped,
+                                frames.len()
+                            );
 
-                                for _ in 0..pages_mapped {
-                                    let frame = super::unmap(None, v as *mut ())
-                                        .ok()?;
+                            let mut v = base_ref.as_ptr();
 
-                                    v = v.wrapping_add(frame.frame_size().bytes());
-                                }
+                            for _ in 0..pages_mapped {
+                                let frame = super::unmap(None, v as *mut ()).ok()?;
 
-                                None
-                            },
-                            Err(_) => None
+                                v = v.wrapping_add(frame.frame_size().bytes());
+                            }
+
+                            None
                         }
-                    })
+                        Err(_) => None,
+                    }
+                })
             } else {
                 None
             }
         }
     }
 
-    impl Deref for PageMapArea {
+    impl<'a> Deref for PageMapArea<'a> {
         type Target = [u8];
 
         fn deref(&self) -> &Self::Target {
@@ -396,36 +338,34 @@ pub mod phys {
         }
     }
 
-    impl DerefMut for PageMapArea {
+    impl<'a> DerefMut for PageMapArea<'a> {
         fn deref_mut(&mut self) -> &mut Self::Target {
             self.slice
         }
     }
 
-    impl Clone for PageMapArea {
+    impl<'a> Clone for PageMapArea<'a> {
         fn clone(&self) -> Self {
             match PageMapArea::new(self.slice.len()) {
                 Some(pmap) => {
                     pmap.slice.copy_from_slice(&self.slice);
 
                     pmap
-                },
+                }
                 None => panic!("Unable to clone page map."),
             }
         }
     }
 
-    impl Drop for PageMapArea {
+    impl<'a> Drop for PageMapArea<'a> {
         fn drop(&mut self) {
-            Self::release_buffer(self.slice.as_mut());
+            let mut guard = PMAP_STATUS.lock();
 
             let mut v = self.slice.as_ptr();
 
             (0..self.slice.len() / VirtualPage::SMALL_PAGE_SIZE).for_each(|_| {
-                let frame = unsafe {
-                    super::unmap(None, v as *mut ())
-                        .expect("Unable to unmap memory")
-                };
+                let frame =
+                    unsafe { super::unmap(None, v as *mut ()).expect("Unable to unmap memory") };
 
                 let block_size = match frame.frame_size() {
                     FrameSize::PseLarge => BlockSize::Block4M,
@@ -438,6 +378,8 @@ pub mod phys {
 
                 v = v.wrapping_add(frame.frame_size().bytes());
             });
+
+            Self::release_buffer(&mut guard, self.slice.as_mut());
         }
     }
 
@@ -448,7 +390,7 @@ pub mod phys {
             let ptr: *mut T = GLOBAL_ALLOCATOR.alloc(layout).cast();
 
             if ptr.is_null() {
-                return None
+                return None;
             } else {
                 peek_ptr(paddr, ptr, mem::size_of::<T>())
                     .ok()
@@ -467,19 +409,19 @@ pub mod phys {
         try_from_phys(base + mem::size_of::<T>() as PSize * index)
     }
 
-    impl AsRef<[u8]> for PageMapArea {
+    impl<'a> AsRef<[u8]> for PageMapArea<'a> {
         fn as_ref(&self) -> &[u8] {
             self.slice
         }
     }
 
-    impl AsMut<[u8]> for PageMapArea {
+    impl<'a> AsMut<[u8]> for PageMapArea<'a> {
         fn as_mut(&mut self) -> &mut [u8] {
             self.slice
         }
     }
 
-    impl Index<usize> for PageMapArea {
+    impl<'a> Index<usize> for PageMapArea<'a> {
         type Output = u8;
 
         fn index(&self, index: usize) -> &Self::Output {
@@ -494,7 +436,7 @@ pub mod phys {
     pub unsafe fn fill_frame(addr: PAddr, value: u8) -> Result<(), Error> {
         PageMapArea::new_from_addr(addr)
             .ok_or_else(|| Error::Failed)
-            .map(|mut pmap_area| pmap_area.as_mut().fill(value) )
+            .map(|mut pmap_area| pmap_area.as_mut().fill(value))
     }
 
     pub fn peek(paddr: PAddr, buffer: &mut [u8]) -> Result<(), usize> {
@@ -513,22 +455,29 @@ pub mod phys {
         read_phys_mem(paddr, buffer.cast(), bytes)
     }
 
-    unsafe fn read_phys_mem(mut paddr: PAddr, buffer: *mut u8, mut length: usize) -> Result<(), usize> {
+    unsafe fn read_phys_mem(
+        mut paddr: PAddr,
+        buffer: *mut u8,
+        mut length: usize,
+    ) -> Result<(), usize> {
         if buffer.is_null() {
             Err(0)
         } else {
             let mut bytes_read = 0;
 
             while length > 0 {
-                let phys_offset = (paddr - paddr.align_trunc(PhysicalFrame::SMALL_PAGE_SIZE as PSize)) as usize;
+                let phys_offset =
+                    (paddr - paddr.align_trunc(PhysicalFrame::SMALL_PAGE_SIZE as PSize)) as usize;
                 let bytes = cmp::min(VirtualPage::SMALL_PAGE_SIZE - phys_offset, length);
 
                 PageMapArea::new_from_addr(paddr)
                     .ok_or_else(|| bytes_read)
                     .map(|mapping_area| {
-                        memcpy(buffer.wrapping_add(bytes_read).cast(),
-                               mapping_area.as_ptr().wrapping_add(phys_offset).cast(),
-                               bytes)
+                        memcpy(
+                            buffer.wrapping_add(bytes_read).cast(),
+                            mapping_area.as_ptr().wrapping_add(phys_offset).cast(),
+                            bytes,
+                        )
                     })?;
 
                 paddr += bytes as PSize;
@@ -540,22 +489,29 @@ pub mod phys {
         }
     }
 
-    unsafe fn write_phys_mem(mut paddr: PAddr, buffer: *const u8, mut length: usize) -> Result<(), usize> {
+    unsafe fn write_phys_mem(
+        mut paddr: PAddr,
+        buffer: *const u8,
+        mut length: usize,
+    ) -> Result<(), usize> {
         if buffer.is_null() {
             Err(0)
         } else {
             let mut bytes_written = 0;
 
             while length > 0 {
-                let phys_offset = (paddr - paddr.align_trunc(PhysicalFrame::SMALL_PAGE_SIZE as PSize)) as usize;
+                let phys_offset =
+                    (paddr - paddr.align_trunc(PhysicalFrame::SMALL_PAGE_SIZE as PSize)) as usize;
                 let bytes = cmp::min(VirtualPage::SMALL_PAGE_SIZE - phys_offset, length);
 
                 PageMapArea::new_from_frames(&[paddr])
                     .ok_or_else(|| bytes_written)
                     .map(|mut mapping_area| {
-                        memcpy(mapping_area.as_mut_ptr().wrapping_add(phys_offset).cast(),
-                               buffer.wrapping_add(bytes_written).cast(),
-                               bytes)
+                        memcpy(
+                            mapping_area.as_mut_ptr().wrapping_add(phys_offset).cast(),
+                            buffer.wrapping_add(bytes_written).cast(),
+                            bytes,
+                        )
                     })?;
 
                 paddr += bytes as PSize;
@@ -568,14 +524,21 @@ pub mod phys {
     }
 }
 
-pub unsafe fn map(root_map: Option<CPageMap>, vaddr: *mut c_void, paddr: PAddr, flags: u32)
-                  -> syscalls::Result<usize> {
+pub unsafe fn map(
+    root_map: Option<CPageMap>,
+    vaddr: *mut c_void,
+    paddr: PAddr,
+    flags: u32,
+) -> syscalls::Result<usize> {
     map_frames(root_map, vaddr, &[paddr], flags)
 }
 
-pub unsafe fn map_frames(root_map: Option<CPageMap>, vaddr: *mut c_void, page_frames: &[PAddr],
-                         flags: u32)
-                         -> syscalls::Result<usize> {
+pub unsafe fn map_frames(
+    root_map: Option<CPageMap>,
+    vaddr: *mut c_void,
+    page_frames: &[PAddr],
+    flags: u32,
+) -> syscalls::Result<usize> {
     let page_size: usize;
 
     let level = if is_flag_set!(flags, flags::mapping::PAGE_SIZED) {
@@ -598,13 +561,19 @@ pub unsafe fn map_frames(root_map: Option<CPageMap>, vaddr: *mut c_void, page_fr
                 flags: syscalls::flags::mapping::ARRAY,
             };
 
-            count += syscalls::set_page_mappings(level, addr_start as *mut (), root_map,
-                                            &page_mappings[..c.len()])
-                .map_err(|e| if let SyscallError::PartiallyMapped(map_count)=e {
+            count += syscalls::set_page_mappings(
+                level,
+                addr_start as *mut (),
+                root_map,
+                &page_mappings[..c.len()],
+            )
+            .map_err(|e| {
+                if let SyscallError::PartiallyMapped(map_count) = e {
                     SyscallError::PartiallyMapped(map_count + count)
                 } else {
                     e
-                })?;
+                }
+            })?;
         }
     }
 
@@ -640,12 +609,12 @@ unsafe impl GlobalAlloc for InitialAllocator {
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-       calloc(1, layout.size()) as *mut u8
+        calloc(1, layout.size()) as *mut u8
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, _layout: Layout, new_size: usize) -> *mut u8 {
         realloc(ptr as *mut c_void, new_size) as *mut u8
-   }
+    }
 }
 
 #[panic_handler]
@@ -654,14 +623,19 @@ fn handle_panic(info: &PanicInfo) -> ! {
 
     match info.location() {
         Some(l) => {
-            eprintf!(" in file '{}' (line {}, col. {})", l.file(), l.line(), l.column());
+            eprintf!(
+                " in file '{}' (line {}, col. {})",
+                l.file(),
+                l.line(),
+                l.column()
+            );
 
             if info.message().as_str().is_some() {
                 eprintf!(":");
             }
 
             eprintf!(" ");
-        },
+        }
         None => {
             eprintf!(": ")
         }

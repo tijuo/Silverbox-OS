@@ -3,10 +3,11 @@ static MAX_NAME_LEN: usize = 12;
 pub(crate) mod manager {
     use crate::Tid;
     use alloc::collections::btree_map::BTreeMap;
-    use crate::error::{ALREADY_REGISTERED, LONG_NAME};
+    use crate::error::Error;
     use super::MAX_NAME_LEN;
     use alloc::string::String;
     use alloc::vec::Vec;
+    use alloc::string::ToString;
 
     static mut NAME_MAP: Option<BTreeMap<String, Tid>> = None;
 
@@ -57,15 +58,15 @@ pub(crate) mod manager {
     /// # }
     /// ```
 
-    pub fn register(name: &str, id: Tid) -> Result<(), i32> {
+    pub fn register(name: &str, id: Tid) -> Result<(), Error> {
         let nm = name_map_mut();
 
         if name.len() > MAX_NAME_LEN {
-            Err(LONG_NAME)
+            Err(Error::TooLong)
         } else if nm.contains_key(name) {
-            Err(ALREADY_REGISTERED)
+            Err(Error::AlreadyRegistered)
         } else {
-            nm.insert(String::from(name), id);
+            nm.insert(name.to_string(), id);
             Ok(())
         }
     }

@@ -54,12 +54,12 @@ int videoSetScroll(unsigned int offset) {
   struct VideoSetScrollRequest *request = (struct VideoSetScrollRequest *)&requestMsg.payload;
   request->row = offset;
 
-  msg_t responseMsg = EMPTY_MSG;
+  msg_t response_msg = EMPTY_MSG;
 
   setMessagePayload(&requestMsg);
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -73,11 +73,11 @@ int videoSetCursor(unsigned int x, unsigned int y) {
   };
 
   msg_t requestMsg = REQUEST_MSG(VSET_CURSOR, videoTid, request);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -90,11 +90,11 @@ int videoEnableCursor(int enable) {
   };
 
   msg_t requestMsg = REQUEST_MSG(VENABLE_CURSOR, videoTid, request);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -103,11 +103,11 @@ int videoClearScreen(void) {
     return -1;
 
   msg_t requestMsg = EMPTY_REQUEST_MSG(VSET_CURSOR, videoTid);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -124,10 +124,10 @@ addr_t mapMem(addr_t addr, int device, size_t length, uint64_t offset,
   request.flags = flags;
 
   msg_t requestMsg = REQUEST_MSG(MAP_MEM, INIT_SERVER_TID, request);
-  msg_t responseMsg = RESPONSE_MSG(response);
+  msg_t response_msg = RESPONSE_MSG(response);
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? response.addr : NULL;
 }
 
@@ -138,11 +138,11 @@ int unmapMem(addr_t addr, size_t length) {
   request.length = length;
 
   msg_t requestMsg = REQUEST_MSG(UNMAP_MEM, INIT_SERVER_TID, request);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -154,10 +154,10 @@ pid_t createPort(pid_t pid, int flags) {
   request.flags = flags;
 
   msg_t requestMsg = REQUEST_MSG(CREATE_PORT, INIT_SERVER_TID, request);
-  msg_t responseMsg = RESPONSE_MSG(response);
+  msg_t response_msg = RESPONSE_MSG(response);
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? response.pid : NULL_PID;
 }
 
@@ -165,13 +165,13 @@ int destroyPort(pid_t port) {
   struct DestroyPortRequest request;
 
   msg_t requestMsg = REQUEST_MSG(DESTROY_PORT, INIT_SERVER_TID, request);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   request.port = port;
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -182,21 +182,21 @@ int registerServer(int type, int id) {
   };
 
   msg_t requestMsg = REQUEST_MSG(REGISTER_SERVER, INIT_SERVER_TID, request);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
 int unregisterServer(void) {
   msg_t requestMsg = EMPTY_REQUEST_MSG(UNREGISTER_SERVER, INIT_SERVER_TID);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -207,13 +207,13 @@ int registerName(const char *name) {
     return -1;
 
   msg_t requestMsg = REQUEST_MSG(REGISTER_NAME, INIT_SERVER_TID, request);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   strncpy(request.name, name, sizeof request.name);
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -225,12 +225,12 @@ tid_t lookupName(const char *name) {
     return NULL_TID;
 
   msg_t requestMsg = REQUEST_MSG(LOOKUP_NAME, INIT_SERVER_TID, request);
-  msg_t responseMsg = RESPONSE_MSG(response);
+  msg_t response_msg = RESPONSE_MSG(response);
 
   strncpy(request.name, name, sizeof request.name);
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? response.tid : NULL_TID;
 }
 
@@ -241,13 +241,13 @@ int unregisterName(const char *name) {
     return -1;
 
   msg_t requestMsg = REQUEST_MSG(UNREGISTER_NAME, INIT_SERVER_TID, request);
-  msg_t responseMsg = EMPTY_MSG
+  msg_t response_msg = EMPTY_MSG
   ;
 
   strncpy(request.name, name, sizeof request.name);
 
   return
-      (sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+      (sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
           == RESPONSE_OK) ? 0 : -1;
 }
 
@@ -258,9 +258,9 @@ int getCurrentTime(unsigned int *time) {
     return -1;
 
   msg_t requestMsg = EMPTY_REQUEST_MSG(GET_TIME_MSG, rtcTid);
-  msg_t responseMsg = RESPONSE_MSG(response);
+  msg_t response_msg = RESPONSE_MSG(response);
 
-  if(sys_call(&requestMsg, &responseMsg) == ESYS_OK && responseMsg.subject
+  if(sys_call(&requestMsg, &response_msg) == ESYS_OK && response_msg.subject
       == RESPONSE_OK) {
     *time = response.time;
     return 0;
@@ -280,11 +280,11 @@ int getCurrentTime(unsigned int *time) {
  int mapTid( tid_t tid, rspid_t pool_id );
 
  // Creates a region of shared memory
- int createShmem( shmid_t shmid, unsigned pages, struct MemRegion *region,
+ int createShmem( shmid_t shmid, unsigned pages, MemRegion *region,
  bool ro_perm );
 
  // Attaches a memory region to an existing shared memory region
- int attachShmemReg( shmid_t shmid, struct MemRegion *region );
+ int attachShmemReg( shmid_t shmid, MemRegion *region );
 
  // Associates a name with the current thread ID
  int registerName( const char *name, size_t len );
@@ -320,7 +320,7 @@ int getCurrentTime(unsigned int *time) {
  struct MessageHeader *header = (struct MessageHeader *)msg->data;
  struct ConnectArgs *args = (struct ConnectArgs *)(header+1);
  size_t pages = (args->region.length % 4096 == 0 ? args->region.length / 4096 : args->region.length / 4096 + 1);
- struct MemRegion region = { 0x800000, pages * 4096 };
+ MemRegion region = { 0x800000, pages * 4096 };
 
  createShmem(0, pages, &region, 0);
  attachShmemReg(0, &args->region);
@@ -369,7 +369,7 @@ int getCurrentTime(unsigned int *time) {
  */
 
 /*
- int createShmem( shmid_t shmid, unsigned pages, struct MemRegion *region,
+ int createShmem( shmid_t shmid, unsigned pages, MemRegion *region,
  bool ro_perm )
  {
  volatile struct GenericReq *req;
@@ -407,7 +407,7 @@ int getCurrentTime(unsigned int *time) {
  return -1;
  }
 
- int attachShmemReg( shmid_t shmid, struct MemRegion *region )
+ int attachShmemReg( shmid_t shmid, MemRegion *region )
  {
  volatile struct GenericReq *req;
  volatile struct Message msg;

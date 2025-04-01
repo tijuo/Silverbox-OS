@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 use core::mem;
-use crate::address::Align;
+use rust::align::Align;
 
 #[repr(packed)]
 pub struct BPB {

@@ -353,9 +353,10 @@ int enable_apic(void)
 
     pte_t *pte = CURRENT_PTE(LAPIC_VADDR);
 
+    pte->value = 0;
     pte->is_read_write = 1;
     pte->global = 1;
-    pte->pat = 1;
+    pte->pat = 0;
     pte->pcd = 1;
     pte->pwt = 1;
     pte->base = PADDR_TO_PTE_BASE((paddr_t)lapic_ptr);
@@ -369,7 +370,6 @@ int enable_apic(void)
     pte->value = 0;
     pte->is_read_write = 1;
     pte->global = 1;
-    pte->pat = 1;
     pte->pcd = 1;
     pte->pwt = 1;
     pte->base = PADDR_TO_PTE_BASE((paddr_t)ioapic_ptr);
@@ -657,15 +657,14 @@ void init(multiboot_info_t* info)
         // todo: Mark these pages as free for init server
     }
 
-    // Initialize FPU to a known state
-    __asm__("fninit\n");
-    //"fxsave %0\n" :: "m"(init_server_thread->xsave_state));
-
 // Set MSRs to enable sysenter/sysexit functionality
 
     wrmsr(SYSENTER_CS_MSR, KCODE_SEL);
     wrmsr(SYSENTER_ESP_MSR, (uint64_t)(uintptr_t)kernel_stack_top);
     wrmsr(SYSENTER_EIP_MSR, (uint64_t)(uintptr_t)sysenter_entry);
+
+    // Set initial SSE state
+    //_fxrstor(init_server_thread->fxsave_state);
 
     kprintfln("Context switching...");
 

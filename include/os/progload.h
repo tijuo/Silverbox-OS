@@ -3,6 +3,6 @@
 
 #include <elf.h>
 
-bool isValidElfExe( elf_header_t *image );
+bool is_valid_elf_exe( elf_header_t *image );
 
 #endif /* PROGLOAD_H */

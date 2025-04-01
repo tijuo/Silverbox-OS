@@ -154,7 +154,7 @@ int main(void) {
         failureCount++;
     }
 
-    msg_t responseMsg = {
+    msg_t response_msg = {
       .recipient = requestMsg.sender,
       .flags = MSG_NOBLOCK,
       .buffer = &responseBody,
@@ -163,18 +163,18 @@ int main(void) {
 
     switch(requestMsg.subject) {
       case GET_TIME_MSG: {
-        responseMsg.subject = RESPONSE_OK;
+        response_msg.subject = RESPONSE_OK;
         responseBody.time = getTime();
         break;
       }
       default:
-        responseMsg.subject = RESPONSE_FAIL;
-        responseMsg.buffer = NULL;
-        responseMsg.bufferLen = 0;
+        response_msg.subject = RESPONSE_FAIL;
+        response_msg.buffer = NULL;
+        response_msg.bufferLen = 0;
         break;
     }
 
-    if(sys_send(&responseMsg) != ESYS_OK)
+    if(sys_send(&response_msg) != ESYS_OK)
       fprintf(stderr, "rtc: Failed to send response to %d\n",
               requestMsg.sender);
   }

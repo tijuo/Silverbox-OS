@@ -5,7 +5,7 @@ ROOT_DIR	:=../..
 ARFLAGS =rs
 
 DIRS	=ostypes
-SRC	=bitmap.c elf.c sbrk.c strings.c message.c
+SRC	=allocator.c bitarray.c elf.c sbrk.c string.c syscalls.c time.c
 ASM_SRC	=mutex.S state.S
 OBJ	=$(SRC:%.c=%.o) $(ASM_SRC:%.S=%.o)
 

@@ -37,7 +37,7 @@
 #define PAGE_OFFSET(a)		    		    ((a) & (PAGE_SIZE-1))
 #define LARGE_PAGE_OFFSET(a)                ((a) & (LARGE_PAGE_SIZE-1))
 
-#define NDX_TO_VADDR(pde, pte, offset)      ((((pde) & 0x3FFu) << 22) | (((pte) & 0x3FFu) << 12) | ((offset) & 0xFFFu))
+#define NDX_TO_VADDR(pde, pte, offset)      ((((pde) & 0x3FFu) << 22) | (((pte) & 0x3FFu) << 12) | (((offset) & 0x3FFu) << 2))
 
 #define PAGING_PRES		        		    (1ul << 0)
 #define PAGING_RW		        			(1ul << 1)

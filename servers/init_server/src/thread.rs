@@ -1,5 +1,5 @@
 use core::time::Duration;
-use crate::syscall;
+use rust::syscalls::{self, SleepGranularity};
 use alloc::string::String;
 
 pub struct Thread {
@@ -53,7 +53,7 @@ impl Thread {
         Thread {
             name,
             stack_size,
-            id: ThreadId(syscall::c_types::NULL_TID),
+            id: ThreadId(syscalls::c_types::NULL_TID),
             stack_top: stack_memory + stack_size,
         }
     }
@@ -62,7 +62,7 @@ impl Thread {
     pub fn spawn<F, T>(self, f: F) -> Result<JoinHandle<T>, error::Error>
         where  F: FnOnce() -> T + Send + 'static, T: Send + 'static {
         unsafe {
-            syscall::sys_create_thread(syscall::c_types::NULL_TID,
+            syscalls::sys_create_thread(syscalls::c_types::NULL_TID,
                                        &f as * const F as * const c_void,
             core::ptr::null() as * const PAddr,
             self.stack_top as * const c_void);
@@ -74,15 +74,8 @@ impl Thread {
 pub fn sleep(dur: Duration) {
     let millis = dur.as_millis().clamp(0, 0xffffffff) as u32;
 
-    match syscall::sleep(millis) {
-        Err(code) => eprintfln!("syscall::sleep() failed with code: {}", code),
+    match syscalls::sleep(millis, SleepGranularity::Milliseconds) {
+        Err(code) => eprintfln!("syscalls::sleep() failed with code: {:?}", code),
         _ => (),
-    };
-}
-
-pub fn yield_now() {
-    match syscall::sleep(0) {
-        Err(code) => eprintfln!("syscall::sleep() failed with code: {}", code),
-        _ => ()
     };
 }

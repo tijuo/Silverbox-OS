@@ -309,11 +309,10 @@ void handle_cpu_exception(struct CpuExInterruptFrame* interrupt_frame)
             .who = get_tid(tcb),
         };
 
-        if(IS_ERROR(send_message(tcb, tcb->ex_handler, EXCEPTION_MSG, MSG_KERNEL, &message_data, sizeof message_data))) {
+        if(tcb->ex_handler == NULL_TID || IS_ERROR(send_message(tcb, interrupt_frame->ex_num == 14 ? tcb->pager : tcb->ex_handler, EXCEPTION_MSG, MSG_KERNEL, &message_data, sizeof message_data))) {
             kprintfln("Unable to send message to exception handler.");
             kprintfln("Tried to send exception %u message to tid %hhu.",
-                interrupt_frame->ex_num, interrupt_frame->error_code,
-                interrupt_frame->ex_num == 14 ? get_cr2() : 0, get_tid(tcb));
+                interrupt_frame->ex_num, interrupt_frame->ex_num == 14 ? tcb->pager : tcb->ex_handler);
             dump_regs(tcb, &interrupt_frame->state, interrupt_frame->ex_num, interrupt_frame->error_code);
 
             if(IS_ERROR(thread_release(tcb))) {

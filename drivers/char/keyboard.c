@@ -118,14 +118,14 @@
 byte kbBufData[KB_MAX_BUFSIZE];
 byte mouseBufData[MOUSE_MAX_BUFSIZE];
 
-struct CircularBuffer kbBuffer = {
+CircularBuffer kbBuffer = {
     .data = kbBufData,
     .ptr = kbBufData,
     .unreadLen = 0,
     .bufLen = KB_MAX_BUFSIZE
 };
 
-struct CircularBuffer mouseBuffer = {
+CircularBuffer mouseBuffer = {
     .data = mouseBufData,
     .ptr = mouseBufData,
     .unreadLen = 0,

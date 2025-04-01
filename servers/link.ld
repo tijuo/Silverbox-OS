@@ -7,7 +7,10 @@ SECTIONS
   .text virtual : {
     __codeStart = .;
     *(.text)
-    *(.comment)
+    . = ALIGN(4096);
+  }
+
+  .rodata . : {
     *(.rodata*)
     . = ALIGN(4096);
   }

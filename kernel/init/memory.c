@@ -19,6 +19,8 @@ DISC_CODE void init_paging(void);
 
 DISC_DATA ALIGN_AS(PAGE_SIZE) pmap_entry_t kpage_dir[PMAP_ENTRY_COUNT]; // The initial page directory used by the kernel on bootstrap
 
+DISC_DATA bool can_alloc_frames = false;
+
 ALIGN_AS(PAGE_SIZE) pte_t kernel_page_table[PTE_ENTRY_COUNT];
 ALIGN_AS(PAGE_SIZE) pte_t klower_mem_ptab[PTE_ENTRY_COUNT];
 
@@ -28,8 +30,17 @@ extern multiboot_info_t* multiboot_info;
 extern uint32_t lapic_ptr;
 extern uint32_t ioapic_ptr;
 
+struct PseudoSelector {
+    uint16_t limit;
+    uint32_t base;
+} PACKED;
+
 paddr_t alloc_phys_frame(void)
 {
+    if(!can_alloc_frames) {
+        PANIC("Unable to allocate physical frame. Either the allocator hasn't been initialized yet or the init server has already been loaded.");
+    }
+
     paddr_t frame = first_free_page;
 
     while(frame >= EXTENDED_MEMORY && is_reserved_page(frame, multiboot_info, 0)) {
@@ -131,7 +142,8 @@ void setup_tss(unsigned int processor)
 
 int init_memory(multiboot_info_t* info)
 {
-    first_free_page = (paddr_t)((uintptr_t)&kphys_start + (size_t)&ksize);
+    first_free_page = (paddr_t)ALIGN(((uintptr_t)&kphys_start + (size_t)ksize), PAGE_SIZE);
+    can_alloc_frames = true;
 
     unsigned int total_phys_mem = (info->mem_upper + 1024) * 1024;
 
@@ -159,6 +171,10 @@ int init_memory(multiboot_info_t* info)
 void init_paging(void)
 {
     uint32_t old_cr0;
+    struct PseudoSelector gdt_psel = {
+        .base = (uint32_t)kernel_gdt,
+        .limit = (uint16_t)(sizeof kernel_gdt)
+    };
 
     // These are supposed to be cleared, but just in case...
 
@@ -174,7 +190,6 @@ void init_paging(void)
         klower_mem_ptab[i].value = 0;
         klower_mem_ptab[i].is_present = 1;
         klower_mem_ptab[i].is_read_write = 1;
-        klower_mem_ptab[i].pat = is_mmio ? 1 : 0;
         klower_mem_ptab[i].pcd = is_mmio ? 1 : 0;
         klower_mem_ptab[i].pwt = is_mmio ? 1 : 0;
         klower_mem_ptab[i].base = i;
@@ -255,6 +270,7 @@ void init_paging(void)
         "retf\n"
         "1:\n"
         "pop %%eax\n" :: "i"(KCODE_SEL) : "memory", "cc");
-
+    
+    __asm__("lgdt %0\n" :: "m"(gdt_psel) : "memory");
     setup_tss(0);
 }

@@ -1,82 +1,55 @@
-use alloc::boxed::Box;
-use core::borrow::{Borrow, BorrowMut};
+use core::cell::UnsafeCell;
+use core::sync::atomic::AtomicBool;
+use core::sync::atomic::Ordering;
 use core::ops::{Deref, DerefMut};
-use core::cell::{Cell, RefCell, RefMut};
-use crate::syscall;
-
-#[link(name="os_init", kind="static")]
-extern "C" {
-    fn mutex_lock(lock: *mut i32) -> i32;
-}
-
-pub enum TryLockResult {
-    AlreadyLocked,
-    Poisoned,
-}
 
 pub struct Mutex<T: ?Sized> {
-    data: Box<RefCell<T>>,
-    lock: Cell<i32>,
+    locked: AtomicBool,
+    inner: UnsafeCell<MutexInner<T>>
 }
 
-pub struct LockedResource<'a, T: 'a + ?Sized> {
-    mutex: &'a Mutex<T>,
-    data_ref: RefMut<'a, T>
+pub struct MutexInner<T: ?Sized> {
+    data: T,
+}
+
+pub struct MutexGuard<'a, T: ?Sized> {
+    mutex_ref: &'a Mutex<T>
 }
 
 impl<T> Mutex<T> {
-    pub fn new(t: T) -> Mutex<T> {
+    pub const fn new(data: T) -> Self {
         Self {
-            data: Box::new(RefCell::new(t)),
-            lock: Cell::new(0),
+            locked: AtomicBool::new(false),
+            inner: UnsafeCell::new(MutexInner { data }),
         }
+    }
+
+    pub fn lock(&self) -> MutexGuard<'_, T> {
+        while self.locked
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err() {}
+        MutexGuard { mutex_ref: &self }
     }
 }
 
-impl<T: ?Sized> Mutex<T> {
-    pub fn lock(&self) -> LockedResource<'_, T> {
-        unsafe {
-            while mutex_lock(self.lock.as_ptr()) != 0 {
-                syscall::sys_sleep(0);
-            }
-        }
-
-        LockedResource {
-            mutex: &self,
-            data_ref: (*self.data).borrow_mut(),
-        }
-    }
-
-    pub fn try_lock(&self) -> Result<LockedResource<'_, T>, TryLockResult> {
-        unsafe {
-            if mutex_lock(self.lock.as_ptr()) != 0 {
-                return Err(TryLockResult::AlreadyLocked)
-            }
-        }
-
-        Ok(LockedResource {
-                mutex: &self,
-                data_ref: (*self.data).borrow_mut(),
-            })
-    }
-}
-
-impl<'a, T: ?Sized> Deref for LockedResource<'a, T> {
+impl<'a, T> Deref for MutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        self.data_ref.borrow()
+        unsafe { &(*self.mutex_ref.inner.get()).data }
     }
 }
 
-impl<'a, T: ?Sized> DerefMut for LockedResource<'a, T> {
+impl<'a, T> DerefMut for MutexGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.data_ref.borrow_mut()
+        unsafe { &mut (*self.mutex_ref.inner.get()).data  }
     }
 }
 
-impl<'a, T: ?Sized> Drop for LockedResource<'a, T> {
+impl<'a, T: ?Sized> Drop for MutexGuard<'a, T> {
     fn drop(&mut self) {
-        self.mutex.lock.set(0);
+        self.mutex_ref.locked.store(false, Ordering::Release);
     }
 }
+
+unsafe impl<T: ?Sized> Sync for Mutex<T> {}

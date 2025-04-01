@@ -145,7 +145,7 @@ static int handle_sys_sleep(syscall_args_t args)
 {
     tcb_t* current_thread = thread_get_current();
     tcb_t* new_thread = NULL;
-    int ret_val;
+    int ret_val = ESYS_FAIL;
 
     if(ARG_DURATION == 0) {
         new_thread = schedule(processor_get_current());    // yield processor to another thread
@@ -161,10 +161,12 @@ static int handle_sys_sleep(syscall_args_t args)
                 break;
             case E_DONE:
                 PANIC("A paused thread shouldn't be able to call sys_sleep()");
+                UNREACHABLE;
+                break;
             default:
                 UNREACHABLE;
+                break;
         }
-        ret_val = ESYS_FAIL;
     } else {
         switch(thread_sleep(thread_get_current(), ARG_DURATION, ARG_GRANULARITY)) {
             case E_OK:
@@ -176,8 +178,11 @@ static int handle_sys_sleep(syscall_args_t args)
                 break;
             case E_DONE:
                 PANIC("A paused thread shouldn't be able to call sys_sleep()");
+                UNREACHABLE;
+                break;
             default:
                 UNREACHABLE;
+                break;
         }
     }
 
@@ -190,55 +195,65 @@ static int handle_sys_sleep(syscall_args_t args)
 #undef ARG_DURATION
 #undef ARG_GRANULARITY
 
-// arg1 - virt
-// arg2 - count
-// arg3 - addr_space
-// arg4 - mappings
-// sub_arg.word - level
-
 static int handle_sys_read_page_mappings(SysReadPageMappingsArgs* args)
 {
     PageMapping* mappings = args->mappings;
     size_t i;
+    addr_t virt;
+    paddr_t page_dir;
+    pde_t pde;
 
     if(!mappings)
         return ESYS_FAIL;
 
-    if(args->addr_space == CURRENT_ROOT_PMAP) {
-        if(args->level == 2) {
-            cr3_t cr3 = {
-                .value = get_cr3()
-            };
-
-            mappings->phys_frame = (paddr_t)cr3.base;
-            mappings->flags = 0;
-
-            if(cr3.pcd)
-                mappings->flags |= PM_UNCACHED;
-
-            if(cr3.pwt)
-                mappings->flags |= PM_WRITETHRU;
-
-            return 1;
-        } else
-            args->addr_space = (addr_t)get_root_page_map();
+    if(args->level >= N_PM_LEVELS) {
+        return ESYS_FAIL;
     }
 
-    kprintf("sys_get_page_mappings: virt-%#x count-%#x frame-%#x flags:-%#x level: %d\n",
-        args->virt, args->count, mappings->phys_frame, mappings->flags, args->level);
+    if(args->addr_space == CURRENT_ROOT_PMAP) {
+        args->addr_space = thread_get_current()->root_pmap;
+    }
 
-    switch(args->level) {
-        case 0:
-            for(i = 0; i < args->count && args->virt < KERNEL_VSTART;
-                i++, args->virt += PAGE_SIZE, mappings++) {
-                pde_t pde;
+    virt = args->virt;
+    page_dir = (paddr_t)ALIGN_DOWN(args->addr_space, (paddr_t)PAGE_SIZE);
 
-                if(IS_ERROR(read_pde(&pde, PDE_INDEX(args->virt), args->addr_space))) {
+    for(i = 0; i < args->count; i++, virt += (args->level == 0) ? PAGE_TABLE_SIZE : PAGE_SIZE) {
+        for(int level = 0; level < args->level; level++) {
+            #ifndef PAE
+            if(level == 0) {
+                if(IS_ERROR(read_pde(&pde, PDE_INDEX(virt), page_dir))) {
                     RET_MSG((int)i, "Unable to read PDE.");
-                };
+                }
 
-                if(!pde.is_present)
-                    RET_MSG((int)i, "Page directory is not present.");
+                if(!pde.is_present) {
+                    mappings[i][0].flags = PM_UNMAPPED;
+                    mappings[i][0].type = PMT_BLOCK;
+                    mappings[i][0].block_num = pde.value >> 1;
+                    break;
+                } else {
+                    mappings[i][0].phys_frame = get_pde_frame_number(pde);
+                    mappings[i][0].flags = (!pde.is_read_write ? PM_READ_ONLY : 0) | (!pde.is_user ? PM_KERNEL : 0)
+                        | (pde.pcd ? PM_UNCACHED : 0) | (pde.pwt ? PM_WRITETHRU : 0) | (pde.accessed ? PM_ACCESSED : 0);
+                    
+                    if(pde.is_page_sized) {
+                        pmap_entry_t pmap_entry = {
+                            .pde = pde
+                        };
+
+                        mappings[i][0].flags |= PM_PAGE_SIZED;
+                        mappings[i][0].type = PMT_PAGE;
+                        mappings[i][0].flags |= pmap_entry.large_pde.available << PM_AVAIL_OFFSET;
+
+                        if(pmap_entry.large_pde.dirty) {
+                            mappings[i][0].flags |= PM_DIRTY;
+                        }
+                    } else {
+                        mappings[i][0].flags |= ((pde.available2 ? (1u << 4) : 0) | pde.available) << PM_AVAIL_OFFSET;
+                        mappings[i][0].type = PMT_PAGE_TABLE;
+                    }
+                }
+            } else {
+                // pde is assumed to already have been loaded when level == 0
 
                 pte_t pte;
 
@@ -247,92 +262,23 @@ static int handle_sys_read_page_mappings(SysReadPageMappingsArgs* args)
                 }
 
                 if(!pte.is_present) {
-                    mappings->block_num = pte.value >> 1;
-                    mappings->flags |= PM_UNMAPPED;
+                    mappings[i][1].block_num = pte.value >> 1;
+                    mappings[i][1].flags = PM_UNMAPPED;
+                    mappings[i][1].type = PMT_BLOCK;
                 } else {
-                    mappings->phys_frame = pte.base;
-                    mappings->flags = PM_PAGE_SIZED;
+                    mappings[i][1].phys_frame = pte.base;
+                    mappings[i][1].flags = PM_PAGE_SIZED;
+                    mappings[i][1].type = PMT_PAGE;
 
-                    if(!pte.is_read_write)
-                        mappings->flags |= PM_READ_ONLY;
-
-                    if(!pte.is_user)
-                        mappings->flags |= PM_KERNEL;
-
-                    mappings->flags |= pte.available << PM_AVAIL_OFFSET;
-
-                    if(pte.dirty)
-                        mappings->flags |= PM_DIRTY;
-
-                    if(pte.pcd)
-                        mappings->flags |= PM_UNCACHED;
-
-                    if(pte.pwt)
-                        mappings->flags |= PM_WRITETHRU;
-
-                    if(pte.accessed)
-                        mappings->flags |= PM_ACCESSED;
+                    mappings[i][1].flags |= (!pte.is_read_write ? PM_READ_ONLY : 0) | (!pte.is_user ? PM_KERNEL : 0)
+                    | (pte.dirty ? PM_DIRTY : 0) | (pte.pcd ? PM_UNCACHED : 0) | (pte.pwt ? PM_WRITETHRU : 0)
+                    | (pte.accessed ? PM_ACCESSED : 0) | (pte.available << PM_AVAIL_OFFSET);
                 }
             }
-            break;
-        case 1:
-            for(i = 0; i < args->count && args->virt < KERNEL_VSTART; i++, args->virt += PAGE_TABLE_SIZE, mappings++) {
-                pde_t pde;
-                
-                if(IS_ERROR(read_pde(&pde, PDE_INDEX(args->virt), args->addr_space))) {
-                    RET_MSG((int)i, "Unable to read PDE.");
-                }
-
-                if(!pde.is_present) {
-                    mappings->block_num = pde.value >> 1;
-                    mappings->flags |= PM_UNMAPPED;
-                } else {
-                    mappings->phys_frame = get_pde_frame_number(pde);
-                    mappings->flags = 0;
-
-                    if(!pde.is_read_write)
-                        mappings->flags |= PM_READ_ONLY;
-
-                    if(!pde.is_user)
-                        mappings->flags |= PM_KERNEL;
-
-                    if(pde.is_page_sized) {
-                        pmap_entry_t pmap_entry = {
-                            .pde = pde
-                        };
-
-                        mappings->flags |= PM_PAGE_SIZED;
-                        mappings->flags |= pmap_entry.large_pde.available << PM_AVAIL_OFFSET;
-
-                        if(pmap_entry.large_pde.dirty)
-                            mappings->flags |= PM_DIRTY;
-                    } else {
-                        mappings->flags |= ((pde.available2 ? (1u << 4) : 0) | pde.available) << PM_AVAIL_OFFSET;
-                    }
-
-                    if(pde.pcd)
-                        mappings->flags |= PM_UNCACHED;
-
-                    if(pde.pwt)
-                        mappings->flags |= PM_WRITETHRU;
-
-                    if(pde.accessed)
-                        mappings->flags |= PM_ACCESSED;
-                }
-            }
-            break;
-        case 2:
-        {
-            if(args->count) {
-                mappings->phys_frame = PADDR_TO_PBASE(args->addr_space);
-                mappings->flags = 0;
-
-                return 1;
-            } else
-                return 0;
+            #else
+            #error "PAE support for handle_sys_read_page_mappings() is not yet implemented."
+            #endif /* PAE */
         }
-        default:
-            RET_MSG(ESYS_FAIL, "Invalid page map level.");
     }
 
     return (int)i;
@@ -345,191 +291,181 @@ static int handle_sys_read_page_mappings(SysReadPageMappingsArgs* args)
 // sub_arg.word - level
 static int handle_sys_update_page_mappings(SysUpdatePageMappingsArgs* args)
 {
-    size_t i;
     PageMapping* mappings = args->mappings;
-    pbase_t pframe = 0;
-    bool is_array = false;
+    size_t i;
+    addr_t virt;
+    paddr_t page_dir;
+    pmap_entry_t pmap_entry;
 
     if(!mappings)
         return ESYS_FAIL;
 
-    if(args->addr_space == CURRENT_ROOT_PMAP)
-        args->addr_space = (uint32_t)get_root_page_map();
-
-    kprintf("sys_set_page_mappings: virt-%#x count-%#x frame-%#x flags:-%#x level: %d\n",
-        args->virt, args->count, mappings->phys_frame, mappings->flags, args->level);
-
-    if(IS_FLAG_SET(mappings->flags, PM_ARRAY)) {
-        is_array = true;
-        pframe = mappings->phys_frame;
+    if(args->level >= N_PM_LEVELS) {
+        return ESYS_FAIL;
     }
 
-    switch(args->level) {
-        case 0:
-            for(i = 0; i < args->count && args->virt < KERNEL_VSTART; i++, args->virt += PAGE_SIZE) {
-                pte_t pte = {
-                    .value = 0
-                };
+    if(args->addr_space == CURRENT_ROOT_PMAP) {
+        args->addr_space = thread_get_current()->root_pmap & CR3_BASE_MASK;
+    }
 
-                pde_t pde;
-                
-                if(IS_ERROR(read_pde(&pde, PDE_INDEX(args->virt), args->addr_space))) {
+    virt = args->virt;
+    page_dir = (paddr_t)ALIGN_DOWN(args->addr_space, (paddr_t)PAGE_SIZE);
+
+    for(i = 0; i < args->count; i++, virt += (args->level == 0) ? PAGE_TABLE_SIZE : PAGE_SIZE) {
+        bool end_walk = false;
+        bool was_mapped = false;
+
+        for(int level = 0; level < args->level; level++) {
+            #ifndef PAE
+            unsigned int pmap_entry_index = (virt >> (12 + 10*(N_PM_LEVELS-level-1))) & (PAGE_SIZE-1);
+
+            if(level == 0) {
+                if(IS_ERROR(read_pmap_entry(page_dir, pmap_entry_index, &pmap_entry))) {
                     RET_MSG((int)i, "Unable to read PDE.");
                 }
 
-                if(!pde.is_present)
-                    RET_MSG((int)i, "PDE is not present for address");
-
-                if(IS_FLAG_SET(mappings->flags, PM_KERNEL))
-                    RET_MSG((int)i, "Cannot set page with kernel access privilege.");
-
-                pte_t old_pte;
-                
-                if(IS_ERROR(read_pte(&old_pte, PTE_INDEX(args->virt), PDE_BASE(pde)))) {
+                if(pmap_entry.pde.is_present && !pmap_entry.pde.is_user) {
+                    RET_MSG((int)i, "Cannot update kernel page mapping.");
+                }
+            } else {
+                if(IS_ERROR(read_pmap_entry(PBASE_TO_PADDR(get_pde_frame_number(pmap_entry.pde)), pmap_entry_index, &pmap_entry))) {
                     RET_MSG((int)i, "Unable to read PTE.");
                 }
 
-                if(old_pte.is_present && !IS_FLAG_SET(mappings->flags, PM_OVERWRITE)) {
-                    kprintf("Mapping for %#x in address space %#x already exists!\n", args->virt, args->addr_space);
-                    RET_MSG((int)i, "Attempted to overwrite page mapping.");
-                }
-
-                if(IS_FLAG_SET(mappings->flags, PM_UNMAPPED)) {
-                    if((is_array ? pframe : mappings->block_num) >= 0x80000000u)
-                        RET_MSG((int)i, "Tried to set invalid block number for PTE.");
-                    else
-                        pte.value = (is_array ? pframe : mappings->block_num) << 1;
-                } else {
-                    uint32_t avail_bits = ((mappings->flags & PM_AVAIL_MASK) >> PM_AVAIL_OFFSET);
-                    pte.is_present = 1;
-
-                    if((is_array ? pframe : mappings->phys_frame) >= (1u << 20))
-                        RET_MSG((int)i, "Tried to write invalid frame to PTE.");
-                    else if(avail_bits & ~0x07u)
-                        RET_MSG((int)i, "Cannot set available bits (overflow).");
-
-                    pte.base = is_array ? pframe : mappings->phys_frame;
-                    pte.is_read_write = !IS_FLAG_SET(mappings->flags, PM_READ_ONLY);
-                    pte.is_user = 1;
-                    pte.dirty = IS_FLAG_SET(mappings->flags, PM_DIRTY);
-                    pte.accessed = IS_FLAG_SET(mappings->flags, PM_ACCESSED);
-                    pte.pat = IS_FLAG_SET(mappings->flags,
-                        PM_WRITECOMB)
-                        && !IS_FLAG_SET(mappings->flags, PM_UNCACHED);
-                    pte.pcd = IS_FLAG_SET(mappings->flags, PM_UNCACHED);
-                    pte.pwt = IS_FLAG_SET(mappings->flags, PM_WRITETHRU);
-                    pte.global = IS_FLAG_SET(mappings->flags, PM_STICKY);
-                    pte.available = avail_bits;
-
-                    if(IS_FLAG_SET(mappings->flags, PM_CLEAR)) {
-                        if(clear_phys_frames(PTE_BASE(pte), 1) != 1) {
-                            RET_MSG((int)i, "Unable to clear physical frame.");
-                        }
-                    }
-                }
-
-                if(IS_ERROR(write_pte(PTE_INDEX(args->virt), pte, PDE_BASE(pde))))
-                    RET_MSG((int)i, "Unable to write to PTE.");
-
-                invalidate_page(args->virt);
-
-                if(is_array) {
-                    pframe++;
-                } else {
-                    mappings++;
+                if(pmap_entry.pte.is_present && !pmap_entry.pte.is_user) {
+                    RET_MSG((int)i, "Cannot update kernel page mapping.");
                 }
             }
-            break;
-        case 1:
-            for(i = 0; i < args->count && args->virt < KERNEL_VSTART; i++, args->virt += PAGE_TABLE_SIZE, mappings++) {
-                pmap_entry_t pmap_entry = {
-                    .value = 0
-                };
+            #endif /* PAE */
 
-                if(IS_FLAG_SET(mappings->flags, PM_KERNEL))
-                    RET_MSG((int)i, "Cannot set page with kernel access privilege.");
-
-                pde_t old_pde;
-                
-                if(IS_ERROR(read_pde(&old_pde, PDE_INDEX(args->virt), args->addr_space))) {
-                    RET_MSG((int)i, "Unablo to read PDE.");
+            switch(mappings[i][level].type) {
+                case PMT_BLOCK: {
+                    was_mapped = !!((level == N_PM_LEVELS - 1) ? pmap_entry.pte.is_present : pmap_entry.pde.is_present);
+                    pmap_entry.value = mappings[i][level].block_num << 1;
+                    end_walk = true;
+                    break;
                 }
+                case PMT_PAGE_TABLE: {
+                    // XXX: Physical frames need to be checked or allocated by the kernel in
+                    // order to prevent the user from mapping arbitrary address.
 
-                if(old_pde.is_present && !IS_FLAG_SET(mappings->flags, PM_OVERWRITE))
-                    RET_MSG((int)i, "Attempted to overwrite page mapping.");
+                    if(level == N_PM_LEVELS - 1) {
+                        RET_MSG((int)i, "Page map level %d cannot be a page table.", level);
+                    }
 
-                if(IS_FLAG_SET(mappings->flags, PM_UNMAPPED)) {
-                    if((is_array ? pframe : mappings->block_num) >= 0x80000000u)
-                        RET_MSG((int)i, "Tried to set invalid block number for PDE.");
-                    else
-                        pmap_entry.value = (is_array ? pframe : mappings->block_num) << 1;
-                } else {
-                    pmap_entry.pde.is_present = 1;
+                    if(IS_FLAG_SET(mappings[i][level].flags, PM_UNMAPPED)) {
+                        pmap_entry.value = 0;
+                        end_walk = true;
+                        break;
+                    }
 
-                    pmap_entry.pde.is_read_write = !IS_FLAG_SET(mappings->flags,
+                    uint32_t avail_bits = ((mappings[i][level].flags & PM_AVAIL_MASK) >> PM_AVAIL_OFFSET);
+
+                    if(avail_bits & ~0x0Fu) {
+                        RET_MSG((int)i, "Cannot set available bits (overflow).");
+                    }
+
+                    pmap_entry.pde.is_read_write = !IS_FLAG_SET(mappings[i][level].flags,
                         PM_READ_ONLY);
                     pmap_entry.pde.is_user = 1;
-                    pmap_entry.pde.accessed = IS_FLAG_SET(mappings->flags, PM_ACCESSED);
-                    pmap_entry.pde.pcd = IS_FLAG_SET(mappings->flags, PM_UNCACHED);
-                    pmap_entry.pde.pwt = IS_FLAG_SET(mappings->flags, PM_WRITETHRU);
+                    pmap_entry.pde.accessed = IS_FLAG_SET(mappings[i][level].flags, PM_ACCESSED);
+                    pmap_entry.pde.pcd = IS_FLAG_SET(mappings[i][level].flags, PM_UNCACHED);
+                    pmap_entry.pde.pwt = IS_FLAG_SET(mappings[i][level].flags, PM_WRITETHRU);
+                    pmap_entry.pde.base = PADDR_TO_PBASE(mappings[i][level].phys_frame);
+                    pmap_entry.pde.available = avail_bits & 0x03u;
+                    pmap_entry.pde.available2 = (avail_bits >> 2) & 0x01;
+                    pmap_entry.pde.available3 = (avail_bits >> 3) & 0x01;
+                    pmap_entry.pte.dirty = IS_FLAG_SET(mappings[i][level].flags, PM_DIRTY);
 
-                    if(IS_FLAG_SET(mappings->flags, PM_PAGE_SIZED)) {
-                        uint32_t avail_bits = ((mappings->flags & PM_AVAIL_MASK) >> PM_AVAIL_OFFSET);
+                    // Clear a newly mapped page table
+                    if(!was_mapped && clear_phys_frames(mappings[i][level].phys_frame, 1) != 1) {
+                        RET_MSG((int)i, "Unable to clear physical frame.");
+                    }
+                    break;
+                }
+                case PMT_PAGE: {
+                    // XXX: Physical frames need to be checked or allocated by the kernel in
+                    // order to prevent the user from mapping arbitrary address.
+                    end_walk = true;
+                    was_mapped = !!((level == N_PM_LEVELS - 1) ? pmap_entry.pte.is_present : pmap_entry.pde.is_present);
 
-                        if((is_array ? pframe : mappings->phys_frame) >= (1u << 28))
-                            RET_MSG((int)i, "Tried to write invalid frame to PDE.");
-                        else if(avail_bits & ~0x07u)
+                    if(IS_FLAG_SET(mappings[i][level].flags, PM_UNMAPPED)) {
+                        pmap_entry.value = 0;
+                        end_walk = true;
+                        break;
+                    }
+
+                    if(level == N_PM_LEVELS - 1) {
+                        uint32_t avail_bits = ((mappings[i][level].flags & PM_AVAIL_MASK) >> PM_AVAIL_OFFSET);
+
+                        if(avail_bits & ~0x03u) {
                             RET_MSG((int)i, "Cannot set available bits (overflow).");
+                        }
+
+                        pmap_entry.pte.is_read_write = !IS_FLAG_SET(mappings[i][level].flags, PM_READ_ONLY);
+                        pmap_entry.pte.is_user = 1;
+                        pmap_entry.pte.accessed = IS_FLAG_SET(mappings[i][level].flags, PM_ACCESSED);
+                        pmap_entry.pte.pcd = IS_FLAG_SET(mappings[i][level].flags, PM_UNCACHED);
+                        pmap_entry.pte.pwt = IS_FLAG_SET(mappings[i][level].flags, PM_WRITETHRU);
+                        pmap_entry.pte.base = PADDR_TO_PBASE(mappings[i][level].phys_frame);
+                        pmap_entry.pte.available = avail_bits & 0x03u;
+                        pmap_entry.pte.dirty = IS_FLAG_SET(mappings[i][level].flags, PM_DIRTY);
+                    } else {
+                        uint32_t avail_bits = ((mappings[i][level].flags & PM_AVAIL_MASK) >> PM_AVAIL_OFFSET);
+
+                        if(avail_bits & ~0x03u) {
+                            RET_MSG((int)i, "Cannot set available bits (overflow).");
+                        }
+
+                        pmap_entry.large_pde.is_read_write = !IS_FLAG_SET(mappings[i][level].flags,
+                            PM_READ_ONLY);
+                        pmap_entry.large_pde.is_user = 1;
+                        pmap_entry.large_pde.accessed = IS_FLAG_SET(mappings[i][level].flags, PM_ACCESSED);
+                        pmap_entry.large_pde.pcd = IS_FLAG_SET(mappings[i][level].flags, PM_UNCACHED);
+                        pmap_entry.large_pde.pwt = IS_FLAG_SET(mappings[i][level].flags, PM_WRITETHRU);
 
                         pmap_entry.large_pde.is_page_sized = 1;
-                        pmap_entry.large_pde.dirty = IS_FLAG_SET(mappings->flags, PM_DIRTY);
-                        pmap_entry.large_pde.global = IS_FLAG_SET(mappings->flags, PM_STICKY);
-                        pmap_entry.large_pde.pat = IS_FLAG_SET(mappings->flags,
-                            PM_WRITECOMB)
-                            && !IS_FLAG_SET(mappings->flags,
-                                PM_UNCACHED);
-                        pmap_entry.large_pde.available = avail_bits;
-                        pmap_entry.large_pde.base_lower = ((
-                            is_array ? pframe : mappings->phys_frame)
-                            >> 10)
-                            & 0x3FFu;
-                        pmap_entry.large_pde.base_upper = (is_array ? pframe : mappings->phys_frame) >> 20u;
+                        pmap_entry.large_pde.dirty = IS_FLAG_SET(mappings[i][level].flags, PM_DIRTY);
+                        pmap_entry.large_pde.global = IS_FLAG_SET(mappings[i][level].flags, PM_STICKY);
+                        pmap_entry.large_pde.pat = IS_FLAG_SET(mappings[i][level].flags, PM_WRITECOMB)
+                            && !IS_FLAG_SET(mappings[i][level].flags, PM_UNCACHED);
+                        pmap_entry.large_pde.available = avail_bits & 0x03;
+                        pmap_entry.large_pde.base_lower = ((mappings[i][level].phys_frame)
+                            >> 10) & 0x3FFu;
+                        pmap_entry.large_pde.base_upper = (mappings[i][level].phys_frame) >> 20u;
                         pmap_entry.large_pde._resd = 0;
-                    } else {
-                        uint32_t avail_bits = ((mappings->flags & PM_AVAIL_MASK) >> PM_AVAIL_OFFSET);
-
-                        if((is_array ? pframe : mappings->phys_frame) >= (1u << 20))
-                            RET_MSG((int)i, "Tried to write invalid frame to PDE.");
-                        else if(avail_bits & ~0x1fu)
-                            RET_MSG((int)i, "Cannot set available bits (overflow).");
-
-                        pmap_entry.pde.base = is_array ? pframe : mappings->phys_frame;
-                        pmap_entry.pde.available = avail_bits & 0x0Fu;
-                        pmap_entry.pde.available2 = avail_bits >> 4;
-                        pmap_entry.pde.is_page_sized = 0;
-
-                        if(IS_FLAG_SET(mappings->flags, PM_CLEAR)) {
-                            if(clear_phys_frames(PDE_BASE(pmap_entry.pde), 1) != 1) {
-                                RET_MSG((int)i, "Unable to clear physical frame.");
-                            }
-                        }
+                        end_walk = true;
                     }
+                    break;
                 }
+                default:
+                    RET_MSG((int)i, "Unrecognized mapping type: %d (mapping %i, level %i).", mappings[i][level].type, i, level);
+            }
 
-                if(IS_ERROR(write_pde(PDE_INDEX(args->virt), pmap_entry.pde, args->addr_space)))
+            if(was_mapped && page_dir == args->addr_space) {
+                invalidate_page(virt);
+            }
+
+            #ifndef PAE
+            if(level == 0) {
+                if(IS_ERROR(write_pmap_entry(args->addr_space, pmap_entry_index, pmap_entry))) {
                     RET_MSG((int)i, "Unable to write to PDE.");
-
-                if(is_array) {
-                    pframe += LARGE_PAGE_SIZE / PAGE_SIZE;
-                } else {
-                    mappings++;
+                }
+            } else {
+                if(IS_ERROR(write_pmap_entry(PBASE_TO_PADDR(get_pde_frame_number(pmap_entry.pde)), pmap_entry_index, pmap_entry))) {
+                    RET_MSG((int)i, "Unable to write to PDE.");
                 }
             }
-            break;
-        case 2:
-            return ESYS_PERM;
-        default:
-            return ESYS_FAIL;
+            #endif /* PAE */
+
+            if(end_walk) {
+                break;
+            }
+
+            #ifdef PAE
+            #error "PAE support for handle_sys_update_page_mappings() is not yet implemented."
+            #endif /* PAE */
+        }
     }
 
     return (int)i;
@@ -544,10 +480,11 @@ static int handle_sys_create_tcb(SysCreateTcbArgs* args)
     if(1) {
         tcb_t* new_tcb = thread_create(args->entry, args->addr_space, (void*)args->stack_top);
         return new_tcb ? (int)get_tid(new_tcb) : ESYS_FAIL;
-    } else
+    } else {
         RET_MSG(
             ESYS_PERM,
             "Calling thread doesn't have permission to execute this system call.");
+    }
 }
 
 // arg1 - tid
@@ -557,10 +494,11 @@ static int handle_sys_destroy_tcb(SysDestroyTcbArgs* args)
     if(1) {
         tcb_t* tcb = get_tcb(args->tid);
         return tcb && !IS_ERROR(thread_release(tcb)) ? ESYS_OK : ESYS_FAIL;
-    } else
+    } else {
         RET_MSG(
             ESYS_PERM,
             "Calling thread doesn't have permission to execute this system call.");
+    }
 }
 
 // arg1 - tid
@@ -618,16 +556,16 @@ static int handle_sys_read_tcb(SysReadTcbArgs* args)
 
             info->exception_handler = tcb->ex_handler;
 
-            info->xsave_state = (void*)tcb->xsave_state;
+            info->fxsave_state = (void*)tcb->fxsave_state;
             info->xsave_rfbm = tcb->xsave_rfbm;
-            info->xsave_state_len = tcb->xsave_state_len;
+            info->fxsave_state_len = tcb->fxsave_state_len;
 
             return ESYS_OK;
-        } else
+        } else {
             RET_MSG(
                 ESYS_PERM,
                 "Calling thread doesn't have permission to execute this system call.");
-
+        }
         return ESYS_FAIL;
     }
 }
@@ -637,16 +575,18 @@ static int handle_sys_read_tcb(SysReadTcbArgs* args)
 
 static int handle_sys_update_tcb(SysUpdateTcbArgs* args)
 {
-    if(0)
+    if(0) {
         RET_MSG(
             ESYS_PERM,
             "Calling thread doesn't have permission to execute this system call.");
+    }
 
     thread_info_t* info = args->info;
     tcb_t* tcb = args->tid == NULL_TID ? thread_get_current() : get_tcb(args->tid);
 
-    if(!tcb || tcb->thread_state == INACTIVE)
-        RET_MSG(ESYS_ARG, "The specified thread doesn't exist");
+    if(!tcb || tcb->thread_state == INACTIVE) {
+        RET_MSG(ESYS_ARG, "The specified thread (tid: %hhu) doesn't exist.", args->tid);
+    }
 
     if(IS_FLAG_SET(args->flags, TF_STATUS)) {
 
@@ -655,7 +595,7 @@ static int handle_sys_update_tcb(SysUpdateTcbArgs* args)
             case PAUSED:
                 break;
             default:
-                RET_MSG(ESYS_ARG, "Unable to change thread status");
+                RET_MSG(ESYS_ARG, "Unable to change thread status to %d.", info->status);
         }
 
         if(IS_ERROR(thread_remove_from_list(tcb))) {
@@ -673,13 +613,14 @@ static int handle_sys_update_tcb(SysUpdateTcbArgs* args)
 
     if(IS_FLAG_SET(args->flags, TF_ROOT_PMAP)) {
         tcb->root_pmap = info->root_pmap;
+
         if(IS_ERROR(initialize_root_pmap(tcb->root_pmap))) {
             RET_MSG(ESYS_FAIL, "Unable to create initial page directory");
         }
     }
 
     if(IS_FLAG_SET(args->flags, TF_EXT_REG_STATE)) {
-        memcpy(&tcb->xsave_state, &info->xsave_state, sizeof tcb->xsave_state);
+        memcpy(&tcb->fxsave_state, &info->fxsave_state, sizeof tcb->fxsave_state);
     }
 
     if(IS_FLAG_SET(args->flags, TF_REG_STATE)) {
@@ -859,7 +800,7 @@ void sysenter_entry(void)
         "pop %edi\n"
         "pop %ebp\n"
         "popf\n"
-        
+
         // ECX will be set as the user return ESP
         // EDX will be the return EIP and should've been set by the user
         // EBP contains the actual user ESP. The user EBP should've been saved by the user

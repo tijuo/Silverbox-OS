@@ -18,6 +18,8 @@
 extern addr_t kboot_stack_top;
 extern paddr_t kpage_dir;
 
+const bool is_vga_enabled = false;
+
 // TODO: This doesn't actually lock the VGA VRAM, itself
 
 #define VIDMEM_START PHYS_TO_VIRT(0xB8000u)
@@ -71,13 +73,13 @@ enum TextColors {
 #define COLOR_OF(c) (((c) >> 8) & 0xFFu)
 
 // int itoa(value, char *str, int base);
-#define itoa(value, str, base) _Generic((value), \
+#define itoa(value, cstr, base) _Generic((value), \
     long long int: kllitoa,                      \
     unsigned long long int: kullitoa,            \
     unsigned int: kuitoa,                        \
     long int: klitoa,                            \
     unsigned long int: kulitoa,                  \
-    default: kitoa)((value), (str), (base))
+    default: kitoa)((value), (cstr), (base))
 
 #define DEFAULT_PRECISION -1
 
@@ -138,7 +140,7 @@ NON_NULL_PARAMS void reset_printf_state(PrintfState* state);
 
 static void print_char(int c);
 NON_NULL_PARAMS static void _kprintf(void (*write_func)(int), const char* str,
-    va_list args);
+    va_list args) __attribute__((format(printf, 2, 0)));
 NON_NULL_PARAM(1)
 void kprintf(const char* str, ...) __attribute__((format(printf, 1, 2)));
 NON_NULL_PARAM(3)
@@ -639,19 +641,21 @@ CALL_COUNTER(inc_sched_count)
  */
     void inc_sched_count(void)
 {
-    tcb_t* current_thread = thread_get_current();
+    if(is_vga_enabled) {
+        tcb_t* current_thread = thread_get_current();
 
-    volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
+        volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
 
-    uint16_t w = VGA_CHAR_AT(vidmem, 0, 0);
+        uint16_t w = VGA_CHAR_AT(vidmem, 0, 0);
 
-    VGA_CHAR_AT(vidmem, 0, 0) = VGA_CHAR(CHAR_OF(w + 1), RED, GRAY);
+        VGA_CHAR_AT(vidmem, 0, 0) = VGA_CHAR(CHAR_OF(w + 1), RED, GRAY);
 
-    KASSERT(current_thread != NULL);
+        KASSERT(current_thread != NULL);
 
-    if(current_thread) {
-        kprintf_at(2, 0, "tid: %5u cr3: %p", get_tid(current_thread),
-            (void*)current_thread->root_pmap);
+        if(current_thread) {
+            kprintf_at(2, 0, "tid: %5u cr3: %p", get_tid(current_thread),
+                (void*)current_thread->root_pmap);
+        }
     }
 }
 
@@ -660,29 +664,33 @@ CALL_COUNTER(inc_sched_count)
  */
 void inc_timer_count(void)
 {
-    volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
+    if(is_vga_enabled) {
+        volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
 
-    uint16_t w = VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1);
+        uint16_t w = VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1);
 
-    VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1) = VGA_CHAR(CHAR_OF(w + 1), GREEN, GRAY);
+        VGA_CHAR_AT(vidmem, 0, SCREEN_WIDTH - 1) = VGA_CHAR(CHAR_OF(w + 1), GREEN, GRAY);
+    }
 }
 
 /// Blanks the screen
 void clear_screen(void)
 {
-    volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
+    if(is_vga_enabled) {
+        volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
 
-    for(int col = 0; col < SCREEN_WIDTH; col++)
-        VGA_CHAR_AT(vidmem, 0, col) = VGA_CHAR(' ', BLACK, GRAY);
-
-    for(int line = 1; line < SCREEN_HEIGHT; line++) {
         for(int col = 0; col < SCREEN_WIDTH; col++)
-            VGA_CHAR_AT(vidmem, line, col) = VGA_CHAR(' ', GRAY, BLACK);
+            VGA_CHAR_AT(vidmem, 0, col) = VGA_CHAR(' ', BLACK, GRAY);
+
+        for(int line = 1; line < SCREEN_HEIGHT; line++) {
+            for(int col = 0; col < SCREEN_WIDTH; col++)
+                VGA_CHAR_AT(vidmem, line, col) = VGA_CHAR(' ', GRAY, BLACK);
+        }
+
+        // memset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
+
+        reset_scroll();
     }
-
-    // memset( (char *)vidmem, 0, SCREEN_HEIGHT * SCREEN_WIDTH * 2 );
-
-    reset_scroll();
 }
 
 NON_NULL_PARAMS void do_new_line(int* x, int* y)
@@ -697,34 +705,38 @@ NON_NULL_PARAMS void do_new_line(int* x, int* y)
 void print_char(int c)
 {
     // Do nothing if char isn't an ASCII printable character.
-    if(c < 32 || c > 126)
-        return;
+    if(is_vga_enabled) {
+        if(c < 32 || c > 126)
+            return;
 
-    SPINLOCK_ACQUIRE(video_cursor);
-    VideoCursor cursor = LOCK_VAL(video_cursor);
+        SPINLOCK_ACQUIRE(video_cursor);
+        VideoCursor cursor = LOCK_VAL(video_cursor);
 
-    volatile uint16_t* vidmem = (volatile uint16_t*)VIDMEM_START + cursor.y * SCREEN_WIDTH + cursor.x;
+        volatile uint16_t* vidmem = (volatile uint16_t*)VIDMEM_START + cursor.y * SCREEN_WIDTH + cursor.x;
 
-    *vidmem = (*vidmem & 0xFF00) | (unsigned char)c;
+        *vidmem = (*vidmem & 0xFF00) | (unsigned char)c;
 
-    cursor.x++;
+        cursor.x++;
 
-    if(cursor.x >= SCREEN_WIDTH) {
-        cursor.x = 0;
-        cursor.y++;
+        if(cursor.x >= SCREEN_WIDTH) {
+            cursor.x = 0;
+            cursor.y++;
+        }
+
+        LOCK_SET(video_cursor, cursor);
+
+        SPINLOCK_RELEASE(video_cursor);
     }
-
-    LOCK_SET(video_cursor, cursor);
-
-    SPINLOCK_RELEASE(video_cursor);
 }
 
 // Assumes that VRAM is already locked.
 void _put_char(char c, int x, int y, unsigned char attrib)
 {
-    volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
+    if(is_vga_enabled) {
+        volatile uint16_t* vidmem = (volatile uint16_t*)(VIDMEM_START);
 
-    VGA_CHAR_AT(vidmem, y, x) = VGA_CHAR(c, attrib & 0x0F, (attrib >> 4) & 0x0F);
+        VGA_CHAR_AT(vidmem, y, x) = VGA_CHAR(c, attrib & 0x0F, (attrib >> 4) & 0x0F);
+    }
 }
 
 // Assumes that VRAM is already locked.
@@ -955,7 +967,7 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char* str,
                 case 'o':
                     switch(state.length) {
                         case LONG_LONG_INT:
-                            state.arg_length = (size_t)itoa(va_arg(args, unsigned long long int), buf, 8);
+                            state.arg_length = (size_t)itoa((unsigned long long int)va_arg(args, unsigned long long int), buf, 8);
                             break;
                         case CHAR:
                             state.arg_length = (size_t)itoa((unsigned char)va_arg(args, unsigned int), buf, 8);
@@ -968,7 +980,7 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char* str,
                             break;
                         case DEFAULT:
                         default:
-                            state.arg_length = (size_t)itoa(va_arg(args, unsigned int), buf, 8);
+                            state.arg_length = (size_t)itoa((unsigned int)va_arg(args, unsigned int), buf, 8);
                             break;
                     }
 
@@ -993,7 +1005,7 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char* str,
                 case 'u':
                     switch(state.length) {
                         case LONG_LONG_INT:
-                            state.arg_length = (size_t)itoa(va_arg(args, unsigned long long int), buf, 10);
+                            state.arg_length = (size_t)itoa((unsigned long long int)va_arg(args, unsigned long long int), buf, 10);
                             break;
                         case CHAR:
                             state.arg_length = (size_t)itoa((unsigned char)va_arg(args, unsigned int), buf, 10);
@@ -1006,7 +1018,7 @@ NON_NULL_PARAMS void _kprintf(void (*write_func)(int), const char* str,
                             break;
                         case DEFAULT:
                         default:
-                            state.arg_length = (size_t)itoa(va_arg(args, unsigned int), buf, 10);
+                            state.arg_length = (size_t)itoa((unsigned int)va_arg(args, unsigned int), buf, 10);
                             break;
                     }
 

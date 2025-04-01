@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use rust::types::Tid;
-use rust::{device, syscalls};
+use rust::syscalls;
 use crate::lowlevel;
 use crate::mapping;
 use crate::error::{self, Error};
@@ -11,6 +11,7 @@ use core::convert::TryInto;
 use rust::message::kernel::ExceptionMessage;
 use crate::mapping::AddrSpace;
 use alloc::borrow::Cow;
+use crate::device;
 
 mod new_allocator {
     use crate::address::{PAddr, PSize};

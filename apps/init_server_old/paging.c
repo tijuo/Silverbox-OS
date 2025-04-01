@@ -37,7 +37,7 @@ int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSp
       mappingArgs.level = 0;
       mappingArgs.buffer = &data;
       mappingArgs.entry = (int)virt >> 12;
-      mappingArgs.addrSpace = !aSpace ? NULL_PADDR : aSpace->phys_addr;
+      mappingArgs.addr_space = !aSpace ? NULL_PADDR : aSpace->phys_addr;
 
       sys_update(RES_MAPPING, &mappingArgs);
 
@@ -52,7 +52,7 @@ int _mapMem( void *phys, void *virt, int pages, int flags, struct AddrSpace *aSp
     mappingArgs.level = 1;
     mappingArgs.buffer = &data;
     mappingArgs.entry = (int)virt >> 12;
-    mappingArgs.addrSpace = !aSpace ? NULL_PADDR : aSpace->phys_addr;
+    mappingArgs.addr_space = !aSpace ? NULL_PADDR : aSpace->phys_addr;
 
     sys_update(RES_MAPPING, &mappingArgs);
 
@@ -73,7 +73,7 @@ void *_unmapMem( void *virt, struct AddrSpace *aSpace )
 
   mappingArgs.level = 1;
   mappingArgs.entry = (int)virt >> 12;
-  mappingArgs.addrSpace = aSpace ? aSpace->phys_addr : NULL_PADDR;
+  mappingArgs.addr_space = aSpace ? aSpace->phys_addr : NULL_PADDR;
 
   sys_destroy(RES_MAPPING, &mappingArgs);
   return NULL;
@@ -95,7 +95,7 @@ int mapMemRange( void *virt, int pages )
     addr = alloc_phys_page(NORMAL, page_dir);
 
     _mapMem( addr, (void *)((unsigned)virt + i++ * PAGE_SIZE), 1, 0,
-      &initsrv_pool.addrSpace );
+      &initsrv_pool.addr_space );
   }
 
   return 0;

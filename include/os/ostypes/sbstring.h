@@ -2,7 +2,7 @@
 #define SBSTRING_H
 
 #include <stdlib.h>
-#include <os/ostypes/sbarray.h>
+#include <os/ostypes/dynarray.h>
 #include <os/ostypes/ostypes.h>
 
 typedef struct sbstring_t
@@ -23,7 +23,7 @@ int sbStringDelete(sbstring_t *sbString);
 int sbStringFind(sbstring_t *haystack, sbstring_t *needle);
 int sbStringFindChar(sbstring_t *sbString, int c);
 size_t sbStringLength(sbstring_t *str);
-sbarray_t *sbStringSplit(sbstring_t *sbString, sbstring_t *delimiter, int limit, sbarray_t *array);
+DynArray *sbStringSplit(sbstring_t *sbString, sbstring_t *delimiter, int limit, DynArray *array);
 sbstring_t *sbStringSubString(sbstring_t *sbString, int start, int end, sbstring_t *newString);
 char *sbStringToCString(sbstring_t *sbString);
 #endif /* SBSTRING_H */

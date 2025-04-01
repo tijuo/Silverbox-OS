@@ -74,7 +74,7 @@ int init_shmem( shmid_t shmid, tid_t owner, unsigned pages, bool ro_perm )
    permissions. */
 
 int _shmem_attach( struct SharedMemory *shmem, struct AddrSpace \
-                  *addr_space, struct MemRegion *region)
+                  *addr_space, MemRegion *region)
 {
   struct ShMemRegion *shmem_region;
   unsigned int addr, i;
@@ -82,7 +82,7 @@ int _shmem_attach( struct SharedMemory *shmem, struct AddrSpace \
   if( shmem == NULL || addr_space == NULL || region == NULL )
     return -1;
 
-  if( _region_overlaps( addr_space, region ) )
+  if( addr_space_region_intersects( addr_space, region ) )
     return -1;
 
   shmem_region = malloc( sizeof( struct ShMemRegion ) );
@@ -105,7 +105,7 @@ int _shmem_attach( struct SharedMemory *shmem, struct AddrSpace \
 }
 
 int shmem_attach( shmid_t shmid, struct AddrSpace *addr_space, \
-                 struct MemRegion *region )
+                 MemRegion *region )
 {
   struct SharedMemory *shmem;
 
@@ -113,12 +113,12 @@ int shmem_attach( shmid_t shmid, struct AddrSpace *addr_space, \
   return _shmem_attach( shmem, addr_space, region );
 }
 
-int _shmem_detach( struct SharedMemory *sh_region, struct MemRegion *region )
+int _shmem_detach( struct SharedMemory *sh_region, MemRegion *region )
 {
   return -1;
 }
 
-int shmem_detach( shmid_t shmid, struct MemRegion *region )
+int shmem_detach( shmid_t shmid, MemRegion *region )
 {
   return -1;
 }

@@ -434,8 +434,8 @@ pub mod c_types {
         pub sender_wait_head: CTid,
         pub sender_wait_tail: CTid,
     
-        pub xsave_state: *mut LegacyXSaveState,
-        pub xsave_state_len: usize,
+        pub fxsave_state: *mut LegacyXSaveState,
+        pub fxsave_state_len: usize,
         pub xsave_rfbm: u16
     }
     
@@ -459,8 +459,8 @@ pub mod c_types {
                 receiver_wait_tail: 0,
                 sender_wait_head: 0,
                 sender_wait_tail: 0,
-                xsave_state: core::ptr::null_mut(),
-                xsave_state_len: 0,
+                fxsave_state: core::ptr::null_mut(),
+                fxsave_state_len: 0,
                 xsave_rfbm: 0
             }
         }
@@ -891,7 +891,9 @@ pub fn get_page_mappings(level: u32, virt: *const (), addr_space: Option<CPageMa
 
     read(&mut args).and_then(|count| if count as usize == mappings.len() {
         Ok(count as usize)
-    } else  {
+    } else if count == 0 {
+        Err(SyscallError::Failed)
+    } else {
         Err(SyscallError::PartiallyMapped(count as usize))
     })
 }
@@ -907,6 +909,8 @@ pub fn set_page_mappings(level: u32, virt: *mut (), addr_space: Option<CPageMap>
     
     update(&args).and_then(|count| if count as usize == mappings.len() {
         Ok(count as usize)
+    } else if count == 0 {
+        Err(SyscallError::Failed)
     } else  {
         Err(SyscallError::PartiallyMapped(count as usize))
     })

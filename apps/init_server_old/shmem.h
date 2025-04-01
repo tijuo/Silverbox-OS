@@ -12,13 +12,13 @@ struct SharedMemory
   shmid_t shmid;
   bool ro_perm;
   unsigned long *phys_pages;
-  SBArray memoryRegions;
+  DynArray memory_regions;
 //  struct ListType shmem_region_list;
 };
 
 struct ShMemRegion
 {
-  struct MemRegion region;
+  MemRegion region;
   struct AddrSpace *addr_space;
   bool rw;
 };
@@ -27,10 +27,10 @@ struct ShMemRegion
 
 int init_shmem( shmid_t shmid, tid_t owner, unsigned pages, bool ro_perm );
 int _shmem_attach( struct SharedMemory *shmem, struct AddrSpace \
-                  *addr_space, struct MemRegion *region);
+                  *addr_space, MemRegion *region);
 int shmem_attach( shmid_t shmid, struct AddrSpace *addr_space, \
-                 struct MemRegion *region );
-int _shmem_detach( struct SharedMemory *sh_region, struct MemRegion *region );
-int shmem_detach( shmid_t shmid, struct MemRegion *region );
+                 MemRegion *region );
+int _shmem_detach( struct SharedMemory *sh_region, MemRegion *region );
+int shmem_detach( shmid_t shmid, MemRegion *region );
 
 #endif /* _SHMEM_H */

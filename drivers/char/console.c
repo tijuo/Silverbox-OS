@@ -40,7 +40,7 @@ static void keyboardListener(void);
 int handleDeviceRead(msg_t *msg);
 int handleDeviceWrite(msg_t *msg);
 
-LOCKED_RES(struct CircularBuffer, kbBuffer);
+LOCKED_RES(CircularBuffer, kbBuffer);
 LOCKED_RES(size_t, currentConsole);
 struct Console consoles[NUM_CONSOLES];
 
@@ -268,7 +268,7 @@ void keyboardListener(void)
 
       SPINLOCK_WAIT(kbBuffer);
 
-      writeResult = writeCircBuffer(&kbBuffer, sizeof(char), &key);
+      writeResult = circular_buffer_write(&kbBuffer, sizeof(char), &key);
 
       SPINLOCK_RELEASE(kbBuffer);
 
@@ -309,21 +309,21 @@ int handleDeviceWrite(msg_t *msg)
   else
   {
     uint8_t response[sizeof(msg_t) + sizeof(struct DeviceWriteResponse)];
-    msg_t *responseMsg = (msg_t *)response;
-    struct DeviceWriteResponse *responsePayload = (struct DeviceWriteResponse *)(responseMsg + 1);
+    msg_t *response_msg = (msg_t *)response;
+    struct DeviceWriteResponse *responsePayload = (struct DeviceWriteResponse *)(response_msg + 1);
 
     int result = printChars(&consoles[request->deviceMinor], (char *)request->payload, request->length);
 
     if(result != -1)
       responsePayload->bytesTransferred = (size_t)result;
 
-    responseMsg->subject = result == -1 ? RESPONSE_ERROR : RESPONSE_OK;
-    responseMsg->flags = MSG_NOBLOCK;
-    responseMsg->recipient = msg->sender;
-    responseMsg->buffer = result != -1 ? (void *)response : NULL;
-    responseMsg->bufferLen = result != -1 ? sizeof response : 0;
+    response_msg->subject = result == -1 ? RESPONSE_ERROR : RESPONSE_OK;
+    response_msg->flags = MSG_NOBLOCK;
+    response_msg->recipient = msg->sender;
+    response_msg->buffer = result != -1 ? (void *)response : NULL;
+    response_msg->bufferLen = result != -1 ? sizeof response : 0;
 
-    return sys_send(responseMsg) == ESYS_OK ? 0 : -1;
+    return sys_send(response_msg) == ESYS_OK ? 0 : -1;
   }
 }
 
@@ -346,7 +346,7 @@ int main(void)
     }
   }
 
-  if(createCircBuffer(&kbBuffer, KB_BUFFER_SIZE * sizeof(char)) != 0)
+  if(circular_buffer_create(&kbBuffer, KB_BUFFER_SIZE * sizeof(char)) != 0)
   {
     fprintf(stderr, "Unable to allocate memory for keyboard buffer.\n");
     return EXIT_FAILURE;

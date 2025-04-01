@@ -141,11 +141,11 @@ WARN_UNUSED NON_NULL_PARAM(1) int send_message(tcb_t *sender, tid_t recipient_ti
 
     bool is_transfer_kernel_msg = IS_FLAG_SET(flags, MSG_KERNEL);
 
-    //  kprintf("sendMessage(): %d->%d subject %#x flags: %#x\n", sender_tid, recipient_tid, subject, flags);
+    //kprintf("sendMessage(): %d->%d subject %#x flags: %#x\n", sender_tid, recipient_tid, subject, flags);
 
     if(sender_tid == recipient_tid) {
         RET_MSG(E_INVALID_ARG, "Sender attempted to send a message to itself.");
-    } else if(send_buffer_length > 0 && send_buffer != NULL) {
+    } else if(send_buffer_length > 0 && send_buffer == NULL) {
         RET_MSG(E_INVALID_ARG, "Send buffer is NULL, but send length is non-zero.");
     }
 

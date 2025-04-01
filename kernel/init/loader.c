@@ -18,6 +18,8 @@ DISC_DATA static addr_t init_server_img;
 extern tcb_t* init_server_thread;
 extern addr_t first_free_page;
 
+extern bool can_alloc_frames;
+
 int load_servers(multiboot_info_t* info)
 {
     module_t* module;
@@ -99,7 +101,7 @@ tcb_t* load_elf_exe(addr_t img, addr_t addr_space, void* user_stack)
     thread = thread_create((void*)image.entry, addr_space, user_stack);
 
     if(thread == NULL) {
-        RET_MSG(NULL, "loadElfExe(): Couldn't create thread.");
+        RET_MSG(NULL, "load_elf_exe(): Couldn't create thread.");
     }
 
     /* Create the page table before mapping memory */
@@ -136,10 +138,10 @@ tcb_t* load_elf_exe(addr_t img, addr_t addr_space, void* user_stack)
                 pde.was_allocated = 1;
 
                 if(IS_ERROR(write_pde(PDE_INDEX(sheader.addr + offset), pde, addr_space))) {
-                    RET_MSG(NULL, "loadElfExe(): Unable to write PDE.");
+                    RET_MSG(NULL, "load_elf_exe(): Unable to write PDE.");
                 }
             } else if(pde.is_page_sized) {
-                RET_MSG(NULL, "loadElfExe(): Memory region has already been mapped to a large page.");
+                RET_MSG(NULL, "load_elf_exe(): Memory region has already been mapped to a large page.");
             }
 
             if(IS_ERROR(read_pte(&pte, PTE_INDEX(sheader.addr + offset), PDE_BASE(pde)))) {
@@ -153,12 +155,11 @@ tcb_t* load_elf_exe(addr_t img, addr_t addr_space, void* user_stack)
 
                 if(sheader.type == SHT_PROGBITS) {
                     pte.base = (pbase_t)ADDR_TO_PBASE((uint32_t)img + sheader.offset + offset);
-                }
-                else if(sheader.type == SHT_NOBITS) {
+                } else if(sheader.type == SHT_NOBITS) {
                     page = alloc_phys_frame();
 
                     if(page == INVALID_PADDR) {
-                        RET_MSG(NULL, "loadElfExe(): No more physical pages are available.");
+                        RET_MSG(NULL, "load_elf_exe(): No more physical pages are available.");
                     }
 
                     if(clear_phys_frames(page, 1) != 1) {
@@ -171,7 +172,7 @@ tcb_t* load_elf_exe(addr_t img, addr_t addr_space, void* user_stack)
                     continue;
 
                 if(IS_ERROR(write_pte(PTE_INDEX(sheader.addr + offset), pte, PDE_BASE(pde)))) {
-                    RET_MSG(NULL, "loadElfExe(): Unable to write PDE");
+                    RET_MSG(NULL, "load_elf_exe(): Unable to write PDE");
                 }
             } else if(sheader.type == SHT_NOBITS) {
                 memset((void*)(sheader.addr + offset), 0, PAGE_SIZE - (offset % PAGE_SIZE));
@@ -185,8 +186,9 @@ tcb_t* load_elf_exe(addr_t img, addr_t addr_space, void* user_stack)
 struct InitStackArgs {
     uint32_t return_address;
     multiboot_info_t* multiboot_info;
-    addr_t first_free_page;
+    uint64_t first_free_page;
     size_t stack_size;
+    char fxsave_state[512];
     unsigned char code[4];
 };
 
@@ -196,23 +198,9 @@ struct InitStackArgs {
 int bootstrap_init_server(multiboot_info_t* info)
 {
     addr_t init_server_stack = (addr_t)INIT_SERVER_STACK_TOP;
-    addr_t init_server_pdir = INVALID_PADDR;
+    paddr_t init_server_pdir = INVALID_PADDR;
     elf_header_t elf_header;
-
-    struct InitStackArgs stack_data =
-    {
-      .return_address = init_server_stack
-          - sizeof((struct InitStackArgs*)0)->code,
-      .multiboot_info = (multiboot_info_t*)VIRT_TO_PHYS((addr_t)info),
-      .first_free_page = first_free_page,
-      .stack_size = 0,
-      .code = {
-        0xF4,   // hlt
-        0x0F,
-        0x90,   // nop
-        0x0B    // ud2
-      }
-    };
+    size_t init_stack_size = 0;
 
     kprintfln("Bootstrapping initial server...");
 
@@ -230,7 +218,7 @@ int bootstrap_init_server(multiboot_info_t* info)
         goto failed_bootstrap;
     }
 
-    if(clear_phys_frames(init_server_pdir, 1) != E_OK) {
+    if(clear_phys_frames(init_server_pdir, 1) != 1) {
         kprintfln("Unable to clear init server page directory.");
         goto failed_bootstrap;
     }
@@ -252,7 +240,7 @@ int bootstrap_init_server(multiboot_info_t* info)
         }
     }
 
-    pde.base = (pbase_t)ADDR_TO_PBASE(stack_ptab);
+    pde.base = (pbase_t)PADDR_TO_PBASE(stack_ptab);
     pde.is_read_write = 1;
     pde.is_user = 1;
     pde.is_present = 1;
@@ -271,7 +259,7 @@ int bootstrap_init_server(multiboot_info_t* info)
             goto failed_bootstrap;
         }
 
-        pte.base = (pbase_t)ADDR_TO_PBASE(stack_page);
+        pte.base = (pbase_t)PADDR_TO_PBASE(stack_page);
         pte.is_read_write = 1;
         pte.is_user = 1;
         pte.is_present = 1;
@@ -286,14 +274,7 @@ int bootstrap_init_server(multiboot_info_t* info)
                 break;
         }
 
-        if(p == 0) {
-            if(IS_ERROR(poke(stack_page + PAGE_SIZE - sizeof(stack_data), &stack_data,
-                sizeof(stack_data)))) {
-                    goto failed_bootstrap;
-                }
-        }
-
-        stack_data.stack_size += PAGE_SIZE;
+        init_stack_size += PAGE_SIZE;
     }
 
     // Let the initial server have access to conventional memory (first 640 KiB)
@@ -318,7 +299,7 @@ int bootstrap_init_server(multiboot_info_t* info)
         pde.is_present = 1;
         pde.is_read_write = 1;
         pde.is_user = 1;
-        pde.base = (pbase_t)ADDR_TO_PBASE(new_ptab);
+        pde.base = (pbase_t)PADDR_TO_PBASE(new_ptab);
         pde.was_allocated = 1;
 
         if(IS_ERROR(write_pde(0, pde, init_server_pdir))) {
@@ -343,7 +324,7 @@ int bootstrap_init_server(multiboot_info_t* info)
 
     if((init_server_thread = load_elf_exe(
         init_server_img, init_server_pdir,
-        (void*)(init_server_stack - sizeof(stack_data))))
+        (void*)(init_server_stack - sizeof(struct InitStackArgs))))
         == NULL) {
         kprintfln("Unable to load ELF executable.");
         goto failed_bootstrap;
@@ -353,6 +334,31 @@ int bootstrap_init_server(multiboot_info_t* info)
 
     if(IS_ERROR(thread_start(init_server_thread))) {
         goto release_init_thread;
+    }
+
+    struct InitStackArgs stack_data =
+    {
+      .return_address = init_server_stack
+          - sizeof((struct InitStackArgs*)0)->code,
+      .multiboot_info = (multiboot_info_t*)VIRT_TO_PHYS((addr_t)info),
+      .first_free_page = first_free_page,
+      .stack_size = init_stack_size,
+      .fxsave_state = { 0 },
+      .code = {
+        0xF4,   // hlt
+        0x0F,
+        0x90,   // nop
+        0x0B    // ud2
+      }
+    };
+
+    memset(stack_data.fxsave_state, 0, sizeof stack_data.fxsave_state);
+    init_server_thread->fxsave_state = (fxsave_state_t *)((size_t)init_server_stack - sizeof(stack_data) + ((uintptr_t)&stack_data.fxsave_state - (uintptr_t)&stack_data));
+
+    can_alloc_frames = false;
+
+    if(IS_ERROR(poke_virt(init_server_stack - sizeof(stack_data), sizeof(stack_data), &stack_data, init_server_pdir))) {
+        goto failed_bootstrap;
     }
 
     return E_OK;

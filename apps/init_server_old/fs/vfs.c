@@ -89,7 +89,7 @@ Uniform interface with other filesystems. These are, essentially, wrapper
   };
 */
 
-/* SBFilePath is simply an SBArray of SBStrings. Each SBString
+/* SBFilePath is simply an DynArray of SBStrings. Each SBString
    is a directory. The first SBString is the directory in the
    root directory. The subsequent directories are subdirectories. */
 

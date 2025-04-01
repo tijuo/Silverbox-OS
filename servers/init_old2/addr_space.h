@@ -5,18 +5,15 @@
 #include <stddef.h>
 #include <oslib.h>
 
-#define REG_RO		1	// Read-only memory range
-#define REG_COW		2	/* Range is copy-on-write (if written to, copy 
-				   range to another set of pages & mark that
-				   range as read-write [implies read-only]). */
-#define REG_LAZY	4	// Do not immediately map the range into memory
-#define REG_MAP		8	/* Map virtual addresses to a specific physical 
-                                   addresses (as opposed to mapping virtual 
-				   addresses to any physical addresses. */
-#define REG_ZERO	16	// Clear an address range before mapping it.
-#define REG_NOEXEC	32	// Do not allow code execution on memory range
-#define REG_DOWN	64	// Grow region down instead of up (for stacks)
-#define REG_GUARD	128
+#define REG_RO		    1	// Read-only memory range
+#define REG_COW		    2	/* Range is copy-on-write (if written to, copy 
+                   range to another set of pages & mark that
+                   range as read-write [implies read-only]). */
+#define REG_LAZY	    4	// Do not immediately map the range into memory
+#define REG_PIN         8   // Do not swap out the memory within this region.
+#define REG_NOEXEC	    32	// Do not allow code execution on memory range
+#define REG_DOWN	    64	// Grow region down instead of up (for stacks)
+#define REG_GUARD	    128
 
 #define REG_RESD	0xF0000000 // Range is reserved and shouldn't be accessed. For internal use only.
 
@@ -32,29 +29,6 @@
 #define EXEC_RD_ONLY
 #define EXEC_ZERO
 
-#define PAGE_RO			1	// read-only
-#define PAGE_WT			2	// write-through
-#define PAGE_WB			4	// write-back
-#define PAGE_NO_SWAP		8	// Unswappable page
-#define PAGE_RESD		16	// Reserved page
-
-/* A page can either exist in memory or on disk. Pages can originate in RAM or disk.
-   Pages can be swapped from RAM to disk upon low memory conditions. */
-
-typedef struct Page
-{
-  int device;
-  unsigned int block;
-  unsigned int offset;
-  int lastAccessed;
-
-  pbase_t physFrame  : 20;
-  int      isOnDisk   :  1;
-  int      isDirty    :  1;
-  int      isDiskPage :  1;
-  int      flags      :  9;
-} page_t;
-
 /*
   Address region are areas of the address space that can be marked with various flags. Upon
   a page fault, the memory regions are checked for their flags and be mapped appropriately,
@@ -62,49 +36,40 @@ typedef struct Page
 
 */
 
-struct AddrRegion
-{
-  struct MemRegion virtRegion;
-  int flags;
-};
+typedef struct {
+    int fd;
+    size_t file_offset;
+    int permissions;
+    int flags;
+    MemRegion memory_region;
+} MemoryMapping;
 
-#include <os/bitmap.h>
-#include <os/os_types.h>
+#include <os/ostypes/dynarray.h>
+#include <os/ostypes/hashtable.h>
 
-struct AddrSpace
-{
-  paddr_t physAddr;        // physical address of the hardware root page map (page directory)
-  sbarray_t memoryRegions;   // AddrRegion[]
-  sbhash_t addressMap; // virt(addr_t) -> page_t
-};
+typedef struct {
+    paddr_t phys_addr;              // physical address of the hardware root page map (page directory)
+    DynArray mappings;              // DynArray(MemoryMapping) XXX: Consider using another more efficient data structure (if any)
+    DynArray tids;                  // DynArray(tid_t) XXX: Consider using another more efficient data structure (if any)
+    int exe_fd;                     // Executable file descriptor
+} AddrSpace;
 
-struct Executable
-{
-  char *path;
+// XXX: Replace this with the ELF program header
 
-  struct MemRegion codeRegion;
-  struct MemRegion dataRegion;
-  struct MemRegion bssRegion;
-};
+int addr_space_init(AddrSpace* addr_space, paddr_t phys_addr);
+void addr_space_destroy(AddrSpace* addr_space);
+int addr_space_add(AddrSpace* addr_space);
+AddrSpace* lookup_page_map(paddr_t phys_addr);
+int remove_addr_space(paddr_t phys_addr);
+int attach_tid(AddrSpace* addr_space, tid_t tid);
+int detach_tid(AddrSpace *addr_space, tid_t tid);
+AddrSpace* lookup_tid(tid_t tid);
+int attach_addr_region(AddrSpace* addr_space, MemoryMapping *mapping);
+bool find_address(const AddrSpace* addr_space, addr_t addr);
+int remove_mapping(AddrSpace* addr_space, MemRegion *region);
+MemoryMapping* get_mapping(const AddrSpace* addr_space, addr_t addr);
 
-void initAddrSpace(struct AddrSpace *addrSpace, paddr_t *physAddr);
-void destroyAddrSpace(struct AddrSpace *addrSpace);
-int addAddrSpace(struct AddrSpace *addrSpace);
-struct AddrSpace *lookupPageMap(paddr_t *physAddr);
-int removeAddrSpace(paddr_t *physAddr);
-int attachTid(struct AddrSpace *addrSpace, tid_t tid);
-int detachTid(tid_t tid);
-struct AddrSpace *lookupTid(tid_t tid);
-int attachAddrRegion(struct AddrSpace *addrSpace, struct AddrRegion *addrRegion);
-bool findAddress(struct AddrSpace *addrSpace, addr_t addr);
-bool doesOverlap(struct AddrSpace *addrSpace, struct MemRegion *region);
-int setMapping(struct AddrSpace *addrSpace, addr_t virt, page_t *page);
-int getMapping(struct AddrSpace *addrSpace, addr_t virt, page_t **page);
-int removeMapping(struct AddrSpace *addrSpace, addr_t virt);
-struct AddrRegion *getRegion(struct AddrSpace *addrSpace, addr_t addr);
-
-extern struct AddrSpace initsrvAddrSpace;
-extern sbhash_t addrSpaces; // phys addr -> AddrSpace
-extern page_t *pageTable;
+extern AddrSpace initsrv_addr_space;
+extern StringHashTable addr_spaces; // phys addr -> AddrSpace
 
 #endif /* ADDR_SPACE_H */

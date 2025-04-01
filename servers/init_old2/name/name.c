@@ -1,160 +1,171 @@
 #include <oslib.h>
 #include <os/services.h>
-#include <os/os_types.h>
-#include <os/device.h>
+#include <os/driver.h>
 #include <string.h>
 #include "name.h"
 #include <os/vfs.h>
 #include <os/msg/init.h>
+#include <limits.h>
+#include <os/ostypes/string.h>
 
-sbhash_t threadNames, deviceNames, fsNames, deviceTable, fsTable;
+typedef union {
+    struct Device device;
+    struct VFS_Filesystem fs;
+    tid_t tid;
+} NameEntry;
 
-static int registerThreadName(char *name, tid_t tid);
-static int registerFsName(char *name, struct VFS_Filesystem *fs);
+typedef enum { THREAD, DEVICE, FS } NameEntryType;
 
-int _registerDevice(int major, struct Device *device);
-struct Device * _unregisterDevice(int major);
-struct Device *lookupDeviceMajor(int major);
-
-static int _registerFs(struct VFS_Filesystem *fs);
-static struct VFS_Filesystem *_unregisterFs(char *name);
-
-struct ThreadMapping
-{
-  char name[MAX_NAME_LEN+1];
-  tid_t tid;
+struct NameRecord {
+    NameEntryType name_type;
+    NameEntry entry;
+    String name;
 };
 
-int _registerDevice(int major, struct Device *device)
+StringHashTable thread_names, device_names, fs_names, device_table, fs_table;
+
+static int name_register_thread(char* name, tid_t tid);
+static int name_register_fs(char* name, struct VFS_Filesystem* fs);
+
+static int name_register_major(int major, const struct Device* device);
+struct Device* name_unregister_major(int major);
+struct Device* name_lookup_major(int major);
+
+static int _registerFs(struct VFS_Filesystem* fs);
+static struct VFS_Filesystem* _unregisterFs(char* name);
+
+struct ThreadMapping {
+    char name[MAX_NAME_LEN + 1];
+    tid_t tid;
+};
+
+int name_register_major(int major, const struct Device* device)
 {
-  char *m = malloc(5);
+    if(major < 0 || major > USHRT_MAX) {
+        return -1;
+    }
 
-  if(!m)
-    return -1;
+    char key[6] = { 0 };
 
-  itoa(major, m, 10);
+    itoa(major, key, 10);
 
-  return sbHashInsert(&deviceTable, m, device);
+    return string_hash_table_insert(&device_table, STR(key), device);
 }
 
-struct Device *_unregisterDevice(int major)
+struct Device* name_unregister_major(int major)
 {
-  struct Device *dev;
-  char m[5];
-  char *storedName;
+    if(major < 0 || major > USHRT_MAX) {
+        return -1;
+    }
 
-  itoa(major, m, 10);
+    struct Device* dev;
+    char m[6] = { 0 };
+    char* storedName;
 
-  // must remove key
+    itoa(major, m, 10);
 
-  if(sbHashRemovePair(&deviceTable, m, &storedName, (void **)&dev) == 0)
-  {
-    free(storedName);
-    return dev;
-  }
-  else
-   return NULL;
+    // must remove key
+
+    if(string_hash_table_remove_pair(&device_table, STR(m), &storedName, (void**)&dev) == 0) {
+        free(storedName);
+        return dev;
+    } else
+        return NULL;
 }
 
-static int _registerFs(struct VFS_Filesystem *fs)
+static int _registerFs(struct VFS_Filesystem* fs)
 {
-  return (!fs || sbHashInsert(&fsTable, fs->name, fs) != 0) ? -1 : 0;
+    return (!fs || string_hash_table_insert(&fs_table, fs->name, fs) != 0) ? -1 : 0;
 }
 
-static struct VFS_Filesystem *_unregisterFs(char *name)
+static struct VFS_Filesystem* _unregisterFs(char* name)
 {
-  struct VFS_Filesystem *fs;
+    struct VFS_Filesystem* fs;
 
-  if(sbHashLookup(&fsTable, name, (void **)&fs) != 0)
-    return NULL;
+    if(string_hash_table_lookup(&fs_table, name, (void**)&fs) != 0)
+        return NULL;
 
-  return (sbHashRemove(&fsTable, name) == 0) ? fs : NULL;
+    return (string_hash_table_remove(&fs_table, name) == 0) ? fs : NULL;
 }
 
-static int registerFsName(char *name, struct VFS_Filesystem *fs)
+static int name_register_fs(char* name, struct VFS_Filesystem* fs)
 {
-  struct NameRecord *record;
+    struct NameRecord* record;
 
-  record = malloc(sizeof *record);
+    record = malloc(sizeof * record);
 
-  if(!record)
-    return -1;
+    if(!record)
+        return -1;
 
-  record->name[MAX_NAME_LEN] = '\0';
-  strncpy(record->name, name, MAX_NAME_LEN);
-  record->entry.fs = *fs;
-  record->nameType = FS;
+    record->name[MAX_NAME_LEN] = '\0';
+    strncpy(record->name, name, MAX_NAME_LEN);
+    record->entry.fs = *fs;
+    record->naem_type = FS;
 
-  if(sbHashInsert(&fsNames, name, record) != 0)
-  {
-    free(record);
-    return -1;
-  }
+    if(string_hash_table_insert(&fs_names, name, record) != 0) {
+        free(record);
+        return -1;
+    }
 
-  return 0;
+    return 0;
 }
 
-struct Device *lookupDeviceMajor(int major)
+struct Device* name_lookup_major(int major)
 {
-  struct Device *dev;
-  char m[5];
+    struct Device* dev;
+    char m[5];
 
-  itoa(major, m, 10);
+    itoa(major, m, 10);
 
-  return (sbHashLookup(&deviceTable, m, (void **)&dev) == 0) ? dev : NULL;
+    return (string_hash_table_lookup(&device_table, m, (void**)&dev) == 0) ? dev : NULL;
 }
 
-void nameRegister(msg_t *request, msg_t *response)
+void name_register(msg_t* request, msg_t* response)
 {
-  struct RegisterNameRequest *nameRequest = (struct RegisterNameRequest *)&request->data;
-  struct ThreadMapping *mapping = malloc(sizeof *mapping);
+    struct RegisterNameRequest* nameRequest = (struct RegisterNameRequest*)&request->data;
+    struct ThreadMapping* mapping = malloc(sizeof * mapping);
 
-  mapping->name[MAX_NAME_LEN] = '\0';
-  strncpy(mapping->name, nameRequest->name, MAX_NAME_LEN);
-  mapping->tid = request->sender;
+    mapping->name[MAX_NAME_LEN] = '\0';
+    strncpy(mapping->name, nameRequest->name, MAX_NAME_LEN);
+    mapping->tid = request->sender;
 
-  int result = sbHashInsert(&threadNames, mapping->name, mapping);
+    int result = string_hash_table_insert(&thread_names, mapping->name, mapping);
 
-  response->subject = (result == 0 ? RESPONSE_OK : RESPONSE_FAIL);
+    response->subject = (result == 0 ? RESPONSE_OK : RESPONSE_FAIL);
 }
 
-void nameLookup(msg_t *request, msg_t *response)
+void name_lookup(msg_t* request, msg_t* response)
 {
-  struct LookupNameRequest *nameRequest = (struct LookupNameRequest *)&request->data;
-  struct ThreadMapping *mapping;
-  char name[MAX_NAME_LEN+1];
+    struct LookupNameRequest* nameRequest = (struct LookupNameRequest*)&request->data;
+    struct ThreadMapping* mapping;
+    char name[MAX_NAME_LEN + 1];
 
-  name[MAX_NAME_LEN] = '\0';
-  strncpy(name, nameRequest->name, MAX_NAME_LEN);
+    name[MAX_NAME_LEN] = '\0';
+    strncpy(name, nameRequest->name, MAX_NAME_LEN);
 
-  if(sbHashLookup(&threadNames, name, (void **)&mapping) == 0)
-  {
-    struct LookupNameResponse *nameResponse = (struct LookupNameResponse *)&response->data;
+    if(string_hash_table_lookup(&thread_names, name, (void**)&mapping) == 0) {
+        struct LookupNameResponse* nameResponse = (struct LookupNameResponse*)&response->data;
 
-    nameResponse->tid = mapping->tid;
-    response->subject = RESPONSE_OK;
-  }
-  else
-    response->subject = RESPONSE_FAIL;
+        nameResponse->tid = mapping->tid;
+        response->subject = RESPONSE_OK;
+    } else
+        response->subject = RESPONSE_FAIL;
 }
 
-void nameUnregister(msg_t *request, msg_t *response)
+void name_unregister(msg_t* request, msg_t* response)
 {
-  struct UnregisterNameRequest *nameRequest = (struct UnregisterNameRequest *)&request->data;
-  struct ThreadMapping *mapping;
-  char name[MAX_NAME_LEN+1];
+    struct UnregisterNameRequest* nameRequest = (struct UnregisterNameRequest*)&request->data;
+    struct ThreadMapping* mapping;
+    char name[MAX_NAME_LEN + 1];
 
-  name[MAX_NAME_LEN] = '\0';
-  strncpy(name, nameRequest->name, MAX_NAME_LEN);
+    name[MAX_NAME_LEN] = '\0';
+    strncpy(name, nameRequest->name, MAX_NAME_LEN);
 
-  if(sbHashRemovePair(&threadNames, name, NULL, (void **)&mapping) != 0)
-  {
-    response->subject = RESPONSE_FAIL;
-  }
-  else
-  {
-    free(mapping);
-    response->subject = RESPONSE_OK;
-  }
+    if(string_hash_table_remove_pair(&thread_names, name, NULL, (void**)&mapping) != 0) {
+        response->subject = RESPONSE_FAIL;
+    } else {
+        free(mapping);
+        response->subject = RESPONSE_OK;
+    }
 }
 

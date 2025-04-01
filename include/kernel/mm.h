@@ -40,14 +40,14 @@
 #define INIT_SERVER_STACK_SIZE   0x400000u
 
  /** Aligns an address to the previous boundary (if not already aligned) */
-#define ALIGN_DOWN(addr, boundary) ((addr_t)((addr) & ~((boundary) - 1) ))
+#define ALIGN_DOWN(addr, boundary) ((addr) & ~((boundary) - 1) )
 
 _Static_assert(ALIGN_DOWN(0xFF10, 4096) == 0xF000);
 
 #define IS_ALIGNED(addr, boundary)	(((addr) & ((boundary) - 1)) == 0)
 
 /** Aligns an address to next boundary (even if it's already aligned) */
-#define ALIGN_NEXT(addr, boundary)	(ALIGN_DOWN(addr, boundary) + boundary)
+#define ALIGN_NEXT(addr, boundary)	(ALIGN_DOWN(addr, boundary) + (boundary))
 
 _Static_assert(ALIGN_NEXT(0x100000u, 4096) == ALIGN_DOWN(0x100000u, 4096) + 4096);
 
@@ -62,7 +62,7 @@ _Static_assert(ALIGN_NEXT(0x100000u, 4096) == ALIGN_DOWN(0x100000u, 4096) + 4096
       _addr : ALIGN_NEXT(_addr, _boundary)); \
   })
 #else
-#define ALIGN_UP(addr, boundary) (addr == ALIGN_DOWN(addr, boundary) ? addr : ALIGN_NEXT(addr, boundary))
+#define ALIGN_UP(addr, boundary) (addr == ALIGN_DOWN(addr, boundary) ? (addr) : ALIGN_NEXT(addr, boundary))
 #endif /* __GNUC__ */
 
 #define ALIGN(addr, boundary)         ALIGN_UP(addr, boundary)

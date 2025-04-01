@@ -3,60 +3,71 @@
 #include <stdlib.h>
 #include <string.h>
 
-int initCircBuffer(struct CircularBuffer *buffer, void *data, size_t bufferSize)
+int circular_buffer_init(CircularBuffer* buffer, void* data, size_t buffer_size)
 {
-  if(!buffer || !data)
-    return -1;
+    if(!data)
+        return -1;
 
-  buffer->data = buffer->ptr = data;
-  buffer->bufLen = bufferSize;
-  buffer->unreadLen = 0;
+    buffer->data = buffer->ptr = data;
+    buffer->buf_len = buffer_size;
+    buffer->unread_len = 0;
 
-  return 0;
+    return 0;
 }
 
-int createCircBuffer(struct CircularBuffer *buffer, size_t bufferSize) {
-  return initCircBuffer(buffer, malloc(bufferSize), bufferSize);
+int circular_buffer_create(CircularBuffer* buffer, size_t buffer_size)
+{
+    void *new_data = malloc(buffer_size);
+
+    if(!new_data) {
+        return -1;
+    }
+
+    return circular_buffer_init(buffer, new_data, buffer_size);
 }
 
-size_t readCircBuffer(struct CircularBuffer *buffer, size_t bytes,
-                      void *outData)
-{
-  size_t bytesToRead = bytes > buffer->unreadLen ? buffer->unreadLen : bytes;
-  size_t upperSize = (size_t)(((uintptr_t)buffer->data + buffer->bufLen)
-      - (uintptr_t)buffer->ptr);
-
-  if(bytesToRead > upperSize) {
-    memcpy(outData, buffer->ptr, upperSize);
-    memcpy((void*)((uintptr_t)outData + upperSize), buffer->data,
-           bytesToRead - upperSize);
-    buffer->ptr = (void*)((uintptr_t)buffer->data + (bytesToRead - upperSize));
-  }
-  else {
-    memcpy(outData, buffer->ptr, bytesToRead);
-    buffer->ptr = (void*)((uintptr_t)buffer->ptr + bytesToRead);
-  }
-
-  buffer->unreadLen -= bytesToRead;
-  return bytesToRead;
+void circular_buffer_destroy(CircularBuffer* buffer) {
+    free(buffer->data);
+    buffer->data = NULL;
 }
 
-size_t writeCircBuffer(struct CircularBuffer *buffer, size_t bytes, void *data)
+size_t circular_buffer_read(CircularBuffer* buffer, size_t bytes,
+    void* out_data)
 {
-  size_t bytesToWrite =
-      bytes > buffer->bufLen - buffer->unreadLen ?
-          buffer->bufLen - buffer->unreadLen : bytes;
-  uintptr_t ptr = (uintptr_t)buffer->ptr + buffer->unreadLen;
-  size_t upperSize = (size_t)((uintptr_t)buffer->data + buffer->bufLen - ptr);
+    size_t bytes_to_read = bytes > buffer->unread_len ? buffer->unread_len : bytes;
+    size_t upper_size = (size_t)(((uintptr_t)buffer->data + buffer->buf_len)
+        - (uintptr_t)buffer->ptr);
 
-  if(bytesToWrite > upperSize) {
-    memcpy((void*)ptr, data, upperSize);
-    memcpy(buffer->data, (void*)((uintptr_t)data + upperSize),
-           bytesToWrite - upperSize);
-  }
-  else
-    memcpy((void*)ptr, data, bytesToWrite);
+    if(bytes_to_read > upper_size) {
+        memcpy(out_data, buffer->ptr, upper_size);
+        memcpy((void*)((uintptr_t)out_data + upper_size), buffer->data,
+            bytes_to_read - upper_size);
+        buffer->ptr = (void*)((uintptr_t)buffer->data + (bytes_to_read - upper_size));
+    } else {
+        memcpy(out_data, buffer->ptr, bytes_to_read);
+        buffer->ptr = (void*)((uintptr_t)buffer->ptr + bytes_to_read);
+    }
 
-  buffer->unreadLen += bytesToWrite;
-  return bytesToWrite;
+    buffer->unread_len -= bytes_to_read;
+    return bytes_to_read;
+}
+
+size_t circular_buffer_write(CircularBuffer* buffer, size_t bytes, void* data)
+{
+    size_t bytes_to_write =
+        bytes > buffer->buf_len - buffer->unread_len ?
+        buffer->buf_len - buffer->unread_len : bytes;
+    uintptr_t ptr = (uintptr_t)buffer->ptr + buffer->unread_len;
+    size_t upper_size = (size_t)((uintptr_t)buffer->data + buffer->buf_len - ptr);
+
+    if(bytes_to_write > upper_size) {
+        memcpy((void*)ptr, data, upper_size);
+        memcpy(buffer->data, (void*)((uintptr_t)data + upper_size),
+            bytes_to_write - upper_size);
+    } else {
+        memcpy((void*)ptr, data, bytes_to_write);
+    }
+
+    buffer->unread_len += bytes_to_write;
+    return bytes_to_write;
 }

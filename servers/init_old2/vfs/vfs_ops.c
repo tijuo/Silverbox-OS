@@ -1,5 +1,5 @@
 #include <os/vfs.h>
-#include <os/os_types.h>
+#include <os/ostypes/string.h>
 #include <string.h>
 
 /**
@@ -8,54 +8,56 @@
   mounted device
 */
 
-extern int sbFilePathCreate(SBFilePath *path);
-extern int lookupMountEntry(const SBString *path, struct MountEntry **entry,
-    SBFilePath *relPath);
+extern int sbFilePathCreate(SBFilePath* path);
+extern int lookupMountEntry(const String* path, struct MountEntry** entry,
+    SBFilePath* relPath);
 
-int getFsOps(const char *path_str, SBFilePath *relPath, struct FSOps **ops, struct MountEntry **entry);
+int getFsOps(const char* path_str, SBFilePath* relPath, struct FSOps** ops, struct MountEntry** entry);
 
-
-int getFsOps(const char *path_str, SBFilePath *relPath, struct FSOps **ops, struct MountEntry **entry)
+// XXX: Use a StrSlice
+int getFsOps(const char* path_str, SBFilePath* relPath, struct FSOps** ops, struct MountEntry** entry)
 {
-  SBString path;
+    String path;
 
-  sbFilePathCreate(relPath);
-  sbStringCreate(&path, path_str);
+    sbFilePathCreate(relPath);
 
-  if( lookupMountEntry(&path, entry, relPath) != 0 )
-    return -1;
+    if(string_from_cstr(&path, path_str, NULL) == NULL) {
+        return -1;
+    }
 
-  *ops = &(*entry)->fs->fsOps;
+    if(lookupMountEntry(&path, entry, relPath) != 0)
+        return -1;
 
-  sbStringDelete(&path);
+    *ops = &(*entry)->fs->fsOps;
 
-  return 0;
+    string_destroy(&path);
+
+    return 0;
 }
 
-int _readFile(const char *path, int offset, char *buffer, size_t bytes)
+int _readFile(const char* path, int offset, char* buffer, size_t bytes)
 {
-  SBFilePath relPath;
-  struct FSOps *ops=NULL;
-  struct MountEntry *entry = NULL;
-  struct VfsReadArgs args;
-  char *newBuffer = NULL;
-  int num_read=0;
+    SBFilePath relPath;
+    struct FSOps* ops = NULL;
+    struct MountEntry* entry = NULL;
+    struct VfsReadArgs args;
+    char* newBuffer = NULL;
+    int num_read = 0;
 
-  if( getFsOps(path, &relPath, &ops, &entry) != 0 )
-    return -1;
+    if(getFsOps(path, &relPath, &ops, &entry) != 0)
+        return -1;
 
-  args.offset = offset;
-  args.length = bytes;
+    args.offset = offset;
+    args.length = bytes;
 
-  num_read = ops->read(entry->device, &relPath, &args, &newBuffer);
+    num_read = ops->read(entry->device, &relPath, &args, &newBuffer);
 
-  if( num_read >= 0 )
-  {
-    memcpy(buffer, newBuffer, args.length);
-    free(newBuffer);
-  }
+    if(num_read >= 0) {
+        memcpy(buffer, newBuffer, args.length);
+        free(newBuffer);
+    }
 
-  return num_read;
+    return num_read;
 }
 
 /*

@@ -420,7 +420,7 @@ int init_video( void )
 int handleDeviceRead(msg_t *msg)
 {
   struct DeviceWriteResponse response = { .bytesTransferred = 0 };
-  msg_t responseMsg = {
+  msg_t response_msg = {
       .subject = RESPONSE_OK,
       .recipient = msg->sender,
       .buffer = &response,
@@ -437,7 +437,7 @@ int handleDeviceRead(msg_t *msg)
       if(request->offset > BIOS_ROM-VIDEO_RAM)
       {
         response.bytesTransferred = 0;
-        responseMsg.subject = DEVICE_NOMORE;
+        response_msg.subject = DEVICE_NOMORE;
       }
       else
       {
@@ -447,7 +447,7 @@ int handleDeviceRead(msg_t *msg)
         memcpy(msg->buffer, (void *)offset, response.bytesTransferred);
       }
 
-      return sys_send(&responseMsg) == ESYS_OK ? 0 : -1;
+      return sys_send(&response_msg) == ESYS_OK ? 0 : -1;
     default:
       return handleDeviceError(msg);
   }
@@ -456,7 +456,7 @@ int handleDeviceRead(msg_t *msg)
 int handleDeviceWrite(msg_t *msg)
 {
   struct DeviceWriteResponse response = { .bytesTransferred = 0 };
-  msg_t responseMsg = {
+  msg_t response_msg = {
       .subject = RESPONSE_OK,
       .recipient = msg->sender,
       .buffer = &response,
@@ -473,7 +473,7 @@ int handleDeviceWrite(msg_t *msg)
       if(request->offset > BIOS_ROM-VIDEO_RAM)
       {
         response.bytesTransferred = 0;
-        responseMsg.subject = DEVICE_NOMORE;
+        response_msg.subject = DEVICE_NOMORE;
       }
       else
       {
@@ -483,7 +483,7 @@ int handleDeviceWrite(msg_t *msg)
         memcpy((void *)offset, request->payload, response.bytesTransferred);
       }
 
-      return sys_send(&responseMsg) == ESYS_OK ? 0 : -1;
+      return sys_send(&response_msg) == ESYS_OK ? 0 : -1;
     default:
       return handleDeviceError(msg);
   }

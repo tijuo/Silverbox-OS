@@ -4,21 +4,22 @@
 #![feature(alloc_error_handler)]
 
 extern "C" {
-    fn exit(code: i32) -> !;
+    fn sys_exit(code: i32) -> !;
 }
 
 #[no_mangle]
-pub extern "C" fn _start(multiboot_info: *mut RawMultibootInfo, first_free_page: PAddr, stack_size: usize) -> ! {
-    eprintfln!("Initializing the init server..");
+pub extern "C" fn _start(multiboot_info: *mut RawMultibootInfo, first_free_page: PAddr, stack_size: usize, _fxsave_state: [u8; 512]) -> ! {
+    eprintfln!("Starting system.");
+    eprintfln!("Initializing the init server...");
     eprintfln!("Multiboot info: {:#x}", multiboot_info as usize);
     eprintfln!("First free page: {:#x}", first_free_page as usize);
     eprintfln!("Stack size: {} bytes", stack_size);
-    let multiboot_box = init(multiboot_info as usize as PAddr,
+    let multiboot_box = init(multiboot_info as *const RawMultibootInfo,
                              first_free_page, stack_size);
     main(multiboot_box);
 
     unsafe {
-        exit(1);
+        sys_exit(1);
     }
 }
 
@@ -29,23 +30,24 @@ extern crate num_traits;
 
 mod pager;
 mod address;
-//mod name;
-//mod port;
+mod name;
+mod port;
 mod page;
 mod mapping;
 mod error;
-//mod device;
+mod device;
 #[macro_use] mod lowlevel;
 mod sbrk;
-//mod elf;
-//mod ramdisk;
-//mod thread;
+mod elf;
+mod ramdisk;
+mod thread;
 mod multiboot;
 mod region;
 mod phys_alloc;
-//mod vfs;
-//mod fat;
-//mod mutex;
+mod vfs;
+mod fat;
+mod mutex;
+mod message;
 
 use address::PAddr;
 use crate::multiboot::{RawMultibootInfo, MultibootInfo};
@@ -59,15 +61,20 @@ use rust::syscalls::PageMapping;
 use crate::page::PhysicalFrame;
 use alloc::borrow::Cow;
 use crate::error::Error;
+use crate::Tid;
 
 const DATA_BUF_SIZE: usize = 64;
 
-fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Option<Box<MultibootInfo>> {
+fn init(multiboot_info: *const RawMultibootInfo, first_free_page: PAddr, _stack_size: usize) -> Option<Box<MultibootInfo>> {
     eprintfln!("Initializing bootstrap allocator");
 
     PhysPageAllocator::init_bootstrap(first_free_page);
 
-    for ptab_num in 0..=1023 {
+    // This seems to map PDEs for the first 3 GiB of memory
+    // FIXME: This code is supposed to be temporary
+
+    
+    for ptab_num in 0..=768 {
         let vaddr = (ptab_num * PhysicalFrame::SMALL_PAGE_SIZE * 1024) as *mut ();
         let mut page_mapping = [PageMapping {
             number: 0,
@@ -93,9 +100,10 @@ fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Op
                 .expect("Unable to set page mapping.");
         }
     }
+    
 
     let mmap_iter = unsafe {
-        RawMultibootInfo::raw_mmap_iter(multiboot_info)
+        RawMultibootInfo::raw_mmap_iter(multiboot_info as usize as PAddr)
     }.expect("Unable to read memory map from Multiboot info");
 
     mmap_iter.clone()
@@ -113,7 +121,6 @@ fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Op
     eprintfln!("Initializing mapping manager...");
     mapping::manager::init();
 
-    /*
     eprintfln!("Initializing name manager...");
     name::manager::init();
 
@@ -125,17 +132,15 @@ fn init(multiboot_info: PAddr, first_free_page: PAddr, _stack_size: usize) -> Op
 
     eprintfln!("Loading modules...");
 
-     */
     let multiboot_box = unsafe {
-        MultibootInfo::from_phys(multiboot_info)
+        MultibootInfo::from_phys(multiboot_info as usize as PAddr)
     };
-/*
+
     load_modules(&multiboot_box);
-*/
+
     multiboot_box
 }
 
-/*
 fn load_modules(multiboot_info: &Option<Box<MultibootInfo>>) {
     if let Some(ref mb_info) = multiboot_info {
         let initsrv_name = mb_info.command_line.as_ref()
@@ -161,7 +166,7 @@ fn load_modules(multiboot_info: &Option<Box<MultibootInfo>>) {
         eprintfln!("Multiboot info is missing.");
     }
 }
-*/
+
 
 fn handle_message(header: &mut MessageHeader, recv_buffer: &mut [u8]) -> Result<(), (Error, Cow<'static, str>)> {
     let message_sender = header.target.expect("Message should have a sender");
@@ -179,7 +184,7 @@ fn handle_message(header: &mut MessageHeader, recv_buffer: &mut [u8]) -> Result<
                                                       let mut thread_info = ThreadInfo::default();
                             thread_info.status = ThreadInfo::READY;
 
-                            syscall::update_thread(&Tid::from(ex_msg.who),
+                            syscalls::update_thread(&Tid::from(ex_msg.who),
                                                    &ThreadStruct::new(thread_info, ThreadInfo::STATUS))
                                 .map_err(|e| (e, None))
                              */
@@ -210,7 +215,7 @@ fn handle_message(header: &mut MessageHeader, recv_buffer: &mut [u8]) -> Result<
     }
     else {
         match header.subject {
-            /*
+            
             init::REGISTER_NAME => {
                 RegisterNameRequest::try_from(msg)
                     .and_then(|request| {
@@ -331,7 +336,6 @@ fn handle_message(header: &mut MessageHeader, recv_buffer: &mut [u8]) -> Result<
             init::UNREGISTER_SERVER => {
                 Err((Error::NotImplemented, Some(format!("Request {}", msg.subject()))))
             },
-             */
             _ => Err((Error::BadRequest, Cow::Owned(format!("Request {:#x} sender: {} flags: {}",
                                                        header.subject,
                                                        CTid::from(message_sender),
@@ -340,7 +344,6 @@ fn handle_message(header: &mut MessageHeader, recv_buffer: &mut [u8]) -> Result<
     }
 }
 
-/*
 fn idle_main() -> ! {
     loop {}
 }
@@ -350,14 +353,14 @@ fn init_threads(thread_entries: Vec<fn() -> !>) {
     let addr_space = mapping::manager::lookup_tid_mut(&init_tid)
         .expect("Unable to get the initial address space");
     let stack_size = 4096 * 1024;
-    let pmap = syscall::get_init_pmap().unwrap().as_address();
+    let pmap = syscalls::get_init_pmap().unwrap().as_address();
     let zero_device = DeviceId::new_from_tuple((device::pseudo::MAJOR, device::pseudo::ZERO_MINOR));
 
     for (i, entry) in thread_entries.into_iter().enumerate() {
         let stack_top = 0xF8000000 - (i + 1) * stack_size;
 
         let tid =
-            syscall::create_thread(entry as *const fn() -> ! as *const c_void,
+            syscalls::create_thread(entry as *const fn() -> ! as *const c_void,
                                        pmap as u32,
                                        stack_top as *const c_void).expect("Unable to create new thread.");
 
@@ -377,13 +380,12 @@ fn init_threads(thread_entries: Vec<fn() -> !>) {
         };
 
         let thread_struct = ThreadStruct::new(thread_info, flags);
-        match syscall::update_thread(&tid, &thread_struct) {
+        match syscalls::update_thread(&tid, &thread_struct) {
             Err(e) => error::log_error(e, Some(String::from("Error while initializing thread. Unable to start."))),
             _ => ()
         }
     }
 }
-*/
 
 fn main(_multiboot_info: Option<Box<MultibootInfo>>) {
     let mut header = MessageHeader::blank();

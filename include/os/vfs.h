@@ -3,7 +3,9 @@
 
 #include <types.h>
 #include <os/file.h>
-#include <os/os_types.h>
+#include <os/ostypes/string.h>
+#include <os/ostypes/dynarray.h>
+
 //#include <time.h>
 
 #define VFS_NAME_MAXLEN		12
@@ -20,7 +22,7 @@
 #define FS_ENCRYPT	0x200
 #define FS_DEVICE   0x400
 
-typedef sbarray_t SBFilePath;
+typedef DynArray SBFilePath;
 
 struct FileAttributes
 {
@@ -35,7 +37,7 @@ struct MountEntry
 {
   int device;
   struct VFS_Filesystem *fs;
-  sbstring_t path;
+  String path;
   int flags;
 };
 
@@ -93,13 +95,13 @@ struct MountArgs
 
 struct FSOps
 {
-  int (*createDir)( sbstring_t *, SBFilePath * );
+  int (*createDir)( String *, SBFilePath * );
   int (*list)( unsigned short, SBFilePath *, struct VfsListArgs *, struct FileAttributes ** );
-  int (*createFile)( sbstring_t *, SBFilePath * );
+  int (*createFile)( String *, SBFilePath * );
   int (*read)( unsigned short, SBFilePath *, struct VfsReadArgs *, char ** );
   int (*write)( SBFilePath *, char *, size_t );
   int (*remove)( SBFilePath * );
-  int (*link)( sbstring_t *, SBFilePath * ); // Creates a hard link
+  int (*link)( String *, SBFilePath * ); // Creates a hard link
   int (*unlink)( SBFilePath * );
   int (*getAttributes)( unsigned short, SBFilePath *, struct VfsGetAttribArgs *, struct FileAttributes ** );
   int (*setAttributes)( SBFilePath *, struct FileAttributes * );

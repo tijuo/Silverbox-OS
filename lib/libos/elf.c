@@ -2,7 +2,7 @@
 #include <elf.h>
 #include <os/progload.h>
 
-bool isValidElfExe(elf_header_t *image) {
+bool is_valid_elf_exe(elf_header_t *image) {
   if(!VALID_ELF(image))
     return false;
   else {
@@ -34,7 +34,7 @@ bool isValidElfExe(elf_header_t *image) {
  // 5. Put input arguments on stack
  // 6. Create a new thread (and start it)
 
- if( !isValidElfExe(elf_img) )
+ if( !is_valid_elf_exe(elf_img) )
  return -1;
  }
  */
@@ -47,38 +47,38 @@ bool isValidElfExe(elf_header_t *image) {
  unsigned pheader_count;
  tid_t tid;
  void *phys;
- void *addrSpace;
+ void *addr_space;
  struct AddrSpace *addr_space_struct;
 
  if( fatReadFile( path, 0, DEV_NUM(10, 0), &header, sizeof header ) < 0 )
  return -1;
 
- if( !isValidElfExe( &header ) )
+ if( !is_valid_elf_exe( &header ) )
  return -1;
 
  pheader_count = header.phnum;
 
- addrSpace = alloc_phys_page(NORMAL, page_dir);//pageAllocator->alloc();
+ addr_space = alloc_phys_page(NORMAL, page_dir);//pageAllocator->alloc();
 
  // XXX: Now create a 'struct AddrSpace' for the new thread
 
  addr_space_struct = malloc( sizeof( struct AddrSpace ) );
- init_addr_space(addr_space_struct, addrSpace);
- list_insert((int)addrSpace, addr_space_struct, &addr_space_list);
+ addr_space_init(addr_space_struct, addr_space);
+ list_insert((int)addr_space, addr_space_struct, &addr_space_list);
 
- clearPage( addrSpace );
+ clearPage( addr_space );
 
- tid = __create_thread( (addr_t)header.entry, addrSpace, (void *)(TEMP_PTABLE + PTABLE_SIZE), 1 );
+ tid = __create_thread( (addr_t)header.entry, addr_space, (void *)(TEMP_PTABLE + PTABLE_SIZE), 1 );
 
  if( tid == -1 )
  {
- free_phys_page( addrSpace );
- list_remove((int)addrSpace, &addr_space_list);
+ free_phys_page( addr_space );
+ list_remove((int)addr_space, &addr_space_list);
  free(addr_space_struct);
  return -1; // XXX: But first, free physical memory before returning
  }
 
- attach_tid(addrSpace, tid);
+ attach_tid(addr_space, tid);
 
  for( unsigned i = 0; i < pheader_count; i++ )
  {
@@ -87,14 +87,14 @@ bool isValidElfExe(elf_header_t *image) {
 
  if( pheader.type == PT_LOAD )
  {
- unsigned memSize = pheader.memsz;
- unsigned fileSize = pheader.filesz;
+ unsigned mem_size = pheader.memsz;
+ unsigned file_size = pheader.filesz;
 
- for ( unsigned j = 0; memSize > 0; j++ )
+ for ( unsigned j = 0; mem_size > 0; j++ )
  {
- phys = alloc_phys_page(NORMAL, addrSpace);
+ phys = alloc_phys_page(NORMAL, addr_space);
 
- if ( fileSize == 0 )
+ if ( file_size == 0 )
  clearPage(phys);
  else
  {
@@ -104,25 +104,25 @@ bool isValidElfExe(elf_header_t *image) {
  (void *)TEMP_PAGE, PAGE_SIZE );
  }
 
- _mapMem( phys, (void *)(pheader.vaddr + j * PAGE_SIZE), 1, 0, addrSpace );
+ _mapMem( phys, (void *)(pheader.vaddr + j * PAGE_SIZE), 1, 0, addr_space );
 
- if( fileSize > 0 )
+ if( file_size > 0 )
  __unmap( (void *)TEMP_PAGE, page_dir );
 
- if( memSize < PAGE_SIZE )
- memSize = 0;
+ if( mem_size < PAGE_SIZE )
+ mem_size = 0;
  else
- memSize -= PAGE_SIZE;
+ mem_size -= PAGE_SIZE;
 
- if( fileSize < PAGE_SIZE )
- fileSize = 0;
+ if( file_size < PAGE_SIZE )
+ file_size = 0;
  else
- fileSize -= PAGE_SIZE;
+ file_size -= PAGE_SIZE;
  }
  }
  }
 
- __start_thread( tid );
+ __thread_start( tid );
  return 0;
  }
  */

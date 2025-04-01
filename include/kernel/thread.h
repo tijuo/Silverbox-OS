@@ -94,8 +94,8 @@ struct ThreadControlBlock {
 
     // 48 bytes
 
-    xsave_state_t* xsave_state;
-    size_t xsave_state_len;
+    fxsave_state_t* fxsave_state;
+    size_t fxsave_state_len;
     uint64_t xsave_rfbm;    // xsave requested feature bitmap
 
     // 64 bytes
@@ -121,7 +121,7 @@ _Static_assert(((int)sizeof(tcb_t) & -(int)sizeof(tcb_t)) == (int)sizeof(tcb_t),
 
 extern struct Processor processors[MAX_PROCESSORS];
 
-WARN_UNUSED NON_NULL_PARAMS tcb_t* thread_create(void* entryAddr, uint32_t addrSpace,
+WARN_UNUSED NON_NULL_PARAMS tcb_t* thread_create(void* entryAddr, uint32_t addr_space,
     void* stackTop);
 
     WARN_UNUSED NON_NULL_PARAMS int thread_start(tcb_t* thread);

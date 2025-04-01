@@ -4,6 +4,6 @@
 #include <elf.h>
 #include <types.h>
 
-bool isValidElfExe( elf_header_t *image );
+bool is_valid_elf_exe( elf_header_t *image );
 
 #endif /* OS_ELF_H */

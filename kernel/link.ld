@@ -40,14 +40,15 @@ SECTIONS
       krodata = .;
       *(.rodata*)
       . = ALIGN(4);
-      *(.debug*)
+      *(.eh_frame*)
+      . = ALIGN(4);
       krodata_end = .;
     } :rodata
 
     .data : ALIGN(4K) {
         kdata = .;
         ksize = .;
-        LONG(SIZEOF(.boot) + SIZEOF(.text) + SIZEOF(.rodata) + SIZEOF(.data) + SIZEOF(.bss));
+        LONG (SIZEOF(.boot) + SIZEOF(.text) + SIZEOF(.rodata) + SIZEOF(.data) + SIZEOF(.bss))
 
         *(.data*)
         . = ALIGN(4K);
@@ -65,9 +66,8 @@ SECTIONS
     }
 
     kend = .;
-
     /DISCARD/ : {
-      *(.comment*)
-      *(.note*)
+    *(.comment*)
+    *(.note*)
     }
 }

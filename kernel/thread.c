@@ -12,6 +12,7 @@
 #include <string.h>
 #include <util.h>
 #include <kernel/lock.h>
+#include <x86intrin.h>
 
 #define TID_START 0u
 
@@ -19,7 +20,8 @@ ALIGN_AS(PAGE_SIZE)
 uint8_t kernel_stack[PAGE_SIZE]; // The single kernel stack used by all threads (assumes a uniprocessor system)
 uint8_t* kernel_stack_top = kernel_stack + PAGE_SIZE;
 
-LOCKED(tcb_t *, tcb_table);
+#warning "TCB Table needs to be properly created in kernel space. The current table can only contain 15 entries."
+LOCKED_ARRAY(tcb_t, tcb_table, 16);
 
 NON_NULL_PARAMS tid_t get_tid(tcb_t* tcb)
 {
@@ -202,6 +204,7 @@ NON_NULL_PARAMS tcb_t* thread_create(void* entry_addr, addr_t addr_space,
     thread->user_exec_state.eip = (uint32_t)entry_addr;
 
     thread->user_exec_state.user_esp = (uint32_t)stack_top;
+    thread->user_exec_state.ebp = thread->user_exec_state.user_esp;
     thread->user_exec_state.cs = UCODE_SEL;
     thread->user_exec_state.ds = UDATA_SEL;
     thread->user_exec_state.es = UDATA_SEL;
@@ -210,9 +213,10 @@ NON_NULL_PARAMS tcb_t* thread_create(void* entry_addr, addr_t addr_space,
     thread->priority = NORMAL_PRIORITY;
 
     thread->thread_state = PAUSED;
+
     list_enqueue(&paused_list, thread);
 
-    kprintfln("Created new thread at %#p (tid: %u, pmap: %#p)", thread, last_tid,
+    kprintfln("Created new thread at %#p (tid: %hhu, pmap: %#p)", thread, last_tid,
         (void*)(uintptr_t)thread->root_pmap);
 
     SPINLOCK_RELEASE(tcb_table);
@@ -276,7 +280,7 @@ NON_NULL_PARAMS int thread_release(tcb_t* thread)
     return E_OK;
 }
 
-NON_NULL_PARAMS void thread_switch_context(tcb_t* thread, bool do_xsave)
+NON_NULL_PARAMS void thread_switch_context(tcb_t* thread, bool do_fxsave)
 {
     KASSERT(thread->thread_state == RUNNING);
 
@@ -285,8 +289,8 @@ NON_NULL_PARAMS void thread_switch_context(tcb_t* thread, bool do_xsave)
 
     tcb_t* current_thread = thread_get_current();
 
-    if(current_thread && do_xsave && current_thread->xsave_state) {
-        __asm__ __volatile__("fxsave  %0\n" ::"m"(current_thread->xsave_state));
+    if(current_thread && do_fxsave && current_thread->fxsave_state) {
+        _fxsave(current_thread->fxsave_state);
     }
 
     // Restore user state
@@ -300,8 +304,8 @@ NON_NULL_PARAMS void thread_switch_context(tcb_t* thread, bool do_xsave)
 
     set_cr3(init_server_thread->root_pmap);
 
-    if(do_xsave && thread->xsave_state) {
-        __asm__ __volatile__("fxrstor %0\n" ::"m"(thread->xsave_state));
+    if(do_fxsave && thread->fxsave_state) {
+        _fxrstor(thread->fxsave_state);
     }
 
     RESTORE_STATE;

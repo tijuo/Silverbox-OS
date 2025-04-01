@@ -1,4 +1,4 @@
-use crate::address::{PAddr, PSize};
+use crate::address::{VAddr, PAddr, PSize};
 use crate::lowlevel::phys;
 use core::{mem, cmp};
 use alloc::vec::Vec;
@@ -753,7 +753,38 @@ pub struct RawMemoryMapIterator {
 }
 
 impl RawMemoryMapIterator {
-    pub fn new(address: PAddr) -> Option<RawMemoryMapIterator> {
+    pub unsafe fn new(address: PAddr) -> Option<RawMemoryMapIterator> {
+        let raw_info = unsafe { &*(address as *const RawMultibootInfo) };
+        
+        if raw_info.flags & RawMultibootInfo::MMAP == RawMultibootInfo::MMAP {
+            let mut buffer = Vec::with_capacity(raw_info.mmap_length as usize);
+            
+            unsafe {
+                phys::peek_ptr(raw_info.mmap_addr as PAddr, buffer.as_mut_ptr(), raw_info.mmap_length as usize)
+                    .map(|_|
+                        RawMemoryMapIterator {
+                            addr: raw_info.mmap_addr as PAddr,
+                            length: raw_info.mmap_length as PSize,
+                            bytes_read: 0,
+                            buffer: Rc::new(buffer),
+                        })
+                    .ok()
+            }
+            /*
+            Some(RawMemoryMapIterator {
+                addr: raw_info.mmap_addr as VAddr,
+                length: raw_info.mmap_length as usize,
+                bytes_read: 0,
+                buffer: Rc::new(buffer)
+            })
+            */
+        } else {
+            None
+        }
+    }
+
+    /*
+    pub fn new_from_paddr(address: PAddr) -> Option<RawMemoryMapIterator> {
         let mut raw_info = RawMultibootInfo::default();
 
         let success = unsafe {
@@ -777,7 +808,7 @@ impl RawMemoryMapIterator {
             None
         }
     }
-
+    */
     pub fn reset(&mut self) {
         self.bytes_read = 0;
     }

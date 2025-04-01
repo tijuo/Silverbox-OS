@@ -7,18 +7,18 @@
 
 #define PAGE_SIZE       4096
 
-char *physMap = (char *)0x200000;
-addr_t *freePageStack = (addr_t *)0xBF800000, *freePageStackTop;
-static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys);
+char* phys_map = (char*)0x200000;
+addr_t* free_page_stack = (addr_t*)0xBF800000, * free_page_stack_top;
+static int access_phys(addr_t phys, void* buffer, size_t len, bool read_phys);
 
-addr_t allocPhysPage(void)
+addr_t alloc_phys_frame(void)
 {
-  return ((freePageStack == freePageStackTop) ? NULL : *--freePageStackTop);
+    return ((free_page_stack == free_page_stack_top) ? NULL : *--free_page_stack_top);
 }
 
-void freePhysPage(addr_t page)
+void free_phys_frame(addr_t page)
 {
-  *freePageStackTop++ = page;
+    *free_page_stack_top++ = page;
 }
 
 /**
@@ -30,9 +30,9 @@ void freePhysPage(addr_t page)
   @return 0 on success. -1 if phys is NULL.
 */
 
-int poke( addr_t phys, void *buffer, size_t bytes )
+int poke(addr_t phys, void* buffer, size_t bytes)
 {
-  return accessPhys( phys, buffer, bytes, false );
+    return access_phys(phys, buffer, bytes, false);
 }
 
 /**
@@ -44,30 +44,31 @@ int poke( addr_t phys, void *buffer, size_t bytes )
   @return 0 on success. -1 if phys is NULL.
 */
 
-int peek( addr_t phys, void *buffer, size_t bytes )
+int peek(addr_t phys, void* buffer, size_t bytes)
 {
-  return accessPhys( phys, buffer, bytes, true );
+    return access_phys(phys, buffer, bytes, true);
 }
 
-static int accessPhys(addr_t phys, void *buffer, size_t len, bool readPhys)
+static int access_phys(addr_t phys, void* buffer, size_t len, bool read_phys)
 {
-  size_t offset=(size_t)(phys & (PAGE_SIZE - 1));
-  size_t numPages = 1 + (((phys+len) & ~(PAGE_SIZE-1)) - (phys & ~(PAGE_SIZE-1))) / PAGE_SIZE;
+    size_t offset = (size_t)(phys & (PAGE_SIZE - 1));
+    size_t num_pages = 1 + (((phys + len) & ~(PAGE_SIZE - 1)) - (phys & ~(PAGE_SIZE - 1))) / PAGE_SIZE;
 
-  if(len > 0xE00000) // Unable to handle larger sizes due to location of physMap
-    return -1;
+    if(len > 0xE00000) // Unable to handle larger sizes due to location of phys_map
+        return -1;
 
-  pbase_t frame = (pbase_t)(phys >> 12);
+    pbase_t frame = (pbase_t)(phys >> 12);
 
-  if(sys_map(NULL, (void *)physMap, &frame, numPages, PM_READ_WRITE) != (int)numPages)
-    return -1;
+    if(sys_map(NULL, (void*)phys_map, &frame, num_pages, PM_READ_WRITE) != (int)num_pages)
+        return -1;
 
-  if( readPhys )
-    memcpy(buffer, (void *)(physMap + offset), len);
-  else
-    memcpy((void *)(physMap + offset), buffer, len);
+    if(read_phys) {
+        memcpy(buffer, (void*)(phys_map + offset), len);
+    } else {
+        memcpy((void*)(phys_map + offset), buffer, len);
+    }
 
-  sys_unmap(NULL, (void *)physMap, numPages);
+    sys_unmap(NULL, (void*)phys_map, num_pages);
 
-  return 0;
+    return 0;
 }

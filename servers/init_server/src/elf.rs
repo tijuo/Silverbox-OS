@@ -82,7 +82,7 @@ pub mod loader {
     use crate::elf::{RawElfHeader, RawProgramHeader32};
     use rust::types::Tid;
     use rust::syscalls;
-    use rust::syscalls::c_types::{NULL_TID, ThreadState};
+    use rust::syscalls::c_types::NULL_TID;
     use core::mem;
     use core::ffi::c_void;
     use crate::page::VirtualPage;
@@ -90,8 +90,8 @@ pub mod loader {
     use crate::mapping::{self, AddrSpace};
     use crate::lowlevel::phys;
     use crate::address;
-    use rust::device::{self, DeviceId};
-    use crate::syscall::{ThreadStruct, INIT_TID};
+    use crate::device::{self, DeviceId};
+    use rust::syscalls::{ThreadInfo, INIT_TID};
     use crate::multiboot::BootModule;
     use crate::phys_alloc::{self, BlockSize, AllocError};
 
@@ -164,7 +164,7 @@ pub mod loader {
                 .map(|header|
                     unsafe {
                         let entry = header.entry;
-                        (header, syscall::sys_create_thread(
+                        (header, syscalls::sys_create_thread(
                                                    entry as *const c_void,
                                                    pmap as u32,
                                                    stack_top as *const c_void))
@@ -225,7 +225,7 @@ pub mod loader {
                         let thread_struct = ThreadStruct::new(thread_info, ThreadInfo::STATUS);
 
                         mapping::manager::register(addr_space);
-                        syscall::update_thread(&tid, &thread_struct)
+                        syscalls::update_thread(&tid, &thread_struct)
                         .map(|_| tid)
                         .map_err(|_| { println!("Unable to update thread"); () })
                         /*Ok(tid)*/

@@ -3,16 +3,17 @@
 
 #include <stdlib.h>
 
-struct CircularBuffer {
-  void *data;
-  void *ptr;
-  size_t unreadLen;
-  size_t bufLen;
-};
+typedef struct {
+    void* data;
+    void* ptr;
+    size_t unread_len;
+    size_t buf_len;
+} CircularBuffer;
 
-int initCircBuffer(struct CircularBuffer *buffer, void *data, size_t bufferSize);
-int createCircBuffer(struct CircularBuffer *buffer, size_t bufferSize);
-size_t readCircBuffer(struct CircularBuffer *buffer, size_t bytes, void *outData);
-size_t writeCircBuffer(struct CircularBuffer *buffer, size_t bytes, void *data);
+int circular_buffer_init(CircularBuffer* buffer, void* data, size_t bufferSize);
+int circular_buffer_create(CircularBuffer* buffer, size_t bufferSize);
+size_t circular_buffer_read(CircularBuffer* buffer, size_t bytes, void* outData);
+size_t circular_buffer_write(CircularBuffer* buffer, size_t bytes, void* data);
+void circular_buffer_destroy(CircularBuffer* buffer);
 
 #endif /* CIRC_BUFFER_H */
